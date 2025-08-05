@@ -1,0 +1,23 @@
+# Ignore system files 
+.DS_Store
+Thumbs.db
+
+#Ignore config files with sensitive data 
+config/database.php
+
+# Ignore Uploaded files 
+assets/images/uploads*
+!assets/images/uploads/.gitkeep
+
+#Ignore vendor directory
+vendor/
+
+# Ignore IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Ignore log files
+*.log
+
