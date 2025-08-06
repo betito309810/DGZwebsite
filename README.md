@@ -7,7 +7,7 @@ Web-based inventory and sales management system for Team DGZ Sto Niño Motorshop
 - Inventory Management
 - Point of Sale (POS)
 - Online Ordering
-- Sales Reporting
+- Sales Reporting (Daily, Weekly, Annual)
   
 ## Team Members
 - Sean Ace  Cadivida  
