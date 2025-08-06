@@ -10,7 +10,7 @@ Web-based inventory and sales management system for Team DGZ Sto Niño Motorshop
 - Sales Reporting
   
 ## Team Members
-- Sean Ace B. Cadivida  
-- Mark John C. Espinosa
-- Geraldine D. Perez
-- Christopher A. Betito
+- Sean Ace  Cadivida  
+- Mark John  Espinosa
+- Geraldine  Perez
+- Christopher  Betito
