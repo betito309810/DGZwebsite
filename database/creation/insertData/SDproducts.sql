@@ -1,0 +1,75 @@
+INSERT INTO products (
+  product_name, description, price, stock_quantity, sku, 
+  category_id, brand, weight, specifications, status, 
+  created_at, updated_at
+) VALUES
+(
+  'Yamaha Brake Pad',
+  'High quality front brake pad for Yamaha motorcycles.',
+  550.00,
+  25,
+  'YBP-001',
+  1,
+  'Yamaha',
+  0.75,
+  JSON_OBJECT('material', 'ceramic', 'compatibility', 'Mio i125'),
+  'active',
+  CURRENT_TIMESTAMP,
+  CURRENT_TIMESTAMP
+),
+(
+  'Shell Advance AX7 10W-40',
+  'Semi-synthetic motorcycle engine oil, 1L bottle.',
+  320.00,
+  50,
+  'SAO-002',
+  2,
+  'Shell',
+  1.00,
+  JSON_OBJECT('viscosity', '10W-40', 'volume', '1L'),
+  'active',
+  CURRENT_TIMESTAMP,
+  CURRENT_TIMESTAMP
+),
+(
+  'LED Headlight V2',
+  'Waterproof LED headlight with high/low beam function.',
+  600.00,
+  15,
+  'LHV2-003',
+  3,
+  'MotorLux',
+  0.30,
+  JSON_OBJECT('lumens', 1800, 'power', '18W'),
+  'active',
+  CURRENT_TIMESTAMP,
+  CURRENT_TIMESTAMP
+),
+(
+  'Motul 7100 4T 10W-40',
+  'Fully synthetic motorcycle oil for performance engines.',
+  900.00,
+  40,
+  'MOT7100-004',
+  2,
+  'Motul',
+  1.00,
+  JSON_OBJECT('viscosity', '10W-40', 'type', 'synthetic'),
+  'active',
+  CURRENT_TIMESTAMP,
+  CURRENT_TIMESTAMP
+),
+(
+  'Rider Helmet Classic Matte Black',
+  'DOT certified classic motorcycle helmet, large size.',
+  1200.00,
+  10,
+  'RHCMB-005',
+  3,
+  'RiderGear',
+  1.5,
+  JSON_OBJECT('size', 'Large', 'certification', 'DOT'),
+  'active',
+  CURRENT_TIMESTAMP,
+  CURRENT_TIMESTAMP
+);
