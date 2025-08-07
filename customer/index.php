@@ -4,13 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="../assets/css/index.css">
+    <link rel="stylesheet" href="../assets/css/framework.css">
     <title> DGZ </title>
     
 </head>
 <body>
     <header class="header"  >
         <div class="header-content">
-            <div class="logo">TEAM DGZ</div>
+            <div class="logo-container">
+               <img src="../assets/logo/logo.png" alt="logo" width = "80px" height = "80px" >   
+            </div>
             <div class="search-container">
                 <input type="text" class="search-bar" placeholder="Search by Category Part Name...">
                 <span class="search-icon">🔍</span>
@@ -163,4 +166,4 @@
         </main>
     </div>
 </body>
-</html>
+</html> 

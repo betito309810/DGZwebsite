@@ -4,12 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="../assets/css/dashboard.css">
+    <link rel="stylesheet" href="../assets/css/framework.css">
+
     <title>Dashboard - Team DGZ</title>
     
 </head>
 <body>
     <div class="header">
-        <div class="logo">TEAM DGZ</div>
+        <img src="../assets/logo/logo.png" alt="logo" width = "80px" height = "80px" >
         <div class="search-bar">
             <input type="text" placeholder="Search...">
             <span class="search-icon">🔍</span>
