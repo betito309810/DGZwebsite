@@ -9,11 +9,13 @@
 </head>
 <body>
     <div class="login-wrapper">
-        <button class="close-btn">✕</button>
+        
         
         <div class="login-container">
             <div class="login-header">
-                <div class="logo">TEAM DGZ</div>
+                <div class="logo">
+                    <img src="../assets/logo/logo.png" class = "dgz-logo" alt="logo" width = "60p" height = "60 " >
+                </div>
                 
                 <form>
                     <div class="form-group">
