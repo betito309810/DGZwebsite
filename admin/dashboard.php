@@ -1,3 +1,10 @@
+/* <?php
+require 'footer.php';
+require 'sidebar.php';
+require 'header';
+s
+?> */
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
