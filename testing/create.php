@@ -1,16 +1,18 @@
 <?php
 require('connection.php');
 
-if (isset($_POST['submit'])){
-    $firstname = $_POST['username'];
+if(isset($_POST['submit'])){
+    $username = $_POST['username'];
     $password = $_POST['password'];
 
-$createquery = "INSERT INTO users VALUES (null, '$firstname', '$password')";
-$createor = mysqli_query($sqlconnection,$createquery);
+    $querycreate = "INSERT INTO users (user_id, first_name, password_hash) VALUES (null,'$username', '$password')";
+    $resultcreate = mysqli_query($sqlconnection, $querycreate);
 
- echo '<script>alert("Account Created")</script>';
- echo '<script>window.location.href ="index.php"</script>';
+    echo '<script>alert("User created successfully!");</script>';
+    echo '<script>window.location.href = "index.php";</script>';
+
 }
-else{ echo '<script>window.location.href ="index.php"</script>';
+else {
+    echo '<script>window.location.href = "index.php";</script>';
 }
-?>  
+?>
