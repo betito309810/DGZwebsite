@@ -76,7 +76,7 @@ require('read.php');
         <tr>
           <td><?php echo $results['user_id']; ?></td>
           <td><?php echo $results['first_name']; ?></td>
-          <td><?php echo $results['hash_password']; ?></td>
+          <td><?php echo $results['password_hash']; ?></td>
           <td>
             <form action="/php-crud-tutorial/update.php" method="post">
               <input type="submit" name="edit" value="EDIT" />
