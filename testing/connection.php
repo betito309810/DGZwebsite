@@ -2,7 +2,7 @@
 $host = 'localhost';
 $user = 'root';
 $password = '';
-$database = 'dgz_motorshop';
+$database = 'accounts';
 
 $sqlconnection =  mysqli_connect($host, $user, $password, $database);
 if (mysqli_connect_error()) {
