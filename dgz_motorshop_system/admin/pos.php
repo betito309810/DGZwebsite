@@ -1,5 +1,5 @@
 <?php
-require 'config.php';
+require '../config.php';
 $pdo = db();
 $products = $pdo->query('SELECT * FROM products')->fetchAll();
 if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['pos_checkout'])) {
@@ -34,21 +34,38 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['pos_checkout'])) {
     exit;
 }
 ?>
-<!doctype html><html><head><meta charset="utf-8"><title>POS - DGZ</title><link rel="stylesheet" href="assets/style.css"></head><body>
-<h2>POS - Walk-in</h2><a href="index.php">Back to Shop</a>
-<form method="post">
-<table>
-<tr><th>Product</th><th>Price</th><th>Available</th><th>Qty</th></tr>
-<?php foreach($products as $p): ?>
-<tr>
-  <td><?=htmlspecialchars($p['name'])?></td>
-  <td>₱<?=number_format($p['price'],2)?></td>
-  <td><?=intval($p['quantity'])?></td>
-  <td><input type="checkbox" name="product_id[]" value="<?=$p['id']?>"> <input type="number" name="qty[]" value="1" min="1" max="<?=max(1,$p['quantity'])?>"></td>
-</tr>
-<?php endforeach; ?>
-</table>
-<button name="pos_checkout" type="submit">Settle Payment (Complete)</button>
-</form>
-<?php if(!empty($_GET['ok'])) echo '<p>Transaction recorded.</p>'; ?>
-</body></html>
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>POS - DGZ</title>
+    <link rel="stylesheet" href="../assets/style.css">
+</head>
+
+<body>
+    <h2>POS - Walk-in</h2><a href="dashboard.php">Back to dashboard</a>
+    <form method="post">
+        <table>
+            <tr>
+                <th>Product</th>
+                <th>Price</th>
+                <th>Available</th>
+                <th>Qty</th>
+            </tr>
+            <?php foreach($products as $p): ?>
+            <tr>
+                <td><?=htmlspecialchars($p['name'])?></td>
+                <td>₱<?=number_format($p['price'],2)?></td>
+                <td><?=intval($p['quantity'])?></td>
+                <td><input type="checkbox" name="product_id[]" value="<?=$p['id']?>"> <input type="number" name="qty[]"
+                        value="1" min="1" max="<?=max(1,$p['quantity'])?>"></td>
+            </tr>
+            <?php endforeach; ?>
+        </table>
+        <button name="pos_checkout" type="submit">Settle Payment (Complete)</button>
+    </form>
+    <?php if(!empty($_GET['ok'])) echo '<p>Transaction recorded.</p>'; ?>
+</body>
+
+</html>

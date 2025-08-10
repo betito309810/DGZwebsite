@@ -16,21 +16,39 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
 ?>
 <!doctype html>
 <html>
-
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Login</title>
     <link rel="stylesheet" href="../assets/style.css">
+    <link rel="stylesheet" href="../assets/login.css">
 </head>
-
 <body>
-    <h2>Admin / Staff Login</h2>
-    <?php if($msg) echo '<p style="color:red">'.$msg.'</p>';?>
-    <form method="post">
-        <label>Email: <input name="email" required></label><br>
-        <label>Password: <input name="password" type="password" required></label><br>
-        <button>Login</button>
-    </form>
+    <!-- Logo placeholder - replace src with your logo path -->
+    <div class="logo">
+        <img src="../assets/logo.png" alt="Company Logo">
+    </div>
+    
+    <div class="login-container">
+        <h2>Admin / Staff Login</h2>
+        
+        <?php if($msg): ?>
+            <div class="error-msg"><?= htmlspecialchars($msg) ?></div>
+        <?php endif; ?>
+        
+        <form method="post">
+            <label>
+                Email:
+                <input name="email" type="email" required>
+            </label>
+            
+            <label>
+                Password:
+                <input name="password" type="password" required>
+            </label>
+            
+            <button type="submit">Login</button>
+        </form>
+    </div>
 </body>
-
 </html>
