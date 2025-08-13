@@ -38,7 +38,6 @@ body {
 .logo img {
     width: 100%;
     height: auto;
-    
 }
 
 .nav-menu {
@@ -81,7 +80,6 @@ body {
 .main-content {
     margin-left: 260px;
     min-height: 100vh;
-    
 }
 
 /* Header */
@@ -269,6 +267,14 @@ table th {
     letter-spacing: 0.5px;
 }
 
+/* Center CODE and ACTION columns */
+table th:first-child,
+table td:first-child,
+table th:last-child,
+table td:last-child {
+    text-align: center;
+}
+
 table td {
     padding: 18px 20px;
     border-bottom: 1px solid #f1f5f9;
@@ -293,12 +299,11 @@ table tr:last-child td {
 table td:first-child {
     font-family: 'Courier New', monospace;
     background: #e2e8f0;
-    color: #2d3748;
+    color: #482d2d;
     font-weight: 600;
     border-radius: 6px;
-    display: inline-block;
     padding: 6px 10px;
-    font-size: 12px;
+    font-size: 20px;
     margin: 0;
 }
 
@@ -353,75 +358,6 @@ table td:nth-child(3):after {
     margin-left: 4px;
 }
 
-/* Responsive Design */
-@media (max-width: 768px) {
-    .sidebar {
-        transform: translateX(-100%);
-    }
-
-    .sidebar.mobile-open {
-        transform: translateX(0);
-    }
-
-    .main-content {
-        margin-left: 0;
-    }
-
-    .mobile-toggle {
-        display: block !important;
-    }
-
-    .header {
-        padding: 15px 20px;
-    }
-
-    .header-left h2 {
-        font-size: 22px;
-    }
-
-    main.main-content {
-        padding: 20px 15px;
-    }
-
-    form {
-        padding: 20px;
-    }
-
-    table {
-        font-size: 12px;
-    }
-
-    table th,
-    table td {
-        padding: 12px 8px;
-    }
-
-    form label {
-        margin-bottom: 15px;
-    }
-
-    form input,
-    form textarea {
-        padding: 10px 12px;
-    }
-}
-
-@media (max-width: 480px) {
-    table {
-        display: block;
-        overflow-x: auto;
-        white-space: nowrap;
-    }
-
-    .header-left h2 {
-        font-size: 18px;
-    }
-
-    form {
-        padding: 15px;
-    }
-}
-
 /* Additional enhancements for better visual hierarchy */
 form input[type="hidden"] {
     display: none;
@@ -471,12 +407,76 @@ table a:focus {
     outline-offset: 2px;
 }
 
+/* Mobile menu toggle */
+.mobile-toggle {
+    display: none;
+    background: none;
+    border: none;
+    font-size: 20px;
+    color: #2c3e50;
+    cursor: pointer;
+    padding: 5px;
+}
+
+@media (max-width: 768px) {
+    .sidebar {
+        transform: translateX(-100%);
+        width: 100%;
+    }
+    
+    .sidebar.mobile-open {
+        transform: translateX(0);
+    }
+    
+    .main-content {
+        margin-left: 0;
+    }
+    
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+    
+    .stats-overview {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    
+    .header {
+        padding: 15px 20px;
+    }
+    
+    .dashboard-content {
+        padding: 20px;
+    }
+
+    .mobile-toggle {
+        display: block;
+    }
+}
+
+@media (max-width: 480px) {
+    table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+    }
+
+    .header-left h2 {
+        font-size: 18px;
+    }
+
+    form {
+        padding: 15px;
+    }
+}
+
 /* Smooth scrolling */
 html {
     scroll-behavior: smooth;
 }
 
-/* Print styles */
+/* Print styles 
 @media print {
     .sidebar,
     .header,
@@ -494,3 +494,4 @@ html {
         border: 1px solid #000;
     }
 }
+*/
