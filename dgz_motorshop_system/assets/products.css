@@ -38,6 +38,7 @@ body {
 .logo img {
     width: 100%;
     height: auto;
+    
 }
 
 .nav-menu {
@@ -80,6 +81,7 @@ body {
 .main-content {
     margin-left: 260px;
     min-height: 100vh;
+    
 }
 
 /* Header */
@@ -267,14 +269,6 @@ table th {
     letter-spacing: 0.5px;
 }
 
-/* Center CODE and ACTION columns */
-table th:first-child,
-table td:first-child,
-table th:last-child,
-table td:last-child {
-    text-align: center;
-}
-
 table td {
     padding: 18px 20px;
     border-bottom: 1px solid #f1f5f9;
@@ -305,6 +299,7 @@ table td:first-child {
     padding: 6px 10px;
     font-size: 20px;
     margin: 0;
+    text-align: center;
 }
 
 table td:nth-child(2) {
@@ -358,6 +353,8 @@ table td:nth-child(3):after {
     margin-left: 4px;
 }
 
+
+
 /* Additional enhancements for better visual hierarchy */
 form input[type="hidden"] {
     display: none;
@@ -406,18 +403,7 @@ table a:focus {
     outline: 2px solid #60a5fa;
     outline-offset: 2px;
 }
-
-/* Mobile menu toggle */
-.mobile-toggle {
-    display: none;
-    background: none;
-    border: none;
-    font-size: 20px;
-    color: #2c3e50;
-    cursor: pointer;
-    padding: 5px;
-}
-
+/* Mobile responsiveness */
 @media (max-width: 768px) {
     .sidebar {
         transform: translateX(-100%);
@@ -449,7 +435,19 @@ table a:focus {
     .dashboard-content {
         padding: 20px;
     }
+}
+/* Mobile menu toggle */
+.mobile-toggle {
+    display: none;
+    background: none;
+    border: none;
+    font-size: 20px;
+    color: #2c3e50;
+    cursor: pointer;
+    padding: 5px;
+}
 
+@media (max-width: 768px) {
     .mobile-toggle {
         display: block;
     }
@@ -470,7 +468,6 @@ table a:focus {
         padding: 15px;
     }
 }
-
 /* Smooth scrolling */
 html {
     scroll-behavior: smooth;

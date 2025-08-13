@@ -15,25 +15,38 @@ if($_SERVER['REQUEST_METHOD']==='POST') {
     if(empty($_POST['customer_name'])) {
         // show form
         ?>
-        <!doctype html><html><head><meta charset="utf-8"><title>Checkout</title><link rel="stylesheet" href="assets/style.css"></head><body>
-        <h2>Checkout - <?=htmlspecialchars($p['name'])?></h2>
-        <form method="post" enctype="multipart/form-data">
-          <input type="hidden" name="product_id" value="<?= $p['id']?>">
-          <input type="hidden" name="qty" value="<?= $qty ?>">
-          <label>Your name: <input name="customer_name" required></label><br>
-          <label>Contact: <input name="contact" required></label><br>
-          <label>Address: <textarea name="address" required></textarea></label><br>
-          <label>Payment method:
-            <select name="payment_method">
-              <option>Cash</option>
-              <option>GCash</option>
-            </select>
-          </label><br>
-          <label>Payment proof (optional for GCash): <input type="file" name="proof"></label><br>
-          <button type="submit">Place Order</button>
-        </form>
-        </body></html>
-        <?php
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/
+  <title>Checkout</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+
+<body>
+  <h2>Checkout - <?=htmlspecialchars($p['name'])?></h2>
+  <form method="post" enctype="multipart/form-data">
+    <input type="hidden" name="product_id" value="<?= $p['id']?>">
+    <input type="hidden" name="qty" value="<?= $qty ?>">
+    <label>Your name: <input name="customer_name" required></label><br>
+    <label>Contact: <input name="contact" required></label><br>
+    <label>Address: <textarea name="address" required></textarea></label><br>
+    <label>Payment method:
+      <select name="payment_method">
+        <option>Cash</option>
+        <option>GCash</option>
+      </select>
+    </label><br>
+    <label>Payment proof (optional for GCash): <input type="file" name="proof"></label><br>
+    <button type="submit">Place Order</button>
+  </form>
+</body>
+
+</html>
+<?php
         exit;
     }
 

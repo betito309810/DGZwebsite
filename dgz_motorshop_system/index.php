@@ -5,17 +5,24 @@ $products = $pdo->query('SELECT * FROM products')->fetchAll();
 ?>
 <!doctype html>
 <html>
+
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/
   <title>DGZ Motorshop - Shop</title>
   <link rel="stylesheet" href="assets/style.css">
 </head>
+
 <body>
-  <header><h1>DGZ Motorshop - Online Shop</h1><nav><a href="index.php">Shop</a> | <a href="pos.php">POS</a> | <a href="admin/login.php">Admin</a></nav></header>
+  <header>
+    <h1>DGZ Motorshop - Online Shop</h1>
+    <nav><a href="index.php">Shop</a> | <a href="pos.php">POS</a> | <a href="admin/login.php">Admin</a></nav>
+  </header>
   <main>
     <h2>Products</h2>
     <div class="grid">
-    <?php foreach($products as $p): ?>
+      <?php foreach($products as $p): ?>
       <div class="card">
         <h3><?=htmlspecialchars($p['name'])?></h3>
         <p><?=htmlspecialchars($p['description'])?></p>
@@ -27,9 +34,10 @@ $products = $pdo->query('SELECT * FROM products')->fetchAll();
           <button type="submit">Buy / Checkout</button>
         </form>
       </div>
-    <?php endforeach; ?>
+      <?php endforeach; ?>
     </div>
   </main>
   <footer>DGZ Motorshop &copy; <?=date('Y')?></footer>
 </body>
+
 </html>
