@@ -172,11 +172,11 @@ body {
 .dashboard-content {
     padding: 30px;
 }
-/* Content Area */
+/* Content Area 
 main.main-content {
     padding: 30px;
     background: #f5f7fa;
-}
+}*/
 
 /* Form Styling */
 h3 {
@@ -456,7 +456,7 @@ table a:focus {
         display: block;
     }
 }
-
+/*
 @media (max-width: 480px) {
     table {
         display: block;
@@ -471,7 +471,7 @@ table a:focus {
     form {
         padding: 15px;
     }
-}
+}*/
 /* Smooth scrolling */
 html {
     scroll-behavior: smooth;
