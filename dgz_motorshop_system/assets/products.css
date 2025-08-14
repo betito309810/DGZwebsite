@@ -1,4 +1,4 @@
-/* Modern Products Page CSS - Override existing styles */
+/*Reset and base styles*/
 * {
     margin: 0;
     padding: 0;
@@ -77,7 +77,7 @@ body {
     width: 20px;
 }
 
-/* Enhanced Main Content */
+/*  Main Content */
 .main-content {
     margin-left: 260px;
     min-height: 100vh;
@@ -168,6 +168,10 @@ body {
     background: #fee;
 }
 
+/* Dashboard Content */
+.dashboard-content {
+    padding: 30px;
+}
 /* Content Area */
 main.main-content {
     padding: 30px;
