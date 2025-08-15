@@ -76,12 +76,11 @@ body {
     width: 20px;
 }
 
-/* Main content 
+/* Main content */
 .main-content {
     margin-left: 260px;
-    min-height: 100vh;}
-    /*padding: 30px;8?
-}*/
+    min-height: 100vh;
+}
 
 /* Header */
 .header {
@@ -166,7 +165,10 @@ body {
 .dropdown-item.logout:hover {
     background: #fee;
 }
-
+/* Dashboard content */
+.dashboard-content {
+    padding: 30px;
+}
 /* Table styles */
 table {
     width: 100%;
@@ -176,7 +178,7 @@ table {
     box-shadow: 0 2px 15px rgba(0,0,0,0.05);
     border: 1px solid #e2e8f0;
     border-collapse: collapse;
-    margin-top: 30px;
+    margin-top: 20px;
 }
 
 table th {
@@ -222,7 +224,7 @@ table tr:last-child td {
     }
     .main-content {
         margin-left: 0;
-        padding: 15px;
+        
     }
     .header {
         padding: 15px 20px;
