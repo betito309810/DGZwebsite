@@ -62,9 +62,9 @@ $products = $pdo->query('SELECT * FROM products')->fetchAll();
                 </a>
             </div>
             <div class="nav-item">
-                <a href="orders.php" class="nav-link">
+                <a href="Inventory.php" class="nav-link">
                     <i class="fas fa-shopping-cart nav-icon"></i>
-                    Orders
+                    Inventory
                 </a>
             </div>
         </nav>
@@ -78,7 +78,7 @@ $products = $pdo->query('SELECT * FROM products')->fetchAll();
                 <button class="mobile-toggle" onclick="toggleSidebar()">
                     <i class="fas fa-bars"></i>
                 </button>
-                <h2>Products</h2>
+                <h2>Products - Add / Edit </h2>
             </div>
                 <div class="user-menu">
                 <div class="user-avatar" onclick="toggleDropdown()">
@@ -97,7 +97,6 @@ $products = $pdo->query('SELECT * FROM products')->fetchAll();
                 </div>
             </div>
         </header>
-    <h3>Add / Edit Product</h3>
     <form method="post">
         <input type="hidden" name="id" value="0">
         <label>Code: <input name="code" required></label><br>

@@ -190,9 +190,10 @@ h3 {
 
 form {
     background: white;
-    padding: 30px;
+    padding: 20px;
     border-radius: 12px;
     box-shadow: 0 2px 15px rgba(0,0,0,0.05);
+    margin-top: 10px    ;
     margin-bottom: 30px;
     border: 1px solid #e2e8f0;
 }
@@ -259,6 +260,7 @@ table {
     box-shadow: 0 2px 15px rgba(0,0,0,0.05);
     border: 1px solid #e2e8f0;
     border-collapse: collapse;
+    margin-top: 32px; 
 }
 
 table th {
@@ -438,6 +440,15 @@ table a:focus {
     
     .dashboard-content {
         padding: 20px;
+    }
+     table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+    }
+    table th, table td {
+        padding: 12px 10px;
+        font-size: 13px;
     }
 }
 /* Mobile menu toggle */
