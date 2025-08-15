@@ -66,7 +66,8 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['pos_checkout'])) {
             </tr>
             <?php endforeach; ?>
         </table>
-        <button name="pos_checkout" type="submit">Settle Payment (Complete)</button>
+    <button type="button" id="clearPosTable" style="margin:10px 0 0 0; background:#e74c3c; color:#fff; border:none; border-radius:6px; font-size:15px; padding:8px 18px; cursor:pointer;">Clear</button>
+    <button name="pos_checkout" type="submit">Settle Payment (Complete)</button>
     </form>
     <?php if(!empty($_GET['ok'])) echo '<p>Transaction recorded.</p>'; ?>
 
@@ -83,7 +84,7 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['pos_checkout'])) {
                             <th style="padding:8px 6px; text-align:left;">Product</th>
                             <th style="padding:8px 6px; text-align:right;">Price</th>
                             <th style="padding:8px 6px; text-align:center;">Stock</th>
-                            <th style="padding:8px 6px; text-align:center;">Action</th>
+                            <th style="padding:8px 6px; text-align:center;">Select</th>
                         </tr>
                     </thead>
                     <tbody id="productSearchTableBody">
@@ -91,6 +92,7 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['pos_checkout'])) {
                     </tbody>
                 </table>
             </div>
+            <button id="addSelectedProducts" style="margin-top:14px; background:#3498db; color:#fff; border:none; border-radius:6px; font-size:15px; padding:8px 18px; cursor:pointer; width:100%;">Add Selected</button>
         </div>
     </div>
 
@@ -138,10 +140,7 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['pos_checkout'])) {
         }
         filtered.forEach(p => {
             const tr = document.createElement('tr');
-            tr.innerHTML = `<td>${p.name}</td><td style='text-align:right;'>₱${parseFloat(p.price).toFixed(2)}</td><td style='text-align:center;'>${p.quantity}</td><td style='text-align:center;'><button style='background:#3498db;color:#fff;border:none;border-radius:5px;padding:6px 12px;cursor:pointer;font-size:13px;' data-id='${p.id}'>Add</button></td>`;
-            tr.querySelector('button').onclick = function() {
-                addProductToPOS(p);
-            };
+            tr.innerHTML = `<td>${p.name}</td><td style='text-align:right;'>₱${parseFloat(p.price).toFixed(2)}</td><td style='text-align:center;'>${p.quantity}</td><td style='text-align:center;'><input type='checkbox' class='product-select-checkbox' data-id='${p.id}'></td>`;
             tbody.appendChild(tr);
         });
     }
@@ -166,7 +165,21 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['pos_checkout'])) {
         renderProductTable(this.value.trim());
     };
 
-    // Add product to POS table
+    // Add selected products to POS table
+    document.getElementById('addSelectedProducts').onclick = function() {
+        const checkboxes = document.querySelectorAll('.product-select-checkbox:checked');
+        if(checkboxes.length === 0) {
+            alert('Please select at least one product to add.');
+            return;
+        }
+        checkboxes.forEach(cb => {
+            const pid = cb.getAttribute('data-id');
+            const product = allProducts.find(p => p.id == pid);
+            if(product) addProductToPOS(product);
+        });
+        document.getElementById('productModal').style.display = 'none';
+    };
+
     function addProductToPOS(product) {
         // Check if already in table
         const table = document.getElementById('posTable');
@@ -184,8 +197,15 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['pos_checkout'])) {
             tr.innerHTML = `<td>${product.name}</td><td>₱${parseFloat(product.price).toFixed(2)}</td><td>${product.quantity}</td><td><input type='checkbox' name='product_id[]' value='${product.id}' checked> <input type='number' name='qty[]' value='1' min='1' max='${product.quantity}'></td>`;
             table.appendChild(tr);
         }
-        document.getElementById('productModal').style.display = 'none';
     }
+    // Clear POS table (remove all rows except header)
+    document.getElementById('clearPosTable').onclick = function() {
+        const table = document.getElementById('posTable');
+        // Remove all rows except the first (header)
+        while(table.rows.length > 1) {
+            table.deleteRow(1);
+        }
+    };
     </script>
 </body>
 
