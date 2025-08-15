@@ -40,7 +40,7 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
 </head>
 
 <body>
-     <!-- Sidebar -->
+    <!-- Sidebar -->
     <aside class="sidebar" id="sidebar">
         <div class="sidebar-header">
             <div class="logo">
@@ -80,7 +80,7 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
             </div>
         </nav>
     </aside>
-     <!-- Main Content -->
+    <!-- Main Content -->
     <main class="main-content">
         <!-- Header -->
         <header class="header">
@@ -90,7 +90,7 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                 </button>
                 <h2>Inventory</h2>
             </div>
-                <div class="user-menu">
+            <div class="user-menu">
                 <div class="user-avatar" onclick="toggleDropdown()">
                     <i class="fas fa-user"></i>
                 </div>
@@ -107,38 +107,39 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                 </div>
             </div>
         </header>
-    <a href="inventory.php?export=csv">Export CSV</a>
-    <table border="1" cellpadding="5">
-        <tr>
-            <th>Code</th>
-            <th>Name</th>
-            <th>Quantity</th>
-            <th>Low Stock Threshold</th>
-            <th>Date Added</th><?php if($role==='admin') echo '<th>Update Stock</th>';?>
-        </tr>
-        <?php foreach($products as $p): 
+        
+        <a href="inventory.php?export=csv">Export CSV</a>   
+        <table border="1" cellpadding="5">
+            <tr>
+                <th>Code</th>
+                <th>Name</th>
+                <th>Quantity</th>
+                <th>Low Stock Threshold</th>
+                <th>Date Added</th><?php if($role==='admin') echo '<th>Update Stock</th>';?>
+            </tr>
+            <?php foreach($products as $p): 
 $low = $p['quantity'] <= $p['low_stock_threshold'];
 ?>
-        <tr style="<?php if($low) echo 'background-color:#fdd'; ?>">
-            <td><?=htmlspecialchars($p['code'])?></td>
-            <td><?=htmlspecialchars($p['name'])?></td>
-            <td><?=intval($p['quantity'])?></td>
-            <td><?=intval($p['low_stock_threshold'])?></td>
-            <td><?=$p['created_at']?></td>
-            <?php if($role==='admin'): ?>
-            <td>
-                <form method="post" style="display:inline-block">
-                    <input type="hidden" name="id" value="<?=$p['id']?>">
-                    <input type="number" name="change" value="0" style="width:60px">
-                    <button name="update_stock">Apply</button>
-                </form>
-            </td>
-            <?php endif; ?>
-        </tr>
-        <?php endforeach; ?>
-    </table>
+            <tr style="<?php if($low) echo 'background-color:#fdd'; ?>">
+                <td><?=htmlspecialchars($p['code'])?></td>
+                <td><?=htmlspecialchars($p['name'])?></td>
+                <td><?=intval($p['quantity'])?></td>
+                <td><?=intval($p['low_stock_threshold'])?></td>
+                <td><?=$p['created_at']?></td>
+                <?php if($role==='admin'): ?>
+                <td>
+                    <form method="post" style="display:inline-block">
+                        <input type="hidden" name="id" value="<?=$p['id']?>">
+                        <input type="number" name="change" value="0" style="width:60px">
+                        <button name="update_stock">Apply</button>
+                    </form>
+                </td>
+                <?php endif; ?>
+            </tr>
+            <?php endforeach; ?>
+        </table>
     </main>
-     <script>
+    <script>
         // Toggle user dropdown
         function toggleDropdown() {
             const dropdown = document.getElementById('userDropdown');
@@ -152,22 +153,22 @@ $low = $p['quantity'] <= $p['low_stock_threshold'];
         }
 
         // Close dropdown when clicking outside
-        document.addEventListener('click', function(event) {
+        document.addEventListener('click', function (event) {
             const userMenu = document.querySelector('.user-menu');
             const dropdown = document.getElementById('userDropdown');
-            
+
             if (!userMenu.contains(event.target)) {
                 dropdown.classList.remove('show');
             }
         });
 
         // Close sidebar when clicking outside on mobile
-        document.addEventListener('click', function(event) {
+        document.addEventListener('click', function (event) {
             const sidebar = document.getElementById('sidebar');
             const toggle = document.querySelector('.mobile-toggle');
-            
-            if (window.innerWidth <= 768 && 
-                !sidebar.contains(event.target) && 
+
+            if (window.innerWidth <= 768 &&
+                !sidebar.contains(event.target) &&
                 !toggle.contains(event.target)) {
                 sidebar.classList.remove('mobile-open');
             }
