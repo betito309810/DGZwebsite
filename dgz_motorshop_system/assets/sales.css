@@ -10,32 +10,161 @@ body {
     background: #f5f7fa;
     color: #333;
     line-height: 1.6;
+}
+
+/* Sidebar */
+.sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 260px;
+    height: 100vh;
+    background: #2c3e50;
+    z-index: 1000;
+    transition: transform 0.3s ease;
+    overflow-y: auto;
+}
+
+.sidebar-header {
+    padding: 20px;
+    border-bottom: 1px solid #34495e;
+}
+
+.logo {
+    max-width: 150px;
+    height: auto;
+}
+
+.logo img {
+    width: 100%;
+    height: auto;
+}
+
+.nav-menu {
+    padding: 20px 0;
+}
+
+.nav-item {
+    margin-bottom: 5px;
+}
+
+.nav-link {
+    display: flex;
+    align-items: center;
+    padding: 12px 20px;
+    color: #bdc3c7;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    font-size: 14px;
+}
+
+.nav-link:hover {
+    background: #d4d406;
+    color: white;
+    padding-left: 25px;
+}
+
+.nav-link.active {
+    background: #3498db;
+    color: white;
+    border-right: 3px solid #2980b9;
+}
+
+.nav-icon {
+    margin-right: 12px;
+    font-size: 16px;
+    width: 20px;
+}
+
+/* Main content */
+.main-content {
+    margin-left: 260px;
+    min-height: 100vh;
     padding: 30px;
 }
 
 /* Header */
-h2 {
+.header {
+    background: white;
+    padding: 15px 30px;
+    border-bottom: 1px solid #e9ecef;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.header h2 {
     color: #2c3e50;
     font-size: 24px;
     font-weight: 600;
-    margin-bottom: 20px;
 }
 
-a {
-    display: inline-block;
+.user-menu {
+    position: relative;
+}
+
+.user-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
     background: #3498db;
-    color: #fff;
-    text-decoration: none;
-    padding: 10px 18px;
-    border-radius: 6px;
-    font-size: 14px;
-    font-weight: 500;
-    margin-bottom: 25px;
-    transition: background 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background 0.3s ease;
 }
 
-a:hover {
+.user-avatar:hover {
     background: #2980b9;
+}
+
+.dropdown-menu {
+    position: absolute;
+    top: 50px;
+    right: 0;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    min-width: 150px;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: all 0.3s ease;
+    z-index: 1001;
+}
+
+.dropdown-menu.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.dropdown-item {
+    display: block;
+    padding: 12px 20px;
+    color: #333;
+    text-decoration: none;
+    transition: background 0.3s ease;
+    font-size: 14px;
+}
+
+.dropdown-item:hover {
+    background: #f8f9fa;
+}
+
+.dropdown-item.logout {
+    color: #e74c3c;
+    border-top: 1px solid #eee;
+}
+
+.dropdown-item.logout:hover {
+    background: #fee;
 }
 
 /* Table styles */
@@ -47,7 +176,7 @@ table {
     box-shadow: 0 2px 15px rgba(0,0,0,0.05);
     border: 1px solid #e2e8f0;
     border-collapse: collapse;
-    margin-top: 20px;
+    margin-top: 30px;
 }
 
 table th {
@@ -84,21 +213,44 @@ table tr:last-child td {
 
 /* Responsive table */
 @media (max-width: 768px) {
-    body {
+    .sidebar {
+        transform: translateX(-100%);
+        width: 100%;
+    }
+    .sidebar.mobile-open {
+        transform: translateX(0);
+    }
+    .main-content {
+        margin-left: 0;
         padding: 15px;
+    }
+    .header {
+        padding: 15px 20px;
     }
     table {
         display: block;
         overflow-x: auto;
         white-space: nowrap;
     }
-    h2 {
-        font-size: 18px;
-    }
-    a {
-        padding: 8px 14px;
-        font-size: 13px;
-    }
     table th, table td {
         padding: 12px 10px;
         font-size: 13px;
+    }
+}
+
+/* Mobile menu toggle */
+.mobile-toggle {
+    display: none;
+    background: none;
+    border: none;
+    font-size: 20px;
+    color: #2c3e50;
+    cursor: pointer;
+    padding: 5px;
+}
+
+@media (max-width: 768px) {
+    .mobile-toggle {
+        display: block;
+    }
+}
