@@ -20,7 +20,7 @@ $orders = $pdo->query($sql)->fetchAll();
 </head>
 
 <body>
-
+<!-- Sidebar -->
     <aside class="sidebar" id="sidebar">
         <div class="sidebar-header">
             <div class="logo">
@@ -61,7 +61,7 @@ $orders = $pdo->query($sql)->fetchAll();
         </nav>
     </aside>
 
-<main>
+<main class="main-content">
     <!-- Header -->
         <header class="header">
             <div class="header-left">
@@ -142,6 +142,7 @@ $orders = $pdo->query($sql)->fetchAll();
                 sidebar.classList.remove('mobile-open');
             }
         });
+        </script> 
 </body>
 
 </html>

@@ -53,9 +53,9 @@ $top = $pdo->query('SELECT p.*, SUM(oi.qty) as sold FROM order_items oi JOIN pro
                 </a>
             </div>
             <div class="nav-item">
-                <a href="orders.php" class="nav-link">
+                <a href="inventory.php" class="nav-link">
                     <i class="fas fa-shopping-cart nav-icon"></i>
-                    Orders
+                    Inventory
                 </a>
             </div>
         </nav>

@@ -76,12 +76,12 @@ body {
     width: 20px;
 }
 
-/* Main content */
+/* Main content 
 .main-content {
     margin-left: 260px;
-    min-height: 100vh;
-    padding: 30px;
-}
+    min-height: 100vh;}
+    /*padding: 30px;8?
+}*/
 
 /* Header */
 .header {
