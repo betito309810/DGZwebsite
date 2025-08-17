@@ -97,6 +97,17 @@ $products = $pdo->query('SELECT * FROM products')->fetchAll();
                 </div>
             </div>
         </header>
+        <button id="openAddModal" class="add-btn" type="button">
+    <i class="fas fa-plus"></i> Add Product
+</button>
+<!-- Add Product Modal -->
+<div id="addModal"
+    style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.3); z-index:9999; align-items:center; justify-content:center;">
+    <div
+        style="background:#fff; border-radius:10px; max-width:400px; width:95%; margin:auto; padding:24px; position:relative;">
+        <button type="button" id="closeAddModal"
+            style="position:absolute; top:10px; right:10px; background:none; border:none; font-size:20px; color:#888;">&times;</button>
+        <h3>Add Product</h3>
         <form method="post">
             <input type="hidden" name="id" value="0">
             <label>Code: <input name="code" required></label><br>
@@ -107,6 +118,8 @@ $products = $pdo->query('SELECT * FROM products')->fetchAll();
             <label>Low stock threshold: <input name="low_stock_threshold" value="5" required></label><br>
             <button name="save_product" type="submit">Add</button>
         </form>
+    </div>
+</div>
         <h3>All Products</h3>
         <table>
             <tr>
@@ -210,6 +223,17 @@ $products = $pdo->query('SELECT * FROM products')->fetchAll();
         document.getElementById('editModal').addEventListener('click', function (e) {
             if (e.target === this) this.style.display = 'none';
         });
+
+        // Add product modal functionality
+            document.getElementById('openAddModal').onclick = function () {
+        document.getElementById('addModal').style.display = 'flex';
+    };
+    document.getElementById('closeAddModal').onclick = function () {
+        document.getElementById('addModal').style.display = 'none';
+    };
+    document.getElementById('addModal').addEventListener('click', function (e) {
+        if (e.target === this) this.style.display = 'none';
+    });
     
     </script>
 

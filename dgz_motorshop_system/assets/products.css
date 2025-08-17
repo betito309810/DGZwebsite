@@ -187,6 +187,29 @@ h3 {
     padding-bottom: 10px;
     border-bottom: 2px solid #e2e8f0;
 }
+/* Add Product Button */
+.add-btn {
+    background: linear-gradient(135deg, #60a5fa, #2563eb);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 15px;
+    padding: 10px 20px;
+    cursor: pointer;
+    margin-bottom: 0px;
+    margin-top: 18px;
+    margin-left:auto;
+    display: block;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    width: fit-content;
+    transition: background 0.2s;
+    
+}
+.add-btn:hover {
+    background: linear-gradient(135deg, #2563eb, #1e40af);
+}
 
 form {
     background: white;
@@ -466,7 +489,15 @@ table a:focus {
         grid-template-columns: 1fr;
         gap: 15px;
     }
-    
+    .add-btn {
+        margin-left: auto;
+        margin-right: 0;
+        width: fit-content;
+        display: block;
+        justify-content: center;
+        margin-top: 18px;
+        margin-bottom: 18px;
+    }
     .header {
         padding: 15px 20px;
     }
