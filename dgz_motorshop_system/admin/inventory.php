@@ -74,7 +74,7 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
             </div>
             <div class="nav-item">
                 <a href="inventory.php" class="nav-link active">
-                    <i class="fas fa-shopping-cart nav-icon"></i>
+                    <i class="fas fa-boxes nav-icon"></i>
                     Inventory
                 </a>
             </div>

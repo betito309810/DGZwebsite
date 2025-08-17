@@ -54,7 +54,7 @@ $orders = $pdo->query($sql)->fetchAll();
             </div>
             <div class="nav-item">
                 <a href="inventory.php" class="nav-link">
-                    <i class="fas fa-shopping-cart nav-icon"></i>
+                    <i class="fas fa-boxes nav-icon"></i>
                     Inventory
                 </a>
             </div>

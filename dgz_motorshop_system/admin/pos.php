@@ -82,7 +82,7 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['pos_checkout'])) {
             </div>
             <div class="nav-item">
                 <a href="inventory.php" class="nav-link">
-                    <i class="fas fa-shopping-cart nav-icon"></i>
+                    <i class="fas fa-boxes nav-icon"></i>
                     Inventory
                 </a>
             </div>
@@ -152,7 +152,7 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['pos_checkout'])) {
                     </tbody>
                 </table>
             </div>
-            <button id="addSelectedProducts" style="margin-top:14px; background:#3498db; color:#fff; border:none; border-radius:6px; font-size:15px; padding:8px 18px; cursor:pointer; width:100%;">Add Selected</button>
+            <button id="addSelectedProducts" style="margin-top:14px; background:#3498db; color:#fff; border:none; border-radius:6px; font-size:15px; padding:8px 18px; cursor:pointer; width:100%;">Add </button>
         </div>
     </div>
     </main>

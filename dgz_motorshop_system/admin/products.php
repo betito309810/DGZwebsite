@@ -63,7 +63,7 @@ $products = $pdo->query('SELECT * FROM products')->fetchAll();
             </div>
             <div class="nav-item">
                 <a href="Inventory.php" class="nav-link">
-                    <i class="fas fa-shopping-cart nav-icon"></i>
+                    <i class="fas fa-boxes nav-icon"></i>
                     Inventory
                 </a>
             </div>
@@ -105,7 +105,7 @@ $products = $pdo->query('SELECT * FROM products')->fetchAll();
         <label>Price: <input name="price" required></label><br>
         <label>Quantity: <input name="quantity" required></label><br>
         <label>Low stock threshold: <input name="low_stock_threshold" value="5" required></label><br>
-        <button name="save_product" type="submit">Save</button>
+        <button name="save_product" type="submit">Add</button>
     </form>
     <h3>All Products</h3>
     <table>
