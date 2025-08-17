@@ -19,17 +19,17 @@ $products = $pdo->query('SELECT * FROM products')->fetchAll();
 <html>
 
 <head>
-     <meta charset="utf-8">
+    <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Products</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="../assets/style.css">
     <link rel="stylesheet" href="../assets/products.css">
-    
+
 </head>
 
 <body>
-     <!-- Sidebar -->
+    <!-- Sidebar -->
     <aside class="sidebar" id="sidebar">
         <div class="sidebar-header">
             <div class="logo">
@@ -80,7 +80,7 @@ $products = $pdo->query('SELECT * FROM products')->fetchAll();
                 </button>
                 <h2>Products - Add / Edit </h2>
             </div>
-                <div class="user-menu">
+            <div class="user-menu">
                 <div class="user-avatar" onclick="toggleDropdown()">
                     <i class="fas fa-user"></i>
                 </div>
@@ -97,35 +97,62 @@ $products = $pdo->query('SELECT * FROM products')->fetchAll();
                 </div>
             </div>
         </header>
-    <form method="post">
-        <input type="hidden" name="id" value="0">
-        <label>Code: <input name="code" required></label><br>
-        <label>Name: <input name="name" required></label><br>
-        <label>Description: <textarea name="description"></textarea></label><br>
-        <label>Price: <input name="price" required></label><br>
-        <label>Quantity: <input name="quantity" required></label><br>
-        <label>Low stock threshold: <input name="low_stock_threshold" value="5" required></label><br>
-        <button name="save_product" type="submit">Add</button>
-    </form>
-    <h3>All Products</h3>
-    <table>
-        <tr>
-            <th>Code</th>
-            <th>Name</th>
-            <th>Qty</th>
-            <th>Price</th>
-            <th>Action</th>
-        </tr>
-        <?php foreach($products as $p): ?>
-        <tr>
-            <td><?=htmlspecialchars($p['code'])?></td>
-            <td><?=htmlspecialchars($p['name'])?></td>
-            <td><?=intval($p['quantity'])?></td>
-            <td>₱<?=number_format($p['price'],2)?></td>
-            <td><a href="products.php?delete=<?=$p['id']?>" onclick="return confirm('Delete?')">Delete</a></td>
-        </tr>
-        <?php endforeach; ?>
-    </table>
+        <form method="post">
+            <input type="hidden" name="id" value="0">
+            <label>Code: <input name="code" required></label><br>
+            <label>Name: <input name="name" required></label><br>
+            <label>Description: <textarea name="description"></textarea></label><br>
+            <label>Price: <input name="price" required></label><br>
+            <label>Quantity: <input name="quantity" required></label><br>
+            <label>Low stock threshold: <input name="low_stock_threshold" value="5" required></label><br>
+            <button name="save_product" type="submit">Add</button>
+        </form>
+        <h3>All Products</h3>
+        <table>
+            <tr>
+                <th>Code</th>
+                <th>Name</th>
+                <th>Qty</th>
+                <th>Price</th>
+                <th>Action</th>
+            </tr>
+            <?php foreach($products as $p): ?>
+            <tr>
+                <td><?=htmlspecialchars($p['code'])?></td>
+                <td><?=htmlspecialchars($p['name'])?></td>
+                <td><?=intval($p['quantity'])?></td>
+                <td>₱<?=number_format($p['price'],2)?></td>
+                <td> <a href="#" class="edit-btn action-btn" data-id="<?=$p['id']?>" data-code="<?=htmlspecialchars($p['code'])?>"
+                        data-name="<?=htmlspecialchars($p['name'])?>"
+                        data-description="<?=htmlspecialchars($p['description'])?>"
+                        data-price="<?=htmlspecialchars($p['price'])?>"
+                        data-quantity="<?=htmlspecialchars($p['quantity'])?>"
+                        data-low="<?=htmlspecialchars($p['low_stock_threshold'])?>"><i class="fas fa-edit"></i>Edit</a>
+                        <a href="products.php?delete=<?=$p['id']?>" class="delete-btn action-btn" onclick="return confirm('Delete?')"> <i class="fas fa-trash"></i>Delete</a>
+            </td>
+            </tr>
+            <?php endforeach; ?>
+        </table>
+        <!-- Edit Product Modal -->
+        <div id="editModal"
+            style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.3); z-index:9999; align-items:center; justify-content:center;">
+            <div
+                style="background:#fff; border-radius:10px; max-width:400px; width:95%; margin:auto; padding:24px; position:relative;">
+                <button type="button" id="closeEditModal"
+                    style="position:absolute; top:10px; right:10px; background:none; border:none; font-size:20px; color:#888;">&times;</button>
+                <h3>Edit Product</h3>
+                <form method="post" id="editProductForm">
+                    <input type="hidden" name="id" id="edit_id">
+                    <label>Code: <input name="code" id="edit_code" required></label><br>
+                    <label>Name: <input name="name" id="edit_name" required></label><br>
+                    <label>Description: <textarea name="description" id="edit_description"></textarea></label><br>
+                    <label>Price: <input name="price" id="edit_price" required></label><br>
+                    <label>Quantity: <input name="quantity" id="edit_quantity" required></label><br>
+                    <label>Low stock threshold: <input name="low_stock_threshold" id="edit_low" required></label><br>
+                    <button name="save_product" type="submit">Save Changes</button>
+                </form>
+            </div>
+        </div>
     </main>
     <script>
         // Toggle user dropdown
@@ -141,28 +168,51 @@ $products = $pdo->query('SELECT * FROM products')->fetchAll();
         }
 
         // Close dropdown when clicking outside
-        document.addEventListener('click', function(event) {
+        document.addEventListener('click', function (event) {
             const userMenu = document.querySelector('.user-menu');
             const dropdown = document.getElementById('userDropdown');
-            
+
             if (!userMenu.contains(event.target)) {
                 dropdown.classList.remove('show');
             }
         });
 
         // Close sidebar when clicking outside on mobile
-        document.addEventListener('click', function(event) {
+        document.addEventListener('click', function (event) {
             const sidebar = document.getElementById('sidebar');
             const toggle = document.querySelector('.mobile-toggle');
-            
-            if (window.innerWidth <= 768 && 
-                !sidebar.contains(event.target) && 
+
+            if (window.innerWidth <= 768 &&
+                !sidebar.contains(event.target) &&
                 !toggle.contains(event.target)) {
                 sidebar.classList.remove('mobile-open');
             }
         });
-    </script>
+
+        // Edit product functionality
+            document.querySelectorAll('.edit-btn').forEach(btn => {
+                btn.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    document.getElementById('edit_id').value = this.dataset.id;
+                    document.getElementById('edit_code').value = this.dataset.code;
+                    document.getElementById('edit_name').value = this.dataset.name;
+                    document.getElementById('edit_description').value = this.dataset.description;
+                    document.getElementById('edit_price').value = this.dataset.price;
+                    document.getElementById('edit_quantity').value = this.dataset.quantity;
+                    document.getElementById('edit_low').value = this.dataset.low;
+                    document.getElementById('editModal').style.display = 'flex';
+                });
+            });
+        document.getElementById('closeEditModal').onclick = function () {
+            document.getElementById('editModal').style.display = 'none';
+        };
+        // Optional: close modal when clicking outside the modal content
+        document.getElementById('editModal').addEventListener('click', function (e) {
+            if (e.target === this) this.style.display = 'none';
+        });
     
+    </script>
+
 </body>
 
 </html>
