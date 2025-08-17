@@ -241,6 +241,46 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['pos_checkout'])) {
         document.getElementById('productModal').style.display = 'none';
     };
 
+    //Save POS table data to localStorage
+    function savePosTableToStorage() {
+    const rows = [];
+    document.querySelectorAll('#posTable tr[data-product-id]').forEach(tr => {
+        rows.push({
+            id: tr.getAttribute('data-product-id'),
+            name: tr.querySelector('.pos-name').textContent,
+            price: tr.querySelector('.pos-price').textContent,
+            available: tr.querySelector('.pos-available').textContent,
+            qty: tr.querySelector('.pos-qty').value
+        });
+    });
+    localStorage.setItem('posTable', JSON.stringify(rows));
+}
+
+//Restore POS table from localStorage on page load
+window.addEventListener('DOMContentLoaded', function() {
+    const data = JSON.parse(localStorage.getItem('posTable') || '[]');
+    data.forEach(item => {
+        addProductToPOS({
+            id: item.id,
+            name: item.name,
+            price: item.price.replace(/[^\d.]/g, ''), // Remove ₱ and keep number
+            quantity: item.available,
+        });
+        // Set the correct qty value after row is added
+        const table = document.getElementById('posTable');
+        const tr = table.querySelector(`tr[data-product-id='${item.id}']`);
+        if(tr) {
+            tr.querySelector('.pos-qty').value = item.qty;
+        }
+    });
+});
+
+//Clear localStorage when checkout is completed or clear button is clicked
+function clearPosTable() {
+    // ...your code to clear the table...
+    localStorage.removeItem('posTable');
+}
+
     function addProductToPOS(product) {
         // Check if already in table
         const table = document.getElementById('posTable');
@@ -255,10 +295,21 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['pos_checkout'])) {
             // Add new row
             const tr = document.createElement('tr');
             tr.setAttribute('data-product-id', product.id);
-            tr.innerHTML = `<td>${product.name}</td><td>₱${parseFloat(product.price).toFixed(2)}</td><td>${product.quantity}</td><td><input type='checkbox' name='product_id[]' value='${product.id}' checked> <input type='number' name='qty[]' value='1' min='1' max='${product.quantity}'></td>`;
+            tr.innerHTML = `
+            <td class="pos-name">${product.name}</td>
+            <td class="pos-price">₱${parseFloat(product.price).toFixed(2)}</td>
+            <td class="pos-available">${product.quantity}</td>
+            <td><input type='checkbox' name='product_id[]' value='${product.id}' checked> <input type='number' class='pos-qty' name='qty[]' value='1' min='1' max='${product.quantity}'></td>`;
             table.appendChild(tr);
         }
+        savePosTableToStorage(); // Save to localStorage
     }
+    // Save POS table to localStorage on input change
+    document.getElementById('posTable').addEventListener('input', function(e) {
+    if(e.target.classList.contains('pos-qty')) {
+        savePosTableToStorage();
+    }
+});
     // Clear POS table (remove all rows except header)
     document.getElementById('clearPosTable').onclick = function() {
         const table = document.getElementById('posTable');
@@ -266,7 +317,8 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['pos_checkout'])) {
         while(table.rows.length > 1) {
             table.deleteRow(1);
         }
-        
+        savePosTableToStorage(); // Save to localStorage
+        localStorage.removeItem('posTable'); // Clear localStorage
     };
     // Toggle user dropdown
         function toggleDropdown() {
