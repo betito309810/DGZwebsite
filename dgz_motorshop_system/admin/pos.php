@@ -6,6 +6,11 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['pos_checkout'])) {
     // simple POS flow: product_id[], qty[]
     $items = $_POST['product_id'] ?? [];
     $qtys = $_POST['qty'] ?? [];
+    if (empty($items)) {
+    echo "<script>alert('No item selected in POS!'); window.location='pos.php';</script>";
+    exit;
+}
+
     $total = 0;
     foreach($items as $i=>$pid){
         $pstmt = $pdo->prepare('SELECT * FROM products WHERE id=?');
@@ -16,6 +21,18 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['pos_checkout'])) {
             $total += $p['price'] * $q;
         }
     }
+    // Modal overlay 
+    if (empty($items)) {
+    echo "<script>
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('productModal').style.display = 'none';
+            alert('No item selected in POS!');
+            window.location='pos.php';
+        });
+    </script>";
+    exit;
+}
+
     // create a generic customer "Walk-in"
     $stmt = $pdo->prepare('INSERT INTO orders (customer_name,contact,address,total,payment_method,status) VALUES (?,?,?,?,?,?)');
     $stmt->execute(['Walk-in','N/A','N/A',$total,'Cash','completed']);
@@ -129,6 +146,7 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['pos_checkout'])) {
     <button type="button" id="clearPosTable" style="margin:10px 0 0 0; background:#e74c3c; color:#fff; border:none; border-radius:6px; font-size:15px; padding:8px 18px; cursor:pointer;">Clear</button>
     <button name="pos_checkout" type="submit">Settle Payment (Complete)</button>
     </form>
+    <p></p>
     <?php if(!empty($_GET['ok'])) echo '<p>Transaction recorded.</p>'; ?>
 
     <!-- Product Search Modal -->
@@ -310,6 +328,45 @@ function clearPosTable() {
         savePosTableToStorage();
     }
 });
+
+// Show alert and clear POS table if payment is settled
+window.addEventListener('DOMContentLoaded', function() {
+    if (window.location.search.includes('ok=1')) {
+        alert('Payment settled! Transaction recorded.');
+        // Clear POS table and localStorage
+        const table = document.getElementById('posTable');
+        while(table.rows.length > 1) {
+            table.deleteRow(1);
+        }
+        localStorage.removeItem('posTable');
+
+        // Remove ok=1 from the URL without reloading
+        if (window.history.replaceState) {
+            const url = window.location.href.replace(/(\?|&)ok=1/, '');
+            window.history.replaceState({}, document.title, url);
+        }
+    }
+});
+// Prevent checkout if no products in POS table
+document.getElementById('posForm').addEventListener('submit', function(e) {
+    const rows = document.querySelectorAll('#posTable tr[data-product-id]');
+    if (rows.length === 0) {
+        e.preventDefault();
+        alert('No item selected in POS!');
+    }
+});
+
+//Modal overlay 
+document.getElementById('posForm').addEventListener('submit', function(e) {
+    const rows = document.querySelectorAll('#posTable tr[data-product-id]');
+    if (rows.length === 0) {
+        e.preventDefault();
+        document.getElementById('productModal').style.display = 'none'; // close modal if open
+        alert('No item selected in POS!');
+    }
+});
+
+
     // Clear POS table (remove all rows except header)
     document.getElementById('clearPosTable').onclick = function() {
         const table = document.getElementById('posTable');
