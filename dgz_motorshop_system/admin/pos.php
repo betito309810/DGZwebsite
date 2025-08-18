@@ -6,10 +6,10 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['pos_checkout'])) {
     // simple POS flow: product_id[], qty[]
     $items = $_POST['product_id'] ?? [];
     $qtys = $_POST['qty'] ?? [];
-    if (empty($items)) {
+    /*if (empty($items)) {
     echo "<script>alert('No item selected in POS!'); window.location='pos.php';</script>";
     exit;
-}
+}*/
 
     $total = 0;
     foreach($items as $i=>$pid){
