@@ -347,16 +347,9 @@ window.addEventListener('DOMContentLoaded', function() {
         }
     }
 });
-// Prevent checkout if no products in POS table
-/*
-document.getElementById('posForm').addEventListener('submit', function(e) {
-    const rows = document.querySelectorAll('#posTable tr[data-product-id]');
-    if (rows.length === 0) {
-        e.preventDefault();
-        alert('No item selected in POS!');
-    }
-});*/
 
+
+// Prevent checkout if no products in POS table
 //Modal overlay 
 document.getElementById('posForm').addEventListener('submit', function(e) {
     const rows = document.querySelectorAll('#posTable tr[data-product-id]');
