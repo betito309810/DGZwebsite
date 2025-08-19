@@ -80,6 +80,7 @@ body {
 .main-content {
     margin-left: 260px;
     min-height: 100vh;
+    padding: 30px;
 }
 
 /* Header */
@@ -93,12 +94,19 @@ body {
     position: sticky;
     top: 0;
     z-index: 100;
+    margin: -30px -30px 30px -30px;
 }
 
 .header h2 {
     color: #2c3e50;
     font-size: 24px;
     font-weight: 600;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 15px;
 }
 
 .user-menu {
@@ -165,20 +173,48 @@ body {
 .dropdown-item.logout:hover {
     background: #fee;
 }
-/* Dashboard content */
-.dashboard-content {
-    padding: 30px;
-}
-/* Table styles */
-table {
-    width: 100%;
+
+/* Table container */
+.table-container {
     background: white;
     border-radius: 12px;
     overflow: hidden;
-    box-shadow: 0 2px 15px rgba(0,0,0,0.05);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
     border: 1px solid #e2e8f0;
+    max-width: 100%;
+
+}
+
+.table-wrapper {
+    height: 400px; /* height for the container */
+    overflow-y: auto;
+    overflow-x: auto;
+}
+
+/* Custom scrollbar */
+.table-wrapper::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.table-wrapper::-webkit-scrollbar-track {
+    background: #f1f5f9;
+}
+
+.table-wrapper::-webkit-scrollbar-thumb {
+    background: #cbd5e0;
+    border-radius: 4px;
+}
+
+.table-wrapper::-webkit-scrollbar-thumb:hover {
+    background: #a0aec0;
+}
+
+/* Table styles */
+table {
+    width: 100%;
     border-collapse: collapse;
-    margin-top: 20px;
+    margin: 0;
 }
 
 table th {
@@ -191,6 +227,9 @@ table th {
     font-size: 14px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
 }
 
 table td {
@@ -213,30 +252,123 @@ table tr:last-child td {
     border-bottom: none;
 }
 
-/* Responsive table */
+/* Pagination */
+.pagination-container {
+    padding: 20px 30px;
+    background: white;
+    border-top: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.pagination-info {
+    color: #6b7280;
+    font-size: 14px;
+}
+
+.pagination {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pagination a,
+.pagination span {
+    padding: 8px 12px;
+    text-decoration: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    min-width: 40px;
+    text-align: center;
+    border: 1px solid #e2e8f0;
+}
+
+.pagination a {
+    color: #4a5568;
+    background: white;
+}
+
+.pagination a:hover {
+    background: #f8fafc;
+    border-color: #cbd5e0;
+    color: #2d3748;
+}
+
+.pagination .current {
+    background: #3498db;
+    color: white;
+    border-color: #3498db;
+}
+
+.pagination .prev,
+.pagination .next {
+    padding: 8px 16px;
+    font-weight: 600;
+}
+
+.pagination .disabled {
+    color: #a0aec0;
+    cursor: not-allowed;
+    background: #f7fafc;
+}
+
+.pagination .disabled:hover {
+    background: #f7fafc;
+    border-color: #e2e8f0;
+}
+
+/* Responsive styles */
 @media (max-width: 768px) {
     .sidebar {
         transform: translateX(-100%);
         width: 100%;
     }
+    
     .sidebar.mobile-open {
         transform: translateX(0);
     }
+    
     .main-content {
         margin-left: 0;
-        
+        padding: 20px 15px;
     }
+    
     .header {
         padding: 15px 20px;
+        margin: -20px -15px 20px -15px;
     }
-    table {
-        display: block;
-        overflow-x: auto;
-        white-space: nowrap;
+    
+    .table-wrapper {
+        height: 400px; /* Smaller height on mobile */
     }
+    
+    .pagination-container {
+        padding: 15px 20px;
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .pagination {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    
+    .pagination a,
+    .pagination span {
+        padding: 6px 10px;
+        font-size: 13px;
+        min-width: 35px;
+    }
+    
     table th, table td {
         padding: 12px 10px;
         font-size: 13px;
+        white-space: nowrap;
     }
 }
 
