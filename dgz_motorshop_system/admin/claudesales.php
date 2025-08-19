@@ -4,7 +4,7 @@ if(empty($_SESSION['user_id'])){ header('Location: login.php'); exit; }
 
 $pdo = db();
 
-// Handle export to CSV
+// Handle CSV export FIRST - before any other queries
 if(isset($_GET['export']) && $_GET['export'] == 'csv') {
     // Get ALL orders for export
     $export_sql = "SELECT * FROM orders ORDER BY created_at DESC";
@@ -20,7 +20,6 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
     fclose($out);
     exit;
 }
-
 
 // Pagination variables
 $records_per_page = 20;
@@ -125,8 +124,12 @@ $end_record = min($offset + $records_per_page, $total_records);
             </div>
         </header>
 
-        <!-- Export CSV Button -->
-         <a href="sales.php?export=csv">Export CSV</a>   
+        <!-- Export Button -->
+        <div style="margin-bottom: 20px;">
+            <a href="?export=csv" style="background: #27ae60; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-size: 14px; display: inline-flex; align-items: center; gap: 8px;">
+                <i class="fas fa-download"></i> Export to CSV
+            </a>
+        </div>
 
         <!-- Table Container -->
         <div class="table-container">
@@ -135,17 +138,20 @@ $end_record = min($offset + $records_per_page, $total_records);
                     <thead>
                         <tr>
                             <th>ID</th>
-                            <th>Customer</th>
+                            <th>Customer Name</th>
+                            <th>Contact</th>
+                            <th>Address</th>
                             <th>Total</th>
-                            <th>Payment</th>
+                            <th>Payment Method</th>
+                            <th>Payment Proof</th>
                             <th>Status</th>
-                            <th>Date</th>
+                            <th>Created At</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php if(empty($orders)): ?>
                             <tr>
-                                <td colspan="6" style="text-align: center; padding: 40px; color: #6b7280;">
+                                <td colspan="9" style="text-align: center; padding: 40px; color: #6b7280;">
                                     <i class="fas fa-inbox" style="font-size: 48px; margin-bottom: 10px; display: block;"></i>
                                     No sales records found.
                                 </td>
@@ -155,8 +161,11 @@ $end_record = min($offset + $records_per_page, $total_records);
                             <tr>
                                 <td><?=$o['id']?></td>
                                 <td><?=htmlspecialchars($o['customer_name'])?></td>
+                                <td><?=htmlspecialchars($o['contact'] ?? 'N/A')?></td>
+                                <td><?=htmlspecialchars($o['address'] ?? 'N/A')?></td>
                                 <td>₱<?=number_format($o['total'],2)?></td>
                                 <td><?=htmlspecialchars($o['payment_method'])?></td>
+                                <td><?=htmlspecialchars($o['payment_proof'] ?? 'NULL')?></td>
                                 <td><?=htmlspecialchars($o['status'])?></td>
                                 <td><?=date('M d, Y g:i A', strtotime($o['created_at']))?></td>
                             </tr>
