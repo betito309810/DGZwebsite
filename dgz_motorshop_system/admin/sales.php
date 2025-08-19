@@ -4,6 +4,19 @@ if(empty($_SESSION['user_id'])){ header('Location: login.php'); exit; }
 
 $pdo = db();
 
+// Handle export to CSV
+if(isset($_GET['export']) && $_GET['export'] == 'csv') {
+    header('Content-Type: text/csv');
+    header('Content-Disposition: attachment; filename="Sales.csv"');
+    $out = fopen('php://output', 'w');
+    fputcsv($out, ['Product Code','Name','Quantity','Low Stock Threshold','Date Added']);
+    foreach($products as $p) {
+        fputcsv($out, [$p['code'],$p['name'],$p['quantity'],$p['low_stock_threshold'],$p['created_at']]);
+    }
+    fclose($out);
+    exit;
+}
+
 // Pagination variables
 $records_per_page = 20;
 $current_page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
@@ -106,6 +119,9 @@ $end_record = min($offset + $records_per_page, $total_records);
                 </div>
             </div>
         </header>
+
+        <!-- Export CSV Button -->
+         <a href="inventory.php?export=csv">Export CSV</a>   
 
         <!-- Table Container -->
         <div class="table-container">
