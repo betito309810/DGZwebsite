@@ -201,54 +201,54 @@ foreach($items as $i=>$pid){
     </main>
 
     <script>
-        // Modal open/close
-        document.getElementById('openProductModal').onclick = function () {
-            document.getElementById('productModal').style.display = 'flex';
-            document.getElementById('productSearchInput').value = '';
-            document.getElementById('productSearchResults').innerHTML = '';
-            document.getElementById('productSearchInput').focus();
-        };
-        document.getElementById('closeProductModal').onclick = function () {
-            document.getElementById('productModal').style.display = 'none';
-        };
-        // Close modal on outside click
-        document.getElementById('productModal').onclick = function (e) {
-            if (e.target === this) this.style.display = 'none';
-        };
+        // Remove the first duplicate event handler and keep only this one:
 
-        // Prepare product data for search (from PHP)
-        const allProducts = [ <
-            ? php foreach($products as $p) : ? > {
-                id: < ? = json_encode($p['id']) ? > ,
-                name: < ? = json_encode($p['name']) ? > ,
-                price: < ? = json_encode($p['price']) ? > ,
-                quantity: < ? = json_encode($p['quantity']) ? >
-            }, <
-            ? php endforeach; ? >
-        ];
+// Modal open/close
+document.getElementById('openProductModal').onclick = function () {
+    document.getElementById('productModal').style.display = 'flex';
+    document.getElementById('productSearchInput').value = '';
+    renderProductTable(); // This will show all products when modal opens
+    document.getElementById('productSearchInput').focus();
+};
 
-        // Render all products in table
-        function renderProductTable(filter = '') {
-            const tbody = document.getElementById('productSearchTableBody');
-            tbody.innerHTML = '';
-            let filtered = allProducts;
-            if (filter) {
-                filtered = allProducts.filter(p => p.name.toLowerCase().includes(filter.toLowerCase()));
-            }
-            if (filtered.length === 0) {
-                const tr = document.createElement('tr');
-                tr.innerHTML =
-                    `<td colspan='4' style='text-align:center; color:#888; padding:16px;'>No products found.</td>`;
-                tbody.appendChild(tr);
-                return;
-            }
-            /*old function for rendering checkboxes
-            filtered.forEach(p => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `<td>${p.name}</td><td style='text-align:right;'>₱${parseFloat(p.price).toFixed(2)}</td><td style='text-align:center;'>${p.quantity}</td><td style='text-align:center;'><input type='checkbox' class='product-select-checkbox' data-id='${p.id}'></td>`;
-                tbody.appendChild(tr);
-            });*/
-            filtered.forEach(p => {
+document.getElementById('closeProductModal').onclick = function () {
+    document.getElementById('productModal').style.display = 'none';
+};
+
+// Close modal on outside click
+document.getElementById('productModal').onclick = function (e) {
+    if (e.target === this) this.style.display = 'none';
+};
+
+// Prepare product data for search (from PHP)
+const allProducts = [<?php foreach($products as $p) : ?> {
+    id: <?= json_encode($p['id']) ?>,
+    name: <?= json_encode($p['name']) ?>,
+    price: <?= json_encode($p['price']) ?>,
+    quantity: <?= json_encode($p['quantity']) ?>
+}, <?php endforeach; ?>];
+
+// Render all products in table
+function renderProductTable(filter = '') {
+    const tbody = document.getElementById('productSearchTableBody');
+    tbody.innerHTML = '';
+    let filtered = allProducts;
+    if (filter) {
+        filtered = allProducts.filter(p => p.name.toLowerCase().includes(filter.toLowerCase()));
+    }
+    if (filtered.length === 0) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td colspan='4' style='text-align:center; color:#888; padding:16px;'>No products found.</td>`;
+        tbody.appendChild(tr);
+        return;
+    }
+    /*
+    filtered.forEach(p => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${p.name}</td><td style='text-align:right;'>₱${parseFloat(p.price).toFixed(2)}</td><td style='text-align:center;'>${p.quantity}</td><td style='text-align:center;'><input type='checkbox' class='product-select-checkbox' data-id='${p.id}'></td>`;
+        tbody.appendChild(tr);
+    });*/
+    filtered.forEach(p => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
         <td>${p.name}</td>
@@ -263,9 +263,8 @@ foreach($items as $i=>$pid){
         </td>`;
                 tbody.appendChild(tr);
             });
-
-        }
-        // Prevent adding out-of-stock products from dev tools
+}
+// Prevent adding out-of-stock products from dev tools
         function addProductToPOS(product) {
             if (parseInt(product.quantity) <= 0) {
                 alert(product.name + " is out of stock and cannot be added.");
@@ -273,41 +272,25 @@ foreach($items as $i=>$pid){
             }
             // existing add-to-table logic...
         }
+// Filter table as user types
+document.getElementById('productSearchInput').oninput = function () {
+    renderProductTable(this.value.trim());
+};
 
-        // Show all products when modal opens
-        document.getElementById('openProductModal').onclick = function () {
-            document.getElementById('productModal').style.display = 'flex';
-            document.getElementById('productSearchInput').value = '';
-            renderProductTable();
-            document.getElementById('productSearchInput').focus();
-        };
-        document.getElementById('closeProductModal').onclick = function () {
-            document.getElementById('productModal').style.display = 'none';
-        };
-        // Close modal on outside click
-        document.getElementById('productModal').onclick = function (e) {
-            if (e.target === this) this.style.display = 'none';
-        };
-
-        // Filter table as user types
-        document.getElementById('productSearchInput').oninput = function () {
-            renderProductTable(this.value.trim());
-        };
-
-        // Add selected products to POS table
-        document.getElementById('addSelectedProducts').onclick = function () {
-            const checkboxes = document.querySelectorAll('.product-select-checkbox:checked');
-            if (checkboxes.length === 0) {
-                alert('Please select at least one product to add.');
-                return;
-            }
-            checkboxes.forEach(cb => {
-                const pid = cb.getAttribute('data-id');
-                const product = allProducts.find(p => p.id == pid);
-                if (product) addProductToPOS(product);
-            });
-            document.getElementById('productModal').style.display = 'none';
-        };
+// Add selected products to POS table
+document.getElementById('addSelectedProducts').onclick = function () {
+    const checkboxes = document.querySelectorAll('.product-select-checkbox:checked');
+    if (checkboxes.length === 0) {
+        alert('Please select at least one product to add.');
+        return;
+    }
+    checkboxes.forEach(cb => {
+        const pid = cb.getAttribute('data-id');
+        const product = allProducts.find(p => p.id == pid);
+        if (product) addProductToPOS(product);
+    });
+    document.getElementById('productModal').style.display = 'none';
+};
 
         //Save POS table data to localStorage
         function savePosTableToStorage() {
