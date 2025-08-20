@@ -51,7 +51,7 @@ $end_record = min($offset + $records_per_page, $total_records);
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="../assets/style.css">
-    <link rel="stylesheet" href="../assets/sales.css">
+    <link rel="stylesheet" href="../assets/claudesales.css">
     <title>Sales</title>
 </head>
 
@@ -131,6 +131,7 @@ $end_record = min($offset + $records_per_page, $total_records);
             </a>
         </div>
 
+
         <!-- Table Container -->
         <div class="table-container">
             <div class="table-wrapper">
@@ -150,31 +151,32 @@ $end_record = min($offset + $records_per_page, $total_records);
                     </thead>
                     <tbody>
                         <?php if(empty($orders)): ?>
-                            <tr>
-                                <td colspan="9" style="text-align: center; padding: 40px; color: #6b7280;">
-                                    <i class="fas fa-inbox" style="font-size: 48px; margin-bottom: 10px; display: block;"></i>
-                                    No sales records found.
-                                </td>
-                            </tr>
+                        <tr>
+                            <td colspan="9" style="text-align: center; padding: 40px; color: #6b7280;">
+                                <i class="fas fa-inbox"
+                                    style="font-size: 48px; margin-bottom: 10px; display: block;"></i>
+                                No sales records found.
+                            </td>
+                        </tr>
                         <?php else: ?>
-                            <?php foreach($orders as $o): ?>
-                            <tr>
-                                <td><?=$o['id']?></td>
-                                <td><?=htmlspecialchars($o['customer_name'])?></td>
-                                <td><?=htmlspecialchars($o['contact'] ?? 'N/A')?></td>
-                                <td><?=htmlspecialchars($o['address'] ?? 'N/A')?></td>
-                                <td>₱<?=number_format($o['total'],2)?></td>
-                                <td><?=htmlspecialchars($o['payment_method'])?></td>
-                                <td><?=htmlspecialchars($o['payment_proof'] ?? 'NULL')?></td>
-                                <td><?=htmlspecialchars($o['status'])?></td>
-                                <td><?=date('M d, Y g:i A', strtotime($o['created_at']))?></td>
-                            </tr>
-                            <?php endforeach; ?>
+                        <?php foreach($orders as $o): ?>
+                        <tr>
+                            <td><?=$o['id']?></td>
+                            <td><?=htmlspecialchars($o['customer_name'])?></td>
+                            <td><?=htmlspecialchars($o['contact'] ?? 'N/A')?></td>
+                            <td><?=htmlspecialchars($o['address'] ?? 'N/A')?></td>
+                            <td>₱<?=number_format($o['total'],2)?></td>
+                            <td><?=htmlspecialchars($o['payment_method'])?></td>
+                            <td><?=htmlspecialchars($o['payment_proof'] ?? 'NULL')?></td>
+                            <td><?=htmlspecialchars($o['status'])?></td>
+                            <td><?=date('M d, Y g:i A', strtotime($o['created_at']))?></td>
+                        </tr>
+                        <?php endforeach; ?>
                         <?php endif; ?>
                     </tbody>
                 </table>
             </div>
-            
+
             <?php if($total_records > 0): ?>
             <!-- Pagination -->
             <div class="pagination-container">
@@ -184,13 +186,13 @@ $end_record = min($offset + $records_per_page, $total_records);
                 <div class="pagination">
                     <!-- Previous button -->
                     <?php if($current_page > 1): ?>
-                        <a href="?page=<?=($current_page-1)?>" class="prev">
-                            <i class="fas fa-chevron-left"></i> Prev
-                        </a>
+                    <a href="?page=<?=($current_page-1)?>" class="prev">
+                        <i class="fas fa-chevron-left"></i> Prev
+                    </a>
                     <?php else: ?>
-                        <span class="prev disabled">
-                            <i class="fas fa-chevron-left"></i> Prev
-                        </span>
+                    <span class="prev disabled">
+                        <i class="fas fa-chevron-left"></i> Prev
+                    </span>
                     <?php endif; ?>
 
                     <!-- Page numbers -->
@@ -200,46 +202,243 @@ $end_record = min($offset + $records_per_page, $total_records);
                     
                     // Show first page if not in range
                     if($start_page > 1): ?>
-                        <a href="?page=1">1</a>
-                        <?php if($start_page > 2): ?>
-                            <span>...</span>
-                        <?php endif;
+                    <a href="?page=1">1</a>
+                    <?php if($start_page > 2): ?>
+                    <span>...</span>
+                    <?php endif;
                     endif;
                     
                     // Show page numbers in range
                     for($i = $start_page; $i <= $end_page; $i++):
                         if($i == $current_page): ?>
-                            <span class="current"><?=$i?></span>
-                        <?php else: ?>
-                            <a href="?page=<?=$i?>"><?=$i?></a>
-                        <?php endif;
+                    <span class="current"><?=$i?></span>
+                    <?php else: ?>
+                    <a href="?page=<?=$i?>"><?=$i?></a>
+                    <?php endif;
                     endfor;
                     
                     // Show last page if not in range
                     if($end_page < $total_pages):
                         if($end_page < $total_pages - 1): ?>
-                            <span>...</span>
-                        <?php endif; ?>
-                        <a href="?page=<?=$total_pages?>"><?=$total_pages?></a>
+                    <span>...</span>
+                    <?php endif; ?>
+                    <a href="?page=<?=$total_pages?>"><?=$total_pages?></a>
                     <?php endif; ?>
 
                     <!-- Next button -->
                     <?php if($current_page < $total_pages): ?>
-                        <a href="?page=<?=($current_page+1)?>" class="next">
-                            Next <i class="fas fa-chevron-right"></i>
-                        </a>
+                    <a href="?page=<?=($current_page+1)?>" class="next">
+                        Next <i class="fas fa-chevron-right"></i>
+                    </a>
                     <?php else: ?>
-                        <span class="next disabled">
-                            Next <i class="fas fa-chevron-right"></i>
-                        </span>
+                    <span class="next disabled">
+                        Next <i class="fas fa-chevron-right"></i>
+                    </span>
                     <?php endif; ?>
                 </div>
             </div>
             <?php endif; ?>
         </div>
+
+        <!-- Sales Widget -->
+        <!-- Add this after the Export Button and before the Table Container -->
+        <div class="stat-overview">
+            <div class="sales-widget">
+                <div class="widget-header">
+                    <h2 class="widget-title">
+                        <i class="fas fa-chart-line"></i>
+                        Sales Analytics
+                    </h2>
+                    <div class="period-selector">
+                        <select class="period-dropdown" id="periodSelector">
+                            <option value="daily">Daily</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="monthly">Monthly</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="stats-container">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-dollar-sign"></i>
+                        </div>
+                        <div class="stat-value" id="totalSales">₱0.00</div>
+                        <div class="stat-label">Total Sales</div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-shopping-cart"></i>
+                        </div>
+                        <div class="stat-value" id="totalOrders">0</div>
+                        <div class="stat-label">Total Orders</div>
+                    </div>
+                </div>
+
+
+            </div>
+             <div class="chart-container">
+        <h2>Most Bought Items</h2>
+
+        <!-- Selector -->
+        <select id="timeFilter">
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+        </select>
+
+        <!-- Pie Chart -->
+        <canvas id="salesPieChart"></canvas>
+
+        <!-- Legend -->
+        <div id="chartLegend"></div>
+    </div>
+        </div>
     </main>
 
     <script>
+        //chart
+const ctx = document.getElementById('salesPieChart').getContext('2d');
+    let salesChart;
+
+    function loadChartData(period = 'daily') {
+        fetch(`chart_data.php?period=${period}`)
+            .then(response => response.json())
+            .then(data => {
+                const labels = data.map(item => item.product_name);
+                const values = data.map(item => item.total_qty);
+                const colors = data.map(item => item.color);
+
+                if (salesChart) {
+                    salesChart.destroy();
+                }
+
+                salesChart = new Chart(ctx, {
+                    type: 'pie',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            data: values,
+                            backgroundColor: colors
+                        }]
+                    }
+                });
+
+                // Custom legend
+                const legendContainer = document.getElementById('chartLegend');
+                legendContainer.innerHTML = '';
+                data.forEach((item, index) => {
+                    const legendItem = document.createElement('div');
+                    legendItem.classList.add('legend-item');
+                    legendItem.innerHTML = `
+                        <span class="legend-color" style="background-color:${colors[index]}"></span>
+                        ${item.product_name} (${values[index]})
+                    `;
+                    legendContainer.appendChild(legendItem);
+                });
+            });
+    }
+
+    document.getElementById('timeFilter').addEventListener('change', function() {
+        loadChartData(this.value);
+    });
+
+    // Load default
+    loadChartData();
+
+
+    //
+     // Replace the sample data section with this code:
+
+        const periodSelector = document.getElementById('periodSelector');
+        const totalSalesEl = document.getElementById('totalSales');
+        const totalOrdersEl = document.getElementById('totalOrders');
+        //const chartTitleEl = document.getElementById('chartTitle');
+        const widget = document.querySelector('.sales-widget');
+
+        // Function to fetch sales data from PHP backend
+        async function fetchSalesData(period) {
+            try {
+                const response = await fetch(`sales_api.php?period=${period}`);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('Error fetching sales data:', error);
+                // Return fallback data in case of error
+                return {
+                    totalSales: 0,
+                    totalOrders: 0,
+                    period: 'Error'
+                };
+            }
+        }
+
+        // Function to update stats with real data
+        async function updateStats(period) {
+            // Add loading state
+            widget.classList.add('loading');
+
+            try {
+                // Fetch real data from backend
+                const data = await fetchSalesData(period);
+
+                // Update values with animation
+                totalSalesEl.textContent = `₱${data.totalSales.toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        })}`;
+
+                totalOrdersEl.textContent = data.totalOrders.toLocaleString();
+
+                /* Update chart title
+                const periodNames = {
+                    daily: 'Daily',
+                    weekly: 'Weekly', 
+                    monthly: 'Monthly'
+                };
+                chartTitleEl.textContent = `${periodNames[period]} Sales Trend`;*/
+
+            } catch (error) {
+                console.error('Error updating stats:', error);
+                // Show error state
+                totalSalesEl.textContent = 'Error';
+                totalOrdersEl.textContent = 'Error';
+            } finally {
+                // Remove loading state
+                widget.classList.remove('loading');
+            }
+        }
+
+        // Event listener for period change
+        periodSelector.addEventListener('change', function () {
+            updateStats(this.value);
+        });
+
+        // Initialize with daily data
+        updateStats('daily');
+
+        // Add some interactivity
+        document.querySelectorAll('.stat-card').forEach(card => {
+            card.addEventListener('click', function () {
+                this.style.transform = 'scale(0.98)';
+                setTimeout(() => {
+                    this.style.transform = '';
+                }, 150);
+            });
+        });
+
+        // Optional: Auto-refresh data every 30 seconds
+        setInterval(() => {
+            const currentPeriod = periodSelector.value;
+            updateStats(currentPeriod);
+        }, 30000);
+
         // Toggle user dropdown
         function toggleDropdown() {
             const dropdown = document.getElementById('userDropdown');
@@ -253,22 +452,22 @@ $end_record = min($offset + $records_per_page, $total_records);
         }
 
         // Close dropdown when clicking outside
-        document.addEventListener('click', function(event) {
+        document.addEventListener('click', function (event) {
             const userMenu = document.querySelector('.user-menu');
             const dropdown = document.getElementById('userDropdown');
-            
+
             if (!userMenu.contains(event.target)) {
                 dropdown.classList.remove('show');
             }
         });
 
         // Close sidebar when clicking outside on mobile
-        document.addEventListener('click', function(event) {
+        document.addEventListener('click', function (event) {
             const sidebar = document.getElementById('sidebar');
             const toggle = document.querySelector('.mobile-toggle');
-            
-            if (window.innerWidth <= 768 && 
-                !sidebar.contains(event.target) && 
+
+            if (window.innerWidth <= 768 &&
+                !sidebar.contains(event.target) &&
                 !toggle.contains(event.target)) {
                 sidebar.classList.remove('mobile-open');
             }
