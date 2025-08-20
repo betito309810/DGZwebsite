@@ -126,8 +126,8 @@ $end_record = min($offset + $records_per_page, $total_records);
 
         <!-- Export Button -->
         <div style="margin-bottom: 20px;">
-            <a href="?export=csv" style="background: #27ae60; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-size: 14px; display: inline-flex; align-items: center; gap: 8px;">
-                <i class="fas fa-download"></i> Export to CSV
+            <a href="?export=csv">
+                Export to CSV
             </a>
         </div>
 
