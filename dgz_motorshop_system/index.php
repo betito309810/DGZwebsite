@@ -28,7 +28,7 @@ $products = $pdo->query('SELECT * FROM products')->fetchAll();
         <p><?=htmlspecialchars($p['description'])?></p>
         <p>Price: ₱<?=number_format($p['price'],2)?></p>
         <p>Stock: <?=intval($p['quantity'])?></p>
-        <form method="post" action="checkout.php">
+        <form method="post" action="claudecheckout.php">
           <input type="hidden" name="product_id" value="<?= $p['id']?>">
           <label>Qty: <input type="number" name="qty" value="1" min="1" max="<?=max(1,$p['quantity'])?>"></label><br>
           <button type="submit">Buy / Checkout</button>
