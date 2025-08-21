@@ -200,7 +200,6 @@ a[href*="export=csv"]:hover {
     border: 1px solid #e2e8f0;
     max-width: 100%;
     margin-top: 24px;
-
 }
 
 .table-wrapper {
@@ -339,14 +338,15 @@ table tr:last-child td {
     background: #f7fafc;
     border-color: #e2e8f0;
 }
+
 .sales-widget {
     background: white;
     border-radius: 16px;
     padding: 24px;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
     border: 1px solid #e2e8f0;
-    /* Removed margin and max-width */
 }
+
 .stat-overview{
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
@@ -354,13 +354,14 @@ table tr:last-child td {
     margin-bottom: 30px;
     margin-top: 20px;
 }
-.chart-widget {
+
+/* This is the class for the pie chart container */
+.chart-card {
     background: white;
     border-radius: 16px;
     padding: 24px;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
     border: 1px solid #e2e8f0;
-    /* Removed margin and max-width */
 }
 
 .widget-header {
@@ -384,8 +385,10 @@ table tr:last-child td {
 .period-selector {
     position: relative;
 }
-.pieperiod-selector{
-    position:relative;
+/* Fixed typo in pieperiod-selector to match HTML */
+.chart-header .period-selector,
+#timeFilter {
+    position: relative;
 }
 
 .period-dropdown {
@@ -402,9 +405,9 @@ table tr:last-child td {
     outline: none;
 }
 
-.pieperiod-dropdown {
+/* Remove the specific pieperiod-dropdown and apply to #timeFilter instead */
+#timeFilter {
     appearance: none;
-    display: flex;
     background: linear-gradient(135deg, #3498db, #2980b9);
     color: white;
     border: none;
@@ -415,12 +418,14 @@ table tr:last-child td {
     cursor: pointer;
     transition: all 0.3s ease;
     outline: none;
-    width: 100%;
-    margin-left: 165%;
 }
 
 
 .period-dropdown:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+}
+#timeFilter:hover {
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
 }
@@ -437,28 +442,26 @@ table tr:last-child td {
     pointer-events: none;
 }
 
-.chart-container {
-    width: 500px;
-    margin: 30px auto;
-    padding: 20px;
-    border: 1px solid #ddd;
-    border-radius: 12px;
-    background: #fff;
-    box-shadow: 0px 4px 12px rgba(0,0,0,0.1);
-    text-align: center;
+/* New CSS to style the pie chart container and make it larger */
+.chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
 }
 
-#timeFilter {
-    padding: 6px 12px;
-    margin-bottom: 15px;
-    border-radius: 6px;
-    border: 1px solid #ccc;
-    font-size: 14px;
+.chart-canvas-wrap {
+    position: relative;
+    /* This is the key change to make the chart larger */
+    height: 400px;
+    width: 100%;
 }
 
 #salesPieChart {
+    /* The canvas will now fill its larger container */
     max-width: 100%;
-    height: 300px;
+    max-height: 100%;
+    /* No need for a fixed height here */
 }
 
 #chartLegend {
@@ -468,19 +471,44 @@ table tr:last-child td {
 
 .legend-item {
     display: flex;
+    justify-content: space-between;
     align-items: center;
     margin-bottom: 6px;
     font-size: 14px;
+    padding: 4px 0;
+    border-bottom: 1px solid #f1f5f9;
 }
 
-.legend-color {
+.legend-item:last-child {
+    border-bottom: none;
+}
+
+.legend-swatch {
     display: inline-block;
     width: 16px;
     height: 16px;
     margin-right: 8px;
     border-radius: 3px;
+    flex-shrink: 0;
 }
 
+.legend-name {
+    flex-grow: 1;
+    color: #4a5568;
+}
+
+.legend-count {
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.legend-empty {
+    text-align: center;
+    color: #a0aec0;
+    padding: 20px 0;
+}
+
+/* Original stats container styles */
 .stats-container {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -549,35 +577,6 @@ table tr:last-child td {
     font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-}
-
-.chart-container {
-    background: #f8fafc;
-    border-radius: 12px;
-    padding: 20px;
-    margin-top: 20px;
-    border: 1px solid #e2e8f0;
-}
-
-.chart-title {
-    color: #4a5568;
-    font-size: 16px;
-    font-weight: 600;
-    margin-bottom: 16px;
-    text-align: center;
-}
-
-.chart-placeholder {
-    height: 200px;
-    background: linear-gradient(135deg, #e2e8f0, #cbd5e0);
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #6b7280;
-    font-size: 14px;
-    font-weight: 500;
-    text-align: center;
 }
 
 .loading {
