@@ -70,7 +70,7 @@ foreach($products as $product) {
         <div class="nav-content">
             <a href="#home" class="nav-link active">HOME</a>
             <a href="#new" class="nav-link">NEW</a>
-            <a href="#about" class="nav-link">ABOUT</a>
+            <a href="about.php" class="nav-link">ABOUT</a>
 
         </div>
     </nav>
@@ -100,28 +100,28 @@ foreach($products as $product) {
 
         <!-- Main Content -->
         <main class="main-content">
-            <h1 class="section-title">Trending Motorcycle Parts</h1>
+            <h1 class="section-title">Trending Products</h1>
 
             <!-- Featured Products - Top 4 Trending from Database -->
             <div class="featured-products">
                 <?php 
-    // Get top 4 selling products from database
-    $topProducts = $pdo->query('
+        // Get top 4 selling products from database
+        $topProducts = $pdo->query('
         SELECT p.*, SUM(oi.qty) as total_sold 
         FROM order_items oi 
         JOIN products p ON p.id = oi.product_id 
         GROUP BY p.id 
         ORDER BY total_sold DESC 
         LIMIT 4
-    ')->fetchAll();
+        ')->fetchAll();
     
-    // If no top products yet, show some featured products as fallback
-    if (empty($topProducts)) {
+        // If no top products yet, show some featured products as fallback
+         if (empty($topProducts)) {
         $topProducts = array_slice($products, 0, 4);
-    }
+        }
     
-    foreach($topProducts as $p): 
-    ?>
+        foreach($topProducts as $p): 
+     ?>
                 <div class="featured-card">
                     <div class="product-image">
                         <i class="fas fa-cog"></i>
@@ -234,88 +234,90 @@ foreach($products as $product) {
                     <?php endforeach; ?>
                 </div>
             </div>
+            <!-- Footer -->
 
-            <script>
-                // Cart functionality
-                let cartCount = 0;
-                let cartItems = [];
+    </div>
+    <script>
+        // Cart functionality
+        let cartCount = 0;
+        let cartItems = [];
 
-                // Save cart to localStorage
-                function saveCart() {
-                    localStorage.setItem('cartItems', JSON.stringify(cartItems));
-                    localStorage.setItem('cartCount', cartCount.toString());
+        // Save cart to localStorage
+        function saveCart() {
+            localStorage.setItem('cartItems', JSON.stringify(cartItems));
+            localStorage.setItem('cartCount', cartCount.toString());
+        }
+
+        // Load cart from localStorage
+        function loadCart() {
+            const savedCart = localStorage.getItem('cartItems');
+            const savedCount = localStorage.getItem('cartCount');
+
+            if (savedCart) {
+                try {
+                    cartItems = JSON.parse(savedCart);
+                } catch (e) {
+                    cartItems = [];
+                    console.error('Error parsing cart items:', e);
                 }
+            }
+            if (savedCount) {
+                cartCount = parseInt(savedCount);
+                document.getElementById('cartCount').textContent = cartCount;
+            }
+        }
 
-                // Load cart from localStorage
-                function loadCart() {
-                    const savedCart = localStorage.getItem('cartItems');
-                    const savedCount = localStorage.getItem('cartCount');
+        // Handle cart button click
+        function handleCartClick(event) {
+            event.preventDefault();
 
-                    if (savedCart) {
-                        try {
-                            cartItems = JSON.parse(savedCart);
-                        } catch (e) {
-                            cartItems = [];
-                            console.error('Error parsing cart items:', e);
-                        }
-                    }
-                    if (savedCount) {
-                        cartCount = parseInt(savedCount);
-                        document.getElementById('cartCount').textContent = cartCount;
-                    }
-                }
+            if (cartItems.length === 0) {
+                // Show message instead of alert
+                showToast('Your cart is empty! Add some items first.');
+                return;
+            }
 
-                // Handle cart button click
-                function handleCartClick(event) {
-                    event.preventDefault();
+            // Redirect to checkout with cart data
+            const cartData = encodeURIComponent(JSON.stringify(cartItems));
+            window.location.href = 'checkout.php?cart=' + cartData;
+        }
 
-                    if (cartItems.length === 0) {
-                        // Show message instead of alert
-                        showToast('Your cart is empty! Add some items first.');
-                        return;
-                    }
+        function addToCart(productId, productName, price, quantity = 1) {
+            // Check if product already in cart
+            const existingItem = cartItems.find(item => item.id === productId);
 
-                    // Redirect to checkout with cart data
-                    const cartData = encodeURIComponent(JSON.stringify(cartItems));
-                    window.location.href = 'checkout.php?cart=' + cartData;
-                }
+            if (existingItem) {
+                existingItem.quantity += quantity;
+            } else {
+                cartItems.push({
+                    id: productId,
+                    name: productName,
+                    price: price,
+                    quantity: quantity
+                });
+            }
 
-                function addToCart(productId, productName, price, quantity = 1) {
-                    // Check if product already in cart
-                    const existingItem = cartItems.find(item => item.id === productId);
+            cartCount += quantity;
+            document.getElementById('cartCount').textContent = cartCount;
 
-                    if (existingItem) {
-                        existingItem.quantity += quantity;
-                    } else {
-                        cartItems.push({
-                            id: productId,
-                            name: productName,
-                            price: price,
-                            quantity: quantity
-                        });
-                    }
+            // Save to localStorage
+            saveCart();
 
-                    cartCount += quantity;
-                    document.getElementById('cartCount').textContent = cartCount;
+            // Show confirmation
+            showToast(`${productName} added to cart!`);
+        }
 
-                    // Save to localStorage
-                    saveCart();
+        function showToast(message) {
+            // Remove existing toast if any
+            const existingToast = document.querySelector('.toast-message');
+            if (existingToast) {
+                existingToast.remove();
+            }
 
-                    // Show confirmation
-                    showToast(`${productName} added to cart!`);
-                }
-
-                function showToast(message) {
-                    // Remove existing toast if any
-                    const existingToast = document.querySelector('.toast-message');
-                    if (existingToast) {
-                        existingToast.remove();
-                    }
-
-                    // Create toast element
-                    const toast = document.createElement('div');
-                    toast.className = 'toast-message';
-                    toast.style.cssText = `
+            // Create toast element
+            const toast = document.createElement('div');
+            toast.className = 'toast-message';
+            toast.style.cssText = `
             position: fixed;
             bottom: 20px;
             right: 20px;
@@ -328,20 +330,20 @@ foreach($products as $product) {
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
             animation: slideIn 0.3s ease;
         `;
-                    toast.textContent = message;
+            toast.textContent = message;
 
-                    document.body.appendChild(toast);
+            document.body.appendChild(toast);
 
-                    // Remove after 3 seconds
-                    setTimeout(() => {
-                        toast.style.animation = 'slideOut 0.3s ease';
-                        setTimeout(() => toast.remove(), 300);
-                    }, 3000);
-                }
+            // Remove after 3 seconds
+            setTimeout(() => {
+                toast.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
 
-                // Add CSS animations
-                const style = document.createElement('style');
-                style.textContent = `
+        // Add CSS animations
+        const style = document.createElement('style');
+        style.textContent = `
         @keyframes slideIn {
             from { transform: translateX(100px); opacity: 0; }
             to { transform: translateX(0); opacity: 1; }
@@ -350,64 +352,78 @@ foreach($products as $product) {
             from { transform: translateX(0); opacity: 1; }
             to { transform: translateX(100px); opacity: 0; }
         }
-    `;
-                document.head.appendChild(style);
+        `;
+        document.head.appendChild(style);
 
-                // Load cart on page load
-                document.addEventListener('DOMContentLoaded', function () {
-                    loadCart();
-                });
+        // Load cart on page load
+        document.addEventListener('DOMContentLoaded', function () {
+            loadCart();
+        });
 
-                // Search functionality
-                document.querySelector('.search-bar').addEventListener('keyup', function (e) {
-                    if (e.key === 'Enter') {
-                        const searchTerm = this.value.toLowerCase();
-                        filterProducts(searchTerm);
-                    }
-                });
+        // Search functionality
+        document.querySelector('.search-bar').addEventListener('keyup', function (e) {
+            if (e.key === 'Enter') {
+                const searchTerm = this.value.toLowerCase();
+                filterProducts(searchTerm);
+            }
+        });
 
-                document.querySelector('.search-btn').addEventListener('click', function () {
-                    const searchTerm = document.querySelector('.search-bar').value.toLowerCase();
-                    filterProducts(searchTerm);
-                });
+        document.querySelector('.search-btn').addEventListener('click', function () {
+            const searchTerm = document.querySelector('.search-bar').value.toLowerCase();
+            filterProducts(searchTerm);
+        });
 
-                function filterProducts(searchTerm) {
-                    const products = document.querySelectorAll('.product-card');
-                    products.forEach(product => {
-                        const productName = product.querySelector('h3').textContent.toLowerCase();
-                        const productDescription = product.querySelector('.product-description').textContent
-                            .toLowerCase();
+        function filterProducts(searchTerm) {
+            const products = document.querySelectorAll('.product-card');
+            products.forEach(product => {
+                const productName = product.querySelector('h3').textContent.toLowerCase();
+                const productDescription = product.querySelector('.product-description').textContent
+                    .toLowerCase();
 
-                        if (productName.includes(searchTerm) || productDescription.includes(searchTerm) ||
-                            searchTerm === '') {
-                            product.style.display = 'block';
-                        } else {
-                            product.style.display = 'none';
-                        }
+                if (productName.includes(searchTerm) || productDescription.includes(searchTerm) ||
+                    searchTerm === '') {
+                    product.style.display = 'block';
+                } else {
+                    product.style.display = 'none';
+                }
+            });
+        }
+
+        // Smooth scrolling for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth'
                     });
                 }
+            });
+        });
 
-                // Smooth scrolling for anchor links
-                document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-                    anchor.addEventListener('click', function (e) {
-                        e.preventDefault();
-                        const target = document.querySelector(this.getAttribute('href'));
-                        if (target) {
-                            target.scrollIntoView({
-                                behavior: 'smooth'
-                            });
-                        }
-                    });
-                });
+        // Update cart count when buy forms are submitted
+        document.querySelectorAll('.buy-form').forEach(form => {
+            form.addEventListener('submit', function () {
+                cartCount++;
+                document.getElementById('cartCount').textContent = cartCount;
+            });
+        });
+    </script>
 
-                // Update cart count when buy forms are submitted
-                document.querySelectorAll('.buy-form').forEach(form => {
-                    form.addEventListener('submit', function () {
-                        cartCount++;
-                        document.getElementById('cartCount').textContent = cartCount;
-                    });
-                });
-            </script>
+    </div>
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="social-links">
+                <a href="#"><i class="fab fa-facebook-f"></i></a>
+                <a href="#"><i class="fab fa-instagram"></i></a>
+                <a href="#"><i class="fab fa-twitter"></i></a>
+                <a href="#"><i class="fab fa-youtube"></i></a>
+            </div>
+            <p>DGZ Motorshop - Sto. Niño Branch</p>
+            <p>© 2022-2025 DGZ Motorshop. All rights reserved.</p>
+
+    </footer>
 </body>
 
 </html>
