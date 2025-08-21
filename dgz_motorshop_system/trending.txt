@@ -1,0 +1,39 @@
+All time trending 
+
+SELECT p.*, SUM(oi.qty) as total_sold 
+FROM order_items oi 
+JOIN products p ON p.id = oi.product_id 
+GROUP BY p.id 
+ORDER BY total_sold DESC 
+LIMIT 4
+
+Monthly trending
+
+SELECT p.*, SUM(oi.qty) as total_sold 
+FROM order_items oi 
+JOIN products p ON p.id = oi.product_id 
+WHERE MONTH(oi.created_at) = MONTH(CURRENT_DATE()) 
+AND YEAR(oi.created_at) = YEAR(CURRENT_DATE())
+GROUP BY p.id 
+ORDER BY total_sold DESC 
+LIMIT 4
+
+Weekly trending
+
+SELECT p.*, SUM(oi.qty) as total_sold 
+FROM order_items oi 
+JOIN products p ON p.id = oi.product_id 
+WHERE YEARWEEK(oi.created_at) = YEARWEEK(CURRENT_DATE())
+GROUP BY p.id 
+ORDER BY total_sold DESC 
+LIMIT 4
+
+Today's trending
+
+SELECT p.*, SUM(oi.qty) as total_sold 
+FROM order_items oi 
+JOIN products p ON p.id = oi.product_id 
+WHERE DATE(oi.created_at) = CURRENT_DATE()
+GROUP BY p.id 
+ORDER BY total_sold DESC 
+LIMIT 4
