@@ -2,47 +2,121 @@
 require 'config.php';
 $pdo = db();
 
-if($_SERVER['REQUEST_METHOD']==='POST') {
-    $product_id = intval($_POST['product_id'] ?? 0);
-    $qty = max(1,intval($_POST['qty'] ?? 1));
-    $product = $pdo->prepare('SELECT * FROM products WHERE id=?');
-    $product->execute([$product_id]);
-    $p = $product->fetch();
-    if(!$p){ exit('Product not found'); }
-    if($qty > $p['quantity']){ exit('Not enough stock'); }
+// Handle cart data
+$cartItems = [];
 
-    // Simple customer form if not yet sent
-    if(empty($_POST['customer_name'])) {
-        // show form
-        ?>
+// Check for cart data in URL parameter
+if (isset($_GET['cart'])) {
+    $cartData = urldecode($_GET['cart']);
+    $cartItems = json_decode($cartData, true);
+    
+    // Validate JSON decoding
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        $cartItems = [];
+    }
+}
+
+// Check for cart data in POST (for form submissions)
+if (isset($_POST['cart'])) {
+    $cartItems = json_decode($_POST['cart'], true);
+    
+    // Validate JSON decoding
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        $cartItems = [];
+    }
+}
+
+// If no cart items, show error
+if (empty($cartItems)) {
+    echo '<div style="max-width: 400px; margin: 50px auto; background: white; padding: 40px; border-radius: 20px; text-align: center;">';
+    echo '<i class="fas fa-shopping-cart" style="font-size: 48px; color: #636e72; margin-bottom: 20px;"></i>';
+    echo '<h2 style="color: #2d3436; margin-bottom: 15px;">Your Cart is Empty</h2>';
+    echo '<p style="color: #636e72; margin-bottom: 25px;">Add some products to your cart before proceeding to checkout.</p>';
+    echo '<a href="claudeindex.php" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; padding: 15px 30px; border-radius: 8px; font-weight: 600;">Continue Shopping</a>';
+    echo '</div>';
+    exit;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
+    // Process order
+    $customer_name = $_POST['customer_name'];
+    $contact = $_POST['contact'];
+    $address = $_POST['address'];
+    $payment_method = $_POST['payment_method'];
+    $proof_path = null;
+    
+    if (!empty($_FILES['proof']['tmp_name'])) {
+        if (!is_dir('uploads')) mkdir('uploads', 0777, true);
+        $fn = 'uploads/' . time() . '_' . basename($_FILES['proof']['name']);
+        move_uploaded_file($_FILES['proof']['tmp_name'], $fn);
+        $proof_path = $fn;
+    }
+    
+    // Calculate total from cart items
+    $total = 0;
+    foreach ($cartItems as $item) {
+        $total += $item['price'] * $item['quantity'];
+    }
+    
+    // Insert order
+    $stmt = $pdo->prepare('INSERT INTO orders (customer_name, contact, address, total, payment_method, payment_proof, status) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    $stmt->execute([$customer_name, $contact, $address, $total, $payment_method, $proof_path, 'pending']);
+    $order_id = $pdo->lastInsertId();
+    
+    // Insert order items and update stock
+    foreach ($cartItems as $item) {
+        $product = $pdo->prepare('SELECT * FROM products WHERE id = ?');
+        $product->execute([$item['id']]);
+        $p = $product->fetch();
+        
+        if ($p && $item['quantity'] <= $p['quantity']) {
+            $stmt2 = $pdo->prepare('INSERT INTO order_items (order_id, product_id, qty, price) VALUES (?, ?, ?, ?)');
+            $stmt2->execute([$order_id, $item['id'], $item['quantity'], $item['price']]);
+            
+            // Decrease stock
+            $pdo->prepare('UPDATE products SET quantity = quantity - ? WHERE id = ?')->execute([$item['quantity'], $item['id']]);
+        }
+    }
+    
+    // Clear cart using JavaScript
+    echo '<script>localStorage.removeItem("cartItems"); localStorage.removeItem("cartCount");</script>';
+    
+    // Success message
+    echo '<div style="max-width: 600px; margin: 50px auto; background: white; padding: 40px; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); text-align: center;">';
+    echo '<i class="fas fa-check-circle" style="font-size: 48px; color: #00b894; margin-bottom: 20px;"></i>';
+    echo '<h2 style="color: #2d3436; margin-bottom: 20px;">Order Placed Successfully!</h2>';
+    echo '<p style="color: #636e72; margin-bottom: 10px;">Order ID: <strong>' . $order_id . '</strong></p>';
+    echo '<p style="color: #636e72; margin-bottom: 30px;">Status: <span style="background: #fdcb6e; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">Pending</span></p>';
+    echo '<a href="claudeindex.php" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; padding: 15px 30px; border-radius: 8px; font-weight: 600;">Back to Shop</a>';
+    echo '</div>';
+    exit;
+}
+
+// Show checkout form
+?>
 <!doctype html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Checkout - <?=htmlspecialchars($p['name'])?></title>
+    <title>Checkout - DGZ Motorshop</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="assets/checkout.css">
 </head>
-
 <body>
-            <header class="header">
+    <header class="header">
         <div class="header-content">
-             <div class="logo">
+            <div class="logo">
                 <img src="assets/logo.png" alt="Company Logo">
             </div>
-            
         </div>
     </header>
 
     <div class="container">
-        
         <!-- Left Column - Checkout Form -->
         <div class="checkout-form">
-            
             <form method="post" enctype="multipart/form-data">
-                <input type="hidden" name="product_id" value="<?= $p['id']?>">
-                <input type="hidden" name="qty" value="<?= $qty ?>">
+                <input type="hidden" name="cart" value='<?= htmlspecialchars(json_encode($cartItems)) ?>'>
                 
                 <!-- Contact Section -->
                 <div class="section">
@@ -131,17 +205,19 @@ if($_SERVER['REQUEST_METHOD']==='POST') {
 
         <!-- Right Column - Order Summary -->
         <div class="order-summary">
+            <?php foreach ($cartItems as $item): ?>
             <div class="order-item">
                 <div class="item-image">
                     <i class="fas fa-box"></i>
                 </div>
                 <div class="item-details">
-                    <div class="item-name"><?=htmlspecialchars($p['name'])?></div>
+                    <div class="item-name"><?= htmlspecialchars($item['name']) ?></div>
                     <div class="item-category">Product</div>
                 </div>
-                <div class="quantity-badge">×<?= $qty ?></div>
-                <div class="item-price">₱ <?=number_format($p['price'], 2)?></div>
+                <div class="quantity-badge">×<?= $item['quantity'] ?></div>
+                <div class="item-price">₱ <?= number_format($item['price'], 2) ?></div>
             </div>
+            <?php endforeach; ?>
 
             <div class="discount-section">
                 <div class="discount-input">
@@ -150,9 +226,17 @@ if($_SERVER['REQUEST_METHOD']==='POST') {
                 </div>
             </div>
 
+            <?php
+            $subtotal = 0;
+            foreach ($cartItems as $item) {
+                $subtotal += $item['price'] * $item['quantity'];
+            }
+            $total = $subtotal;
+            ?>
+
             <div class="summary-row">
-                <span>Subtotal, <?= $qty ?> item<?= $qty > 1 ? 's' : '' ?></span>
-                <span>₱ <?=number_format($p['price'] * $qty, 2)?></span>
+                <span>Subtotal, <?= count($cartItems) ?> item<?= count($cartItems) > 1 ? 's' : '' ?></span>
+                <span>₱ <?= number_format($subtotal, 2) ?></span>
             </div>
 
             <div class="summary-row discount-row" style="display: none;">
@@ -162,7 +246,7 @@ if($_SERVER['REQUEST_METHOD']==='POST') {
 
             <div class="summary-row total">
                 <span>Total</span>
-                <span>₱ <?=number_format($p['price'] * $qty, 2)?></span>
+                <span>₱ <?= number_format($total, 2) ?></span>
             </div>
         </div>
     </div>
@@ -192,43 +276,3 @@ if($_SERVER['REQUEST_METHOD']==='POST') {
     </script>
 </body>
 </html>
-<?php
-        exit;
-    }
-
-    // process order
-    $customer_name = $_POST['customer_name'];
-    $contact = $_POST['contact'];
-    $address = $_POST['address'];
-    $payment_method = $_POST['payment_method'];
-    $proof_path = null;
-    if(!empty($_FILES['proof']['tmp_name'])){
-        if(!is_dir('uploads')) mkdir('uploads',0777,true);
-        $fn = 'uploads/' . time() . '_' . basename($_FILES['proof']['name']);
-        move_uploaded_file($_FILES['proof']['tmp_name'],$fn);
-        $proof_path = $fn;
-    }
-    $total = $p['price'] * $qty;
-    $stmt = $pdo->prepare('INSERT INTO orders (customer_name,contact,address,total,payment_method,payment_proof,status) VALUES (?,?,?,?,?,?,?)');
-    $stmt->execute([$customer_name,$contact,$address,$total,$payment_method,$proof_path,'pending']);
-    $order_id = $pdo->lastInsertId();
-    $stmt2 = $pdo->prepare('INSERT INTO order_items (order_id,product_id,qty,price) VALUES (?,?,?,?)');
-    $stmt2->execute([$order_id,$p['id'],$qty,$p['price']]);
-
-    // decrease stock
-    $pdo->prepare('UPDATE products SET quantity = quantity - ? WHERE id = ?')->execute([$qty,$p['id']]);
-
-    echo '<div style="max-width: 600px; margin: 50px auto; background: white; padding: 40px; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); text-align: center;">';
-    echo '<i class="fas fa-check-circle" style="font-size: 48px; color: #00b894; margin-bottom: 20px;"></i>';
-    echo '<h2 style="color: #2d3436; margin-bottom: 20px;">Order Placed Successfully!</h2>';
-    echo '<p style="color: #636e72; margin-bottom: 10px;">Order ID: <strong>'.$order_id.'</strong></p>';
-    echo '<p style="color: #636e72; margin-bottom: 30px;">Status: <span style="background: #fdcb6e; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">Pending</span></p>';
-    echo '<a href="index.php" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; padding: 15px 30px; border-radius: 8px; font-weight: 600;">Back to Shop</a>';
-    echo '</div>';
-    exit;
-}
-echo '<div style="max-width: 400px; margin: 50px auto; background: white; padding: 40px; border-radius: 20px; text-align: center;">';
-echo '<i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #e74c3c; margin-bottom: 20px;"></i>';
-echo '<h2 style="color: #2d3436;">Invalid Access</h2>';
-echo '</div>';
-?>

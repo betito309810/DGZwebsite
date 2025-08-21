@@ -411,12 +411,13 @@ body {
 }
 
 .stock {
-    background: #00b894;
+    background: #ffe208;
     color: white;
     padding: 4px 12px;
     border-radius: 20px;
     font-size: 12px;
     font-weight: 600;
+    
 }
 
 .stock.low {
@@ -443,7 +444,7 @@ body {
 }
 
 .buy-btn {
-    background: linear-gradient(135deg, #00bcd4 0%, #2196f3 100%);
+    background:  #2196f3 100%;
     color: white;
     border: none;
     padding: 12px 20px;
@@ -464,6 +465,75 @@ body {
     cursor: not-allowed;
     transform: none;
     box-shadow: none;
+}
+/* Add to cart button styles */
+.add-cart-btn {
+    display: flex;
+    background:  #2196f3 100%;
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 10px;
+    margin-top: 10px;
+    margin-left: 40%;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    flex: 1;
+}
+
+.add-cart-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(0, 184, 148, 0.3);
+}
+
+.add-cart-btn:disabled {
+    background: #bdc3c7;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* Update buy form for two buttons */
+.buy-form.two-buttons {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.buy-form.two-buttons .qty-input {
+    width: 60px;
+    margin-right: auto;
+}
+
+.buy-form.two-buttons .buy-btn,
+.buy-form.two-buttons .add-cart-btn {
+    flex: 1;
+    min-width: 100px;
+}
+/* Toast message styles */
+.toast-message {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #2196f3;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from { transform: translateX(100px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slideOut {
+    from { transform: translateX(0); opacity: 1; }
+    to { transform: translateX(100px); opacity: 0; }
 }
 
 /* Responsive Design */
