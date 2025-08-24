@@ -77,7 +77,7 @@ foreach($items as $i=>$pid){
     <title>POS - DGZ</title>
 
     <link rel="stylesheet" href="../assets/style.css">
-    <link rel="stylesheet" href="../assets/pos.css">
+    <link rel="stylesheet" href="newpos.css">
 </head>
 
 <body>
