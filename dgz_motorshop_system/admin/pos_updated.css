@@ -353,3 +353,17 @@ body {
     .mobile-toggle {
         display: block;}
     }
+
+#amountReceived {
+    width: 100%;
+    padding: 6px;
+    font-size: 14px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}
+
+#totalAmount, #changeAmount {
+    font-weight: bold;
+    color: #2c3e50;
+    font-size: 16px;
+}

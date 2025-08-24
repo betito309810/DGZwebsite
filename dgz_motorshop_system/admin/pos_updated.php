@@ -160,7 +160,26 @@ foreach($items as $i=>$pid){
                     <th>Available</th>
                     <th>Qty</th>
                 </tr>
-            </table>
+            
+    <tfoot>
+        <tr>
+            <td colspan="3" style="text-align:right; font-weight:bold;">Total:</td>
+            <td id="totalAmount">₱0.00</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td colspan="3" style="text-align:right; font-weight:bold;">Amount Received:</td>
+            <td><input type="number" id="amountReceived" placeholder="Enter cash" /></td>
+            <td></td>
+        </tr>
+        <tr>
+            <td colspan="3" style="text-align:right; font-weight:bold;">Change:</td>
+            <td id="changeAmount">₱0.00</td>
+            <td></td>
+        </tr>
+    </tfoot>
+    
+</table>
             <button type="button" id="clearPosTable"
                 style="margin:10px 0 0 0; background:#e74c3c; color:#fff; border:none; border-radius:6px; font-size:15px; padding:8px 18px; cursor:pointer;">Clear</button>
             <button name="pos_checkout" type="submit">Settle Payment (Complete)</button>
@@ -191,7 +210,26 @@ foreach($items as $i=>$pid){
                         <tbody id="productSearchTableBody">
                             <!-- JS will populate -->
                         </tbody>
-                    </table>
+                    
+    <tfoot>
+        <tr>
+            <td colspan="3" style="text-align:right; font-weight:bold;">Total:</td>
+            <td id="totalAmount">₱0.00</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td colspan="3" style="text-align:right; font-weight:bold;">Amount Received:</td>
+            <td><input type="number" id="amountReceived" placeholder="Enter cash" /></td>
+            <td></td>
+        </tr>
+        <tr>
+            <td colspan="3" style="text-align:right; font-weight:bold;">Change:</td>
+            <td id="changeAmount">₱0.00</td>
+            <td></td>
+        </tr>
+    </tfoot>
+    
+</table>
                 </div>
                 <button id="addSelectedProducts"
                     style="margin-top:14px; background:#3498db; color:#fff; border:none; border-radius:6px; font-size:15px; padding:8px 18px; cursor:pointer; width:100%;">Add
@@ -439,6 +477,34 @@ document.getElementById('addSelectedProducts').onclick = function () {
             }
         });
     </script>
+
+<script>
+function updateTotal() {
+    let total = 0;
+    document.querySelectorAll('#posBody tr').forEach(row => {
+        let subtotalCell = row.querySelector('.subtotal');
+        if (subtotalCell) {
+            total += parseFloat(subtotalCell.innerText.replace('₱','')) || 0;
+        }
+    });
+    document.getElementById('totalAmount').innerText = '₱' + total.toFixed(2);
+    calculateChange();
+}
+function calculateChange() {
+    let total = parseFloat(document.getElementById('totalAmount').innerText.replace('₱','')) || 0;
+    let received = parseFloat(document.getElementById('amountReceived').value) || 0;
+    let change = received - total;
+    if (change < 0) change = 0;
+    document.getElementById('changeAmount').innerText = '₱' + change.toFixed(2);
+}
+document.addEventListener('DOMContentLoaded', function() {
+    let receivedInput = document.getElementById('amountReceived');
+    if(receivedInput){
+        receivedInput.addEventListener('input', calculateChange);
+    }
+});
+</script>
+
 </body>
 
 </html>
