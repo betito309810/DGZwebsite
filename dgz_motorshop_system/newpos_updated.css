@@ -1,0 +1,12 @@
+
+/* === Added CSS for scrollable table with max 7 rows === */
+#posTable tbody {
+  display: block;
+  max-height: 350px; /* roughly fits 7 rows */
+  overflow-y: auto;
+}
+#posTable thead, #posTable tbody tr {
+  display: table;
+  width: 100%;
+  table-layout: fixed;
+}
