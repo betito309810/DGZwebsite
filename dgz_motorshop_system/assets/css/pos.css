@@ -167,7 +167,7 @@ body {
 }
 
 /* POS Table Container - ADDED: Fixed window size container */
-.pos-table-container {
+ .pos-table-container {
     min-height: 400px; /* Fixed minimum height for the table area */
     max-height: 600px; /* Maximum height before scrolling */
     overflow-y: auto;  /* Enable vertical scrolling when content exceeds max-height */

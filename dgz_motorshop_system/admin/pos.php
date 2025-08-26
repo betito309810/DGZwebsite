@@ -152,15 +152,25 @@ foreach($items as $i=>$pid){
         <button type="button" id="openProductModal"
             style="margin: 15px 0; padding: 8px 18px; background: #3498db; color: #fff; border: none; border-radius: 6px; font-size: 15px; cursor: pointer;"><i
                 class="fas fa-search"></i> Search Product</button>
+        
         <form method="post" id="posForm">
-            <table id="posTable">
-                <tr>
-                    <th>Product</th>
-                    <th>Price</th>
-                    <th>Available</th>
-                    <th>Qty</th>
-                </tr>
-            </table>
+            <!-- UPDATED: Added container div around the table -->
+            <div class="pos-table-container">
+                <table id="posTable">
+                    <tr>
+                        <th>Product</th>
+                        <th>Price</th>
+                        <th>Available</th>
+                        <th>Qty</th>
+                    </tr>
+                </table>
+                <!-- ADDED: Empty state that shows when no items are in cart -->
+                <div class="pos-empty-state" id="posEmptyState">
+                    <i class="fas fa-shopping-cart"></i>
+                    <p>No items in cart. Click "Search Product" to add items.</p>
+                </div>
+            </div>
+            
             <button type="button" id="clearPosTable"
                 style="margin:10px 0 0 0; background:#e74c3c; color:#fff; border:none; border-radius:6px; font-size:15px; padding:8px 18px; cursor:pointer;">Clear</button>
             <button name="pos_checkout" type="submit">Settle Payment (Complete)</button>
@@ -332,6 +342,7 @@ document.getElementById('addSelectedProducts').onclick = function () {
             localStorage.removeItem('posTable');
         }
 
+        // UPDATED: Modified addProductToPOS function to handle empty state visibility
         function addProductToPOS(product) {
             // Check if already in table
             const table = document.getElementById('posTable');
@@ -354,8 +365,25 @@ document.getElementById('addSelectedProducts').onclick = function () {
             <td><input type='checkbox' name='product_id[]' value='${product.id}' checked> <input type='number' class='pos-qty' name='qty[]' value='1' min='1' max='${product.quantity}'></td>`;
                 table.appendChild(tr);
             }
+            
+            // ADDED: Hide empty state when products are added
+            updateEmptyStateVisibility();
             savePosTableToStorage(); // Save to localStorage
         }
+        
+        // ADDED: Function to show/hide empty state based on table content
+        function updateEmptyStateVisibility() {
+            const table = document.getElementById('posTable');
+            const emptyState = document.getElementById('posEmptyState');
+            const hasProducts = table.querySelectorAll('tr[data-product-id]').length > 0;
+            
+            if (hasProducts) {
+                emptyState.style.display = 'none';
+            } else {
+                emptyState.style.display = 'flex';
+            }
+        }
+        
         // Save POS table to localStorage on input change
         document.getElementById('posTable').addEventListener('input', function (e) {
             if (e.target.classList.contains('pos-qty')) {
@@ -365,6 +393,9 @@ document.getElementById('addSelectedProducts').onclick = function () {
 
         // Show alert and clear POS table if payment is settled
         window.addEventListener('DOMContentLoaded', function () {
+            // ADDED: Update empty state visibility on page load
+            updateEmptyStateVisibility();
+            
             if (window.location.search.includes('ok=1')) {
                 alert('Payment settled! Transaction recorded.');
                 // Clear POS table and localStorage
@@ -373,6 +404,9 @@ document.getElementById('addSelectedProducts').onclick = function () {
                     table.deleteRow(1);
                 }
                 localStorage.removeItem('posTable');
+                
+                // ADDED: Show empty state after clearing
+                updateEmptyStateVisibility();
 
                 // Remove ok=1 from the URL without reloading
                 if (window.history.replaceState) {
@@ -395,16 +429,20 @@ document.getElementById('addSelectedProducts').onclick = function () {
         });
 
 
-        // Clear POS table (remove all rows except header)
+        // UPDATED: Modified clear function to show empty state
         document.getElementById('clearPosTable').onclick = function () {
             const table = document.getElementById('posTable');
             // Remove all rows except the first (header)
             while (table.rows.length > 1) {
                 table.deleteRow(1);
             }
+            
+            // ADDED: Show empty state after clearing
+            updateEmptyStateVisibility();
             savePosTableToStorage(); // Save to localStorage
             localStorage.removeItem('posTable'); // Clear localStorage
         };
+        
         // Toggle user dropdown
         function toggleDropdown() {
             const dropdown = document.getElementById('userDropdown');
