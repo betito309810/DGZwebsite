@@ -157,7 +157,7 @@ foreach($items as $i=>$pid){
                 <tr>
                     <th>Product</th>
                     <th>Price</th>
-                    <th>Asvailable</th>
+                    <th>Available</th>
                     <th>Qty</th>
                 </tr>
             </table>
