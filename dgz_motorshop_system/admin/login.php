@@ -20,8 +20,8 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Login</title>
-    <link rel="stylesheet" href="../assets/style.css">
-    <link rel="stylesheet" href="../assets/login.css">
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <link rel="stylesheet" href="../assets/css/login.css">
 </head>
 <body>
     <!-- Logo placeholder - replace src with your logo path -->
