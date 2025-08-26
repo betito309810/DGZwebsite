@@ -167,6 +167,17 @@ body {
 }
 
 /* POS Table */
+#posTable tbody {
+  display: block;
+  height: 350px; /* roughly fits 7 rows */
+  overflow-y: auto;
+}
+#posTable thead, #posTable tbody tr {
+  display: table;
+  width: 100%;
+  table-layout: fixed;
+}
+
 #posTable {
     width: 100%;
     background: white;
@@ -176,6 +187,7 @@ body {
     border: 1px solid #e2e8f0;
     border-collapse: collapse;
     margin-top: 20px;
+    
 }
 
 #posTable th {
@@ -188,6 +200,7 @@ body {
     font-size: 14px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    
 }
 
 #posTable td {

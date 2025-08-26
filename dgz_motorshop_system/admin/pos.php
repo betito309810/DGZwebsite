@@ -76,8 +76,12 @@ foreach($items as $i=>$pid){
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <title>POS - DGZ</title>
 
+<<<<<<< HEAD
     <link rel="stylesheet" href="../assets/style.css">
-    <link rel="stylesheet" href="../assets/pos.css">
+=======
+    <link rel="stylesheet" href="../assets/css/style.css">
+>>>>>>> 647b32e557f33b068129d45d7d6e891305bb9358
+    <link rel="stylesheet" href="../assets/css/pos.css">
 </head>
 
 <body>

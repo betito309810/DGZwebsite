@@ -11,7 +11,7 @@ $products = $pdo->query('SELECT * FROM products')->fetchAll();
 <head>
   <meta charset="UTF-8">
   <title>POS (Enhanced)</title>
-  <link rel="stylesheet" href="newpos.css">
+  <link rel="stylesheet" href="newpos_updated.css">
   <script>
     function updateTotals() {
       let rows = document.querySelectorAll("#posTable tbody tr");

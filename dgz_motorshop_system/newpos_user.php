@@ -11,7 +11,7 @@ $products = $pdo->query('SELECT * FROM products')->fetchAll();
 <head>
   <meta charset="UTF-8">
   <title>POS</title>
-  <link rel="stylesheet" href="newpos.css">
+  <link rel="stylesheet" href="newpos_updated.css">
   <script>
     // Function to update totals including VAT
     function updateTotals() {
