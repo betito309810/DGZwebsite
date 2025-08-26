@@ -166,28 +166,26 @@ body {
     background: #fee;
 }
 
-/* POS Table */
-#posTable tbody {
-  display: block;
-  height: 350px; /* roughly fits 7 rows */
-  overflow-y: auto;
-}
-#posTable thead, #posTable tbody tr {
-  display: table;
-  width: 100%;
-  table-layout: fixed;
+/* POS Table Container - ADDED: Fixed window size container */
+.pos-table-container {
+    min-height: 400px; /* Fixed minimum height for the table area */
+    max-height: 600px; /* Maximum height before scrolling */
+    overflow-y: auto;  /* Enable vertical scrolling when content exceeds max-height */
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background: white;
+    box-shadow: 0 2px 15px rgba(0,0,0,0.05);
+    margin-top: 20px;
 }
 
+/* MODIFIED: Updated POS Table styles for fixed container */
 #posTable {
     width: 100%;
     background: white;
     border-radius: 12px;
     overflow: hidden;
-    box-shadow: 0 2px 15px rgba(0,0,0,0.05);
-    border: 1px solid #e2e8f0;
     border-collapse: collapse;
-    margin-top: 20px;
-    
+    margin: 0; /* Removed margin-top since container has it */
 }
 
 #posTable th {
@@ -200,7 +198,9 @@ body {
     font-size: 14px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    
+    position: sticky; /* ADDED: Keep header visible when scrolling */
+    top: 0;           /* ADDED: Stick to top of container */
+    z-index: 10;      /* ADDED: Ensure header stays above content */
 }
 
 #posTable td {
@@ -221,6 +221,28 @@ body {
 
 #posTable tr:last-child td {
     border-bottom: none;
+}
+
+/* ADDED: Empty state styling for when no items are in POS table */
+.pos-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 300px;
+    color: #9ca3af;
+    font-size: 16px;
+    text-align: center;
+}
+
+.pos-empty-state i {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+.pos-empty-state p {
+    margin: 0;
 }
 
 /* POS Buttons */
@@ -337,11 +359,17 @@ body {
     }
     .main-content {
         margin-left: 0;
-        
     }
     .header {
         padding: 15px 20px;
     }
+    
+    /* ADDED: Responsive adjustments for POS table container */
+    .pos-table-container {
+        min-height: 300px; /* Smaller minimum height on mobile */
+        max-height: 400px; /* Smaller maximum height on mobile */
+    }
+    
     #posTable th, #posTable td {
         padding: 12px 10px;
         font-size: 13px;
@@ -364,5 +392,6 @@ body {
 
 @media (max-width: 768px) {
     .mobile-toggle {
-        display: block;}
+        display: block;
     }
+}
