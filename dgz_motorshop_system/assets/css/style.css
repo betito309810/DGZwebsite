@@ -25,15 +25,14 @@ nav a {
 }
 
 table {
-    border-collapse: collapse;
-    width: 100%
+    
+    
 }
 
-table,
-td,
-th {
-    border: 1px solid #ddd;
-    padding: 6px
+
+td{
+    border: 1px solid #d01313;
+    padding: 6px;
 }
 
 input,
