@@ -75,7 +75,6 @@ foreach($items as $i=>$pid){
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <title>POS - DGZ</title>
-    <link rel="stylesheet" href="../assets/style.css">
     <link rel="stylesheet" href="../assets/css/style.css">
     <link rel="stylesheet" href="../assets/css/pos.css">
 </head>
@@ -154,22 +153,41 @@ foreach($items as $i=>$pid){
                 class="fas fa-search"></i> Search Product</button>
         
         <form method="post" id="posForm">
-            <!-- UPDATED: Added container div around the table -->
             <div class="pos-table-container">
                 <table id="posTable">
-                    <tr>
-                        <th>Product</th>
-                        <th>Price</th>
-                        <th>Available</th>
-                        <th>Qty</th>
-                    </tr>
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>Price</th>
+                            <th>Available</th>
+                            <th>Qty</th>
+                        </tr>
+                    </thead>
+                    <tbody id="posTableBody">
+                        <!-- JS will populate rows here -->
+                    </tbody>
                 </table>
-                <!-- ADDED: Empty state that shows when no items are in cart -->
                 <div class="pos-empty-state" id="posEmptyState">
                     <i class="fas fa-shopping-cart"></i>
                     <p>No items in cart. Click "Search Product" to add items.</p>
                 </div>
             </div>
+            <!-- POS Totals Panel (separate from the table) -->
+            <div id="totalsPanel" class="totals-panel">
+                <div class="totals-item">
+                    <label>Total</label>
+                    <div id="totalAmount" class="value">₱0.00</div>
+                </div>
+                <div class="totals-item">
+                    <label for="amountReceived">Amount Received</label>
+                    <input type="number" id="amountReceived" min="0" step="0.01" placeholder="0.00">
+                </div>
+                <div class="totals-item">
+                    <label>Change</label>
+                    <div id="changeAmount" class="value">₱0.00</div>
+                </div>
+            </div>
+           
             
             <button type="button" id="clearPosTable"
                 style="margin:10px 0 0 0; background:#e74c3c; color:#fff; border:none; border-radius:6px; font-size:15px; padding:8px 18px; cursor:pointer;">Clear</button>
@@ -477,6 +495,10 @@ document.getElementById('addSelectedProducts').onclick = function () {
             }
         });
     </script>
+    <!-- Total Sales Panel -->
+     <script src="../assets/js/totalPanel.js"></script>
+     
+
 </body>
 
 </html>

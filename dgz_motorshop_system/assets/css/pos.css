@@ -166,41 +166,42 @@ body {
     background: #fee;
 }
 
-/* POS Table Container - ADDED: Fixed window size container */
- .pos-table-container {
-    min-height: 400px; /* Fixed minimum height for the table area */
-    max-height: 600px; /* Maximum height before scrolling */
-    overflow-y: auto;  /* Enable vertical scrolling when content exceeds max-height */
+/* POS Table Container - fixed height, scrollable, for sticky header */
+.pos-table-container {
+    max-height: 500px;
+    overflow-y: auto;
+    overflow-x: auto;
     border: 1px solid #e2e8f0;
     border-radius: 12px;
-    background: white;
-    box-shadow: 0 2px 15px rgba(0,0,0,0.05);
+    background: #fff;
     margin-top: 20px;
+    position: relative;
+    isolation: isolate;
+    box-shadow: 0 2px 15px rgba(0,0,0,0.05);
 }
 
 /* MODIFIED: Updated POS Table styles for fixed container */
+
+
 #posTable {
     width: 100%;
-    background: white;
-    border-radius: 12px;
-    overflow: hidden;
+    background: #fff;
     border-collapse: collapse;
-    margin: 0; /* Removed margin-top since container has it */
+    margin: 0;
+    table-layout: auto;
 }
 
 #posTable th {
-    background: linear-gradient(135deg, #f8fafc, #f1f5f9);
-    padding: 16px 18px;
-    text-align: left;
-    font-weight: 600;
-    color: #4a5568;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #f8fafc;
+    background-image: linear-gradient(135deg, #f8fafc, #f1f5f9);
+    background-clip: padding-box;
+    padding: 8px 9px;
     border-bottom: 2px solid #e2e8f0;
-    font-size: 14px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    position: sticky; /* ADDED: Keep header visible when scrolling */
-    top: 0;           /* ADDED: Stick to top of container */
-    z-index: 10;      /* ADDED: Ensure header stays above content */
+    color: #222;
+    text-align: left;
 }
 
 #posTable td {
@@ -209,16 +210,15 @@ body {
     color: #4a5568;
     vertical-align: middle;
     font-size: 14px;
+    background: #fff;
 }
 
 #posTable tr {
     transition: background 0.3s;
 }
-
-#posTable tr:hover {
+#posTable tr:hover td {
     background: #f8fafc;
 }
-
 #posTable tr:last-child td {
     border-bottom: none;
 }
@@ -244,6 +244,39 @@ body {
 .pos-empty-state p {
     margin: 0;
 }
+/* === POS Totals Panel (separate from table) === */
+.totals-panel{
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 2px 15px rgba(0,0,0,0.05);
+    margin-top: 14px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+}
+.totals-item label{
+    display:block;
+    font-size:12px;
+    color:#6b7280;
+    margin-bottom:6px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+}
+.totals-item .value{
+    font-weight: 700;
+    font-size: 20px;
+    color: #1f2937;
+}
+#amountReceived{
+    width:100%;
+    height: 40px;
+    padding: 8px 10px;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 14px;
+}
 
 /* POS Buttons */
 #openProductModal,
@@ -261,12 +294,13 @@ body {
     transition: background 0.2s;
 }
 #posTable input[type="number"] {
-    width: 60px;      
-    height: 36px;     
-    font-size: 13px;  
-    padding: 4px 8px; 
+    width: 60px;
+    height: 36px;
+    font-size: 13px;
+    padding: 4px 8px;
     border-radius: 5px;
     border: 1px solid #e2e8f0;
+    background: #f8fafc;
 }
 #clearPosTable {
     background: #e74c3c;
@@ -281,7 +315,8 @@ body {
     background: #c0392b;
 }
 
-/* Modal Styles 
+
+/* Modal Styles */
 #productModal {
     display: none;
     position: fixed;
@@ -291,8 +326,7 @@ body {
     z-index: 9999;
     align-items: center;
     justify-content: center;
-}*/
-/*
+}
 #productModal .modal-content {
     background: #fff;
     border-radius: 10px;
@@ -302,7 +336,7 @@ body {
     padding: 24px;
     position: relative;
     box-shadow: 0 8px 32px rgba(0,0,0,0.18);
-}*/
+}
 
 #closeProductModal {
     position: absolute;
@@ -363,13 +397,9 @@ body {
     .header {
         padding: 15px 20px;
     }
-    
-    /* ADDED: Responsive adjustments for POS table container */
     .pos-table-container {
-        min-height: 300px; /* Smaller minimum height on mobile */
-        max-height: 400px; /* Smaller maximum height on mobile */
+        max-height: 300px;
     }
-    
     #posTable th, #posTable td {
         padding: 12px 10px;
         font-size: 13px;
