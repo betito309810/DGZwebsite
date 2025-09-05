@@ -168,7 +168,7 @@ body {
 
 /* POS Table Container - fixed height, scrollable, for sticky header */
 .pos-table-container {
-    max-height: 600px;
+    height: 610px;
     overflow-y: auto;
     overflow-x: hidden;
     border: 1px solid #e2e8f0;
@@ -180,16 +180,13 @@ body {
     box-shadow: 0 2px 15px rgba(0,0,0,0.05);
 }
 
-/* MODIFIED: Updated POS Table styles for fixed container */
-
-
+/* UPDATED: Fixed table layout for consistent column widths */
 #posTable {
     width: 100%;
     background: #fff;
     border-collapse: collapse;
     margin: 0;
-    table-layout: auto;
-
+    table-layout: fixed; /* This ensures fixed column widths */
 }
 
 #posTable th {
@@ -200,12 +197,13 @@ body {
     background: #f8fafc;
     background-image: linear-gradient(135deg, #f8fafc, #f1f5f9);
     background-clip: padding-box;
-    padding: 16px 18px; /* Match td padding exactly */
-    margin: 0; /* Remove any margin that could cause a gap */
+    padding: 16px 18px;
+    margin: 0;
     border-bottom: 2px solid #e2e8f0;
     color: #222;
     text-align: left;
-    box-shadow: 0 2px 0 0 #e2e8f0; /* Visually cover gap if any */
+    box-shadow: 0 2px 0 0 #e2e8f0;
+    font-weight: 600;
 }
 
 #posTable td {
@@ -215,25 +213,45 @@ body {
     vertical-align: middle;
     font-size: 14px;
     background: #fff;
+    word-wrap: break-word; /* Handle long text */
+    overflow-wrap: break-word;
+}
+
+/* ADDED: Specific styling for product name column to handle long names */
+#posTable td.pos-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ADDED: Tooltip for long product names on hover */
+#posTable td.pos-name:hover {
+    white-space: normal;
+    overflow: visible;
+    position: relative;
+    z-index: 10;
+    background: #f8fafc;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
 #posTable tr {
     transition: background 0.3s;
 }
+
 #posTable tr:hover td {
     background: #f8fafc;
 }
+
 #posTable tr:last-child td {
     border-bottom: none;
 }
 
 /* ADDED: Empty state styling for when no items are in POS table */
-.pos-empty-state {
-    display: flex;
+.pos-empty-state {  
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    height: 300px;
+    height: 610px;
     color: #9ca3af;
     font-size: 16px;
     text-align: center;
@@ -248,6 +266,7 @@ body {
 .pos-empty-state p {
     margin: 0;
 }
+
 /* === POS Totals Panel (separate from table) === */
 .totals-panel{
     background: #fff;
@@ -260,6 +279,7 @@ body {
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 14px;
 }
+
 .totals-item label{
     display:block;
     font-size:12px;
@@ -268,11 +288,13 @@ body {
     text-transform: uppercase;
     letter-spacing: .5px;
 }
+
 .totals-item .value{
     font-weight: 700;
     font-size: 20px;
     color: #1f2937;
 }
+
 #amountReceived{
     width:100%;
     height: 40px;
@@ -297,6 +319,7 @@ body {
     margin: 10px 0 0 0;
     transition: background 0.2s;
 }
+
 #posTable input[type="number"] {
     width: 60px;
     height: 36px;
@@ -306,6 +329,11 @@ body {
     border: 1px solid #e2e8f0;
     background: #f8fafc;
 }
+
+.iquantity{
+    width: 70px;
+}
+
 #clearPosTable {
     background: #e74c3c;
 }
@@ -319,7 +347,6 @@ body {
     background: #c0392b;
 }
 
-
 /* Modal Styles */
 #productModal {
     display: none;
@@ -331,6 +358,7 @@ body {
     align-items: center;
     justify-content: center;
 }
+
 #productModal .modal-content {
     background: #fff;
     border-radius: 10px;
@@ -392,22 +420,34 @@ body {
         transform: translateX(-100%);
         width: 100%;
     }
+    
     .sidebar.mobile-open {
         transform: translateX(0);
     }
+    
     .main-content {
         margin-left: 0;
     }
+    
     .header {
         padding: 15px 20px;
     }
+    
     .pos-table-container {
         max-height: 300px;
     }
+    
     #posTable th, #posTable td {
         padding: 12px 10px;
         font-size: 13px;
     }
+    
+    /* ADDED: Responsive column widths for mobile */
+    #posTable th:nth-child(1), #posTable td:nth-child(1) { width: 35%; }
+    #posTable th:nth-child(2), #posTable td:nth-child(2) { width: 20%; }
+    #posTable th:nth-child(3), #posTable td:nth-child(3) { width: 15%; }
+    #posTable th:nth-child(4), #posTable td:nth-child(4) { width: 30%; }
+    
     #productModal .modal-content {
         padding: 12px;
     }

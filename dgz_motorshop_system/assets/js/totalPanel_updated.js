@@ -1,4 +1,3 @@
-
 (function () {
     function pesoToNumber(text) {
         if (typeof text !== 'string') return Number(text) || 0;
@@ -28,18 +27,22 @@
     });
 }
 
+
     function recalcTotal() {
         let total = 0;
         document.querySelectorAll('#posTable tr[data-product-id]').forEach(function (row) {
             if (!rowIncluded(row)) return;
             total += getRowPrice(row) * getRowQty(row);
         });
-        // ✅ ADDED: Update top simple total
-        var topSimpleEl = document.getElementById('topTotalAmountSimple');
-        if (topSimpleEl) topSimpleEl.textContent = formatPeso(total);
+
         // Update bottom total
         var totalEl = document.getElementById('totalAmount');
         if (totalEl) totalEl.textContent = formatPeso(total);
+
+        // ✅ ADDED: Update top simple total
+        var topSimpleEl = document.getElementById('topTotalAmountSimple');
+        if (topSimpleEl) topSimpleEl.textContent = formatPeso(total);
+
         computeChange();
     }
 
@@ -87,9 +90,8 @@
             };
             window.addProductToPOS.__wrapped = true;
         }
+
+        // Initial calculation
         recalcTotal();
-        
     });
-    
-})
-();
+})();

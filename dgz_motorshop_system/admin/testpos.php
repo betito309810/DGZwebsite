@@ -148,17 +148,9 @@ foreach($items as $i=>$pid){
             </div>
         </header>
 
-        <div style="display: flex; align-items: center; gap: 0px; margin: 15px 0; flex-wrap: wrap;">
-            <button type="button" id="openProductModal"
-                style="padding: 8px 18px; background: #3498db; color: #fff; border: none; border-radius: 6px; font-size: 15px; cursor: pointer;"><i
-                    class="fas fa-search"></i> Search Product</button>
-                    <!-- Large total display -->
-            <div class="top-total-simple" style="font-size: 2.2rem; font-weight: bold; color: #111; min-width: 85%; text-align: right;">
-                <span id="topTotalAmountSimple">₱0.00</span>
-        </div>
-        <!-- Optionally keep the small total below for mobile or reference -->
-        <div class="top-total" style="display:none;">Total Amount: ₱ <span id="topTotalAmount">0.00</span></div>
-                   
+        <button type="button" id="openProductModal"
+            style="margin: 15px 0; padding: 8px 18px; background: #3498db; color: #fff; border: none; border-radius: 6px; font-size: 15px; cursor: pointer;"><i
+                class="fas fa-search"></i> Search Product</button>
         
         <form method="post" id="posForm">
             <div class="pos-table-container">
@@ -169,6 +161,7 @@ foreach($items as $i=>$pid){
                             <th>Price</th>
                             <th>Available</th>
                             <th>Qty</th>
+                            
                         </tr>
                     </thead>
                     <tbody id="posTableBody">
@@ -237,69 +230,70 @@ foreach($items as $i=>$pid){
     </main>
 
     <script>
+        // Modal open/close
+        document.getElementById('openProductModal').onclick = function () {
+            document.getElementById('productModal').style.display = 'flex';
+            document.getElementById('productSearchInput').value = '';
+            renderProductTable(); // This will show all products when modal opens
+            document.getElementById('productSearchInput').focus();
+        };
 
-// Modal open/close
-document.getElementById('openProductModal').onclick = function () {
-    document.getElementById('productModal').style.display = 'flex';
-    document.getElementById('productSearchInput').value = '';
-    renderProductTable(); // This will show all products when modal opens
-    document.getElementById('productSearchInput').focus();
-};
+        document.getElementById('closeProductModal').onclick = function () {
+            document.getElementById('productModal').style.display = 'none';
+        };
 
-document.getElementById('closeProductModal').onclick = function () {
-    document.getElementById('productModal').style.display = 'none';
-};
+        // Close modal on outside click
+        document.getElementById('productModal').onclick = function (e) {
+            if (e.target === this) this.style.display = 'none';
+        };
 
-// Close modal on outside click
-document.getElementById('productModal').onclick = function (e) {
-    if (e.target === this) this.style.display = 'none';
-};
+        // Prepare product data for search (from PHP)
+        const allProducts = [<?php foreach($products as $p) : ?> {
+            id: <?= json_encode($p['id']) ?>,
+            name: <?= json_encode($p['name']) ?>,
+            price: <?= json_encode($p['price']) ?>,
+            quantity: <?= json_encode($p['quantity']) ?>
+        }, <?php endforeach; ?>];
 
-// Prepare product data for search (from PHP)
-const allProducts = [<?php foreach($products as $p) : ?> {
-    id: <?= json_encode($p['id']) ?>,
-    name: <?= json_encode($p['name']) ?>,
-    price: <?= json_encode($p['price']) ?>,
-    quantity: <?= json_encode($p['quantity']) ?>
-}, <?php endforeach; ?>];
-
-// Render all products in table
-function renderProductTable(filter = '') {
-    const tbody = document.getElementById('productSearchTableBody');
-    tbody.innerHTML = '';
-    let filtered = allProducts;
-    if (filter) {
-        filtered = allProducts.filter(p => p.name.toLowerCase().includes(filter.toLowerCase()));
-    }
-    if (filtered.length === 0) {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td colspan='4' style='text-align:center; color:#888; padding:16px;'>No products found.</td>`;
-        tbody.appendChild(tr);
-        return;
-    }
-    filtered.forEach(p => {
+        // Render all products in table
+        function renderProductTable(filter = '') {
+            const tbody = document.getElementById('productSearchTableBody');
+            tbody.innerHTML = '';
+            let filtered = allProducts;
+            if (filter) {
+                filtered = allProducts.filter(p => p.name.toLowerCase().includes(filter.toLowerCase()));
+            }
+            if (filtered.length === 0) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td colspan='4' style='text-align:center; color:#888; padding:16px;'>No products found.</td>`;
+                tbody.appendChild(tr);
+                return;
+            }
+            
+            filtered.forEach(p => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-        <td>${p.name}</td>
-        <td style='text-align:right;'>₱${parseFloat(p.price).toFixed(2)}</td>
-        <td style='text-align:center;'>${p.quantity}</td>
-        <td style='text-align:center;'>
-            ${
-                p.quantity > 0 
-                ? `<input type='checkbox' class='product-select-checkbox' data-id='${p.id}'>`
-                : `<span style="color:#e74c3c;font-size:13px;">Out of Stock</span>`
-            }
-        </td>`;
+                    <td>${p.name}</td>
+                    <td style='text-align:right;'>₱${parseFloat(p.price).toFixed(2)}</td>
+                    <td style='text-align:center;'>${p.quantity}</td>
+                    <td style='text-align:center;'>
+                        ${
+                            p.quantity > 0 
+                            ? `<input type='checkbox' class='product-select-checkbox' data-id='${p.id}'>`
+                            : `<span style="color:#e74c3c;font-size:13px;">Out of Stock</span>`
+                        }
+                    </td>`;
                 tbody.appendChild(tr);
             });
-}
-// Prevent adding out-of-stock products from dev tools
+        }
+
+        // Prevent adding out-of-stock products from dev tools
         function addProductToPOS(product) {
             if (parseInt(product.quantity) <= 0) {
                 alert(product.name + " is out of stock and cannot be added.");
                 return;
             }
-            // existing add-to-table logic...
+            
             // Check if already in table
             const table = document.getElementById('posTable');
             const existing = table.querySelector(`tr[data-product-id='${product.id}']`);
@@ -317,23 +311,21 @@ function renderProductTable(filter = '') {
                     <td class="pos-available">${product.quantity}</td>
                     <td style="display: flex; align-items: center; gap: 8px;">
                         <input type='hidden' name='product_id[]' value='${product.id}'>
-                        <input id='iquantity' type='number' class='pos-qty' name='qty[]' value='1' min='1' max='${product.quantity}'>
+                        <input type='number' class='pos-qty' name='qty[]' value='1' min='1' max='${product.quantity}' style="flex: 1;">
                         <button type='button' class='remove-btn' onclick='removeProductFromPOS(this)' 
-                                style='background:#e74c3c; color:#fff; border:none; border-radius:3px; padding:4px 6px; cursor:pointer; font-size:11px; min-width:24px; height:24px; display:flex; align-items:center; justify-content:center;'>
+                                style='background:#e74c3c; color:#fff; border:none; border-radius:3px; padding:4px 6px; cursor:pointer; font-size:11px; min-width:24px; height:24px; align-items:center; justify-content:center;'>
                             <i class='fas fa-times'></i>
                         </button>
                     </td>`;
                 table.appendChild(tr);
             }
-             // Hide empty state when products are added
+            
+            // Hide empty state when products are added
             updateEmptyStateVisibility();
             savePosTableToStorage();
         }
-// Filter table as user types
-document.getElementById('productSearchInput').oninput = function () {
-    renderProductTable(this.value.trim());
-};
-    // NEW: Function to remove product from POS table
+
+        // NEW: Function to remove product from POS table
         function removeProductFromPOS(button) {
             const tr = button.closest('tr');
             tr.remove();
@@ -341,22 +333,27 @@ document.getElementById('productSearchInput').oninput = function () {
             savePosTableToStorage();
         }
 
-// Add selected products to POS table
-document.getElementById('addSelectedProducts').onclick = function () {
-    const checkboxes = document.querySelectorAll('.product-select-checkbox:checked');
-    if (checkboxes.length === 0) {
-        alert('Please select at least one product to add.');
-        return;
-    }
-    checkboxes.forEach(cb => {
-        const pid = cb.getAttribute('data-id');
-        const product = allProducts.find(p => p.id == pid);
-        if (product) addProductToPOS(product);
-    });
-    document.getElementById('productModal').style.display = 'none';
-};
+        // Filter table as user types
+        document.getElementById('productSearchInput').oninput = function () {
+            renderProductTable(this.value.trim());
+        };
 
-        //Save POS table data to localStorage
+        // Add selected products to POS table
+        document.getElementById('addSelectedProducts').onclick = function () {
+            const checkboxes = document.querySelectorAll('.product-select-checkbox:checked');
+            if (checkboxes.length === 0) {
+                alert('Please select at least one product to add.');
+                return;
+            }
+            checkboxes.forEach(cb => {
+                const pid = cb.getAttribute('data-id');
+                const product = allProducts.find(p => p.id == pid);
+                if (product) addProductToPOS(product);
+            });
+            document.getElementById('productModal').style.display = 'none';
+        };
+
+        // Save POS table data to localStorage
         function savePosTableToStorage() {
             const rows = [];
             document.querySelectorAll('#posTable tr[data-product-id]').forEach(tr => {
@@ -368,12 +365,14 @@ document.getElementById('addSelectedProducts').onclick = function () {
                     qty: tr.querySelector('.pos-qty').value
                 });
             });
-            localStorage.setItem('posTable', JSON.stringify(rows));
+            // Use JavaScript variables instead of localStorage (Claude.ai compatibility)
+           localStorage.setItem('posTable', JSON.stringify(rows));
         }
 
-        //Restore POS table from localStorage on page load
+        // Restore POS table from storage on page load
         window.addEventListener('DOMContentLoaded', function () {
-            const data = JSON.parse(localStorage.getItem('posTable') || '[]');
+            // Use JavaScript variables instead of localStorage
+           const data = JSON.parse(localStorage.getItem('posTable') || '[]');
             data.forEach(item => {
                 addProductToPOS({
                     id: item.id,
@@ -390,14 +389,12 @@ document.getElementById('addSelectedProducts').onclick = function () {
             });
         });
 
-        //Clear localStorage when checkout is completed or clear button is clicked
+        // Clear storage when checkout is completed or clear button is clicked
         function clearPosTable() {
-            // ...your code to clear the table...
-            localStorage.removeItem('posTable');
+            window.posTableData = [];
         }
 
-        
-        // ADDED: Function to show/hide empty state based on table content
+        // Function to show/hide empty state based on table content
         function updateEmptyStateVisibility() {
             const table = document.getElementById('posTable');
             const emptyState = document.getElementById('posEmptyState');
@@ -410,7 +407,7 @@ document.getElementById('addSelectedProducts').onclick = function () {
             }
         }
         
-        // Save POS table to localStorage on input change
+        // Save POS table to storage on input change
         document.getElementById('posTable').addEventListener('input', function (e) {
             if (e.target.classList.contains('pos-qty')) {
                 savePosTableToStorage();
@@ -419,19 +416,19 @@ document.getElementById('addSelectedProducts').onclick = function () {
 
         // Show alert and clear POS table if payment is settled
         window.addEventListener('DOMContentLoaded', function () {
-            // ADDED: Update empty state visibility on page load
+            // Update empty state visibility on page load
             updateEmptyStateVisibility();
             
             if (window.location.search.includes('ok=1')) {
                 alert('Payment settled! Transaction recorded.');
-                // Clear POS table and localStorage
+                // Clear POS table and storage
                 const table = document.getElementById('posTable');
                 while (table.rows.length > 1) {
                     table.deleteRow(1);
                 }
-                localStorage.removeItem('posTable');
+                window.posTableData = [];
                 
-                // ADDED: Show empty state after clearing
+                // Show empty state after clearing
                 updateEmptyStateVisibility();
 
                 // Remove ok=1 from the URL without reloading
@@ -442,20 +439,17 @@ document.getElementById('addSelectedProducts').onclick = function () {
             }
         });
 
-
         // Prevent checkout if no products in POS table
-        //Modal overlay 
         document.getElementById('posForm').addEventListener('submit', function (e) {
             const rows = document.querySelectorAll('#posTable tr[data-product-id]');
             if (rows.length === 0) {
                 e.preventDefault();
-                document.getElementById('productModal').style.display = 'none'; // close modal if open
+                document.getElementById('productModal').style.display = 'none';
                 alert('No item selected in POS!');
             }
         });
 
-
-        // UPDATED: Modified clear function to show empty state
+        // Clear function to show empty state
         document.getElementById('clearPosTable').onclick = function () {
             const table = document.getElementById('posTable');
             // Remove all rows except the first (header)
@@ -463,10 +457,10 @@ document.getElementById('addSelectedProducts').onclick = function () {
                 table.deleteRow(1);
             }
             
-            // ADDED: Show empty state after clearing
+            // Show empty state after clearing
             updateEmptyStateVisibility();
-            savePosTableToStorage(); // Save to localStorage
-            localStorage.removeItem('posTable'); // Clear localStorage
+            savePosTableToStorage();
+            window.posTableData = [];
         };
         
         // Toggle user dropdown
@@ -502,22 +496,9 @@ document.getElementById('addSelectedProducts').onclick = function () {
                 sidebar.classList.remove('mobile-open');
             }
         });
-
-      // NEW: Function to remove product from POS table
-function removeProductFromPOS(button) {
-    const tr = button.closest('tr');
-    tr.remove();
-    updateEmptyStateVisibility();
-    savePosTableToStorage();
-    
-    // Add this line to recalculate the total
-    recalcTotal();
-}
     </script>
     <!-- Total Sales Panel -->
-    <script src="../assets/js/totalPanel.js"></script>
-    
-     
+     <script src="../assets/js/totalPanel.js"></script>
 
 </body>
 
