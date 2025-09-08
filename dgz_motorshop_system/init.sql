@@ -26,6 +26,19 @@ CREATE TABLE IF NOT EXISTS products (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- stock entries table
+CREATE TABLE IF NOT EXISTS stock_entries (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  product_id INT,
+  quantity_added INT NOT NULL,
+  supplier VARCHAR(255) NOT NULL,
+  notes TEXT,
+  stock_in_by INT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (product_id) REFERENCES products(id),
+  FOREIGN KEY (stock_in_by) REFERENCES users(id)
+);
+
 -- orders table
 CREATE TABLE IF NOT EXISTS orders (
   id INT AUTO_INCREMENT PRIMARY KEY,

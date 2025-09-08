@@ -58,6 +58,12 @@ $top = $pdo->query('SELECT p.*, SUM(oi.qty) as sold FROM order_items oi JOIN pro
                     Inventory
                 </a>
             </div>
+             <div class="nav-item">
+                <a href="stockEntry.php" class="nav-link ">
+                    <i class="fas fa-truck-loading nav-icon"></i>
+                    Stock Entry
+                </a>
+            </div>
         </nav>
     </aside>
 

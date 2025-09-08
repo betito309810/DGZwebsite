@@ -19,9 +19,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_stock'])) {
             $stmt = $pdo->prepare("UPDATE products SET quantity = quantity + ? WHERE id = ?");
             $stmt->execute([$quantity, $product_id]);
             
-            // Record stock entry
-            $stmt = $pdo->prepare("INSERT INTO stock_entries (product_id, quantity_added, supplier, notes, created_at) VALUES (?, ?, ?, ?, NOW())");
-            $stmt->execute([$product_id, $quantity, $supplier, $notes]);
+            // Record stock entry with the current user
+            $stmt = $pdo->prepare("INSERT INTO stock_entries (product_id, quantity_added, supplier, notes, stock_in_by, created_at) VALUES (?, ?, ?, ?, ?, NOW())");
+            $stmt->execute([$product_id, $quantity, $supplier, $notes, $_SESSION['user_id']]);
             
             $pdo->commit();
             $success_message = "Stock updated successfully!";
@@ -37,11 +37,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_stock'])) {
 // Get all products for dropdown
 $products = $pdo->query("SELECT * FROM products ORDER BY name")->fetchAll();
 
-// Get recent stock entries
+// Get recent stock entries with user information
 $recent_entries = $pdo->query("
-    SELECT se.*, p.name as product_name 
+    SELECT se.*, p.name as product_name, u.name as user_name 
     FROM stock_entries se 
     JOIN products p ON p.id = se.product_id 
+    LEFT JOIN users u ON u.id = se.stock_in_by 
     ORDER BY se.created_at DESC 
     LIMIT 10
 ")->fetchAll();
@@ -56,104 +57,7 @@ $recent_entries = $pdo->query("
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <style>
-        .stock-entry-form {
-            background: white;
-            padding: 24px;
-            border-radius: 10px;
-            box-shadow: 0 2px 15px rgba(0,0,0,0.05);
-            margin-bottom: 24px;
-        }
-        
-        .form-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin-bottom: 20px;
-        }
-        
-        .form-group {
-            margin-bottom: 15px;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            color: #2c3e50;
-            font-weight: 500;
-        }
-        
-        .form-group select,
-        .form-group input,
-        .form-group textarea {
-            width: 100%;
-            padding: 8px 12px;
-            border: 1px solid #e2e8f0;
-            border-radius: 6px;
-            font-size: 14px;
-        }
-        
-        .form-group textarea {
-            height: 100px;
-            resize: vertical;
-        }
-        
-        .submit-btn {
-            background: #3498db;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 15px;
-        }
-        
-        .submit-btn:hover {
-            background: #2980b9;
-        }
-        
-        .recent-entries {
-            background: white;
-            padding: 24px;
-            border-radius: 10px;
-            box-shadow: 0 2px 15px rgba(0,0,0,0.05);
-        }
-        
-        .entries-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        
-        .entries-table th,
-        .entries-table td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid #e2e8f0;
-        }
-        
-        .entries-table th {
-            background: #f8fafc;
-            font-weight: 600;
-        }
-        
-        .alert {
-            padding: 12px 20px;
-            border-radius: 6px;
-            margin-bottom: 20px;
-        }
-        
-        .alert-success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-        
-        .alert-error {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-    </style>
+    <link rel="stylesheet" href="../assets/css/stockEntry.css">
 </head>
 <body>
     <!-- Sidebar -->
@@ -291,6 +195,7 @@ $recent_entries = $pdo->query("
                             <th>Product</th>
                             <th>Quantity Added</th>
                             <th>Supplier</th>
+                            <th>Stock in by</th>
                             <th>Notes</th>
                         </tr>
                     </thead>
@@ -301,6 +206,7 @@ $recent_entries = $pdo->query("
                                 <td><?php echo htmlspecialchars($entry['product_name']); ?></td>
                                 <td><?php echo $entry['quantity_added']; ?></td>
                                 <td><?php echo htmlspecialchars($entry['supplier']); ?></td>
+                                <td><?php echo htmlspecialchars($entry['user_name'] ?? 'Unknown'); ?></td>
                                 <td><?php echo htmlspecialchars($entry['notes']); ?></td>
                             </tr>
                         <?php endforeach; ?>

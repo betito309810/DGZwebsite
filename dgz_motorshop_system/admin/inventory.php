@@ -77,6 +77,12 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                     Inventory
                 </a>
             </div>
+             <div class="nav-item">
+                <a href="stockEntry.php" class="nav-link ">
+                    <i class="fas fa-truck-loading nav-icon"></i>
+                    Stock Entry
+                </a>
+            </div>
         </nav>
     </aside>
     <!-- Main Content -->
