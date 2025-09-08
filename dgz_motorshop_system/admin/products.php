@@ -121,6 +121,7 @@ $products = $pdo->query('SELECT * FROM products')->fetchAll();
     </div>
 </div>
         <h3>All Products</h3>
+        <div id="productsTable">
         <table>
             <tr>
                 <th>Code</th>
@@ -145,7 +146,7 @@ $products = $pdo->query('SELECT * FROM products')->fetchAll();
             </td>
             </tr>
             <?php endforeach; ?>
-        </table>
+        </table></div>
         <!-- Edit Product Modal -->
         <div id="editModal"
             style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.3); z-index:9999; align-items:center; justify-content:center;">

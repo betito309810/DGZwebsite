@@ -1,5 +1,6 @@
 <?php
 require '../config.php';
+if(empty($_SESSION['user_id'])){ header('Location: login.php'); exit; }
 $pdo = db();
 $products = $pdo->query('SELECT * FROM products')->fetchAll();
 if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['pos_checkout'])) {

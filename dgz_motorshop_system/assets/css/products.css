@@ -275,6 +275,24 @@ form button:hover {
 }
 
 /* Enhanced Table */
+#productsTable {
+    height: 610px; /* Example: Sets a fixed height */
+    overflow-y: auto; /* Adds a vertical scrollbar if content overflows */
+    border: 1px solid #ccc; /* Optional: Adds a border to make the container visible */
+}
+
+/* Optional: To make the table's header always visible at the top */
+#productsTable table {
+    width: 100%;
+    
+}
+
+#productsTable thead {
+    position: sticky;
+    top: 0;
+    background-color: #f2f2f2;
+    z-index: 10;
+}
 table {
     width: 100%;
     background: white;
@@ -283,16 +301,17 @@ table {
     box-shadow: 0 2px 15px rgba(0,0,0,0.05);
     border: 1px solid #e2e8f0;
     border-collapse: collapse;
-    margin-top: 32px; 
+   
+    table-layout: fixed; 
 }
 
 table th {
     background: linear-gradient(135deg, #f8fafc, #f1f5f9);
-    padding: 18px 20px;
+    padding: 20px 20px;
     text-align: left;
     font-weight: 600;
     color: #4a5568;
-    border-bottom: 2px solid #e2e8f0;
+    border-bottom: 2px solid #e2e8f0b9;
     font-size: 14px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -318,7 +337,7 @@ table tr:last-child td {
     border-bottom: none;
 }
 
-/* Enhanced Table Content */
+/* Enhanced Table Content 
 table td:first-child {
     font-family: 'Courier New', monospace;
     background: #e2e8f0;
@@ -345,7 +364,7 @@ table td:nth-child(4) {
     font-weight: 700;
     color: #22543d;
     font-size: 16px;
-}
+}*/
 
 /* Action Links 
 table a {
