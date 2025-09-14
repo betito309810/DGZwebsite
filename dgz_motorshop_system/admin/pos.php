@@ -8,6 +8,7 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['pos_checkout'])) {
     // simple POS flow: product_id[], qty[]
     $items = $_POST['product_id'] ?? [];
     $qtys = $_POST['qty'] ?? [];
+    $amount_paid = floatval($_POST['amount_paid'] ?? 0); // FIX: Get amount paid from form
     
     if (empty($items)) {
         echo "<script>alert('No item selected in POS!'); window.location='pos.php';</script>";
@@ -28,17 +29,24 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['pos_checkout'])) {
         }
     }
 
+    // FIX: Validate payment amount
+    if ($amount_paid < $salesTotal) {
+        echo "<script>alert('Insufficient payment amount!'); window.location='pos.php';</script>";
+        exit;
+    }
+
     // Calculate VAT components
     $vatable = $salesTotal / 1.12;
     $vat = $salesTotal - $vatable;
+    $change = $amount_paid - $salesTotal; // FIX: Calculate change
 
     try {
         // Begin transaction
         $pdo->beginTransaction();
 
-        // Create order
-        $stmt = $pdo->prepare('INSERT INTO orders (customer_name, contact, address, total, payment_method, status, vatable, vat) VALUES (?,?,?,?,?,?,?,?)');
-        $stmt->execute(['Walk-in', 'N/A', 'N/A', $salesTotal, 'Cash', 'completed', $vatable, $vat]);
+        // FIX: Create order with amount_paid and change
+        $stmt = $pdo->prepare('INSERT INTO orders (customer_name, contact, address, total, payment_method, status, vatable, vat, amount_paid, change_amount) VALUES (?,?,?,?,?,?,?,?,?,?)');
+        $stmt->execute(['Walk-in', 'N/A', 'N/A', $salesTotal, 'Cash', 'completed', $vatable, $vat, $amount_paid, $change]);
         $order_id = $pdo->lastInsertId();
 
         // Process items
@@ -64,7 +72,8 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['pos_checkout'])) {
         // Commit transaction
         $pdo->commit();
         
-        header('Location: pos.php?ok=1');
+        // FIX: Pass transaction data to the success page
+        header('Location: pos.php?ok=1&order_id=' . $order_id . '&amount_paid=' . $amount_paid . '&change=' . $change);
         exit;
     } catch (Exception $e) {
         // Rollback on error
@@ -213,7 +222,7 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['pos_checkout'])) {
                 </div>
                 <div class="totals-item">
                     <label for="amountReceived">Amount Received</label>
-                    <input type="number" id="amountReceived" min="0" step="0.01" placeholder="0.00">
+                    <input type="number" id="amountReceived" name="amount_paid" min="0" step="0.01" placeholder="0.00">
                 </div>
                 <div class="totals-item">
                     <label>Change</label>
@@ -514,45 +523,92 @@ function recalcTotal() {
     document.getElementById('vatAmount').textContent = formatPeso(vat);
     document.getElementById('topTotalAmountSimple').textContent = formatPeso(salesTotal);
     
-    // Update change calculation
+    // FIX: Proper change calculation with validation
     const amountReceived = parseFloat(document.getElementById('amountReceived').value) || 0;
-    const change = Math.max(0, amountReceived - salesTotal);
+    let change = 0;
+    
+    if (amountReceived >= salesTotal && salesTotal > 0) {
+        change = amountReceived - salesTotal;
+    } else if (amountReceived > 0 && salesTotal > 0) {
+        // If amount received is less than total, show negative change (insufficient)
+        change = amountReceived - salesTotal;
+    }
+    
     document.getElementById('changeAmount').textContent = formatPeso(change);
+    
+    // FIX: Add visual feedback for insufficient payment
+    const changeElement = document.getElementById('changeAmount');
+    if (change < 0 && salesTotal > 0) {
+        changeElement.style.color = '#e74c3c';
+        changeElement.title = 'Insufficient payment';
+    } else {
+        changeElement.style.color = '#27ae60';
+        changeElement.title = '';
+    }
 }
+// FIX: Improved form validation before checkout
+document.getElementById('posForm').addEventListener('submit', function (e) {
+    const rows = document.querySelectorAll('#posTable tr[data-product-id]');
+    if (rows.length === 0) {
+        e.preventDefault();
+        document.getElementById('productModal').style.display = 'none';
+        alert('No item selected in POS!');
+        return;
+    }
+    
+    const salesTotal = parseFloat(document.getElementById('salesTotalAmount').textContent.replace(/[^\d.-]/g, '')) || 0;
+    const amountReceived = parseFloat(document.getElementById('amountReceived').value) || 0;
+    
+    // FIX: Better validation messages
+    if (amountReceived <= 0) {
+        e.preventDefault();
+        alert('Please enter the amount received from customer!');
+        document.getElementById('amountReceived').focus();
+        return;
+    }
+    
+    if (amountReceived < salesTotal) {
+        e.preventDefault();
+        const shortage = salesTotal - amountReceived;
+        alert(`Insufficient payment! Need ${formatPeso(shortage)} more.`);
+        document.getElementById('amountReceived').focus();
+        return;
+    }
+});
 
 // Also update the generateReceipt function to use proper formatting
-function generateReceipt() {
-    const items = [];
-    let subtotal = 0;
+// FIX: Generate receipt with actual transaction data
+function generateReceiptFromTransaction() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const amountPaid = parseFloat(urlParams.get('amount_paid')) || 0;
+    const change = parseFloat(urlParams.get('change')) || 0;
+    const orderId = urlParams.get('order_id') || '';
     
-    document.querySelectorAll('#posTable tr[data-product-id]').forEach(row => {
-        const name = row.querySelector('.pos-name').textContent;
-        const price = parseFloat(row.querySelector('.pos-price').textContent.replace(/[^\d.-]/g, ''));
-        const qty = parseInt(row.querySelector('.pos-qty').value);
+    const items = [];
+    let salesTotal = 0;
+    
+    // Get items from localStorage (they should still be there)
+    const savedData = JSON.parse(localStorage.getItem('posTable') || '[]');
+    savedData.forEach(item => {
+        const price = parseFloat(item.price.replace(/[^\d.-]/g, ''));
+        const qty = parseInt(item.qty);
         const total = price * qty;
-        subtotal += total;
+        salesTotal += total;
         
-        items.push({ name, price, qty, total });
+        items.push({ 
+            name: item.name, 
+            price: price, 
+            qty: qty, 
+            total: total 
+        });
     });
 
-    const amountPaid = parseFloat(document.getElementById('amountReceived').value) || 0;
-    const salesTotal = subtotal;
     const discount = 0;
     const vatable = salesTotal / 1.12;
     const vat = Math.round((salesTotal - vatable) * 100) / 100;
-    const change = amountPaid - salesTotal;
 
-    // Update the totals panel with proper formatting
-    document.getElementById('salesTotalAmount').textContent = formatPeso(salesTotal);
-    document.getElementById('discountAmount').textContent = formatPeso(discount);
-    document.getElementById('vatableAmount').textContent = formatPeso(vatable);
-    document.getElementById('vatAmount').textContent = formatPeso(vat);
-
-    // Update top total display with proper formatting
-    document.getElementById('topTotalAmountSimple').textContent = formatPeso(salesTotal);
-
-    // Populate receipt
-    document.getElementById('receiptNumber').textContent = 'INV-' + Date.now();
+    // Populate receipt with actual transaction data
+    document.getElementById('receiptNumber').textContent = 'INV-' + (orderId || Date.now());
     document.getElementById('receiptDate').textContent = new Date().toLocaleString();
     document.getElementById('receiptCashier').textContent = 'Admin';
 
@@ -569,7 +625,7 @@ function generateReceipt() {
         tbody.appendChild(tr);
     });
 
-    // Update receipt totals with proper formatting
+    // Update receipt totals with actual transaction data
     document.getElementById('receiptSalesTotal').textContent = formatPeso(salesTotal);
     document.getElementById('receiptDiscount').textContent = formatPeso(discount);
     document.getElementById('receiptVatable').textContent = formatPeso(vatable);
@@ -580,7 +636,71 @@ function generateReceipt() {
     // Show receipt modal
     document.getElementById('receiptModal').style.display = 'flex';
 }
+// FIX: Updated DOMContentLoaded handler
+window.addEventListener('DOMContentLoaded', function () {
+    const data = JSON.parse(localStorage.getItem('posTable') || '[]');
+    data.forEach(item => {
+        const product = allProducts.find(p => p.id == item.id);
+        if (product) {
+            addProductToPOS({
+                id: item.id,
+                name: item.name,
+                price: item.price.replace(/[^\d.]/g, ''), // Remove ₱ and keep number
+                quantity: item.available,
+            });
+            // Set the correct qty value after row is added
+            const table = document.getElementById('posTable');
+            const tr = table.querySelector(`tr[data-product-id='${item.id}']`);
+            if (tr) {
+                tr.querySelector('.pos-qty').value = item.qty;
+            }
+        }
+    });
+    
+    // Update empty state and recalculate totals
+    updateEmptyStateVisibility();
+    recalcTotal();
+    
+    // FIX: Handle checkout success with proper data
+    if (window.location.search.includes('ok=1')) {
+        generateReceiptFromTransaction();
+        
+        // Clear POS table and localStorage after showing receipt
+        setTimeout(() => {
+            const table = document.getElementById('posTable');
+            while (table.rows.length > 1) {
+                table.deleteRow(1);
+            }
+            localStorage.removeItem('posTable');
+            
+            updateEmptyStateVisibility();
+            recalcTotal();
+        }, 1000); // Small delay to ensure receipt is generated first
 
+        // Remove URL parameters without reloading
+        if (window.history.replaceState) {
+            const url = window.location.pathname;
+            window.history.replaceState({}, document.title, url);
+        }
+    }
+});
+
+// FIX: Add input validation for amount received
+document.getElementById('amountReceived').addEventListener('input', function() {
+    // Ensure only positive numbers
+    if (this.value < 0) {
+        this.value = 0;
+    }
+    recalcTotal();
+});
+
+// FIX: Add Enter key support for amount received input
+document.getElementById('amountReceived').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        document.querySelector('button[name="pos_checkout"]').click();
+    }
+});
 // Function to print receipt
 function printReceipt() {
     const receiptContent = document.getElementById('receiptContent').innerHTML;
