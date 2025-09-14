@@ -9,20 +9,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_stock'])) {
     $quantity = (int)($_POST['quantity'] ?? 0);
     $supplier = $_POST['supplier'] ?? '';
     $notes = $_POST['notes'] ?? '';
+    $purchase_price = isset($_POST['purchase_price']) ? floatval($_POST['purchase_price']) : 0;
     
     if ($product_id && $quantity > 0) {
         try {
             // Start transaction
             $pdo->beginTransaction();
-            
             // Update product quantity
             $stmt = $pdo->prepare("UPDATE products SET quantity = quantity + ? WHERE id = ?");
             $stmt->execute([$quantity, $product_id]);
-            
-            // Record stock entry with the current user
-            $stmt = $pdo->prepare("INSERT INTO stock_entries (product_id, quantity_added, supplier, notes, stock_in_by, created_at) VALUES (?, ?, ?, ?, ?, NOW())");
-            $stmt->execute([$product_id, $quantity, $supplier, $notes, $_SESSION['user_id']]);
-            
+            // Record stock entry with the current user and purchase price
+            $stmt = $pdo->prepare("INSERT INTO stock_entries (product_id, quantity_added, purchase_price, supplier, notes, stock_in_by, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())");
+            $stmt->execute([$product_id, $quantity, $purchase_price, $supplier, $notes, $_SESSION['user_id']]);
             $pdo->commit();
             $success_message = "Stock updated successfully!";
         } catch (Exception $e) {
@@ -167,6 +165,10 @@ $recent_entries = $pdo->query("
                             <label for="quantity">Quantity to Add</label>
                             <input type="number" name="quantity" id="quantity" min="1" required>
                         </div>
+                        <div class="form-group">
+                            <label for="purchase_price">Purchased Price per Unit</label>
+                            <input type="number" name="purchase_price" id="purchase_price" min="0" step="0.01" required>
+                        </div>
                         
                         <div class="form-group">
                             <label for="supplier">Supplier</label>
@@ -194,6 +196,7 @@ $recent_entries = $pdo->query("
                             <th>Date</th>
                             <th>Product</th>
                             <th>Quantity Added</th>
+                            <th>Cost (per unit)</th>
                             <th>Supplier</th>
                             <th>Stock in by</th>
                             <th>Notes</th>
@@ -205,6 +208,7 @@ $recent_entries = $pdo->query("
                                 <td><?php echo date('M d, Y H:i', strtotime($entry['created_at'])); ?></td>
                                 <td><?php echo htmlspecialchars($entry['product_name']); ?></td>
                                 <td><?php echo $entry['quantity_added']; ?></td>
+                                <td>₱<?php echo number_format($entry['purchase_price'], 2); ?></td>
                                 <td><?php echo htmlspecialchars($entry['supplier']); ?></td>
                                 <td><?php echo htmlspecialchars($entry['user_name'] ?? 'Unknown'); ?></td>
                                 <td><?php echo htmlspecialchars($entry['notes']); ?></td>

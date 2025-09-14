@@ -3,69 +3,75 @@ require '../config.php';
 if(empty($_SESSION['user_id'])){ header('Location: login.php'); exit; }
 $pdo = db();
 $products = $pdo->query('SELECT * FROM products')->fetchAll();
+
 if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['pos_checkout'])) {
     // simple POS flow: product_id[], qty[]
     $items = $_POST['product_id'] ?? [];
     $qtys = $_POST['qty'] ?? [];
+    
     if (empty($items)) {
-    echo "<script>alert('No item selected in POS!'); window.location='pos.php';</script>";
-    exit;
-}
+        echo "<script>alert('No item selected in POS!'); window.location='pos.php';</script>";
+        exit;
+    }
 
-    $total = 0;
+    $salesTotal = 0;
     foreach($items as $i=>$pid){
         $pstmt = $pdo->prepare('SELECT * FROM products WHERE id=?');
         $pstmt->execute([intval($pid)]);
         $p = $pstmt->fetch();
         if($p){
             $q = max(1,intval($qtys[$i]));
-            $total += $p['price'] * $q;
+            if ($q > $p['quantity']) {
+                $q = $p['quantity']; // clamp to available
+            }
+            $salesTotal += $p['price'] * $q;
         }
     }
-    // Modal overlay 
-    if (empty($items)) {
-    echo "<script>
-        document.addEventListener('DOMContentLoaded', function() {
-            document.getElementById('productModal').style.display = 'none';
-            alert('No item selected in POS!');
-            window.location='pos.php';
-        });
-    </script>";
-    exit;
-}
-// Server side validation for adding products if someone bypasses the UI
-foreach($items as $i=>$pid){
-    $pstmt = $pdo->prepare('SELECT * FROM products WHERE id=?');
-    $pstmt->execute([intval($pid)]);
-    $p = $pstmt->fetch();
-    if($p && $p['quantity'] > 0){
-        $q = max(1,intval($qtys[$i]));
-        if ($q > $p['quantity']) $q = $p['quantity']; // clamp to available
-        $total += $p['price'] * $q;
-    } else {
-        // skip if stock 0
-        continue;
-    }
-}
 
+    // Calculate VAT components
+    $vatable = $salesTotal / 1.12;
+    $vat = $salesTotal - $vatable;
 
+    try {
+        // Begin transaction
+        $pdo->beginTransaction();
 
-    // create a generic customer "Walk-in"
-    $stmt = $pdo->prepare('INSERT INTO orders (customer_name,contact,address,total,payment_method,status) VALUES (?,?,?,?,?,?)');
-    $stmt->execute(['Walk-in','N/A','N/A',$total,'Cash','completed']);
-    $order_id = $pdo->lastInsertId();
-    foreach($items as $i=>$pid){
-        $pstmt = $pdo->prepare('SELECT * FROM products WHERE id=?');
-        $pstmt->execute([intval($pid)]);
-        $p = $pstmt->fetch();
-        if($p){
-            $q = max(1,intval($qtys[$i]));
-            $pdo->prepare('INSERT INTO order_items (order_id,product_id,qty,price) VALUES (?,?,?,?)')->execute([$order_id,$p['id'],$q,$p['price']]);
-            $pdo->prepare('UPDATE products SET quantity = quantity - ? WHERE id = ?')->execute([$q,$p['id']]);
+        // Create order
+        $stmt = $pdo->prepare('INSERT INTO orders (customer_name, contact, address, total, payment_method, status, vatable, vat) VALUES (?,?,?,?,?,?,?,?)');
+        $stmt->execute(['Walk-in', 'N/A', 'N/A', $salesTotal, 'Cash', 'completed', $vatable, $vat]);
+        $order_id = $pdo->lastInsertId();
+
+        // Process items
+        foreach($items as $i=>$pid){
+            $pstmt = $pdo->prepare('SELECT * FROM products WHERE id=?');
+            $pstmt->execute([intval($pid)]);
+            $p = $pstmt->fetch();
+            if($p){
+                $q = max(1,intval($qtys[$i]));
+                if ($q > $p['quantity']) {
+                    $q = $p['quantity'];
+                }
+                // Insert order item
+                $pdo->prepare('INSERT INTO order_items (order_id,product_id,qty,price) VALUES (?,?,?,?)')
+                    ->execute([$order_id, $p['id'], $q, $p['price']]);
+                
+                // Update product quantity
+                $pdo->prepare('UPDATE products SET quantity = quantity - ? WHERE id = ?')
+                    ->execute([$q, $p['id']]);
+            }
         }
+
+        // Commit transaction
+        $pdo->commit();
+        
+        header('Location: pos.php?ok=1');
+        exit;
+    } catch (Exception $e) {
+        // Rollback on error
+        $pdo->rollBack();
+        echo "<script>alert('Error processing transaction: " . addslashes($e->getMessage()) . "'); window.location='pos.php';</script>";
+        exit;
     }
-    header('Location: pos.php?ok=1');
-    exit;
 }
 ?>
 <!doctype html>
@@ -190,8 +196,20 @@ foreach($items as $i=>$pid){
             <!-- POS Totals Panel (separate from the table) -->
             <div id="totalsPanel" class="totals-panel">
                 <div class="totals-item">
-                    <label>Total</label>
-                    <div id="totalAmount" class="value">₱0.00</div>
+                    <label>Sales Total</label>
+                    <div id="salesTotalAmount" class="value">₱0.00</div>
+                </div>
+                <div class="totals-item">
+                    <label>Discount</label>
+                    <div id="discountAmount" class="value">₱0.00</div>
+                </div>
+                <div class="totals-item">
+                    <label>Vatable</label>
+                    <div id="vatableAmount" class="value">₱0.00</div>
+                </div>
+                <div class="totals-item">
+                    <label>VAT (12%)</label>
+                    <div id="vatAmount" class="value">₱0.00</div>
                 </div>
                 <div class="totals-item">
                     <label for="amountReceived">Amount Received</label>
@@ -210,6 +228,73 @@ foreach($items as $i=>$pid){
         </form>
         <p></p>
         <?php if(!empty($_GET['ok'])) echo '<p>Transaction recorded.</p>'; ?>
+
+        <!-- Receipt Preview Modal -->
+        <div id="receiptModal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.3); z-index:9999; align-items:center; justify-content:center;">
+            <div style="background:#fff; border-radius:10px; max-width:400px; width:95%; margin:auto; padding:24px; position:relative; box-shadow:0 8px 32px rgba(0,0,0,0.18);">
+                <button id="closeReceiptModal" style="position:absolute; top:10px; right:10px; background:none; border:none; font-size:20px; color:#888; cursor:pointer;">&times;</button>
+                <div id="receiptContent" style="font-family: 'Courier New', monospace; font-size: 14px;">
+                    <div style="text-align: center; margin-bottom: 20px;">
+                        <h2 style="margin: 0;">DGZ Motorshop</h2>
+                        <p style="margin: 5px 0;">123 Main Street</p>
+                        <p style="margin: 5px 0;">Phone: (123) 456-7890</p>
+                        <p style="margin: 5px 0;">Receipt #: <span id="receiptNumber"></span></p>
+                        <p style="margin: 5px 0;">Date: <span id="receiptDate"></span></p>
+                        <p style="margin: 5px 0;">Cashier: <span id="receiptCashier"></span></p>
+                    </div>
+                    <div style="border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 10px 0; margin: 10px 0;">
+                        <table id="receiptItems" style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr>
+                                    <th style="text-align: left;">Item</th>
+                                    <th style="text-align: right;">Qty</th>
+                                    <th style="text-align: right;">Price</th>
+                                    <th style="text-align: right;">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Items will be inserted here -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div style="margin-top: 10px;">
+                        <div style="display: flex; justify-content: space-between;">
+                            <span>Sales Total:</span>
+                            <span id="receiptSalesTotal">₱0.00</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-top: 5px;">
+                            <span>Discount:</span>
+                            <span id="receiptDiscount">₱0.00</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-top: 5px;">
+                            <span>Vatable:</span>
+                            <span id="receiptVatable">₱0.00</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-top: 5px;">
+                            <span>VAT (12%):</span>
+                            <span id="receiptVat">₱0.00</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-top: 5px;">
+                            <span>Amount Paid:</span>
+                            <span id="receiptAmountPaid">₱0.00</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-top: 5px;">
+                            <span>Change:</span>
+                            <span id="receiptChange">₱0.00</span>
+                        </div>
+                    </div>
+                    <div style="text-align: center; margin-top: 20px;">
+                        <p>Thank you for shopping!</p>
+                        <p>Please come again</p>
+                    </div>
+                </div>
+                <div style="text-align: center; margin-top: 20px;">
+                    <button onclick="printReceipt()" style="background: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">
+                        <i class="fas fa-print"></i> Print Receipt
+                    </button>
+                </div>
+            </div>
+        </div>
 
         <!-- Product Search Modal -->
         <div id="productModal"
@@ -244,6 +329,13 @@ foreach($items as $i=>$pid){
     </main>
 
     <script>
+        // Prepare product data for search (from PHP)
+const allProducts = [<?php foreach($products as $p) : ?> {
+    id: <?= json_encode($p['id']) ?>,
+    name: <?= json_encode($p['name']) ?>,
+    price: <?= json_encode($p['price']) ?>,
+    quantity: <?= json_encode($p['quantity']) ?>
+}, <?php endforeach; ?>];
 
 // Modal open/close
 document.getElementById('openProductModal').onclick = function () {
@@ -262,14 +354,6 @@ document.getElementById('productModal').onclick = function (e) {
     if (e.target === this) this.style.display = 'none';
 };
 
-// Prepare product data for search (from PHP)
-const allProducts = [<?php foreach($products as $p) : ?> {
-    id: <?= json_encode($p['id']) ?>,
-    name: <?= json_encode($p['name']) ?>,
-    price: <?= json_encode($p['price']) ?>,
-    quantity: <?= json_encode($p['quantity']) ?>
-}, <?php endforeach; ?>];
-
 // Render all products in table
 function renderProductTable(filter = '') {
     const tbody = document.getElementById('productSearchTableBody');
@@ -285,68 +369,78 @@ function renderProductTable(filter = '') {
         return;
     }
     filtered.forEach(p => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-        <td>${p.name}</td>
-        <td style='text-align:right;'>₱${parseFloat(p.price).toFixed(2)}</td>
-        <td style='text-align:center;'>${p.quantity}</td>
-        <td style='text-align:center;'>
-            ${
-                p.quantity > 0 
-                ? `<input type='checkbox' class='product-select-checkbox' data-id='${p.id}'>`
-                : `<span style="color:#e74c3c;font-size:13px;">Out of Stock</span>`
-            }
-        </td>`;
-                tbody.appendChild(tr);
-            });
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${p.name}</td>
+            <td style='text-align:right;'>₱${parseFloat(p.price).toFixed(2)}</td>
+            <td style='text-align:center;'>${p.quantity}</td>
+            <td style='text-align:center;'>
+                ${
+                    p.quantity > 0 
+                    ? `<input type='checkbox' class='product-select-checkbox' data-id='${p.id}'>`
+                    : `<span style="color:#e74c3c;font-size:13px;">Out of Stock</span>`
+                }
+            </td>`;
+        tbody.appendChild(tr);
+    });
 }
+
 // Prevent adding out-of-stock products from dev tools
-        function addProductToPOS(product) {
-            if (parseInt(product.quantity) <= 0) {
-                alert(product.name + " is out of stock and cannot be added.");
-                return;
-            }
-            // existing add-to-table logic...
-            // Check if already in table
-            const table = document.getElementById('posTable');
-            const existing = table.querySelector(`tr[data-product-id='${product.id}']`);
-            if (existing) {
-                // If already present, increment qty
-                const qtyInput = existing.querySelector('input[type=number]');
-                qtyInput.value = Math.min(parseInt(qtyInput.value) + 1, product.quantity);
-            } else {
-                // Add new row with remove button instead of checkbox
-                const tr = document.createElement('tr');
-                tr.setAttribute('data-product-id', product.id);
-                tr.innerHTML = `
-                    <td class="pos-name">${product.name}</td>
-                    <td class="pos-price">₱${parseFloat(product.price).toFixed(2)}</td>
-                    <td class="pos-available">${product.quantity}</td>
-                    <td style="display: flex; align-items: center; gap: 8px;">
-                        <input type='hidden' name='product_id[]' value='${product.id}'>
-                        <input id='iquantity' type='number' class='pos-qty' name='qty[]' value='1' min='1' max='${product.quantity}'>
-                        <button type='button' class='remove-btn' onclick='removeProductFromPOS(this)' 
-                                style='background:#e74c3c; color:#fff; border:none; border-radius:3px; padding:4px 6px; cursor:pointer; font-size:11px; min-width:24px; height:24px; display:flex; align-items:center; justify-content:center;'>
-                            <i class='fas fa-times'></i>
-                        </button>
-                    </td>`;
-                table.appendChild(tr);
-            }
-             // Hide empty state when products are added
-            updateEmptyStateVisibility();
-            savePosTableToStorage();
-        }
+function addProductToPOS(product) {
+    if (parseInt(product.quantity) <= 0) {
+        alert(product.name + " is out of stock and cannot be added.");
+        return;
+    }
+    
+    // Check if already in table
+    const table = document.getElementById('posTable');
+    const existing = table.querySelector(`tr[data-product-id='${product.id}']`);
+    if (existing) {
+        // If already present, increment qty
+        const qtyInput = existing.querySelector('input[type=number]');
+        qtyInput.value = Math.min(parseInt(qtyInput.value) + 1, product.quantity);
+    } else {
+        // Add new row with remove button instead of checkbox
+        const tr = document.createElement('tr');
+        tr.setAttribute('data-product-id', product.id);
+        tr.innerHTML = `
+            <td class="pos-name">${product.name}</td>
+            <td class="pos-price">₱${parseFloat(product.price).toFixed(2)}</td>
+            <td class="pos-available">${product.quantity}</td>
+            <td style="display: flex; align-items: center; gap: 8px;">
+                <input type='hidden' name='product_id[]' value='${product.id}'>
+                <input type='number' class='pos-qty' name='qty[]' value='1' min='1' max='${product.quantity}'>
+                <button type='button' class='remove-btn' onclick='removeProductFromPOS(this)' 
+                        style='background:#e74c3c; color:#fff; border:none; border-radius:3px; padding:4px 6px; cursor:pointer; font-size:11px; min-width:24px; height:24px; display:flex; align-items:center; justify-content:center;'>
+                    <i class='fas fa-times'></i>
+                </button>
+            </td>`;
+        table.appendChild(tr);
+    }
+    
+    // Hide empty state when products are added
+    updateEmptyStateVisibility();
+    savePosTableToStorage();
+    
+    // FIXED: Always call recalcTotal after adding product
+    recalcTotal();
+}
+
 // Filter table as user types
 document.getElementById('productSearchInput').oninput = function () {
     renderProductTable(this.value.trim());
 };
-    // NEW: Function to remove product from POS table
-        function removeProductFromPOS(button) {
-            const tr = button.closest('tr');
-            tr.remove();
-            updateEmptyStateVisibility();
-            savePosTableToStorage();
-        }
+
+// FIXED: Function to remove product from POS table
+function removeProductFromPOS(button) {
+    const tr = button.closest('tr');
+    tr.remove();
+    updateEmptyStateVisibility();
+    savePosTableToStorage();
+    
+    // FIXED: Always call recalcTotal after removing product
+    recalcTotal();
+}
 
 // Add selected products to POS table
 document.getElementById('addSelectedProducts').onclick = function () {
@@ -363,166 +457,292 @@ document.getElementById('addSelectedProducts').onclick = function () {
     document.getElementById('productModal').style.display = 'none';
 };
 
-        //Save POS table data to localStorage
-        function savePosTableToStorage() {
-            const rows = [];
-            document.querySelectorAll('#posTable tr[data-product-id]').forEach(tr => {
-                rows.push({
-                    id: tr.getAttribute('data-product-id'),
-                    name: tr.querySelector('.pos-name').textContent,
-                    price: tr.querySelector('.pos-price').textContent,
-                    available: tr.querySelector('.pos-available').textContent,
-                    qty: tr.querySelector('.pos-qty').value
-                });
-            });
-            localStorage.setItem('posTable', JSON.stringify(rows));
-        }
-
-        //Restore POS table from localStorage on page load
-        window.addEventListener('DOMContentLoaded', function () {
-            const data = JSON.parse(localStorage.getItem('posTable') || '[]');
-            data.forEach(item => {
-                addProductToPOS({
-                    id: item.id,
-                    name: item.name,
-                    price: item.price.replace(/[^\d.]/g, ''), // Remove ₱ and keep number
-                    quantity: item.available,
-                });
-                // Set the correct qty value after row is added
-                const table = document.getElementById('posTable');
-                const tr = table.querySelector(`tr[data-product-id='${item.id}']`);
-                if (tr) {
-                    tr.querySelector('.pos-qty').value = item.qty;
-                }
-            });
+// Save POS table data to localStorage
+function savePosTableToStorage() {
+    const rows = [];
+    document.querySelectorAll('#posTable tr[data-product-id]').forEach(tr => {
+        rows.push({
+            id: tr.getAttribute('data-product-id'),
+            name: tr.querySelector('.pos-name').textContent,
+            price: tr.querySelector('.pos-price').textContent,
+            available: tr.querySelector('.pos-available').textContent,
+            qty: tr.querySelector('.pos-qty').value
         });
-
-        //Clear localStorage when checkout is completed or clear button is clicked
-        function clearPosTable() {
-            // ...your code to clear the table...
-            localStorage.removeItem('posTable');
-        }
-
-        
-        // ADDED: Function to show/hide empty state based on table content
-        function updateEmptyStateVisibility() {
-            const table = document.getElementById('posTable');
-            const emptyState = document.getElementById('posEmptyState');
-            const hasProducts = table.querySelectorAll('tr[data-product-id]').length > 0;
-            
-            if (hasProducts) {
-                emptyState.style.display = 'none';
-            } else {
-                emptyState.style.display = 'flex';
-            }
-        }
-        
-        // Save POS table to localStorage on input change
-        document.getElementById('posTable').addEventListener('input', function (e) {
-            if (e.target.classList.contains('pos-qty')) {
-                savePosTableToStorage();
-            }
-        });
-
-        // Show alert and clear POS table if payment is settled
-        window.addEventListener('DOMContentLoaded', function () {
-            // ADDED: Update empty state visibility on page load
-            updateEmptyStateVisibility();
-            
-            if (window.location.search.includes('ok=1')) {
-                alert('Payment settled! Transaction recorded.');
-                // Clear POS table and localStorage
-                const table = document.getElementById('posTable');
-                while (table.rows.length > 1) {
-                    table.deleteRow(1);
-                }
-                localStorage.removeItem('posTable');
-                
-                // ADDED: Show empty state after clearing
-                updateEmptyStateVisibility();
-
-                // Remove ok=1 from the URL without reloading
-                if (window.history.replaceState) {
-                    const url = window.location.href.replace(/(\?|&)ok=1/, '');
-                    window.history.replaceState({}, document.title, url);
-                }
-            }
-        });
-
-
-        // Prevent checkout if no products in POS table
-        //Modal overlay 
-        document.getElementById('posForm').addEventListener('submit', function (e) {
-            const rows = document.querySelectorAll('#posTable tr[data-product-id]');
-            if (rows.length === 0) {
-                e.preventDefault();
-                document.getElementById('productModal').style.display = 'none'; // close modal if open
-                alert('No item selected in POS!');
-            }
-        });
-
-
-        // UPDATED: Modified clear function to show empty state
-        document.getElementById('clearPosTable').onclick = function () {
-            const table = document.getElementById('posTable');
-            // Remove all rows except the first (header)
-            while (table.rows.length > 1) {
-                table.deleteRow(1);
-            }
-            
-            // ADDED: Show empty state after clearing
-            updateEmptyStateVisibility();
-            savePosTableToStorage(); // Save to localStorage
-            localStorage.removeItem('posTable'); // Clear localStorage
-        };
-        
-        // Toggle user dropdown
-        function toggleDropdown() {
-            const dropdown = document.getElementById('userDropdown');
-            dropdown.classList.toggle('show');
-        }
-
-        // Toggle mobile sidebar
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            sidebar.classList.toggle('mobile-open');
-        }
-
-        // Close dropdown when clicking outside
-        document.addEventListener('click', function (event) {
-            const userMenu = document.querySelector('.user-menu');
-            const dropdown = document.getElementById('userDropdown');
-
-            if (!userMenu.contains(event.target)) {
-                dropdown.classList.remove('show');
-            }
-        });
-
-        // Close sidebar when clicking outside on mobile
-        document.addEventListener('click', function (event) {
-            const sidebar = document.getElementById('sidebar');
-            const toggle = document.querySelector('.mobile-toggle');
-
-            if (window.innerWidth <= 768 &&
-                !sidebar.contains(event.target) &&
-                !toggle.contains(event.target)) {
-                sidebar.classList.remove('mobile-open');
-            }
-        });
-
-      // NEW: Function to remove product from POS table
-function removeProductFromPOS(button) {
-    const tr = button.closest('tr');
-    tr.remove();
-    updateEmptyStateVisibility();
-    savePosTableToStorage();
-    
-    // Add this line to recalculate the total
-    recalcTotal();
+    });
+    localStorage.setItem('posTable', JSON.stringify(rows));
 }
+
+// Function to show/hide empty state based on table content
+function updateEmptyStateVisibility() {
+    const table = document.getElementById('posTable');
+    const emptyState = document.getElementById('posEmptyState');
+    const hasProducts = table.querySelectorAll('tr[data-product-id]').length > 0;
+    
+    if (hasProducts) {
+        emptyState.style.display = 'none';
+    } else {
+        emptyState.style.display = 'flex';
+    }
+}
+// Add this function at the top of your script section
+function formatPeso(n) {
+    n = Number(n) || 0;
+    return '₱' + n.toLocaleString('en-PH', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+}
+
+// FIXED: Live update for totals panel with proper formatting
+function recalcTotal() {
+    let subtotal = 0;
+    document.querySelectorAll('#posTable tr[data-product-id]').forEach(row => {
+        const price = parseFloat(row.querySelector('.pos-price').textContent.replace(/[^\d.-]/g, ''));
+        const qty = parseInt(row.querySelector('.pos-qty').value) || 0;
+        subtotal += price * qty;
+    });
+    
+    const salesTotal = subtotal;
+    const discount = 0;
+    const vatable = salesTotal / 1.12;
+    const vat = Math.round((salesTotal - vatable) * 100) / 100;
+    
+    // Update all totals displays with proper formatting
+    document.getElementById('salesTotalAmount').textContent = formatPeso(salesTotal);
+    document.getElementById('discountAmount').textContent = formatPeso(discount);
+    document.getElementById('vatableAmount').textContent = formatPeso(vatable);
+    document.getElementById('vatAmount').textContent = formatPeso(vat);
+    document.getElementById('topTotalAmountSimple').textContent = formatPeso(salesTotal);
+    
+    // Update change calculation
+    const amountReceived = parseFloat(document.getElementById('amountReceived').value) || 0;
+    const change = Math.max(0, amountReceived - salesTotal);
+    document.getElementById('changeAmount').textContent = formatPeso(change);
+}
+
+// Also update the generateReceipt function to use proper formatting
+function generateReceipt() {
+    const items = [];
+    let subtotal = 0;
+    
+    document.querySelectorAll('#posTable tr[data-product-id]').forEach(row => {
+        const name = row.querySelector('.pos-name').textContent;
+        const price = parseFloat(row.querySelector('.pos-price').textContent.replace(/[^\d.-]/g, ''));
+        const qty = parseInt(row.querySelector('.pos-qty').value);
+        const total = price * qty;
+        subtotal += total;
+        
+        items.push({ name, price, qty, total });
+    });
+
+    const amountPaid = parseFloat(document.getElementById('amountReceived').value) || 0;
+    const salesTotal = subtotal;
+    const discount = 0;
+    const vatable = salesTotal / 1.12;
+    const vat = Math.round((salesTotal - vatable) * 100) / 100;
+    const change = amountPaid - salesTotal;
+
+    // Update the totals panel with proper formatting
+    document.getElementById('salesTotalAmount').textContent = formatPeso(salesTotal);
+    document.getElementById('discountAmount').textContent = formatPeso(discount);
+    document.getElementById('vatableAmount').textContent = formatPeso(vatable);
+    document.getElementById('vatAmount').textContent = formatPeso(vat);
+
+    // Update top total display with proper formatting
+    document.getElementById('topTotalAmountSimple').textContent = formatPeso(salesTotal);
+
+    // Populate receipt
+    document.getElementById('receiptNumber').textContent = 'INV-' + Date.now();
+    document.getElementById('receiptDate').textContent = new Date().toLocaleString();
+    document.getElementById('receiptCashier').textContent = 'Admin';
+
+    const tbody = document.getElementById('receiptItems').querySelector('tbody');
+    tbody.innerHTML = '';
+    items.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td style="text-align: left">${item.name}</td>
+            <td style="text-align: right">${item.qty}</td>
+            <td style="text-align: right">${formatPeso(item.price)}</td>
+            <td style="text-align: right">${formatPeso(item.total)}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    // Update receipt totals with proper formatting
+    document.getElementById('receiptSalesTotal').textContent = formatPeso(salesTotal);
+    document.getElementById('receiptDiscount').textContent = formatPeso(discount);
+    document.getElementById('receiptVatable').textContent = formatPeso(vatable);
+    document.getElementById('receiptVat').textContent = formatPeso(vat);
+    document.getElementById('receiptAmountPaid').textContent = formatPeso(amountPaid);
+    document.getElementById('receiptChange').textContent = formatPeso(change);
+
+    // Show receipt modal
+    document.getElementById('receiptModal').style.display = 'flex';
+}
+
+// Function to print receipt
+function printReceipt() {
+    const receiptContent = document.getElementById('receiptContent').innerHTML;
+    const w = window.open('', '_blank');
+    w.document.write(`
+        <html>
+            <head>
+                <title>Print Receipt</title>
+                <style>
+                    body { font-family: 'Courier New', monospace; font-size: 14px; }
+                    @media print {
+                        @page { margin: 0; }
+                        body { margin: 1cm; }
+                    }
+                </style>
+            </head>
+            <body>${receiptContent}</body>
+        </html>
+    `);
+    w.document.close();
+    w.focus();
+    w.print();
+    w.close();
+}
+
+// Close receipt modal
+document.getElementById('closeReceiptModal').onclick = function() {
+    document.getElementById('receiptModal').style.display = 'none';
+};
+
+// Toggle user dropdown
+function toggleDropdown() {
+    const dropdown = document.getElementById('userDropdown');
+    dropdown.classList.toggle('show');
+}
+
+// Toggle mobile sidebar
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    sidebar.classList.toggle('mobile-open');
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function (event) {
+    const userMenu = document.querySelector('.user-menu');
+    const dropdown = document.getElementById('userDropdown');
+
+    if (!userMenu.contains(event.target)) {
+        dropdown.classList.remove('show');
+    }
+});
+
+// Close sidebar when clicking outside on mobile
+document.addEventListener('click', function (event) {
+    const sidebar = document.getElementById('sidebar');
+    const toggle = document.querySelector('.mobile-toggle');
+
+    if (window.innerWidth <= 768 &&
+        !sidebar.contains(event.target) &&
+        !toggle.contains(event.target)) {
+        sidebar.classList.remove('mobile-open');
+    }
+});
+
+// FIXED: Restore POS table from localStorage on page load
+window.addEventListener('DOMContentLoaded', function () {
+    const data = JSON.parse(localStorage.getItem('posTable') || '[]');
+    data.forEach(item => {
+        const product = allProducts.find(p => p.id == item.id);
+        if (product) {
+            addProductToPOS({
+                id: item.id,
+                name: item.name,
+                price: item.price.replace(/[^\d.]/g, ''), // Remove ₱ and keep number
+                quantity: item.available,
+            });
+            // Set the correct qty value after row is added
+            const table = document.getElementById('posTable');
+            const tr = table.querySelector(`tr[data-product-id='${item.id}']`);
+            if (tr) {
+                tr.querySelector('.pos-qty').value = item.qty;
+            }
+        }
+    });
+    
+    // Update empty state and recalculate totals
+    updateEmptyStateVisibility();
+    recalcTotal();
+    
+    // Handle checkout success
+    if (window.location.search.includes('ok=1')) {
+        generateReceipt();
+        // Clear POS table and localStorage
+        const table = document.getElementById('posTable');
+        while (table.rows.length > 1) {
+            table.deleteRow(1);
+        }
+        localStorage.removeItem('posTable');
+        
+        updateEmptyStateVisibility();
+        recalcTotal();
+
+        // Remove ok=1 from the URL without reloading
+        if (window.history.replaceState) {
+            const url = window.location.href.replace(/(\?|&)ok=1/, '');
+            window.history.replaceState({}, document.title, url);
+        }
+    }
+});
+
+// FIXED: Event listeners for real-time updates
+document.addEventListener('DOMContentLoaded', function() {
+    // Listen for quantity changes using event delegation
+    document.getElementById('posTable').addEventListener('input', function(e) {
+        if (e.target.classList.contains('pos-qty')) {
+            savePosTableToStorage();
+            recalcTotal();
+        }
+    });
+    
+    // Listen for amount received changes
+    document.getElementById('amountReceived').addEventListener('input', function() {
+        recalcTotal();
+    });
+});
+
+// Prevent checkout if no products in POS table or insufficient payment
+document.getElementById('posForm').addEventListener('submit', function (e) {
+    const rows = document.querySelectorAll('#posTable tr[data-product-id]');
+    if (rows.length === 0) {
+        e.preventDefault();
+        document.getElementById('productModal').style.display = 'none';
+        alert('No item selected in POS!');
+        return;
+    }
+    
+    const salesTotal = parseFloat(document.getElementById('salesTotalAmount').textContent.replace(/[^\d.-]/g, '')) || 0;
+    const amountReceived = parseFloat(document.getElementById('amountReceived').value) || 0;
+    if (amountReceived < salesTotal) {
+        e.preventDefault();
+        alert('Insufficient payment amount!');
+        return;
+    }
+});
+
+// FIXED: Clear function to show empty state and recalculate
+document.getElementById('clearPosTable').onclick = function () {
+    const table = document.getElementById('posTable');
+    // Remove all rows except the first (header)
+    while (table.rows.length > 1) {
+        table.deleteRow(1);
+    }
+    
+    updateEmptyStateVisibility();
+    localStorage.removeItem('posTable');
+    
+    // FIXED: Recalculate totals after clearing
+    recalcTotal();
+};
     </script>
-    <!-- Total Sales Panel -->
-    <script src="../assets/js/totalPanel.js"></script>
+    <!-- Total Sales Panel 
+    <script src="../assets/js/totalPanel.js"></script>-->
     
      
 

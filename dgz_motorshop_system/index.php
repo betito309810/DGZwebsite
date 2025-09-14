@@ -55,6 +55,7 @@ foreach($products as $product) {
                 <button class="search-btn">
                     <i class="fas fa-search"></i>
                 </button>
+                
             </div>
 
             <a href="#" class="cart-btn" id="cartButton" onclick="handleCartClick(event)">
@@ -194,8 +195,11 @@ foreach($products as $product) {
                 <h2 style="margin: 50px 0 30px 0; font-size: 28px; color: #2d3436; text-align: center;">All Products
                 </h2>
                 <div class="products-grid">
-                    <?php foreach($products as $p): ?>
-                    <div class="product-card">
+                    <?php foreach($products as $p):
+                        $category = isset($p['category']) ? $p['category'] : '';
+                        $brand = isset($p['brand']) ? $p['brand'] : '';
+                    ?>
+                    <div class="product-card" data-category="<?= htmlspecialchars(strtolower($category)) ?>" data-brand="<?= htmlspecialchars(strtolower($brand)) ?>">
                         <div class="product-header">
                             <div class="product-avatar">
                                 <i class="fas fa-motorcycle"></i>
@@ -206,6 +210,9 @@ foreach($products as $product) {
                         </div>
 
                         <p class="product-description"><?=htmlspecialchars($p['description'])?></p>
+                        <p class="product-meta" style="font-size:12px;color:#888;">
+                            Category: <?= htmlspecialchars($category) ?> | Brand: <?= htmlspecialchars($brand) ?>
+                        </p>
 
                         <div class="product-footer">
                             <div class="price">₱<?=number_format($p['price'],2)?></div>
@@ -237,6 +244,7 @@ foreach($products as $product) {
             <!-- Footer -->
 
     </div>
+    
     <script>
         // Cart functionality
         let cartCount = 0;
@@ -360,28 +368,44 @@ foreach($products as $product) {
             loadCart();
         });
 
-        // Search functionality
-        document.querySelector('.search-bar').addEventListener('keyup', function (e) {
-            if (e.key === 'Enter') {
-                const searchTerm = this.value.toLowerCase();
-                filterProducts(searchTerm);
-            }
-        });
+        // Search functionality - robust and clean
+        document.addEventListener('DOMContentLoaded', function () {
+            loadCart();
+            const searchBar = document.querySelector('.search-bar');
+            const searchBtn = document.querySelector('.search-btn');
+            if (!searchBar || !searchBtn) return;
 
-        document.querySelector('.search-btn').addEventListener('click', function () {
-            const searchTerm = document.querySelector('.search-bar').value.toLowerCase();
-            filterProducts(searchTerm);
+            // Search on Enter key
+            searchBar.addEventListener('keyup', function (e) {
+                if (e.key === 'Enter') {
+                    filterProducts(this.value);
+                }
+            });
+            // Search on button click
+            searchBtn.addEventListener('click', function () {
+                filterProducts(searchBar.value);
+            });
+            // Live search as user types
+            searchBar.addEventListener('input', function () {
+                filterProducts(this.value);
+            });
         });
 
         function filterProducts(searchTerm) {
+            const term = (searchTerm || '').toLowerCase().trim();
             const products = document.querySelectorAll('.product-card');
             products.forEach(product => {
-                const productName = product.querySelector('h3').textContent.toLowerCase();
-                const productDescription = product.querySelector('.product-description').textContent
-                    .toLowerCase();
-
-                if (productName.includes(searchTerm) || productDescription.includes(searchTerm) ||
-                    searchTerm === '') {
+                const name = product.querySelector('h3')?.textContent.toLowerCase() || '';
+                const desc = product.querySelector('.product-description')?.textContent.toLowerCase() || '';
+                const category = (product.getAttribute('data-category') || '').toLowerCase();
+                const brand = (product.getAttribute('data-brand') || '').toLowerCase();
+                if (
+                    !term ||
+                    name.includes(term) ||
+                    desc.includes(term) ||
+                    category.includes(term) ||
+                    brand.includes(term)
+                ) {
                     product.style.display = 'block';
                 } else {
                     product.style.display = 'none';
@@ -415,10 +439,7 @@ foreach($products as $product) {
     <footer class="footer">
         <div class="footer-content">
             <div class="social-links">
-                <a href="#"><i class="fab fa-facebook-f"></i></a>
-                <a href="#"><i class="fab fa-instagram"></i></a>
-                <a href="#"><i class="fab fa-twitter"></i></a>
-                <a href="#"><i class="fab fa-youtube"></i></a>
+                <a href="https://www.facebook.com/dgzstonino"><i class="fab fa-facebook-f"></i></a>
             </div>
             <p>DGZ Motorshop - Sto. Niño Branch</p>
             <p>© 2022-2025 DGZ Motorshop. All rights reserved.</p>

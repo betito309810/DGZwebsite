@@ -365,7 +365,60 @@ table td:nth-child(4) {
     color: #22543d;
     font-size: 16px;
 }*/
-
+ /* Modal horizontal layout for Add Product */
+    #addModal .modal-content-horizontal {
+        
+    display: grid;
+    grid-template-columns: repeat(2, 1fr); /* 2 columns */
+    gap: 20px 30px; /* row gap 20px, column gap 30px */
+    }
+    #addModal .modal-fields textarea{
+       grid-column: span 2;
+    }
+    #addModal .modal-fields label {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-weight: 500;
+    }
+    #addModal .modal-image-upload {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 18px;
+        min-width: 180px;
+        max-width: 220px;
+    }
+    #addModal .modal-content-horizontal {
+    align-items: flex-start;
+}
+    #addModal .modal-image-upload input[type="file"] {
+        width: 100%;
+    }
+    #addModal .modal-image-preview {
+        width: 120px;
+        height: 120px;
+        border-radius: 10px;
+        object-fit: cover;
+        background: #f3f3f3;
+        border: 1px solid #e2e8f0;
+        margin-bottom: 8px;
+    }
+    @media (max-width: 700px) {
+        #addModal .modal-content-horizontal {
+            flex-direction: column;
+            gap: 18px;
+            max-width: 98vw;
+            padding: 18px 6vw;
+        }
+        #addModal .modal-image-upload {
+            flex-direction: row;
+            min-width: 0;
+            max-width: 100%;
+            justify-content: flex-start;
+        }
+    }
 /* Action Links 
 table a {
     background: linear-gradient(135deg, #f56565, #e53e3e);
@@ -427,13 +480,6 @@ table a:before {
 }
  */
 /* Add some visual enhancements */
-table td:nth-child(3):after {
-    content: ' pcs';
-    color: #a0aec0;
-    font-size: 12px;
-    margin-left: 4px;
-}
-
 
 
 /* Additional enhancements for better visual hierarchy */

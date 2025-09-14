@@ -187,12 +187,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
                         Payment
                     </h2>
                     <div class="payment-methods">
-                        <div class="payment-option">
-                            <input type="radio" name="payment_method" value="Cash" id="cash" checked>
-                            <label for="cash">
-                                <i class="fas fa-money-bill-wave"></i>&nbsp; Cash
-                            </label>
-                        </div>
+                        
                         <div class="payment-option">
                             <input type="radio" name="payment_method" value="GCash" id="gcash">
                             <label for="gcash">
