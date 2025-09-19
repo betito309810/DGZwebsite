@@ -199,6 +199,47 @@ table td {
     font-size: 14px;
 }
 
+.inventory-actions {
+    margin-top: 24px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.btn-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 14px;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.add-stock-btn {
+    background: #3498db;
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.25);
+}
+
+.add-stock-btn:hover {
+    background: #2c82c9;
+    box-shadow: 0 6px 18px rgba(52, 152, 219, 0.35);
+}
+
+.export-btn {
+    background: #f8fafc;
+    color: #1f2937;
+    border: 1px solid #d1d5db;
+}
+
+.export-btn:hover {
+    background: #e5ebf5;
+}
+
 table tr {
     transition: background 0.3s;
 }
@@ -215,25 +256,6 @@ table tr:last-child td {
 tr[style*="background-color:#fdd"] td {
     background: #fff5f5 !important;
     color: #c0392b;
-}
-
-/* Export CSV Button */
-a[href*="export=csv"] {
-    display: inline-block;
-    background: #3498db;
-    color: #fff;
-    text-decoration: none;
-    padding: 10px 18px;
-    border-radius: 6px;
-    font-size: 14px;
-    font-weight: 500;
-    margin: 18px 0 0 0;
-    margin-left: 91%;
-    transition: background 0.2s;
-}
-
-a[href*="export=csv"]:hover {
-    background: #2176bd;
 }
 
 /* Update Stock Form */
@@ -289,12 +311,6 @@ form[method="post"] button:hover {
     table th, table td {
         padding: 12px 10px;
         font-size: 13px;
-    }
-    a[href*="export=csv"] {
-    margin-left: auto;
-    margin-right: 0;
-    display: block;
-    width: fit-content;
     }
 }
 

@@ -98,12 +98,6 @@ $recent_entries = $pdo->query("
                     Inventory
                 </a>
             </div>
-            <div class="nav-item">
-                <a href="stockEntry.php" class="nav-link active">
-                    <i class="fas fa-truck-loading nav-icon"></i>
-                    Stock Entry
-                </a>
-            </div>
         </nav>
     </aside>
 
@@ -134,6 +128,10 @@ $recent_entries = $pdo->query("
                 </div>
             </div>
         </header>
+
+        <div class="page-actions">
+            <a href="inventory.php" class="btn-action back-btn">Back to Inventory</a>
+        </div>
 
         <!-- Stock Entry Content -->
         <div class="dashboard-content">
