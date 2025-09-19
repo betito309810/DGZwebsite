@@ -16,7 +16,6 @@ if ($role === 'admin' && isset($_POST['update_stock'])) {
     }
 
     header('Location: inventory.php');
-    exit; }
 // Handle stock entry submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_stock'])) {
     $product_id = $_POST['product_id'] ?? '';
@@ -97,7 +96,7 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
             text-decoration: none;
         }
 
-        .btn-primary {
+        .btn-primary { 
             background-color: #007bff;
             color: white;
             border: none;
@@ -106,6 +105,12 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
         .btn-secondary {
             background-color: #6c757d;
             color: white;
+            border: none;
+        }
+
+        .btn-accent {
+            background-color: #17a2b8;
+            color: #fff;
             border: none;
         }
 
@@ -219,6 +224,29 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
             display: none;
         }
 
+        .restock-request {
+            margin: 20px 0;
+            padding: 20px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .restock-request h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.2rem;
+        }
+
+        .restock-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
         /* Alert Styles */
         .alert {
             padding: 15px;
@@ -318,6 +346,118 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
             <div class="alert alert-error"><?php echo $error_message; ?></div>
         <?php endif; ?>
         
+
+        <div class="inventory-actions">
+            <button class="btn-primary" onclick="openStockModal()">
+                <i class="fas fa-plus"></i> Add Stock
+            </button>
+            <button class="btn-accent" onclick="toggleRestockForm()" type="button">
+                <i class="fas fa-truck-loading"></i> Restock Request
+            </button>
+            <a href="inventory.php?export=csv" class="btn-secondary">
+                <i class="fas fa-download"></i> Export CSV
+            </a>
+        </div>
+
+        <div id="restockRequestForm" class="restock-request hidden">
+            <h3><i class="fas fa-clipboard-list"></i> Submit Restock Request</h3>
+            <form>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="restock_product">Product</label>
+                        <select id="restock_product" required>
+                            <option value="">Select Product</option>
+                            <?php foreach ($products as $product): ?>
+                                <option value="<?php echo $product['id']; ?>">
+                                    <?php echo htmlspecialchars($product['name']); ?>
+                                    (Current: <?php echo $product['quantity']; ?>)
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="restock_quantity">Requested Quantity</label>
+                        <input type="number" id="restock_quantity" min="1" placeholder="Enter quantity" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="restock_priority">Priority Level</label>
+                        <select id="restock_priority" required>
+                            <option value="">Select Priority</option>
+                            <option value="low">Low</option>
+                            <option value="medium">Medium</option>
+                            <option value="high">High</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="restock_needed_by">Needed By</label>
+                        <input type="date" id="restock_needed_by">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="restock_notes">Reason / Notes</label>
+                    <textarea id="restock_notes" placeholder="Provide additional details for the restock request..."></textarea>
+                </div>
+                <div class="restock-actions">
+                    <button type="submit" class="submit-btn">
+                        <i class="fas fa-paper-plane"></i> Submit Request
+                    </button>
+                    <button type="button" class="btn-secondary" onclick="toggleRestockForm()">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Stock Entry Modal -->
+        <div id="stockEntryModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Add New Stock</h3>
+                    <span class="close" onclick="closeStockModal()">&times;</span>
+                </div>
+                <form method="POST" action="">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="product_id">Product</label>
+                            <select name="product_id" id="product_id" required>
+                                <option value="">Select Product</option>
+                                <?php foreach ($products as $product): ?>
+                                    <option value="<?php echo $product['id']; ?>">
+                                        <?php echo htmlspecialchars($product['name']); ?> 
+                                        (Current: <?php echo $product['quantity']; ?>)
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="quantity">Quantity to Add</label>
+                            <input type="number" name="quantity" id="quantity" min="1" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="purchase_price">Purchase Price per Unit</label>
+                            <input type="number" name="purchase_price" id="purchase_price" min="0" step="0.01" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="supplier">Supplier</label>
+                            <input type="text" name="supplier" id="supplier" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="notes">Notes</label>
+                        <textarea name="notes" id="notes" placeholder="Enter any additional notes..."></textarea>
+                    </div>
+                    
+                    <button type="submit" name="add_stock" class="submit-btn">
+                        <i class="fas fa-plus"></i> Add Stock
+                    </button>
+                </form>
+            </div>
+        </div>
+
 
         <!-- Main Inventory Table -->
 
@@ -446,6 +586,11 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
 
         function closeStockModal() {
             document.getElementById('stockEntryModal').style.display = 'none';
+        }
+
+        function toggleRestockForm() {
+            const form = document.getElementById('restockRequestForm');
+            form.classList.toggle('hidden');
         }
 
         // Close modal when clicking outside
