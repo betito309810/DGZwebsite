@@ -443,7 +443,7 @@ document.getElementById('historyModal').addEventListener('click', function (e) {
             <label style="grid-column:1;">Quantity:
                 <input name="quantity" type="number" min="0" required placeholder="Enter quantity">
             </label>
-            <label style="grid-column:2;">Price:
+            <label style="grid-column:2;">Price per unit:
                 <input name="price" type="number" min="0" step="0.01" required placeholder="Enter price">
             </label>
             <label style="grid-column:1;">Supplier:
@@ -577,7 +577,7 @@ function toggleSupplierInput(sel) {
                     <label style="grid-column:1;">Quantity:
                         <input name="quantity" id="edit_quantity" type="number" min="0" required placeholder="Enter quantity">
                     </label>
-                    <label style="grid-column:2;">Price:
+                    <label style="grid-column:2;">Price per unit:
                         <input name="price" id="edit_price" type="number" min="0" step="0.01" required placeholder="Enter price">
                     </label>
                     <label style="grid-column:1;">Supplier:
