@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>About DGZ Motorshop</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="assets/about.css">
+    <link rel="stylesheet" href="assets/css/about.css">
 </head>
 <body>
     <!-- Header -->
@@ -106,10 +106,8 @@
     <footer class="footer">
         <div class="footer-content">
             <div class="social-links">
-                <a href="#"><i class="fab fa-facebook-f"></i></a>
-                <a href="#"><i class="fab fa-instagram"></i></a>
-                <a href="#"><i class="fab fa-twitter"></i></a>
-                <a href="#"><i class="fab fa-youtube"></i></a>
+                <a href="https://www.facebook.com/dgzstonino"><i class="fab fa-facebook-f"></i></a>
+                
             </div>
             <p>DGZ Motorshop - Sto. Niño Branch</p>
             <p>© 2022-2025 DGZ Motorshop. All rights reserved.</p>

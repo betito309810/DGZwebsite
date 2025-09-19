@@ -4,7 +4,7 @@ if(empty($_SESSION['user_id'])){ header('Location: login.php'); exit; }
 
 $pdo = db();
 
-// Handle export to CSV
+// Handle CSV export FIRST - before any other queries
 if(isset($_GET['export']) && $_GET['export'] == 'csv') {
     // Get ALL orders for export
     $export_sql = "SELECT * FROM orders ORDER BY created_at DESC";
@@ -20,7 +20,6 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
     fclose($out);
     exit;
 }
-
 
 // Pagination variables
 $records_per_page = 20;
@@ -53,6 +52,8 @@ $end_record = min($offset + $records_per_page, $total_records);
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="../assets/css/style.css">
     <link rel="stylesheet" href="../assets/css/sales.css">
+    <link rel="stylesheet" href="../assets/css/piechart.css">
+     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <title>Sales</title>
 </head>
 
@@ -95,6 +96,14 @@ $end_record = min($offset + $records_per_page, $total_records);
                     Inventory
                 </a>
             </div>
+
+              <div class="nav-item">
+                <a href="stockEntry.php" class="nav-link ">
+                    <i class="fas fa-truck-loading nav-icon"></i>
+                    Stock Entry
+                </a>
+            </div>
+
         </nav>
     </aside>
 
@@ -125,8 +134,13 @@ $end_record = min($offset + $records_per_page, $total_records);
             </div>
         </header>
 
-        <!-- Export CSV Button -->
-         <a href="sales.php?export=csv">Export CSV</a>   
+        <!-- Export Button -->
+        <div style="margin-bottom: 20px;">
+            <a href="?export=csv">
+                Export to CSV
+            </a>
+        </div>
+
 
         <!-- Table Container -->
         <div class="table-container">
@@ -135,37 +149,44 @@ $end_record = min($offset + $records_per_page, $total_records);
                     <thead>
                         <tr>
                             <th>ID</th>
-                            <th>Customer</th>
+                            <th>Customer Name</th>
+                            <th>Contact</th>
+                            <th>Address</th>
                             <th>Total</th>
-                            <th>Payment</th>
+                            <th>Payment Method</th>
+                            <th>Payment Proof</th>
                             <th>Status</th>
-                            <th>Date</th>
+                            <th>Created At</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php if(empty($orders)): ?>
-                            <tr>
-                                <td colspan="6" style="text-align: center; padding: 40px; color: #6b7280;">
-                                    <i class="fas fa-inbox" style="font-size: 48px; margin-bottom: 10px; display: block;"></i>
-                                    No sales records found.
-                                </td>
-                            </tr>
+                        <tr>
+                            <td colspan="9" style="text-align: center; padding: 40px; color: #6b7280;">
+                                <i class="fas fa-inbox"
+                                    style="font-size: 48px; margin-bottom: 10px; display: block;"></i>
+                                No sales records found.
+                            </td>
+                        </tr>
                         <?php else: ?>
-                            <?php foreach($orders as $o): ?>
-                            <tr>
-                                <td><?=$o['id']?></td>
-                                <td><?=htmlspecialchars($o['customer_name'])?></td>
-                                <td>₱<?=number_format($o['total'],2)?></td>
-                                <td><?=htmlspecialchars($o['payment_method'])?></td>
-                                <td><?=htmlspecialchars($o['status'])?></td>
-                                <td><?=date('M d, Y g:i A', strtotime($o['created_at']))?></td>
-                            </tr>
-                            <?php endforeach; ?>
+                        <?php foreach($orders as $o): ?>
+                        <tr class="transaction-row" data-order-id="<?=$o['id']?>" style="cursor: pointer;">
+                            <td><?=$o['id']?></td>
+                            <td><?=htmlspecialchars($o['customer_name'])?></td>
+                            <td><?=htmlspecialchars($o['contact'] ?? 'N/A')?></td>
+                            <td><?=htmlspecialchars($o['address'] ?? 'N/A')?></td>
+                            <td>₱<?=number_format($o['total'],2)?></td>
+                            <td><?=htmlspecialchars($o['payment_method'])?></td>
+                            <td><?=htmlspecialchars($o['payment_proof'] ?? 'NULL')?></td>
+                            <td><?=htmlspecialchars($o['status'])?></td>
+                            <td><?=date('M d, Y g:i A', strtotime($o['created_at']))?></td>
+                        </tr>
+                        <?php endforeach; ?>
                         <?php endif; ?>
                     </tbody>
                 </table>
             </div>
-            
+
             <?php if($total_records > 0): ?>
             <!-- Pagination -->
             <div class="pagination-container">
@@ -175,13 +196,13 @@ $end_record = min($offset + $records_per_page, $total_records);
                 <div class="pagination">
                     <!-- Previous button -->
                     <?php if($current_page > 1): ?>
-                        <a href="?page=<?=($current_page-1)?>" class="prev">
-                            <i class="fas fa-chevron-left"></i> Prev
-                        </a>
+                    <a href="?page=<?=($current_page-1)?>" class="prev">
+                        <i class="fas fa-chevron-left"></i> Prev
+                    </a>
                     <?php else: ?>
-                        <span class="prev disabled">
-                            <i class="fas fa-chevron-left"></i> Prev
-                        </span>
+                    <span class="prev disabled">
+                        <i class="fas fa-chevron-left"></i> Prev
+                    </span>
                     <?php endif; ?>
 
                     <!-- Page numbers -->
@@ -191,46 +212,387 @@ $end_record = min($offset + $records_per_page, $total_records);
                     
                     // Show first page if not in range
                     if($start_page > 1): ?>
-                        <a href="?page=1">1</a>
-                        <?php if($start_page > 2): ?>
-                            <span>...</span>
-                        <?php endif;
+                    <a href="?page=1">1</a>
+                    <?php if($start_page > 2): ?>
+                    <span>...</span>
+                    <?php endif;
                     endif;
                     
                     // Show page numbers in range
                     for($i = $start_page; $i <= $end_page; $i++):
                         if($i == $current_page): ?>
-                            <span class="current"><?=$i?></span>
-                        <?php else: ?>
-                            <a href="?page=<?=$i?>"><?=$i?></a>
-                        <?php endif;
+                    <span class="current"><?=$i?></span>
+                    <?php else: ?>
+                    <a href="?page=<?=$i?>"><?=$i?></a>
+                    <?php endif;
                     endfor;
                     
                     // Show last page if not in range
                     if($end_page < $total_pages):
                         if($end_page < $total_pages - 1): ?>
-                            <span>...</span>
-                        <?php endif; ?>
-                        <a href="?page=<?=$total_pages?>"><?=$total_pages?></a>
+                    <span>...</span>
+                    <?php endif; ?>
+                    <a href="?page=<?=$total_pages?>"><?=$total_pages?></a>
                     <?php endif; ?>
 
                     <!-- Next button -->
                     <?php if($current_page < $total_pages): ?>
-                        <a href="?page=<?=($current_page+1)?>" class="next">
-                            Next <i class="fas fa-chevron-right"></i>
-                        </a>
+                    <a href="?page=<?=($current_page+1)?>" class="next">
+                        Next <i class="fas fa-chevron-right"></i>
+                    </a>
                     <?php else: ?>
-                        <span class="next disabled">
-                            Next <i class="fas fa-chevron-right"></i>
-                        </span>
+                    <span class="next disabled">
+                        Next <i class="fas fa-chevron-right"></i>
+                    </span>
                     <?php endif; ?>
                 </div>
             </div>
             <?php endif; ?>
         </div>
+
+        <!-- Sales Widget -->
+        <!-- Add this after the Export Button and before the Table Container -->
+        <div class="stat-overview">
+            <div class="sales-widget">
+                <div class="widget-header">
+                    <h2 class="widget-title">
+                        <i class="fas fa-chart-line"></i>
+                        Sales Analytics
+                    </h2>
+                    <div class="period-selector">
+                        <select class="period-dropdown" id="periodSelector">
+                            <option value="daily">Daily</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="monthly">Monthly</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="stats-container">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-dollar-sign"></i>
+                        </div>
+                        <div class="stat-value" id="totalSales">₱0.00</div>
+                        <div class="stat-label">Total Sales</div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-shopping-cart"></i>
+                        </div>
+                        <div class="stat-value" id="totalOrders">0</div>
+                        <div class="stat-label">Total Orders</div>
+                    </div>
+                </div>
+
+
+            </div>
+
+            <!-- piecharat widget -->
+            <div class="chart-card">
+                <div class="chart-header">
+                    
+                    <h2><i class="fa-solid fa-chart-pie"></i>
+                        Sales Trend</h2>
+                    <select id="timeFilter" aria-label="Select time period">
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                    </select>
+                </div>
+                <div class="chart-canvas-wrap">
+                    
+                    <canvas id="salesPieChart"></canvas>
+                   
+                </div>
+                
+                <div class="chart-legend" id="chartLegend" aria-live="polite"></div>
+               
+            </div>
+        </div>
     </main>
 
+    <!-- Transaction Details Modal -->
+    <div id="transactionModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Transaction Details</h3>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="transaction-info">
+                    <h4>Order Information</h4>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <label>Customer:</label>
+                            <span id="modal-customer"></span>
+                        </div>
+                        <div class="info-item">
+                            <label>Date:</label>
+                            <span id="modal-date"></span>
+                        </div>
+                        <div class="info-item">
+                            <label>Status:</label>
+                            <span id="modal-status"></span>
+                        </div>
+                        <div class="info-item">
+                            <label>Payment Method:</label>
+                            <span id="modal-payment"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="order-items">
+                    <h4>Order Items</h4>
+                    <div class="table-responsive">
+                        <table class="items-table">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Quantity</th>
+                                    <th>Price</th>
+                                    <th>Subtotal</th>
+                                </tr>
+                            </thead>
+                            <tbody id="modal-items">
+                                <!-- Items will be inserted here -->
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <td colspan="3" style="text-align: right;"><strong>Total:</strong></td>
+                                    <td id="modal-total"></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
+        // sales trend piechart
+        (function(){
+    const ctx = document.getElementById('salesPieChart').getContext('2d');
+    let salesChart = null;
+
+    function renderChart(payload) {
+        const labels = payload.map(item => item.product_name);
+        const values = payload.map(item => Number(item.total_qty));
+        const colors = payload.map(item => item.color);
+
+        if (salesChart) {
+            salesChart.destroy();
+        }
+
+        salesChart = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels,
+                datasets: [{
+                    data: values,
+                    backgroundColor: colors,
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => {
+                                const label = context.label || "";
+                                const value = context.parsed || 0;
+                                return `${label}: ${value}`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // Render custom legend below the chart
+        const legend = document.getElementById('chartLegend');
+        legend.innerHTML = "";
+        if (!payload.length) {
+            legend.innerHTML = "<div class='legend-empty'>No data for this period.</div>";
+            return;
+        }
+        payload.forEach((item) => {
+            const row = document.createElement('div');
+            row.className = 'legend-item';
+            row.innerHTML = `
+                <span class="legend-swatch" style="background:${item.color}"></span>
+                <span class="legend-name">${item.product_name}</span>
+                <span class="legend-count">${item.total_qty}</span>
+            `;
+            legend.appendChild(row);
+        });
+    }
+
+    async function loadChartData(period='daily') {
+        try {
+            const res = await fetch(`chart_data.php?period=${encodeURIComponent(period)}`, { cache: 'no-store' });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            renderChart(Array.isArray(data) ? data : []);
+        } catch (e) {
+            console.error(e);
+            renderChart([]);
+        }
+    }
+
+    document.getElementById('timeFilter').addEventListener('change', function() {
+        loadChartData(this.value);
+    });
+
+    // Initial load
+    loadChartData('daily');
+})();
+
+
+
+        // sales analytics chart
+        const ctx = document.getElementById('salesPieChart').getContext('2d');
+        let salesChart;
+
+        function loadChartData(period = 'daily') {
+            fetch(`chart_data.php?period=${period}`)
+                .then(response => response.json())
+                .then(data => {
+                    const labels = data.map(item => item.product_name);
+                    const values = data.map(item => item.total_qty);
+                    const colors = data.map(item => item.color);
+
+                    if (salesChart) {
+                        salesChart.destroy();
+                    }
+
+                    salesChart = new Chart(ctx, {
+                        type: 'pie',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                data: values,
+                                backgroundColor: colors
+                            }]
+                        }
+                    });
+
+                    // Custom legend
+                    const legendContainer = document.getElementById('chartLegend');
+                    legendContainer.innerHTML = '';
+                    data.forEach((item, index) => {
+                        const legendItem = document.createElement('div');
+                        legendItem.classList.add('legend-item');
+                        legendItem.innerHTML = `
+                        <span class="legend-color" style="background-color:${colors[index]}"></span>
+                        ${item.product_name} (${values[index]})
+                    `;
+                        legendContainer.appendChild(legendItem);
+                    });
+                });
+        }
+
+        document.getElementById('timeFilter').addEventListener('change', function () {
+            loadChartData(this.value);
+        });
+
+        // Load default
+        loadChartData();
+
+
+        //
+        // Replace the sample data section with this code:
+
+        const periodSelector = document.getElementById('periodSelector');
+        const totalSalesEl = document.getElementById('totalSales');
+        const totalOrdersEl = document.getElementById('totalOrders');
+        //const chartTitleEl = document.getElementById('chartTitle');
+        const widget = document.querySelector('.sales-widget');
+
+        // Function to fetch sales data from PHP backend
+        async function fetchSalesData(period) {
+            try {
+                const response = await fetch(`sales_api.php?period=${period}`);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('Error fetching sales data:', error);
+                // Return fallback data in case of error
+                return {
+                    totalSales: 0,
+                    totalOrders: 0,
+                    period: 'Error'
+                };
+            }
+        }
+
+        // Function to update stats with real data
+        async function updateStats(period) {
+            // Add loading state
+            widget.classList.add('loading');
+
+            try {
+                // Fetch real data from backend
+                const data = await fetchSalesData(period);
+
+                // Update values with animation
+                totalSalesEl.textContent = `₱${data.totalSales.toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        })}`;
+
+                totalOrdersEl.textContent = data.totalOrders.toLocaleString();
+
+                /* Update chart title
+                const periodNames = {
+                    daily: 'Daily',
+                    weekly: 'Weekly', 
+                    monthly: 'Monthly'
+                };
+                chartTitleEl.textContent = `${periodNames[period]} Sales Trend`;*/
+
+            } catch (error) {
+                console.error('Error updating stats:', error);
+                // Show error state
+                totalSalesEl.textContent = 'Error';
+                totalOrdersEl.textContent = 'Error';
+            } finally {
+                // Remove loading state
+                widget.classList.remove('loading');
+            }
+        }
+
+        // Event listener for period change
+        periodSelector.addEventListener('change', function () {
+            updateStats(this.value);
+        });
+
+        // Initialize with daily data
+        updateStats('daily');
+
+        // Add some interactivity
+        document.querySelectorAll('.stat-card').forEach(card => {
+            card.addEventListener('click', function () {
+                this.style.transform = 'scale(0.98)';
+                setTimeout(() => {
+                    this.style.transform = '';
+                }, 150);
+            });
+        });
+
+        // Optional: Auto-refresh data every 30 seconds
+        setInterval(() => {
+            const currentPeriod = periodSelector.value;
+            updateStats(currentPeriod);
+        }, 30000);
+
         // Toggle user dropdown
         function toggleDropdown() {
             const dropdown = document.getElementById('userDropdown');
@@ -244,25 +606,81 @@ $end_record = min($offset + $records_per_page, $total_records);
         }
 
         // Close dropdown when clicking outside
-        document.addEventListener('click', function(event) {
+        document.addEventListener('click', function (event) {
             const userMenu = document.querySelector('.user-menu');
             const dropdown = document.getElementById('userDropdown');
-            
+
             if (!userMenu.contains(event.target)) {
                 dropdown.classList.remove('show');
             }
         });
 
         // Close sidebar when clicking outside on mobile
-        document.addEventListener('click', function(event) {
+        document.addEventListener('click', function (event) {
             const sidebar = document.getElementById('sidebar');
             const toggle = document.querySelector('.mobile-toggle');
-            
-            if (window.innerWidth <= 768 && 
-                !sidebar.contains(event.target) && 
+
+            if (window.innerWidth <= 768 &&
+                !sidebar.contains(event.target) &&
                 !toggle.contains(event.target)) {
                 sidebar.classList.remove('mobile-open');
             }
+        });
+
+        // Transaction Modal Functionality
+        const modal = document.getElementById('transactionModal');
+        const closeBtn = document.querySelector('.modal .close');
+
+        // Close modal when clicking the close button
+        closeBtn.onclick = function() {
+            modal.style.display = "none";
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            if (event.target == modal) {
+                modal.style.display = "none";
+            }
+        }
+
+        // Add click event to transaction rows
+        document.querySelectorAll('.transaction-row').forEach(row => {
+            row.addEventListener('click', async function() {
+                const orderId = this.getAttribute('data-order-id');
+                try {
+                    const response = await fetch(`get_transaction_details.php?order_id=${orderId}`);
+                    if (!response.ok) throw new Error('Failed to fetch transaction details');
+                    const data = await response.json();
+                    
+                    // Update modal content
+                    document.getElementById('modal-customer').textContent = data.order.customer_name;
+                    document.getElementById('modal-date').textContent = new Date(data.order.created_at).toLocaleString();
+                    document.getElementById('modal-status').textContent = data.order.status;
+                    document.getElementById('modal-payment').textContent = data.order.payment_method;
+                    
+                    // Update items table
+                    const itemsBody = document.getElementById('modal-items');
+                    itemsBody.innerHTML = '';
+                    data.items.forEach(item => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${item.name}</td>
+                            <td>${item.qty}</td>
+                            <td>₱${parseFloat(item.price).toFixed(2)}</td>
+                            <td>₱${(item.qty * item.price).toFixed(2)}</td>
+                        `;
+                        itemsBody.appendChild(row);
+                    });
+                    
+                    document.getElementById('modal-total').textContent = `₱${parseFloat(data.order.total).toFixed(2)}`;
+                    
+                    // Show modal
+                    modal.style.display = "block";
+                } catch (error) {
+                    console.error('Error fetching transaction details:', error);
+                    alert('Failed to load transaction details. Please try again.');
+                }
+            });
         });
     </script>
 </body>
