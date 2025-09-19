@@ -258,25 +258,6 @@ tr[style*="background-color:#fdd"] td {
     color: #c0392b;
 }
 
-/* Export CSV Button */
-a[href*="export=csv"] {
-    display: inline-block;
-    background: #3498db;
-    color: #fff;
-    text-decoration: none;
-    padding: 10px 18px;
-    border-radius: 6px;
-    font-size: 14px;
-    font-weight: 500;
-    margin: 18px 0 0 0;
-    margin-left: 91%;
-    transition: background 0.2s;
-}
-
-a[href*="export=csv"]:hover {
-    background: #2176bd;
-}
-
 /* Update Stock Form */
 form[method="post"] {
     display: flex;
@@ -330,12 +311,6 @@ form[method="post"] button:hover {
     table th, table td {
         padding: 12px 10px;
         font-size: 13px;
-    }
-    a[href*="export=csv"] {
-    margin-left: auto;
-    margin-right: 0;
-    display: block;
-    width: fit-content;
     }
 }
 

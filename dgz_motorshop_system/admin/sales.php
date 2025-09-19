@@ -96,15 +96,14 @@ $end_record = min($offset + $records_per_page, $total_records);
                     Inventory
                 </a>
             </div>
-<<<<<<< HEAD
+
               <div class="nav-item">
                 <a href="stockEntry.php" class="nav-link ">
                     <i class="fas fa-truck-loading nav-icon"></i>
                     Stock Entry
                 </a>
             </div>
-=======
->>>>>>> 16cb127c575a3ee54222523e9f101a5468c21a92
+
         </nav>
     </aside>
 

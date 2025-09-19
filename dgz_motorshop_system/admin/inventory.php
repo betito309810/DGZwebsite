@@ -4,6 +4,20 @@ if(empty($_SESSION['user_id'])){ header('Location: login.php'); exit; }
 $pdo = db();
 $role = $_SESSION['role'] ?? '';
 
+
+// Handle stock updates (admin only)
+if ($role === 'admin' && isset($_POST['update_stock'])) {
+    $id = intval($_POST['id'] ?? 0);
+    $change = intval($_POST['change'] ?? 0);
+
+    if ($id && $change !== 0) {
+        $stmt = $pdo->prepare('UPDATE products SET quantity = quantity + ? WHERE id = ?');
+        $stmt->execute([$change, $id]);
+    }
+
+    header('Location: inventory.php');
+    exit;
+=======
 // Handle stock entry submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_stock'])) {
     $product_id = $_POST['product_id'] ?? '';
@@ -28,6 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_stock'])) {
     } else {
         $error_message = "Please select a product and enter a valid quantity.";
     }
+
 }
 
 // Get recent stock entries with user information
@@ -300,7 +315,6 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
             <div class="alert alert-success"><?php echo $success_message; ?></div>
         <?php endif; ?>
         
-<<<<<<< HEAD
         <?php if (isset($error_message)): ?>
             <div class="alert alert-error"><?php echo $error_message; ?></div>
         <?php endif; ?>
@@ -365,13 +379,13 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
         </div>
 
         <!-- Main Inventory Table -->
-=======
+
         <div class="inventory-actions">
             <a href="stockEntry.php" class="btn-action add-stock-btn">Add Stock</a>
             <a href="inventory.php?export=csv" class="btn-action export-btn">Export CSV</a>
         </div>
 
->>>>>>> 16cb127c575a3ee54222523e9f101a5468c21a92
+
         <table border="1" cellpadding="5">
             <tr>
                 <th>Code</th>
@@ -379,6 +393,8 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                 <th>Quantity</th>
                 <th>Low Stock Threshold</th>
                 <th>Date Added</th>
+
+                <?php if ($role === 'admin') echo '<th>Update Stock</th>'; ?>
             </tr>
             <?php foreach($products as $p):
                 $low = $p['quantity'] <= $p['low_stock_threshold'];
@@ -389,6 +405,17 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                 <td><?=intval($p['quantity'])?></td>
                 <td><?=intval($p['low_stock_threshold'])?></td>
                 <td><?=$p['created_at']?></td>
+
+                <?php if ($role === 'admin'): ?>
+                <td>
+                    <form method="post">
+                        <input type="hidden" name="id" value="<?=$p['id']?>">
+                        <input type="number" name="change" value="0" step="1">
+                        <button type="submit" name="update_stock">Apply</button>
+                    </form>
+                </td>
+                <?php endif; ?>
+
             </tr>
             <?php endforeach; ?>
         </table>
