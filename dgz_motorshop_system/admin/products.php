@@ -352,8 +352,8 @@ $suppliers = $pdo->query('SELECT DISTINCT supplier FROM products WHERE supplier 
         </div>
 
 <!-- Product Add History Modal (like stockEntry.php) -->
-<div id="historyModal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.3); z-index:9999; align-items:center; justify-content:center;">
-    <div class="modal-content" style="background:white; padding:30px; border-radius:10px; width:95%; max-width:1400px; position:relative; box-shadow:0 4px 6px rgba(0,0,0,0.1); margin:20px;">
+<div id="historyModal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.3); z-index:9999; align-items:center; justify-content:flex-end;">
+    <div class="modal-content" style="background:white; padding:30px; border-radius:10px; width:100%; max-width:1600px; position:relative; box-shadow:0 4px 6px rgba(0,0,0,0.1); margin:50px;">
         <button type="button" id="closeHistoryModal" style="position:absolute; top:20px; right:25px; background:none; border:none; font-size:24px; color:#888; cursor:pointer;">&times;</button>
         <h3 style="margin:0 0 20px 0; font-size:1.5em; color:#333;">Product Add History</h3>
         <div class="recent-entries" style="width:100%;">
@@ -609,7 +609,7 @@ function toggleSupplierInput(sel) {
             const modal = document.getElementById('historyModal');
             const list = document.getElementById('historyList');
             modal.style.display = 'flex';
-            list.innerHTML = '<div style="text-align:center;padding:20px;"><i class="fas fa-spinner fa-spin"></i> Loading history...</div>';
+            list.innerHTML = '<div style="text-align:center;padding:0px;"><i class="fas fa-spinner fa-spin"></i> Loading history...</div>';
 
             fetch('products.php?history=1', {
                 cache: 'no-store',
