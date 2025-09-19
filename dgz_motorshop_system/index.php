@@ -138,58 +138,6 @@ foreach($products as $product) {
                 <?php endforeach; ?>
             </div>
 
-            <!-- Category Icons -->
-            <div class="category-grid">
-                <div class="category-card">
-                    <div class="category-icon"><i class="fas fa-car-side"></i></div>
-                    <div class="category-name">Exhaust</div>
-                </div>
-                <div class="category-card">
-                    <div class="category-icon"><i class="fas fa-gas-pump"></i></div>
-                    <div class="category-name">Fuel Management</div>
-                </div>
-                <div class="category-card">
-                    <div class="category-icon"><i class="fas fa-wind"></i></div>
-                    <div class="category-name">Air Cleaners</div>
-                </div>
-                <div class="category-card">
-                    <div class="category-icon"><i class="fas fa-grip-horizontal"></i></div>
-                    <div class="category-name">Handlebars & Controls</div>
-                </div>
-                <div class="category-card">
-                    <div class="category-icon"><i class="fas fa-shield-alt"></i></div>
-                    <div class="category-name">Windshields & Windscreens</div>
-                </div>
-                <div class="category-card">
-                    <div class="category-icon"><i class="fas fa-battery-three-quarters"></i></div>
-                    <div class="category-name">Batteries & Electrical</div>
-                </div>
-                <div class="category-card">
-                    <div class="category-icon"><i class="fas fa-cogs"></i></div>
-                    <div class="category-name">Drive & Transmission</div>
-                </div>
-                <div class="category-card">
-                    <div class="category-icon"><i class="fas fa-dot-circle"></i></div>
-                    <div class="category-name">Brakes</div>
-                </div>
-                <div class="category-card">
-                    <div class="category-icon"><i class="fas fa-volume-up"></i></div>
-                    <div class="category-name">Audio & Speakers</div>
-                </div>
-                <div class="category-card">
-                    <div class="category-icon"><i class="fas fa-circle"></i></div>
-                    <div class="category-name">Wheel & Axle</div>
-                </div>
-                <div class="category-card">
-                    <div class="category-icon"><i class="fas fa-shield-virus"></i></div>
-                    <div class="category-name">Bumpers & Protection</div>
-                </div>
-                <div class="category-card">
-                    <div class="category-icon"><i class="fas fa-car"></i></div>
-                    <div class="category-name">Cab & Interior</div>
-                </div>
-            </div>
-
             <!-- All Products -->
             <div id="all-products">
                 <h2 style="margin: 50px 0 30px 0; font-size: 28px; color: #2d3436; text-align: center;">All Products
