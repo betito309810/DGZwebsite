@@ -16,6 +16,8 @@ if ($role === 'admin' && isset($_POST['update_stock'])) {
     }
 
     header('Location: inventory.php');
+    exit;
+}
 // Handle stock entry submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_stock'])) {
     $product_id = $_POST['product_id'] ?? '';
@@ -348,15 +350,11 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
         
 
         <div class="inventory-actions">
-            <button class="btn-primary" onclick="openStockModal()">
-                <i class="fas fa-plus"></i> Add Stock
-            </button>
+            
             <button class="btn-accent" onclick="toggleRestockForm()" type="button">
                 <i class="fas fa-truck-loading"></i> Restock Request
             </button>
-            <a href="inventory.php?export=csv" class="btn-secondary">
-                <i class="fas fa-download"></i> Export CSV
-            </a>
+           
         </div>
 
         <div id="restockRequestForm" class="restock-request hidden">
@@ -408,55 +406,7 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
             </form>
         </div>
 
-        <!-- Stock Entry Modal -->
-        <div id="stockEntryModal" class="modal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>Add New Stock</h3>
-                    <span class="close" onclick="closeStockModal()">&times;</span>
-                </div>
-                <form method="POST" action="">
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label for="product_id">Product</label>
-                            <select name="product_id" id="product_id" required>
-                                <option value="">Select Product</option>
-                                <?php foreach ($products as $product): ?>
-                                    <option value="<?php echo $product['id']; ?>">
-                                        <?php echo htmlspecialchars($product['name']); ?> 
-                                        (Current: <?php echo $product['quantity']; ?>)
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="quantity">Quantity to Add</label>
-                            <input type="number" name="quantity" id="quantity" min="1" required>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="purchase_price">Purchase Price per Unit</label>
-                            <input type="number" name="purchase_price" id="purchase_price" min="0" step="0.01" required>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="supplier">Supplier</label>
-                            <input type="text" name="supplier" id="supplier" required>
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="notes">Notes</label>
-                        <textarea name="notes" id="notes" placeholder="Enter any additional notes..."></textarea>
-                    </div>
-                    
-                    <button type="submit" name="add_stock" class="submit-btn">
-                        <i class="fas fa-plus"></i> Add Stock
-                    </button>
-                </form>
-            </div>
-        </div>
+        
 
 
         <!-- Main Inventory Table -->
@@ -627,5 +577,4 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
         });
     </script>
 </body>
-
 </html>
