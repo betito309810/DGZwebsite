@@ -16,8 +16,6 @@ if ($role === 'admin' && isset($_POST['update_stock'])) {
     }
 
     header('Location: inventory.php');
-    exit;
-}
 // Handle stock entry submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_stock'])) {
     $product_id = $_POST['product_id'] ?? '';
@@ -348,6 +346,7 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
             <div class="alert alert-error"><?php echo $error_message; ?></div>
         <?php endif; ?>
         
+
         <div class="inventory-actions">
             <button class="btn-primary" onclick="openStockModal()">
                 <i class="fas fa-plus"></i> Add Stock
@@ -458,6 +457,7 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                 </form>
             </div>
         </div>
+
 
         <!-- Main Inventory Table -->
 
