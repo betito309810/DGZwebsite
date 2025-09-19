@@ -356,6 +356,7 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
             </button>
            
         </div>
+        <!-- Restock Request Form -->
 
         <div id="restockRequestForm" class="restock-request hidden">
             <h3><i class="fas fa-clipboard-list"></i> Submit Restock Request</h3>
