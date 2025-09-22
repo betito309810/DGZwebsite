@@ -1,14 +1,41 @@
 <?php
-require '../config.php';
+require __DIR__ . '/../config.php';
 if(empty($_SESSION['user_id'])){ header('Location: login.php'); exit; }
 $pdo = db();
+
+if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status'])) {
+    $orderId = isset($_POST['order_id']) ? (int) $_POST['order_id'] : 0;
+    $newStatus = isset($_POST['new_status']) ? $_POST['new_status'] : '';
+    $allowedStatuses = array('pending','approved','completed');
+
+    if($orderId > 0 && in_array($newStatus, $allowedStatuses, true)) {
+        $stmt = $pdo->prepare('UPDATE orders SET status = ? WHERE id = ?');
+        $stmt->execute(array($newStatus, $orderId));
+        $_SESSION['pos_active_tab'] = 'online';
+        header('Location: pos.php?tab=online&status_updated=1');
+        exit;
+    }
+
+    $_SESSION['pos_active_tab'] = 'online';
+    header('Location: pos.php?tab=online&status_updated=0');
+    exit;
+}
+
 $products = $pdo->query('SELECT * FROM products')->fetchAll();
+
+$activeTab = 'walkin';
+if (!empty($_SESSION['pos_active_tab']) && in_array($_SESSION['pos_active_tab'], array('walkin','online'), true)) {
+    $activeTab = $_SESSION['pos_active_tab'];
+    unset($_SESSION['pos_active_tab']);
+} elseif (!empty($_GET['tab']) && in_array($_GET['tab'], array('walkin','online'), true)) {
+    $activeTab = $_GET['tab'];
+}
 
 if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['pos_checkout'])) {
     // simple POS flow: product_id[], qty[]
-    $items = $_POST['product_id'] ?? [];
-    $qtys = $_POST['qty'] ?? [];
-    $amount_paid = floatval($_POST['amount_paid'] ?? 0); // FIX: Get amount paid from form
+    $items = isset($_POST['product_id']) ? $_POST['product_id'] : array();
+    $qtys = isset($_POST['qty']) ? $_POST['qty'] : array();
+    $amount_paid = isset($_POST['amount_paid']) ? floatval($_POST['amount_paid']) : 0; // FIX: Get amount paid from form
     
     if (empty($items)) {
         echo "<script>alert('No item selected in POS!'); window.location='pos.php';</script>";
@@ -18,7 +45,7 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['pos_checkout'])) {
     $salesTotal = 0;
     foreach($items as $i=>$pid){
         $pstmt = $pdo->prepare('SELECT * FROM products WHERE id=?');
-        $pstmt->execute([intval($pid)]);
+        $pstmt->execute(array(intval($pid)));
         $p = $pstmt->fetch();
         if($p){
             $q = max(1,intval($qtys[$i]));
@@ -46,13 +73,13 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['pos_checkout'])) {
 
         // FIX: Create order with amount_paid and change
         $stmt = $pdo->prepare('INSERT INTO orders (customer_name, contact, address, total, payment_method, status, vatable, vat, amount_paid, change_amount) VALUES (?,?,?,?,?,?,?,?,?,?)');
-        $stmt->execute(['Walk-in', 'N/A', 'N/A', $salesTotal, 'Cash', 'completed', $vatable, $vat, $amount_paid, $change]);
+        $stmt->execute(array('Walk-in', 'N/A', 'N/A', $salesTotal, 'Cash', 'completed', $vatable, $vat, $amount_paid, $change));
         $order_id = $pdo->lastInsertId();
 
         // Process items
         foreach($items as $i=>$pid){
             $pstmt = $pdo->prepare('SELECT * FROM products WHERE id=?');
-            $pstmt->execute([intval($pid)]);
+            $pstmt->execute(array(intval($pid)));
             $p = $pstmt->fetch();
             if($p){
                 $q = max(1,intval($qtys[$i]));
@@ -61,11 +88,11 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['pos_checkout'])) {
                 }
                 // Insert order item
                 $pdo->prepare('INSERT INTO order_items (order_id,product_id,qty,price) VALUES (?,?,?,?)')
-                    ->execute([$order_id, $p['id'], $q, $p['price']]);
-                
+                    ->execute(array($order_id, $p['id'], $q, $p['price']));
+
                 // Update product quantity
                 $pdo->prepare('UPDATE products SET quantity = quantity - ? WHERE id = ?')
-                    ->execute([$q, $p['id']]);
+                    ->execute(array($q, $p['id']));
             }
         }
 
@@ -82,6 +109,31 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['pos_checkout'])) {
         exit;
     }
 }
+
+$onlineOrdersStmt = $pdo->prepare("
+    SELECT * FROM orders
+    WHERE
+        (payment_method IS NOT NULL AND LOWER(payment_method) = 'gcash')
+        OR (payment_proof IS NOT NULL AND payment_proof <> '')
+        OR (status IS NOT NULL AND LOWER(status) IN ('pending','approved'))
+    ORDER BY created_at DESC
+");
+$onlineOrdersStmt->execute();
+$onlineOrders = $onlineOrdersStmt->fetchAll();
+foreach ($onlineOrders as &$onlineOrder) {
+    $details = parsePaymentProofValue(
+        isset($onlineOrder['payment_proof']) ? $onlineOrder['payment_proof'] : null,
+        isset($onlineOrder['reference_no']) ? $onlineOrder['reference_no'] : null
+    );
+    $onlineOrder['reference_number'] = $details['reference'];
+    $onlineOrder['proof_image'] = $details['image'];
+}
+unset($onlineOrder);
+$statusOptions = array(
+    'pending' => 'Pending',
+    'approved' => 'Approved',
+    'completed' => 'Completed'
+);
 ?>
 <!doctype html>
 <html>
@@ -164,6 +216,18 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['pos_checkout'])) {
             </div>
         </header>
 
+        <div class="pos-tabs">
+            <button type="button" class="pos-tab-button<?= $activeTab === 'walkin' ? ' active' : '' ?>" data-target="walkinTab" data-tab="walkin">
+                <i class="fas fa-store"></i>
+                POS Checkout
+            </button>
+            <button type="button" class="pos-tab-button<?= $activeTab === 'online' ? ' active' : '' ?>" data-target="onlineTab" data-tab="online">
+                <i class="fas fa-shopping-bag"></i>
+                Online Orders
+            </button>
+        </div>
+
+        <div id="walkinTab" class="tab-panel<?= $activeTab === 'walkin' ? ' active' : '' ?>">
         <div style="display: flex; align-items: center; gap: 0px; margin: 15px 0; flex-wrap: wrap;">
             <button type="button" id="openProductModal"
                 style="padding: 8px 18px; background: #3498db; color: #fff; border: none; border-radius: 6px; font-size: 15px; cursor: pointer;"><i
@@ -327,6 +391,97 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['pos_checkout'])) {
                 <button id="addSelectedProducts"
                     style="margin-top:14px; background:#3498db; color:#fff; border:none; border-radius:6px; font-size:15px; padding:8px 18px; cursor:pointer; width:100%;">Add
                 </button>
+            </div>
+        </div>
+        </div><!-- /#walkinTab -->
+
+        <div id="onlineTab" class="tab-panel<?= $activeTab === 'online' ? ' active' : '' ?>">
+            <?php if(isset($_GET['status_updated'])): ?>
+                <?php $success = $_GET['status_updated'] === '1'; ?>
+                <div class="status-alert <?= $success ? 'success' : 'error' ?>">
+                    <i class="fas <?= $success ? 'fa-check-circle' : 'fa-exclamation-circle' ?>"></i>
+                    <?= $success ? 'Order status updated.' : 'Unable to update order status.' ?>
+                </div>
+            <?php endif; ?>
+
+            <div class="online-orders-container">
+                <table class="online-orders-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Customer</th>
+                            <th>Contact</th>
+                            <th>Total</th>
+                            <th>Reference</th>
+                            <th>Proof</th>
+                            <th>Status</th>
+                            <th>Placed</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if(empty($onlineOrders)): ?>
+                            <tr>
+                                <td colspan="8" class="empty-cell">
+                                    <i class="fas fa-inbox"></i>
+                                    No online orders yet.
+                                </td>
+                            </tr>
+                        <?php else: ?>
+                            <?php foreach($onlineOrders as $order): ?>
+                                <?php $imagePath = $order['proof_image'] ? '../' . ltrim($order['proof_image'], '/') : ''; ?>
+                                <tr>
+                                    <td>#<?= (int) $order['id'] ?></td>
+                                    <td><?= htmlspecialchars(isset($order['customer_name']) ? $order['customer_name'] : 'Customer') ?></td>
+                                    <td><?= htmlspecialchars(isset($order['contact']) ? $order['contact'] : 'N/A') ?></td>
+                                    <td>₱<?= number_format((float) $order['total'], 2) ?></td>
+                                    <td>
+                                        <?php if(!empty($order['reference_number'])): ?>
+                                            <span class="reference-badge"><?= htmlspecialchars($order['reference_number']) ?></span>
+                                        <?php else: ?>
+                                            <span class="muted">Not provided</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <button type="button"
+                                            class="view-proof-btn"
+                                            data-image="<?= htmlspecialchars($imagePath) ?>"
+                                            data-reference="<?= htmlspecialchars(isset($order['reference_number']) ? $order['reference_number'] : '') ?>"
+                                            data-customer="<?= htmlspecialchars(isset($order['customer_name']) ? $order['customer_name'] : 'Customer') ?>">
+                                            <i class="fas fa-receipt"></i> View
+                                        </button>
+                                    </td>
+                                    <td>
+                                        <span class="status-badge status-<?= htmlspecialchars($order['status']) ?>"><?= htmlspecialchars(ucfirst($order['status'])) ?></span>
+                                        <form method="post" class="status-form">
+                                            <input type="hidden" name="order_id" value="<?= (int) $order['id'] ?>">
+                                            <input type="hidden" name="update_order_status" value="1">
+                                            <select name="new_status">
+                                                <?php foreach($statusOptions as $value => $label): ?>
+                                                    <option value="<?= $value ?>" <?= $order['status'] === $value ? 'selected' : '' ?>><?= $label ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                            <button type="submit" class="status-save">Update</button>
+                                        </form>
+                                    </td>
+                                    <td><?= date('M d, Y g:i A', strtotime($order['created_at'])) ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="proofModal" class="proof-modal" aria-hidden="true">
+            <div class="proof-modal-content">
+                <button type="button" class="proof-close" id="closeProofModal">&times;</button>
+                <h3 class="proof-title">Payment Proof</h3>
+                <p class="proof-reference">Reference: <span id="proofReferenceValue">Not provided</span></p>
+                <p class="proof-customer">Customer: <span id="proofCustomerName">N/A</span></p>
+                <div class="proof-image-wrapper">
+                    <img id="proofImage" src="" alt="Payment proof preview" />
+                    <div id="proofNoImage" class="proof-empty">No proof uploaded.</div>
+                </div>
             </div>
         </div>
     </main>
@@ -847,13 +1002,140 @@ document.getElementById('clearPosTable').onclick = function () {
     while (table.rows.length > 1) {
         table.deleteRow(1);
     }
-    
+
     updateEmptyStateVisibility();
     localStorage.removeItem('posTable');
-    
+
     // FIXED: Recalculate totals after clearing
     recalcTotal();
 };
+
+// Tab navigation for POS and online orders
+const tabButtons = document.querySelectorAll('.pos-tab-button');
+const tabPanels = document.querySelectorAll('.tab-panel');
+const tabStorageKey = 'posActiveTab';
+
+function persistActiveTab(targetId) {
+    const button = Array.from(tabButtons).find(btn => btn.dataset.target === targetId);
+    if (!button) {
+        return;
+    }
+    const tabName = button.dataset.tab || (targetId === 'onlineTab' ? 'online' : 'walkin');
+    try {
+        localStorage.setItem(tabStorageKey, tabName);
+    } catch (err) {
+        // Ignore storage errors (private mode, etc.)
+    }
+    const url = new URL(window.location);
+    url.searchParams.set('tab', tabName);
+    window.history.replaceState(null, '', url);
+}
+
+function setActiveTab(targetId, options = {}) {
+    const { skipPersistence = false } = options;
+    let foundMatch = false;
+
+    tabButtons.forEach(btn => {
+        const isMatch = btn.dataset.target === targetId;
+        btn.classList.toggle('active', isMatch);
+        if (isMatch) {
+            foundMatch = true;
+        }
+    });
+
+    tabPanels.forEach(panel => {
+        panel.classList.toggle('active', panel.id === targetId);
+    });
+
+    if (foundMatch && !skipPersistence) {
+        persistActiveTab(targetId);
+    }
+}
+
+tabButtons.forEach(button => {
+    button.addEventListener('click', () => {
+        setActiveTab(button.dataset.target);
+    });
+});
+
+(function initializeActiveTab() {
+    const params = new URLSearchParams(window.location.search);
+    const paramTab = params.get('tab');
+    if (paramTab === 'online') {
+        setActiveTab('onlineTab');
+        return;
+    }
+    if (paramTab === 'walkin') {
+        setActiveTab('walkinTab');
+        return;
+    }
+
+    let storedTab = null;
+    try {
+        storedTab = localStorage.getItem(tabStorageKey);
+    } catch (err) {
+        storedTab = null;
+    }
+
+    if (storedTab === 'online') {
+        setActiveTab('onlineTab', { skipPersistence: true });
+    } else if (storedTab === 'walkin') {
+        setActiveTab('walkinTab', { skipPersistence: true });
+    }
+})();
+
+const statusAlert = document.querySelector('.status-alert');
+if (statusAlert) {
+    const url = new URL(window.location);
+    url.searchParams.delete('status_updated');
+    window.history.replaceState(null, '', url);
+}
+
+// Proof of payment modal logic
+const proofModal = document.getElementById('proofModal');
+const proofImage = document.getElementById('proofImage');
+const proofReferenceValue = document.getElementById('proofReferenceValue');
+const proofCustomerName = document.getElementById('proofCustomerName');
+const proofNoImage = document.getElementById('proofNoImage');
+
+function closeProofModal() {
+    proofModal.classList.remove('show');
+    proofModal.setAttribute('aria-hidden', 'true');
+    proofImage.removeAttribute('src');
+    proofImage.style.display = 'none';
+    proofNoImage.style.display = 'none';
+}
+
+document.querySelectorAll('.view-proof-btn').forEach(button => {
+    button.addEventListener('click', () => {
+        const image = button.dataset.image;
+        const reference = button.dataset.reference || '';
+        const customer = button.dataset.customer || 'Customer';
+
+        proofReferenceValue.textContent = reference !== '' ? reference : 'Not provided';
+        proofCustomerName.textContent = customer;
+
+        if (image) {
+            proofImage.src = image;
+            proofImage.style.display = 'block';
+            proofNoImage.style.display = 'none';
+        } else {
+            proofImage.removeAttribute('src');
+            proofImage.style.display = 'none';
+            proofNoImage.style.display = 'flex';
+        }
+
+        proofModal.classList.add('show');
+        proofModal.setAttribute('aria-hidden', 'false');
+    });
+});
+
+document.getElementById('closeProofModal').addEventListener('click', closeProofModal);
+proofModal.addEventListener('click', (event) => {
+    if (event.target === proofModal) {
+        closeProofModal();
+    }
+});
     </script>
     <!-- Total Sales Panel 
     <script src="../assets/js/totalPanel.js"></script>-->

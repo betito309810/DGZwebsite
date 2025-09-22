@@ -13,9 +13,21 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
     header('Content-Type: text/csv');
     header('Content-Disposition: attachment; filename="sales.csv"');
     $out = fopen('php://output', 'w');
-    fputcsv($out, ['ID','Customer Name','Contact','Address','Total','Payment Method','Payment Proof','Status','Created At']);
+    fputcsv($out, ['ID','Customer Name','Contact','Address','Total','Payment Method','Payment Reference','Proof Image','Status','Created At']);
     foreach($export_orders as $o) {
-        fputcsv($out, [$o['id'],$o['customer_name'],$o['contact'],$o['address'],$o['total'],$o['payment_method'],$o['payment_proof'],$o['status'],$o['created_at']]);
+        $details = parsePaymentProofValue($o['payment_proof'] ?? null, $o['reference_no'] ?? null);
+        fputcsv($out, [
+            $o['id'],
+            $o['customer_name'],
+            $o['contact'],
+            $o['address'],
+            $o['total'],
+            $o['payment_method'],
+            $details['reference'],
+            $details['image'],
+            $o['status'],
+            $o['created_at']
+        ]);
     }
     fclose($out);
     exit;
@@ -149,7 +161,8 @@ $end_record = min($offset + $records_per_page, $total_records);
                             <th>Address</th>
                             <th>Total</th>
                             <th>Payment Method</th>
-                            <th>Payment Proof</th>
+                            <th>Reference</th>
+                            <th>Proof</th>
                             <th>Status</th>
                             <th>Created At</th>
                         </tr>
@@ -157,7 +170,7 @@ $end_record = min($offset + $records_per_page, $total_records);
                     <tbody>
                         <?php if(empty($orders)): ?>
                         <tr>
-                            <td colspan="9" style="text-align: center; padding: 40px; color: #6b7280;">
+                            <td colspan="10" style="text-align: center; padding: 40px; color: #6b7280;">
                                 <i class="fas fa-inbox"
                                     style="font-size: 48px; margin-bottom: 10px; display: block;"></i>
                                 No sales records found.
@@ -172,7 +185,23 @@ $end_record = min($offset + $records_per_page, $total_records);
                             <td><?=htmlspecialchars($o['address'] ?? 'N/A')?></td>
                             <td>₱<?=number_format($o['total'],2)?></td>
                             <td><?=htmlspecialchars($o['payment_method'])?></td>
-                            <td><?=htmlspecialchars($o['payment_proof'] ?? 'NULL')?></td>
+                            <?php $paymentDetails = parsePaymentProofValue($o['payment_proof'] ?? null, $o['reference_no'] ?? null); ?>
+                            <td>
+                                <?php if(!empty($paymentDetails['reference'])): ?>
+                                    <span style="font-weight:600; color:#1d4ed8;"><?=htmlspecialchars($paymentDetails['reference'])?></span>
+                                <?php else: ?>
+                                    <span style="color:#94a3b8;">Not provided</span>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <?php if(!empty($paymentDetails['image'])): ?>
+                                    <a href="../<?=htmlspecialchars(ltrim($paymentDetails['image'], '/'))?>" target="_blank" style="color:#0ea5e9; font-weight:600;">
+                                        View Proof
+                                    </a>
+                                <?php else: ?>
+                                    <span style="color:#94a3b8;">No image</span>
+                                <?php endif; ?>
+                            </td>
                             <td><?=htmlspecialchars($o['status'])?></td>
                             <td><?=date('M d, Y g:i A', strtotime($o['created_at']))?></td>
                         </tr>
