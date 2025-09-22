@@ -76,6 +76,24 @@ body {
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
 }
 
+.form-alert {
+    background: #ffe6e6;
+    border: 1px solid #ffb3b3;
+    color: #c0392b;
+    border-radius: 12px;
+    padding: 15px 20px;
+    margin-bottom: 25px;
+}
+
+.form-alert ul {
+    margin: 10px 0 0 20px;
+    padding: 0;
+}
+
+.form-alert li {
+    margin-bottom: 6px;
+}
+
 .order-summary {
     background: white;
     border-radius: 20px;
