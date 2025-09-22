@@ -23,7 +23,19 @@ function parsePaymentProofValue($value) {
         'image' => null,
     ];
 
+
+    if ($value === null) {
+        return $details;
+    }
+
+    if (is_string($value)) {
+        $value = trim($value);
+    }
+
+    if ($value === '' || $value === false) {
+
     if (empty($value)) {
+
         return $details;
     }
 
@@ -35,9 +47,29 @@ function parsePaymentProofValue($value) {
         if (!empty($decoded['image'])) {
             $details['image'] = (string) $decoded['image'];
         }
+
+        return $details;
+    }
+
+    $stringValue = is_scalar($value) ? (string) $value : '';
+    if ($stringValue === '') {
+        return $details;
+    }
+
+    // Legacy data may contain just a reference number or only an image path.
+    $hasPathSeparators = strpos($stringValue, '/') !== false || strpos($stringValue, '\\') !== false;
+    $looksLikeImage = preg_match('/\.(jpe?g|png|gif|webp|bmp)$/i', $stringValue) === 1;
+    $startsWithUrl = stripos($stringValue, 'http://') === 0 || stripos($stringValue, 'https://') === 0;
+
+    if ($looksLikeImage || $hasPathSeparators || $startsWithUrl) {
+        $details['image'] = $stringValue;
+    } else {
+        $details['reference'] = $stringValue;
+
     } else {
         // Legacy orders stored only the uploaded image path.
         $details['image'] = (string) $value;
+
     }
 
     return $details;
