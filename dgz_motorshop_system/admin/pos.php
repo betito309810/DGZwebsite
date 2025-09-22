@@ -104,7 +104,7 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['pos_checkout'])) {
 $onlineOrdersStmt = $pdo->prepare("
     SELECT * FROM orders
     WHERE
-        (payment_method IS NOT NULL AND payment_method <> '' AND LOWER(payment_method) <> 'cash')
+        (payment_method IS NOT NULL AND payment_method <> '' AND LOWER(payment_method) <> 'Gcash')
         OR (payment_proof IS NOT NULL AND payment_proof <> '')
         OR status IN ('pending','approved')
     ORDER BY created_at DESC
@@ -123,6 +123,9 @@ $statusOptions = [
     'approved' => 'Approved',
     'completed' => 'Completed'
 ];
+
+
+
 ?>
 <!doctype html>
 <html>

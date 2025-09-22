@@ -66,7 +66,8 @@ function parsePaymentProofValue($value) {
     } else {
         $details['reference'] = $stringValue;
 
-    } else {
+    }
+} else {
         // Legacy orders stored only the uploaded image path.
         $details['image'] = (string) $value;
 
