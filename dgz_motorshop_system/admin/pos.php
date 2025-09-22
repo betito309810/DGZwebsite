@@ -293,7 +293,7 @@ if ($productCatalogJson === false) {
                 <button type="button" id="openProductModal" class="primary-button">
                     <i class="fas fa-search"></i> Search Product
                 </button>
-                <div class="top-total-simple">
+                 <div class="top-total-simple" style="font-size: 2.2rem; font-weight: bold; color: #111; min-width: 85%; text-align: right;">
                     <span id="topTotalAmountSimple">₱0.00</span>
                 </div>
             </div>
