@@ -27,18 +27,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status'])
     }
 
     $_SESSION['pos_active_tab'] = 'online';
-    header('Location: pos.php?tab=online&status_updated=0');
-
-    exit;
-}
-
-
-        header('Location: pos.php?status_updated=1');
-        exit;
-    }
-
-    header('Location: pos.php?status_updated=0');{
-
+        header('Location: pos.php?status_updated=0');
     exit;
 } 
 
@@ -51,6 +40,8 @@ if (!empty($_SESSION['pos_active_tab']) && in_array($_SESSION['pos_active_tab'],
     $activeTab = $_SESSION['pos_active_tab'];
     unset($_SESSION['pos_active_tab']);
 } elseif (!empty($_GET['tab']) && in_array($_GET['tab'], array('walkin','online'), true)) {
+    $activeTab = $_GET['tab'];
+}
 
 if (!empty($_SESSION['pos_active_tab']) && in_array($_SESSION['pos_active_tab'], ['walkin','online'], true)) {
     $activeTab = $_SESSION['pos_active_tab'];
@@ -155,7 +146,7 @@ foreach ($onlineOrders as &$onlineOrder) {
         isset($onlineOrder['payment_proof']) ? $onlineOrder['payment_proof'] : null,
         isset($onlineOrder['reference_no']) ? $onlineOrder['reference_no'] : null
     );
-
+}
 
 $onlineOrdersStmt = $pdo->prepare("
     SELECT * FROM orders
