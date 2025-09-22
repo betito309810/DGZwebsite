@@ -4,6 +4,7 @@ $pdo = db();
 $errors = [];
 $referenceInput = '';
 
+
 if (!function_exists('ordersHasReferenceColumn')) {
     function ordersHasReferenceColumn(PDO $pdo) {
         static $hasColumn = null;
@@ -21,6 +22,7 @@ if (!function_exists('ordersHasReferenceColumn')) {
         return $hasColumn;
     }
 }
+
 
 // Handle both single product and cart scenarios
 $product_id = intval($_GET['product_id'] ?? 0);
@@ -145,6 +147,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
     }
 
     if (empty($errors)) {
+
         $hasReferenceColumn = ordersHasReferenceColumn($pdo);
 
         if ($hasReferenceColumn) {
@@ -154,6 +157,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
             $stmt = $pdo->prepare('INSERT INTO orders (customer_name, contact, address, total, payment_method, payment_proof, status) VALUES (?, ?, ?, ?, ?, ?, ?)');
             $stmt->execute([$customer_name, $contact, $address, $total, $payment_method, $paymentData, 'pending']);
         }
+
+
+        $stmt = $pdo->prepare('INSERT INTO orders (customer_name, contact, address, total, payment_method, payment_proof, status) VALUES (?, ?, ?, ?, ?, ?, ?)');
+        $stmt->execute([$customer_name, $contact, $address, $total, $payment_method, $paymentData, 'pending']);
+
+
         $order_id = $pdo->lastInsertId();
 
         // Insert order items and update stock
