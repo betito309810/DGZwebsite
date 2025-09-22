@@ -18,7 +18,11 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
 
         $details = parsePaymentProofValue($o['payment_proof'] ?? null, $o['reference_no'] ?? null);
 
+
+        $details = parsePaymentProofValue($o['payment_proof'] ?? null, $o['reference_no'] ?? null);
+
         $details = parsePaymentProofValue($o['payment_proof'] ?? null);
+
 
         fputcsv($out, [
             $o['id'],
@@ -191,7 +195,10 @@ $end_record = min($offset + $records_per_page, $total_records);
                             <td><?=htmlspecialchars($o['payment_method'])?></td>
                             <?php $paymentDetails = parsePaymentProofValue($o['payment_proof'] ?? null, $o['reference_no'] ?? null); ?>
 
+
+
                             <?php $paymentDetails = parsePaymentProofValue($o['payment_proof'] ?? null); ?>
+
 
                             <td>
                                 <?php if(!empty($paymentDetails['reference'])): ?>

@@ -158,8 +158,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
             $stmt->execute([$customer_name, $contact, $address, $total, $payment_method, $paymentData, 'pending']);
         }
 
+
         $stmt = $pdo->prepare('INSERT INTO orders (customer_name, contact, address, total, payment_method, payment_proof, status) VALUES (?, ?, ?, ?, ?, ?, ?)');
         $stmt->execute([$customer_name, $contact, $address, $total, $payment_method, $paymentData, 'pending']);
+
 
         $order_id = $pdo->lastInsertId();
 
