@@ -101,6 +101,7 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['pos_checkout'])) {
 }
 
 
+$onlineOrdersStmt = $pdo->prepare("
     SELECT * FROM orders
     WHERE
         (payment_method IS NOT NULL AND payment_method <> '' AND LOWER(payment_method) <> 'cash')
