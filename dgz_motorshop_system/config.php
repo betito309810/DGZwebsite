@@ -13,5 +13,34 @@ function db() {
     ]);
     return $pdo;
 }
+/**
+ * Normalize payment proof information so callers can reliably access
+ * the reference number and optional image path.
+ */
+function parsePaymentProofValue($value) {
+    $details = [
+        'reference' => null,
+        'image' => null,
+    ];
+
+    if (empty($value)) {
+        return $details;
+    }
+
+    $decoded = json_decode($value, true);
+    if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+        if (!empty($decoded['reference'])) {
+            $details['reference'] = (string) $decoded['reference'];
+        }
+        if (!empty($decoded['image'])) {
+            $details['image'] = (string) $decoded['image'];
+        }
+    } else {
+        // Legacy orders stored only the uploaded image path.
+        $details['image'] = (string) $value;
+    }
+
+    return $details;
+}
 session_start();
 ?>
