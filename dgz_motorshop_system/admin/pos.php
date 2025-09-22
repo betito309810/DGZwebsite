@@ -1,194 +1,205 @@
 <?php
 require __DIR__ . '/../config.php';
-if(empty($_SESSION['user_id'])){ header('Location: login.php'); exit; }
+
+if (empty($_SESSION['user_id'])) {
+    header('Location: login.php');
+    exit;
+}
+
 $pdo = db();
 
-if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status'])) {
+$allowedStatuses = ['pending', 'approved', 'completed'];
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status'])) {
     $orderId = isset($_POST['order_id']) ? (int) $_POST['order_id'] : 0;
-
-    $newStatus = isset($_POST['new_status']) ? $_POST['new_status'] : '';
-    $allowedStatuses = array('pending','approved','completed');
-
-    if($orderId > 0 && in_array($newStatus, $allowedStatuses, true)) {
-        $stmt = $pdo->prepare('UPDATE orders SET status = ? WHERE id = ?');
-        $stmt->execute(array($newStatus, $orderId));
-
-    $newStatus = $_POST['new_status'] ?? '';
-    $allowedStatuses = ['pending','approved','completed'];
-
-    if($orderId > 0 && in_array($newStatus, $allowedStatuses, true)) {
-        $stmt = $pdo->prepare('UPDATE orders SET status = ? WHERE id = ?');
-        $stmt->execute([$newStatus, $orderId]);
-
-
-        $_SESSION['pos_active_tab'] = 'online';
-        header('Location: pos.php?tab=online&status_updated=1');
-        exit;
-    }
+    $newStatus = isset($_POST['new_status']) ? strtolower(trim((string) $_POST['new_status'])) : '';
 
     $_SESSION['pos_active_tab'] = 'online';
-        header('Location: pos.php?status_updated=0');
+
+    if ($orderId > 0 && in_array($newStatus, $allowedStatuses, true)) {
+        $stmt = $pdo->prepare('UPDATE orders SET status = ? WHERE id = ?');
+        $success = $stmt->execute([$newStatus, $orderId]);
+        $statusParam = $success ? '1' : '0';
+    } else {
+        $statusParam = '0';
+    }
+
+    header('Location: pos.php?' . http_build_query([
+        'tab' => 'online',
+        'status_updated' => $statusParam,
+    ]));
     exit;
-} 
-
-
-$products = $pdo->query('SELECT * FROM products')->fetchAll();
-
-$activeTab = 'walkin';
-
-if (!empty($_SESSION['pos_active_tab']) && in_array($_SESSION['pos_active_tab'], array('walkin','online'), true)) {
-    $activeTab = $_SESSION['pos_active_tab'];
-    unset($_SESSION['pos_active_tab']);
-} elseif (!empty($_GET['tab']) && in_array($_GET['tab'], array('walkin','online'), true)) {
-    $activeTab = $_GET['tab'];
 }
 
-if (!empty($_SESSION['pos_active_tab']) && in_array($_SESSION['pos_active_tab'], ['walkin','online'], true)) {
-    $activeTab = $_SESSION['pos_active_tab'];
-    unset($_SESSION['pos_active_tab']);
-} elseif (!empty($_GET['tab']) && in_array($_GET['tab'], ['walkin','online'], true)) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pos_checkout'])) {
+    $productIds = isset($_POST['product_id']) ? (array) $_POST['product_id'] : [];
+    $quantities = isset($_POST['qty']) ? (array) $_POST['qty'] : [];
+    $amountPaid = isset($_POST['amount_paid']) ? (float) $_POST['amount_paid'] : 0.0;
 
-    $activeTab = $_GET['tab'];
-}
-
-if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['pos_checkout'])) {
-    // simple POS flow: product_id[], qty[]
-    $items = isset($_POST['product_id']) ? $_POST['product_id'] : array();
-    $qtys = isset($_POST['qty']) ? $_POST['qty'] : array();
-    $amount_paid = isset($_POST['amount_paid']) ? floatval($_POST['amount_paid']) : 0; // FIX: Get amount paid from form
-    
-    if (empty($items)) {
+    if (empty($productIds)) {
+        $_SESSION['pos_active_tab'] = 'walkin';
         echo "<script>alert('No item selected in POS!'); window.location='pos.php';</script>";
         exit;
     }
 
-    $salesTotal = 0;
-    foreach($items as $i=>$pid){
-        $pstmt = $pdo->prepare('SELECT * FROM products WHERE id=?');
-        $pstmt->execute(array(intval($pid)));
-        $p = $pstmt->fetch();
-        if($p){
-            $q = max(1,intval($qtys[$i]));
-            if ($q > $p['quantity']) {
-                $q = $p['quantity']; // clamp to available
-            }
-            $salesTotal += $p['price'] * $q;
+    $cartItems = [];
+    $salesTotal = 0.0;
+
+    foreach ($productIds as $index => $rawProductId) {
+        $productId = (int) $rawProductId;
+        if ($productId <= 0) {
+            continue;
         }
+
+        $qty = isset($quantities[$index]) ? (int) $quantities[$index] : 0;
+        if ($qty <= 0) {
+            $qty = 1;
+        }
+
+        $productStmt = $pdo->prepare('SELECT id, name, price, quantity FROM products WHERE id = ?');
+        $productStmt->execute([$productId]);
+        $product = $productStmt->fetch();
+
+        if (!$product) {
+            continue;
+        }
+
+        $availableQty = (int) $product['quantity'];
+        if ($availableQty <= 0) {
+            continue;
+        }
+
+        if ($qty > $availableQty) {
+            $qty = $availableQty;
+        }
+
+        $lineTotal = (float) $product['price'] * $qty;
+        $salesTotal += $lineTotal;
+
+        $cartItems[] = [
+            'id' => (int) $product['id'],
+            'qty' => $qty,
+            'price' => (float) $product['price'],
+        ];
     }
 
-    // FIX: Validate payment amount
-    if ($amount_paid < $salesTotal) {
+    if (empty($cartItems)) {
+        $_SESSION['pos_active_tab'] = 'walkin';
+        echo "<script>alert('No item selected in POS!'); window.location='pos.php';</script>";
+        exit;
+    }
+
+    if ($amountPaid < $salesTotal) {
+        $_SESSION['pos_active_tab'] = 'walkin';
         echo "<script>alert('Insufficient payment amount!'); window.location='pos.php';</script>";
         exit;
     }
 
-    // Calculate VAT components
     $vatable = $salesTotal / 1.12;
     $vat = $salesTotal - $vatable;
-    $change = $amount_paid - $salesTotal; // FIX: Calculate change
+    $change = $amountPaid - $salesTotal;
 
     try {
-        // Begin transaction
         $pdo->beginTransaction();
 
-        // FIX: Create order with amount_paid and change
-        $stmt = $pdo->prepare('INSERT INTO orders (customer_name, contact, address, total, payment_method, status, vatable, vat, amount_paid, change_amount) VALUES (?,?,?,?,?,?,?,?,?,?)');
-        $stmt->execute(array('Walk-in', 'N/A', 'N/A', $salesTotal, 'Cash', 'completed', $vatable, $vat, $amount_paid, $change));
-        $order_id = $pdo->lastInsertId();
+        $orderStmt = $pdo->prepare('INSERT INTO orders (customer_name, contact, address, total, payment_method, status, vatable, vat, amount_paid, change_amount) VALUES (?,?,?,?,?,?,?,?,?,?)');
+        $orderStmt->execute([
+            'Walk-in',
+            'N/A',
+            'N/A',
+            $salesTotal,
+            'Cash',
+            'completed',
+            $vatable,
+            $vat,
+            $amountPaid,
+            $change,
+        ]);
 
-        // Process items
-        foreach($items as $i=>$pid){
-            $pstmt = $pdo->prepare('SELECT * FROM products WHERE id=?');
-            $pstmt->execute(array(intval($pid)));
-            $p = $pstmt->fetch();
-            if($p){
-                $q = max(1,intval($qtys[$i]));
-                if ($q > $p['quantity']) {
-                    $q = $p['quantity'];
-                }
-                // Insert order item
-                $pdo->prepare('INSERT INTO order_items (order_id,product_id,qty,price) VALUES (?,?,?,?)')
-                    ->execute(array($order_id, $p['id'], $q, $p['price']));
+        $orderId = (int) $pdo->lastInsertId();
 
-                // Update product quantity
-                $pdo->prepare('UPDATE products SET quantity = quantity - ? WHERE id = ?')
-                    ->execute(array($q, $p['id']));
-            }
+        $itemInsertStmt = $pdo->prepare('INSERT INTO order_items (order_id, product_id, qty, price) VALUES (?,?,?,?)');
+        $inventoryUpdateStmt = $pdo->prepare('UPDATE products SET quantity = quantity - ? WHERE id = ?');
+
+        foreach ($cartItems as $item) {
+            $itemInsertStmt->execute([$orderId, $item['id'], $item['qty'], $item['price']]);
+            $inventoryUpdateStmt->execute([$item['qty'], $item['id']]);
         }
 
-        // Commit transaction
         $pdo->commit();
-        
-        // FIX: Pass transaction data to the success page
-        header('Location: pos.php?ok=1&order_id=' . $order_id . '&amount_paid=' . $amount_paid . '&change=' . $change);
+
+        $params = [
+            'ok' => 1,
+            'order_id' => $orderId,
+            'amount_paid' => number_format($amountPaid, 2, '.', ''),
+            'change' => number_format($change, 2, '.', ''),
+        ];
+
+        header('Location: pos.php?' . http_build_query($params));
         exit;
-    } catch (Exception $e) {
-        // Rollback on error
+    } catch (Throwable $exception) {
         $pdo->rollBack();
-        echo "<script>alert('Error processing transaction: " . addslashes($e->getMessage()) . "'); window.location='pos.php';</script>";
+        $_SESSION['pos_active_tab'] = 'walkin';
+        $message = addslashes($exception->getMessage());
+        echo "<script>alert('Error processing transaction: {$message}'); window.location='pos.php';</script>";
         exit;
     }
 }
 
+$productQuery = $pdo->query('SELECT id, name, price, quantity FROM products ORDER BY name');
+$products = $productQuery->fetchAll();
 
-$onlineOrdersStmt = $pdo->prepare("
-    SELECT * FROM orders
-    WHERE
-        (payment_method IS NOT NULL AND LOWER(payment_method) = 'gcash')
-        OR (payment_proof IS NOT NULL AND payment_proof <> '')
-        OR (status IS NOT NULL AND LOWER(status) IN ('pending','approved'))
-    ORDER BY created_at DESC
-");
-$onlineOrdersStmt->execute();
-$onlineOrders = $onlineOrdersStmt->fetchAll();
-foreach ($onlineOrders as &$onlineOrder) {
-    $details = parsePaymentProofValue(
-        isset($onlineOrder['payment_proof']) ? $onlineOrder['payment_proof'] : null,
-        isset($onlineOrder['reference_no']) ? $onlineOrder['reference_no'] : null
-    );
+$productCatalog = array_map(static function (array $product): array {
+    return [
+        'id' => (int) $product['id'],
+        'name' => (string) $product['name'],
+        'price' => (float) $product['price'],
+        'quantity' => (int) $product['quantity'],
+    ];
+}, $products);
+
+$allowedTabs = ['walkin', 'online'];
+$activeTab = 'walkin';
+
+if (!empty($_SESSION['pos_active_tab']) && in_array($_SESSION['pos_active_tab'], $allowedTabs, true)) {
+    $activeTab = $_SESSION['pos_active_tab'];
+    unset($_SESSION['pos_active_tab']);
+} elseif (!empty($_GET['tab']) && in_array($_GET['tab'], $allowedTabs, true)) {
+    $activeTab = $_GET['tab'];
 }
 
-$onlineOrdersStmt = $pdo->prepare("
-    SELECT * FROM orders
-    WHERE
+$onlineOrdersStmt = $pdo->prepare(
+    "SELECT * FROM orders
+     WHERE
         (payment_method IS NOT NULL AND payment_method <> '' AND LOWER(payment_method) = 'gcash')
         OR (payment_proof IS NOT NULL AND payment_proof <> '')
         OR status IN ('pending','approved')
-    ORDER BY created_at DESC
-");
-
+     ORDER BY created_at DESC"
+);
 $onlineOrdersStmt->execute();
 $onlineOrders = $onlineOrdersStmt->fetchAll();
 
-foreach ($onlineOrders as &$onlineOrder) {
-    $details = parsePaymentProofValue(
-        $onlineOrder['payment_proof'] ?? null,
-        $onlineOrder['reference_no'] ?? null  // Using fallback reference if you have this column
-    );
-    
-
-    $onlineOrder['reference_number'] = $details['reference'];
-    $onlineOrder['proof_image'] = $details['image'];
+foreach ($onlineOrders as &$order) {
+    $details = parsePaymentProofValue($order['payment_proof'] ?? null, $order['reference_no'] ?? null);
+    $order['reference_number'] = $details['reference'];
+    $order['proof_image'] = $details['image'];
+    $order['status'] = strtolower((string) ($order['status'] ?? 'pending'));
 }
-unset($onlineOrder);
-
-$statusOptions = array(
-    'pending' => 'Pending',
-    'approved' => 'Approved',
-    'completed' => 'Completed'
-);
-
+unset($order);
 
 $statusOptions = [
     'pending' => 'Pending',
     'approved' => 'Approved',
-    'completed' => 'Completed'
+    'completed' => 'Completed',
 ];
 
-
+$productCatalogJson = json_encode($productCatalog, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
+if ($productCatalogJson === false) {
+    $productCatalogJson = '[]';
+}
 ?>
 <!doctype html>
-<html>
+<html lang="en">
 
 <head>
     <meta charset="utf-8">
@@ -200,7 +211,6 @@ $statusOptions = [
 </head>
 
 <body>
-    <!-- Sidebar -->
     <aside class="sidebar" id="sidebar">
         <div class="sidebar-header">
             <div class="logo">
@@ -228,7 +238,7 @@ $statusOptions = [
             </div>
             <div class="nav-item">
                 <a href="pos.php" class="nav-link active">
-                    <i class="fas fa-cash-register nav-icon "></i>
+                    <i class="fas fa-cash-register nav-icon"></i>
                     POS
                 </a>
             </div>
@@ -240,20 +250,19 @@ $statusOptions = [
             </div>
         </nav>
     </aside>
-    <!-- Main Content -->
+
     <main class="main-content">
-        <!-- Header -->
         <header class="header">
             <div class="header-left">
-                <button class="mobile-toggle" onclick="toggleSidebar()">
+                <button class="mobile-toggle" type="button">
                     <i class="fas fa-bars"></i>
                 </button>
                 <h2>POS</h2>
             </div>
             <div class="user-menu">
-                <div class="user-avatar" onclick="toggleDropdown()">
+                <button type="button" class="user-avatar" aria-haspopup="true" aria-expanded="false">
                     <i class="fas fa-user"></i>
-                </div>
+                </button>
                 <div class="dropdown-menu" id="userDropdown">
                     <a href="profile.php" class="dropdown-item">
                         <i class="fas fa-user-cog"></i> Profile
@@ -269,346 +278,81 @@ $statusOptions = [
         </header>
 
         <div class="pos-tabs">
-
-            <button type="button" class="pos-tab-button<?= $activeTab === 'walkin' ? ' active' : '' ?>" data-target="walkinTab" data-tab="walkin">
+            <button type="button" class="pos-tab-button<?= $activeTab === 'walkin' ? ' active' : '' ?>" data-tab="walkin">
                 <i class="fas fa-store"></i>
                 POS Checkout
             </button>
-            <button type="button" class="pos-tab-button<?= $activeTab === 'online' ? ' active' : '' ?>" data-target="onlineTab" data-tab="online">
+            <button type="button" class="pos-tab-button<?= $activeTab === 'online' ? ' active' : '' ?>" data-tab="online">
                 <i class="fas fa-shopping-bag"></i>
                 Online Orders
             </button>
         </div>
 
         <div id="walkinTab" class="tab-panel<?= $activeTab === 'walkin' ? ' active' : '' ?>">
-        <div style="display: flex; align-items: center; gap: 0px; margin: 15px 0; flex-wrap: wrap;">
-            <button type="button" id="openProductModal"
-                style="padding: 8px 18px; background: #3498db; color: #fff; border: none; border-radius: 6px; font-size: 15px; cursor: pointer;"><i
-                    class="fas fa-search"></i> Search Product</button>
-                    <!-- Large total display -->
-            <div class="top-total-simple" style="font-size: 2.2rem; font-weight: bold; color: #111; min-width: 85%; text-align: right;">
-                <span id="topTotalAmountSimple">₱0.00</span>
-
-
-            <button type="button" class="pos-tab-button<?= $activeTab === 'walkin' ? ' active' : '' ?>"
-                data-target="walkinTab" data-tab="walkin">
-                <i class="fas fa-store"></i>
-                POS Checkout
-            </button>
-            <button type="button" class="pos-tab-button<?= $activeTab === 'online' ? ' active' : '' ?>"
-                data-target="onlineTab" data-tab="online">
-
-                <button type="button" class="pos-tab-button active" data-target="walkinTab">
-                    <i class="fas fa-store"></i>
-                    POS Checkout
+            <div class="walkin-actions">
+                <button type="button" id="openProductModal" class="primary-button">
+                    <i class="fas fa-search"></i> Search Product
                 </button>
-                <button type="button" class="pos-tab-button" data-target="onlineTab">
+                <div class="top-total-simple">
+                    <span id="topTotalAmountSimple">₱0.00</span>
+                </div>
+            </div>
 
-                    <i class="fas fa-shopping-bag"></i>
-                    Online Orders
-                </button>
-
-        </div>
-
-
-        <div id="walkinTab" class="tab-panel<?= $activeTab === 'walkin' ? ' active' : '' ?>">
-
-            <div id="walkinTab" class="tab-panel active">
-
-                <div style="display: flex; align-items: center; gap: 0px; margin: 15px 0; flex-wrap: wrap;">
-                    <button type="button" id="openProductModal"
-                        style="padding: 8px 18px; background: #3498db; color: #fff; border: none; border-radius: 6px; font-size: 15px; cursor: pointer;"><i
-                            class="fas fa-search"></i> Search Product</button>
-                    <!-- Large total display -->
-                    <div class="top-total-simple"
-                        style="font-size: 2.2rem; font-weight: bold; color: #111; min-width: 85%; text-align: right;">
-                        <span id="topTotalAmountSimple">₱0.00</span>
-                    </div>
-                    <!-- Optionally keep the small total below for mobile or reference -->
-                    <div class="top-total" style="display:none;">Total Amount: ₱ <span id="topTotalAmount">0.00</span>
-                    </div>
-
-
-                    <form method="post" id="posForm">
-                        <div class="pos-table-container">
-                            <table id="posTable">
-                                <thead>
-                                    <tr>
-                                        <th>Product</th>
-                                        <th>Price</th>
-                                        <th>Available</th>
-                                        <th>Qty</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="posTableBody">
-                                    <!-- JS will populate rows here -->
-                                </tbody>
-                            </table>
-                            <div class="pos-empty-state" id="posEmptyState">
-                                <i class="fas fa-shopping-cart"></i>
-                                <p>No items in cart. Click "Search Product" to add items.</p>
-                            </div>
-                        </div>
-                        <!-- POS Totals Panel (separate from the table) -->
-                        <div id="totalsPanel" class="totals-panel">
-                            <div class="totals-item">
-                                <label>Sales Total</label>
-                                <div id="salesTotalAmount" class="value">₱0.00</div>
-                            </div>
-                            <div class="totals-item">
-                                <label>Discount</label>
-                                <div id="discountAmount" class="value">₱0.00</div>
-                            </div>
-                            <div class="totals-item">
-                                <label>Vatable</label>
-                                <div id="vatableAmount" class="value">₱0.00</div>
-                            </div>
-                            <div class="totals-item">
-                                <label>VAT (12%)</label>
-                                <div id="vatAmount" class="value">₱0.00</div>
-                            </div>
-                            <div class="totals-item">
-                                <label for="amountReceived">Amount Received</label>
-                                <input type="number" id="amountReceived" name="amount_paid" min="0" step="0.01"
-                                    placeholder="0.00">
-                            </div>
-                            <div class="totals-item">
-                                <label>Change</label>
-                                <div id="changeAmount" class="value">₱0.00</div>
-                            </div>
-                        </div>
-
-
-                        <button type="button" id="clearPosTable"
-                            style="margin:10px 0 0 0; background:#e74c3c; color:#fff; border:none; border-radius:6px; font-size:15px; padding:8px 18px; cursor:pointer;">Clear</button>
-                        <button name="pos_checkout" type="submit">Settle Payment (Complete)</button>
-                    </form>
-                    <p></p>
-                    <?php if(!empty($_GET['ok'])) echo '<p>Transaction recorded.</p>'; ?>
-
-                    <!-- Receipt Preview Modal -->
-                    <div id="receiptModal"
-                        style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.3); z-index:9999; align-items:center; justify-content:center;">
-                        <div
-                            style="background:#fff; border-radius:10px; max-width:400px; width:95%; margin:auto; padding:24px; position:relative; box-shadow:0 8px 32px rgba(0,0,0,0.18);">
-                            <button id="closeReceiptModal"
-                                style="position:absolute; top:10px; right:10px; background:none; border:none; font-size:20px; color:#888; cursor:pointer;">&times;</button>
-                            <div id="receiptContent" style="font-family: 'Courier New', monospace; font-size: 14px;">
-                                <div style="text-align: center; margin-bottom: 20px;">
-                                    <h2 style="margin: 0;">DGZ Motorshop</h2>
-                                    <p style="margin: 5px 0;">123 Main Street</p>
-                                    <p style="margin: 5px 0;">Phone: (123) 456-7890</p>
-                                    <p style="margin: 5px 0;">Receipt #: <span id="receiptNumber"></span></p>
-                                    <p style="margin: 5px 0;">Date: <span id="receiptDate"></span></p>
-                                    <p style="margin: 5px 0;">Cashier: <span id="receiptCashier"></span></p>
-                                </div>
-                                <div
-                                    style="border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 10px 0; margin: 10px 0;">
-                                    <table id="receiptItems" style="width: 100%; border-collapse: collapse;">
-                                        <thead>
-                                            <tr>
-                                                <th style="text-align: left;">Item</th>
-                                                <th style="text-align: right;">Qty</th>
-                                                <th style="text-align: right;">Price</th>
-                                                <th style="text-align: right;">Total</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <!-- Items will be inserted here -->
-                                        </tbody>
-                                    </table>
-                                </div>
-                                <div style="margin-top: 10px;">
-                                    <div style="display: flex; justify-content: space-between;">
-                                        <span>Sales Total:</span>
-                                        <span id="receiptSalesTotal">₱0.00</span>
-                                    </div>
-                                    <div style="display: flex; justify-content: space-between; margin-top: 5px;">
-                                        <span>Discount:</span>
-                                        <span id="receiptDiscount">₱0.00</span>
-                                    </div>
-                                    <div style="display: flex; justify-content: space-between; margin-top: 5px;">
-                                        <span>Vatable:</span>
-                                        <span id="receiptVatable">₱0.00</span>
-                                    </div>
-                                    <div style="display: flex; justify-content: space-between; margin-top: 5px;">
-                                        <span>VAT (12%):</span>
-                                        <span id="receiptVat">₱0.00</span>
-                                    </div>
-                                    <div style="display: flex; justify-content: space-between; margin-top: 5px;">
-                                        <span>Amount Paid:</span>
-                                        <span id="receiptAmountPaid">₱0.00</span>
-                                    </div>
-                                    <div style="display: flex; justify-content: space-between; margin-top: 5px;">
-                                        <span>Change:</span>
-                                        <span id="receiptChange">₱0.00</span>
-                                    </div>
-                                </div>
-                                <div style="text-align: center; margin-top: 20px;">
-                                    <p>Thank you for shopping!</p>
-                                    <p>Please come again</p>
-                                </div>
-                            </div>
-                            <div style="text-align: center; margin-top: 20px;">
-                                <button onclick="printReceipt()"
-                                    style="background: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">
-                                    <i class="fas fa-print"></i> Print Receipt
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Product Search Modal -->
-                    <div id="productModal"
-                        style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.3); z-index:9999; align-items:center; justify-content:center;">
-                        <div
-                            style="background:#fff; border-radius:10px; max-width:600px; width:95%; margin:auto; padding:24px; position:relative; box-shadow:0 8px 32px rgba(0,0,0,0.18);">
-                            <button id="closeProductModal"
-                                style="position:absolute; top:10px; right:10px; background:none; border:none; font-size:20px; color:#888; cursor:pointer;">&times;</button>
-                            <h3 style="margin-bottom:12px;">Search Product</h3>
-                            <input type="text" id="productSearchInput" placeholder="Type product name..."
-                                style="width:100%; padding:8px 10px; border:1px solid #ccc; border-radius:5px; margin-bottom:12px;">
-                            <div style="max-height:320px; overflow-y:auto;">
-                                <table id="productSearchTable" style="width:100%; border-collapse:collapse;">
-                                    <thead>
-                                        <tr style="background:#f8fafc;">
-                                            <th style="padding:8px 6px; text-align:left;">Product</th>
-                                            <th style="padding:8px 6px; text-align:right;">Price</th>
-                                            <th style="padding:8px 6px; text-align:center;">Stock</th>
-                                            <th style="padding:8px 6px; text-align:center;">Select</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="productSearchTableBody">
-                                        <!-- JS will populate -->
-                                    </tbody>
-                                </table>
-                            </div>
-                            <button id="addSelectedProducts"
-                                style="margin-top:14px; background:#3498db; color:#fff; border:none; border-radius:6px; font-size:15px; padding:8px 18px; cursor:pointer; width:100%;">Add
-                            </button>
-                        </div>
-                    </div>
-                </div><!-- /#walkinTab -->
-
-
-                <div id="onlineTab" class="tab-panel<?= $activeTab === 'online' ? ' active' : '' ?>">
-
-                    <div id="onlineTab" class="tab-panel">
-
-                        <?php if(isset($_GET['status_updated'])): ?>
-                        <?php $success = $_GET['status_updated'] === '1'; ?>
-                        <div class="status-alert <?= $success ? 'success' : 'error' ?>">
-                            <i class="fas <?= $success ? 'fa-check-circle' : 'fa-exclamation-circle' ?>"></i>
-                            <?= $success ? 'Order status updated.' : 'Unable to update order status.' ?>
-                        </div>
-                        <?php endif; ?>
-
-                        <div class="online-orders-container">
-                            <table class="online-orders-table">
-                                <thead>
-                                    <tr>
-                                        <th>ID</th>
-                                        <th>Customer</th>
-                                        <th>Contact</th>
-                                        <th>Total</th>
-                                        <th>Reference</th>
-                                        <th>Proof</th>
-                                        <th>Status</th>
-                                        <th>Placed</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php if(empty($onlineOrders)): ?>
-                                    <tr>
-                                        <td colspan="8" class="empty-cell">
-                                            <i class="fas fa-inbox"></i>
-                                            No online orders yet.
-                                        </td>
-                                    </tr>
-                                    <?php else: ?>
-                                    <?php foreach($onlineOrders as $order): ?>
-                                    <?php $imagePath = $order['proof_image'] ? '../' . ltrim($order['proof_image'], '/') : ''; ?>
-                                    <tr>
-                                        <td>#<?= (int) $order['id'] ?></td>
-                                        <td><?= htmlspecialchars($order['customer_name'] ?? 'Customer') ?></td>
-                                        <td><?= htmlspecialchars($order['contact'] ?? 'N/A') ?></td>
-                                        <td>₱<?= number_format((float) $order['total'], 2) ?></td>
-                                        <td>
-                                            <?php if(!empty($order['reference_number'])): ?>
-                                            <span
-                                                class="reference-badge"><?= htmlspecialchars($order['reference_number']) ?></span>
-                                            <?php else: ?>
-                                            <span class="muted">Not provided</span>
-                                            <?php endif; ?>
-                                        </td>
-                                        <td>
-                                            <button type="button" class="view-proof-btn"
-                                                data-image="<?= htmlspecialchars($imagePath) ?>"
-                                                data-reference="<?= htmlspecialchars($order['reference_number'] ?? '') ?>"
-                                                data-customer="<?= htmlspecialchars($order['customer_name'] ?? 'Customer') ?>">
-                                                <i class="fas fa-receipt"></i> View
-                                            </button>
-                                        </td>
-                                        <td>
-                                            <span
-                                                class="status-badge status-<?= htmlspecialchars($order['status']) ?>"><?= htmlspecialchars(ucfirst($order['status'])) ?></span>
-                                            <form method="post" class="status-form">
-                                                <input type="hidden" name="order_id" value="<?= (int) $order['id'] ?>">
-                                                <input type="hidden" name="update_order_status" value="1">
-                                                <select name="new_status">
-                                                    <?php foreach($statusOptions as $value => $label): ?>
-                                                    <option value="<?= $value ?>"
-                                                        <?= $order['status'] === $value ? 'selected' : '' ?>>
-                                                        <?= $label ?></option>
-                                                    <?php endforeach; ?>
-                                                </select>
-                                                <button type="submit" class="status-save">Update</button>
-                                            </form>
-                                        </td>
-                                        <td><?= date('M d, Y g:i A', strtotime($order['created_at'])) ?></td>
-                                    </tr>
-                                    <?php endforeach; ?>
-                                    <?php endif; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-
-        <!-- Product Search Modal -->
-        <div id="productModal"
-            style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.3); z-index:9999; align-items:center; justify-content:center;">
-            <div
-                style="background:#fff; border-radius:10px; max-width:600px; width:95%; margin:auto; padding:24px; position:relative; box-shadow:0 8px 32px rgba(0,0,0,0.18);">
-                <button id="closeProductModal"
-                    style="position:absolute; top:10px; right:10px; background:none; border:none; font-size:20px; color:#888; cursor:pointer;">&times;</button>
-                <h3 style="margin-bottom:12px;">Search Product</h3>
-                <input type="text" id="productSearchInput" placeholder="Type product name..."
-                    style="width:100%; padding:8px 10px; border:1px solid #ccc; border-radius:5px; margin-bottom:12px;">
-                <div style="max-height:320px; overflow-y:auto;">
-                    <table id="productSearchTable" style="width:100%; border-collapse:collapse;">
+            <form method="post" id="posForm">
+                <div class="pos-table-container">
+                    <table id="posTable">
                         <thead>
-                            <tr style="background:#f8fafc;">
-                                <th style="padding:8px 6px; text-align:left;">Product</th>
-                                <th style="padding:8px 6px; text-align:right;">Price</th>
-                                <th style="padding:8px 6px; text-align:center;">Stock</th>
-                                <th style="padding:8px 6px; text-align:center;">Select</th>
+                            <tr>
+                                <th>Product</th>
+                                <th>Price</th>
+                                <th>Available</th>
+                                <th>Qty</th>
                             </tr>
                         </thead>
-                        <tbody id="productSearchTableBody">
-                            <!-- JS will populate -->
-                        </tbody>
+                        <tbody id="posTableBody"></tbody>
                     </table>
+                    <div class="pos-empty-state" id="posEmptyState">
+                        <i class="fas fa-shopping-cart"></i>
+                        <p>No items in cart. Click "Search Product" to add items.</p>
+                    </div>
                 </div>
-                <button id="addSelectedProducts"
-                    style="margin-top:14px; background:#3498db; color:#fff; border:none; border-radius:6px; font-size:15px; padding:8px 18px; cursor:pointer; width:100%;">Add
-                </button>
-            </div>
+
+                <div id="totalsPanel" class="totals-panel">
+                    <div class="totals-item">
+                        <label>Sales Total</label>
+                        <div id="salesTotalAmount" class="value">₱0.00</div>
+                    </div>
+                    <div class="totals-item">
+                        <label>Discount</label>
+                        <div id="discountAmount" class="value">₱0.00</div>
+                    </div>
+                    <div class="totals-item">
+                        <label>Vatable</label>
+                        <div id="vatableAmount" class="value">₱0.00</div>
+                    </div>
+                    <div class="totals-item">
+                        <label>VAT (12%)</label>
+                        <div id="vatAmount" class="value">₱0.00</div>
+                    </div>
+                    <div class="totals-item">
+                        <label for="amountReceived">Amount Received</label>
+                        <input type="number" id="amountReceived" name="amount_paid" min="0" step="0.01" placeholder="0.00">
+                    </div>
+                    <div class="totals-item">
+                        <label>Change</label>
+                        <div id="changeAmount" class="value">₱0.00</div>
+                    </div>
+                </div>
+
+                <div class="pos-actions">
+                    <button type="button" id="clearPosTable" class="danger-button">Clear</button>
+                    <button name="pos_checkout" type="submit" class="success-button">Settle Payment (Complete)</button>
+                </div>
+            </form>
         </div>
-        </div><!-- /#walkinTab -->
 
         <div id="onlineTab" class="tab-panel<?= $activeTab === 'online' ? ' active' : '' ?>">
-            <?php if(isset($_GET['status_updated'])): ?>
+            <?php if (isset($_GET['status_updated'])): ?>
                 <?php $success = $_GET['status_updated'] === '1'; ?>
                 <div class="status-alert <?= $success ? 'success' : 'error' ?>">
                     <i class="fas <?= $success ? 'fa-check-circle' : 'fa-exclamation-circle' ?>"></i>
@@ -631,7 +375,7 @@ $statusOptions = [
                         </tr>
                     </thead>
                     <tbody>
-                        <?php if(empty($onlineOrders)): ?>
+                        <?php if (empty($onlineOrders)): ?>
                             <tr>
                                 <td colspan="8" class="empty-cell">
                                     <i class="fas fa-inbox"></i>
@@ -639,43 +383,53 @@ $statusOptions = [
                                 </td>
                             </tr>
                         <?php else: ?>
-                            <?php foreach($onlineOrders as $order): ?>
-                                <?php $imagePath = $order['proof_image'] ? '../' . ltrim($order['proof_image'], '/') : ''; ?>
+                            <?php foreach ($onlineOrders as $order): ?>
+                                <?php
+                                $imagePath = '';
+                                if (!empty($order['proof_image'])) {
+                                    $imagePath = '../' . ltrim($order['proof_image'], '/');
+                                }
+                                $statusValue = $order['status'] !== '' ? $order['status'] : 'pending';
+                                $createdAt = !empty($order['created_at']) ? date('M d, Y g:i A', strtotime($order['created_at'])) : 'N/A';
+                                ?>
                                 <tr>
                                     <td>#<?= (int) $order['id'] ?></td>
-                                    <td><?= htmlspecialchars(isset($order['customer_name']) ? $order['customer_name'] : 'Customer') ?></td>
-                                    <td><?= htmlspecialchars(isset($order['contact']) ? $order['contact'] : 'N/A') ?></td>
+                                    <td><?= htmlspecialchars($order['customer_name'] ?? 'Customer', ENT_QUOTES, 'UTF-8') ?></td>
+                                    <td><?= htmlspecialchars($order['contact'] ?? 'N/A', ENT_QUOTES, 'UTF-8') ?></td>
                                     <td>₱<?= number_format((float) $order['total'], 2) ?></td>
                                     <td>
-                                        <?php if(!empty($order['reference_number'])): ?>
-                                            <span class="reference-badge"><?= htmlspecialchars($order['reference_number']) ?></span>
+                                        <?php if (!empty($order['reference_number'])): ?>
+                                            <span class="reference-badge"><?= htmlspecialchars($order['reference_number'], ENT_QUOTES, 'UTF-8') ?></span>
                                         <?php else: ?>
                                             <span class="muted">Not provided</span>
                                         <?php endif; ?>
                                     </td>
                                     <td>
-                                        <button type="button"
-                                            class="view-proof-btn"
-                                            data-image="<?= htmlspecialchars($imagePath) ?>"
-                                            data-reference="<?= htmlspecialchars(isset($order['reference_number']) ? $order['reference_number'] : '') ?>"
-                                            data-customer="<?= htmlspecialchars(isset($order['customer_name']) ? $order['customer_name'] : 'Customer') ?>">
+                                        <button type="button" class="view-proof-btn"
+                                            data-image="<?= htmlspecialchars($imagePath, ENT_QUOTES, 'UTF-8') ?>"
+                                            data-reference="<?= htmlspecialchars($order['reference_number'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+                                            data-customer="<?= htmlspecialchars($order['customer_name'] ?? 'Customer', ENT_QUOTES, 'UTF-8') ?>">
                                             <i class="fas fa-receipt"></i> View
                                         </button>
                                     </td>
                                     <td>
-                                        <span class="status-badge status-<?= htmlspecialchars($order['status']) ?>"><?= htmlspecialchars(ucfirst($order['status'])) ?></span>
+                                        <span class="status-badge status-<?= htmlspecialchars($statusValue, ENT_QUOTES, 'UTF-8') ?>">
+                                            <?= htmlspecialchars(ucfirst($statusValue), ENT_QUOTES, 'UTF-8') ?>
+                                        </span>
                                         <form method="post" class="status-form">
                                             <input type="hidden" name="order_id" value="<?= (int) $order['id'] ?>">
                                             <input type="hidden" name="update_order_status" value="1">
                                             <select name="new_status">
-                                                <?php foreach($statusOptions as $value => $label): ?>
-                                                    <option value="<?= $value ?>" <?= $order['status'] === $value ? 'selected' : '' ?>><?= $label ?></option>
+                                                <?php foreach ($statusOptions as $value => $label): ?>
+                                                    <option value="<?= $value ?>" <?= $statusValue === $value ? 'selected' : '' ?>>
+                                                        <?= $label ?>
+                                                    </option>
                                                 <?php endforeach; ?>
                                             </select>
                                             <button type="submit" class="status-save">Update</button>
                                         </form>
                                     </td>
-                                    <td><?= date('M d, Y g:i A', strtotime($order['created_at'])) ?></td>
+                                    <td><?= htmlspecialchars($createdAt, ENT_QUOTES, 'UTF-8') ?></td>
                                 </tr>
                             <?php endforeach; ?>
                         <?php endif; ?>
@@ -683,887 +437,757 @@ $statusOptions = [
                 </table>
             </div>
         </div>
-
-        <div id="proofModal" class="proof-modal" aria-hidden="true">
-            <div class="proof-modal-content">
-                <button type="button" class="proof-close" id="closeProofModal">&times;</button>
-                <h3 class="proof-title">Payment Proof</h3>
-                <p class="proof-reference">Reference: <span id="proofReferenceValue">Not provided</span></p>
-                <p class="proof-customer">Customer: <span id="proofCustomerName">N/A</span></p>
-                <div class="proof-image-wrapper">
-                    <img id="proofImage" src="" alt="Payment proof preview" />
-                    <div id="proofNoImage" class="proof-empty">No proof uploaded.</div>
-                </div>
-            </div>
-        </div>
-
-                    <div id="proofModal" class="proof-modal" aria-hidden="true">
-                        <div class="proof-modal-content">
-                            <button type="button" class="proof-close" id="closeProofModal">&times;</button>
-                            <h3 class="proof-title">Payment Proof</h3>
-                            <p class="proof-reference">Reference: <span id="proofReferenceValue">Not provided</span></p>
-                            <p class="proof-customer">Customer: <span id="proofCustomerName">N/A</span></p>
-                            <div class="proof-image-wrapper">
-                                <img id="proofImage" src="" alt="Payment proof preview" />
-                                <div id="proofNoImage" class="proof-empty">No proof uploaded.</div>
-                            </div>
-                        </div>
-                    </div>
-
     </main>
 
-    <script>
-        // Prepare product data for search (from PHP)
-        const allProducts = [ < ? php foreach($products as $p) : ? > {
-            id: < ? = json_encode($p['id']) ? > ,
-            name: < ? = json_encode($p['name']) ? > ,
-            price: < ? = json_encode($p['price']) ? > ,
-            quantity: < ? = json_encode($p['quantity']) ? >
-        }, < ? php endforeach; ? > ];
+    <div id="productModal" class="modal-overlay" style="display:none;">
+        <div class="modal-content large-modal">
+            <button id="closeProductModal" type="button" class="modal-close">&times;</button>
+            <h3>Search Product</h3>
+            <input type="text" id="productSearchInput" placeholder="Type product name...">
+            <div class="modal-table-wrapper">
+                <table id="productSearchTable">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>Price</th>
+                            <th>Stock</th>
+                            <th>Select</th>
+                        </tr>
+                    </thead>
+                    <tbody id="productSearchTableBody"></tbody>
+                </table>
+            </div>
+            <button id="addSelectedProducts" type="button" class="primary-button full-width">Add</button>
+        </div>
+    </div>
 
-        // Modal open/close
-        document.getElementById('openProductModal').onclick = function () {
-            document.getElementById('productModal').style.display = 'flex';
-            document.getElementById('productSearchInput').value = '';
-            renderProductTable(); // This will show all products when modal opens
-            document.getElementById('productSearchInput').focus();
-        };
-
-        document.getElementById('closeProductModal').onclick = function () {
-            document.getElementById('productModal').style.display = 'none';
-        };
-
-        // Close modal on outside click
-        document.getElementById('productModal').onclick = function (e) {
-            if (e.target === this) this.style.display = 'none';
-        };
-
-        // Render all products in table
-        function renderProductTable(filter = '') {
-            const tbody = document.getElementById('productSearchTableBody');
-            tbody.innerHTML = '';
-            let filtered = allProducts;
-            if (filter) {
-                filtered = allProducts.filter(p => p.name.toLowerCase().includes(filter.toLowerCase()));
-            }
-            if (filtered.length === 0) {
-                const tr = document.createElement('tr');
-                tr.innerHTML =
-                    `<td colspan='4' style='text-align:center; color:#888; padding:16px;'>No products found.</td>`;
-                tbody.appendChild(tr);
-                return;
-            }
-            filtered.forEach(p => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-            <td>${p.name}</td>
-            <td style='text-align:right;'>₱${parseFloat(p.price).toFixed(2)}</td>
-            <td style='text-align:center;'>${p.quantity}</td>
-            <td style='text-align:center;'>
-                ${
-                    p.quantity > 0 
-                    ? `<input type='checkbox' class='product-select-checkbox' data-id='${p.id}'>`
-                    : `<span style="color:#e74c3c;font-size:13px;">Out of Stock</span>`
-                }
-            </td>`;
-                tbody.appendChild(tr);
-            });
-        }
-
-        // Prevent adding out-of-stock products from dev tools
-        function addProductToPOS(product) {
-            if (parseInt(product.quantity) <= 0) {
-                alert(product.name + " is out of stock and cannot be added.");
-                return;
-            }
-
-            // Check if already in table
-            const table = document.getElementById('posTable');
-            const existing = table.querySelector(`tr[data-product-id='${product.id}']`);
-            if (existing) {
-                // If already present, increment qty
-                const qtyInput = existing.querySelector('input[type=number]');
-                qtyInput.value = Math.min(parseInt(qtyInput.value) + 1, product.quantity);
-            } else {
-                // Add new row with remove button instead of checkbox
-                const tr = document.createElement('tr');
-                tr.setAttribute('data-product-id', product.id);
-                tr.innerHTML = `
-            <td class="pos-name">${product.name}</td>
-            <td class="pos-price">₱${parseFloat(product.price).toFixed(2)}</td>
-            <td class="pos-available">${product.quantity}</td>
-            <td style="display: flex; align-items: center; gap: 8px;">
-                <input type='hidden' name='product_id[]' value='${product.id}'>
-                <input type='number' class='pos-qty' name='qty[]' value='1' min='1' max='${product.quantity}'>
-                <button type='button' class='remove-btn' onclick='removeProductFromPOS(this)' 
-                        style='background:#e74c3c; color:#fff; border:none; border-radius:3px; padding:4px 6px; cursor:pointer; font-size:11px; min-width:24px; height:24px; display:flex; align-items:center; justify-content:center;'>
-                    <i class='fas fa-times'></i>
+    <div id="receiptModal" class="modal-overlay" style="display:none;">
+        <div class="modal-content receipt-modal">
+            <button id="closeReceiptModal" type="button" class="modal-close">&times;</button>
+            <div id="receiptContent" class="receipt-content">
+                <div class="receipt-header">
+                    <h2>DGZ Motorshop</h2>
+                    <p>123 Main Street</p>
+                    <p>Phone: (123) 456-7890</p>
+                    <p>Receipt #: <span id="receiptNumber"></span></p>
+                    <p>Date: <span id="receiptDate"></span></p>
+                    <p>Cashier: <span id="receiptCashier"></span></p>
+                </div>
+                <div class="receipt-body">
+                    <table id="receiptItems">
+                        <thead>
+                            <tr>
+                                <th style="text-align:left;">Item</th>
+                                <th style="text-align:right;">Qty</th>
+                                <th style="text-align:right;">Price</th>
+                                <th style="text-align:right;">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="receiptItemsBody"></tbody>
+                    </table>
+                </div>
+                <div class="receipt-totals">
+                    <div><span>Sales Total:</span> <span id="receiptSalesTotal">₱0.00</span></div>
+                    <div><span>Discount:</span> <span id="receiptDiscount">₱0.00</span></div>
+                    <div><span>Vatable:</span> <span id="receiptVatable">₱0.00</span></div>
+                    <div><span>VAT (12%):</span> <span id="receiptVat">₱0.00</span></div>
+                    <div><span>Amount Paid:</span> <span id="receiptAmountPaid">₱0.00</span></div>
+                    <div><span>Change:</span> <span id="receiptChange">₱0.00</span></div>
+                </div>
+                <div class="receipt-footer">
+                    <p>Thank you for shopping!</p>
+                    <p>Please come again.</p>
+                </div>
+            </div>
+            <div class="receipt-actions">
+                <button type="button" id="printReceiptButton" class="primary-button">
+                    <i class="fas fa-print"></i> Print Receipt
                 </button>
-            </td>`;
-                table.appendChild(tr);
-            }
+            </div>
+        </div>
+    </div>
 
-            // Hide empty state when products are added
-            updateEmptyStateVisibility();
-            savePosTableToStorage();
+    <div id="proofModal" class="proof-modal" aria-hidden="true">
+        <div class="proof-modal-content">
+            <button type="button" class="proof-close" id="closeProofModal">&times;</button>
+            <h3 class="proof-title">Payment Proof</h3>
+            <p class="proof-reference">Reference: <span id="proofReferenceValue">Not provided</span></p>
+            <p class="proof-customer">Customer: <span id="proofCustomerName">N/A</span></p>
+            <div class="proof-image-wrapper">
+                <img id="proofImage" src="" alt="Payment proof preview" />
+                <div id="proofNoImage" class="proof-empty">No proof uploaded.</div>
+            </div>
+        </div>
+    </div>
 
-            // FIXED: Always call recalcTotal after adding product
-            recalcTotal();
-        }
+    <script>
+        const productCatalog = <?= $productCatalogJson ?>;
+        const initialActiveTab = <?= json_encode($activeTab) ?>;
 
-        // Filter table as user types
-        document.getElementById('productSearchInput').oninput = function () {
-            renderProductTable(this.value.trim());
-        };
+        document.addEventListener('DOMContentLoaded', () => {
+            const posStateKey = 'posTable';
+            const tabStateKey = 'posActiveTab';
 
-        // FIXED: Function to remove product from POS table
-        function removeProductFromPOS(button) {
-            const tr = button.closest('tr');
-            tr.remove();
-            updateEmptyStateVisibility();
-            savePosTableToStorage();
-
-            // FIXED: Always call recalcTotal after removing product
-            recalcTotal();
-        }
-
-        // Add selected products to POS table
-        document.getElementById('addSelectedProducts').onclick = function () {
-            const checkboxes = document.querySelectorAll('.product-select-checkbox:checked');
-            if (checkboxes.length === 0) {
-                alert('Please select at least one product to add.');
-                return;
-            }
-            checkboxes.forEach(cb => {
-                const pid = cb.getAttribute('data-id');
-                const product = allProducts.find(p => p.id == pid);
-                if (product) addProductToPOS(product);
-            });
-            document.getElementById('productModal').style.display = 'none';
-        };
-
-        // Save POS table data to localStorage
-        function savePosTableToStorage() {
-            const rows = [];
-            document.querySelectorAll('#posTable tr[data-product-id]').forEach(tr => {
-                rows.push({
-                    id: tr.getAttribute('data-product-id'),
-                    name: tr.querySelector('.pos-name').textContent,
-                    price: tr.querySelector('.pos-price').textContent,
-                    available: tr.querySelector('.pos-available').textContent,
-                    qty: tr.querySelector('.pos-qty').value
-                });
-            });
-            localStorage.setItem('posTable', JSON.stringify(rows));
-        }
-
-        // Function to show/hide empty state based on table content
-        function updateEmptyStateVisibility() {
-            const table = document.getElementById('posTable');
-            const emptyState = document.getElementById('posEmptyState');
-            const hasProducts = table.querySelectorAll('tr[data-product-id]').length > 0;
-
-            if (hasProducts) {
-                emptyState.style.display = 'none';
-            } else {
-                emptyState.style.display = 'flex';
-            }
-        }
-        // Add this function at the top of your script section
-        function formatPeso(n) {
-            n = Number(n) || 0;
-            return '₱' + n.toLocaleString('en-PH', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2
-            });
-        }
-
-        // FIXED: Live update for totals panel with proper formatting
-        function recalcTotal() {
-            let subtotal = 0;
-            document.querySelectorAll('#posTable tr[data-product-id]').forEach(row => {
-                const price = parseFloat(row.querySelector('.pos-price').textContent.replace(/[^\d.-]/g, ''));
-                const qty = parseInt(row.querySelector('.pos-qty').value) || 0;
-                subtotal += price * qty;
-            });
-
-            const salesTotal = subtotal;
-            const discount = 0;
-            const vatable = salesTotal / 1.12;
-            const vat = Math.round((salesTotal - vatable) * 100) / 100;
-
-            // Update all totals displays with proper formatting
-            document.getElementById('salesTotalAmount').textContent = formatPeso(salesTotal);
-            document.getElementById('discountAmount').textContent = formatPeso(discount);
-            document.getElementById('vatableAmount').textContent = formatPeso(vatable);
-            document.getElementById('vatAmount').textContent = formatPeso(vat);
-            document.getElementById('topTotalAmountSimple').textContent = formatPeso(salesTotal);
-
-            // FIX: Proper change calculation with validation
-            const amountReceived = parseFloat(document.getElementById('amountReceived').value) || 0;
-            let change = 0;
-
-            if (amountReceived >= salesTotal && salesTotal > 0) {
-                change = amountReceived - salesTotal;
-            } else if (amountReceived > 0 && salesTotal > 0) {
-                // If amount received is less than total, show negative change (insufficient)
-                change = amountReceived - salesTotal;
-            }
-
-            document.getElementById('changeAmount').textContent = formatPeso(change);
-
-            // FIX: Add visual feedback for insufficient payment
-            const changeElement = document.getElementById('changeAmount');
-            if (change < 0 && salesTotal > 0) {
-                changeElement.style.color = '#e74c3c';
-                changeElement.title = 'Insufficient payment';
-            } else {
-                changeElement.style.color = '#27ae60';
-                changeElement.title = '';
-            }
-        }
-        // FIX: Improved form validation before checkout
-        document.getElementById('posForm').addEventListener('submit', function (e) {
-            const rows = document.querySelectorAll('#posTable tr[data-product-id]');
-            if (rows.length === 0) {
-                e.preventDefault();
-                document.getElementById('productModal').style.display = 'none';
-                alert('No item selected in POS!');
-                return;
-            }
-
-            const salesTotal = parseFloat(document.getElementById('salesTotalAmount').textContent.replace(
-                /[^\d.-]/g, '')) || 0;
-            const amountReceived = parseFloat(document.getElementById('amountReceived').value) || 0;
-
-            // FIX: Better validation messages
-            if (amountReceived <= 0) {
-                e.preventDefault();
-                alert('Please enter the amount received from customer!');
-                document.getElementById('amountReceived').focus();
-                return;
-            }
-
-            if (amountReceived < salesTotal) {
-                e.preventDefault();
-                const shortage = salesTotal - amountReceived;
-                alert(`Insufficient payment! Need ${formatPeso(shortage)} more.`);
-                document.getElementById('amountReceived').focus();
-                return;
-            }
-        });
-
-        // Also update the generateReceipt function to use proper formatting
-        // FIX: Generate receipt with actual transaction data
-        function generateReceiptFromTransaction() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const amountPaid = parseFloat(urlParams.get('amount_paid')) || 0;
-            const change = parseFloat(urlParams.get('change')) || 0;
-            const orderId = urlParams.get('order_id') || '';
-
-            const items = [];
-            let salesTotal = 0;
-
-            // Get items from localStorage (they should still be there)
-            const savedData = JSON.parse(localStorage.getItem('posTable') || '[]');
-            savedData.forEach(item => {
-                const price = parseFloat(item.price.replace(/[^\d.-]/g, ''));
-                const qty = parseInt(item.qty);
-                const total = price * qty;
-                salesTotal += total;
-
-                items.push({
-                    name: item.name,
-                    price: price,
-                    qty: qty,
-                    total: total
-                });
-            });
-
-            const discount = 0;
-            const vatable = salesTotal / 1.12;
-            const vat = Math.round((salesTotal - vatable) * 100) / 100;
-
-            // Populate receipt with actual transaction data
-            document.getElementById('receiptNumber').textContent = 'INV-' + (orderId || Date.now());
-            document.getElementById('receiptDate').textContent = new Date().toLocaleString();
-            document.getElementById('receiptCashier').textContent = 'Admin';
-
-            const tbody = document.getElementById('receiptItems').querySelector('tbody');
-            tbody.innerHTML = '';
-            items.forEach(item => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-            <td style="text-align: left">${item.name}</td>
-            <td style="text-align: right">${item.qty}</td>
-            <td style="text-align: right">${formatPeso(item.price)}</td>
-            <td style="text-align: right">${formatPeso(item.total)}</td>
-        `;
-                tbody.appendChild(tr);
-            });
-
-            // Update receipt totals with actual transaction data
-            document.getElementById('receiptSalesTotal').textContent = formatPeso(salesTotal);
-            document.getElementById('receiptDiscount').textContent = formatPeso(discount);
-            document.getElementById('receiptVatable').textContent = formatPeso(vatable);
-            document.getElementById('receiptVat').textContent = formatPeso(vat);
-            document.getElementById('receiptAmountPaid').textContent = formatPeso(amountPaid);
-            document.getElementById('receiptChange').textContent = formatPeso(change);
-
-            // Show receipt modal
-            document.getElementById('receiptModal').style.display = 'flex';
-        }
-        // FIX: Updated DOMContentLoaded handler
-        window.addEventListener('DOMContentLoaded', function () {
-            const data = JSON.parse(localStorage.getItem('posTable') || '[]');
-            data.forEach(item => {
-                const product = allProducts.find(p => p.id == item.id);
-                if (product) {
-                    addProductToPOS({
-                        id: item.id,
-                        name: item.name,
-                        price: item.price.replace(/[^\d.]/g, ''), // Remove ₱ and keep number
-                        quantity: item.available,
-                    });
-                    // Set the correct qty value after row is added
-                    const table = document.getElementById('posTable');
-                    const tr = table.querySelector(`tr[data-product-id='${item.id}']`);
-                    if (tr) {
-                        tr.querySelector('.pos-qty').value = item.qty;
-                    }
-                }
-            });
-
-            // Update empty state and recalculate totals
-            updateEmptyStateVisibility();
-            recalcTotal();
-
-            // FIX: Handle checkout success with proper data
-            if (window.location.search.includes('ok=1')) {
-                generateReceiptFromTransaction();
-
-                // Clear POS table and localStorage after showing receipt
-                setTimeout(() => {
-                    const table = document.getElementById('posTable');
-                    while (table.rows.length > 1) {
-                        table.deleteRow(1);
-                    }
-                    localStorage.removeItem('posTable');
-
-                    updateEmptyStateVisibility();
-                    recalcTotal();
-                }, 1000); // Small delay to ensure receipt is generated first
-
-                // Remove URL parameters without reloading
-                if (window.history.replaceState) {
-                    const url = window.location.pathname;
-                    window.history.replaceState({}, document.title, url);
-                }
-            }
-        });
-
-        // FIX: Add input validation for amount received
-        document.getElementById('amountReceived').addEventListener('input', function () {
-            // Ensure only positive numbers
-            if (this.value < 0) {
-                this.value = 0;
-            }
-            recalcTotal();
-        });
-
-        // FIX: Add Enter key support for amount received input
-        document.getElementById('amountReceived').addEventListener('keypress', function (e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                document.querySelector('button[name="pos_checkout"]').click();
-            }
-        });
-        // Function to print receipt
-        function printReceipt() {
-            const receiptContent = document.getElementById('receiptContent').innerHTML;
-            const w = window.open('', '_blank');
-            w.document.write(`
-        <html>
-            <head>
-                <title>Print Receipt</title>
-                <style>
-                    body { font-family: 'Courier New', monospace; font-size: 14px; }
-                    @media print {
-                        @page { margin: 0; }
-                        body { margin: 1cm; }
-                    }
-                </style>
-            </head>
-            <body>${receiptContent}</body>
-        </html>
-    `);
-            w.document.close();
-            w.focus();
-            w.print();
-            w.close();
-        }
-
-        // Close receipt modal
-        document.getElementById('closeReceiptModal').onclick = function () {
-            document.getElementById('receiptModal').style.display = 'none';
-        };
-
-        // Toggle user dropdown
-        function toggleDropdown() {
-            const dropdown = document.getElementById('userDropdown');
-            dropdown.classList.toggle('show');
-        }
-
-        // Toggle mobile sidebar
-        function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
-            sidebar.classList.toggle('mobile-open');
-        }
-
-        // Close dropdown when clicking outside
-        document.addEventListener('click', function (event) {
+            const mobileToggle = document.querySelector('.mobile-toggle');
             const userMenu = document.querySelector('.user-menu');
-            const dropdown = document.getElementById('userDropdown');
+            const userAvatar = document.querySelector('.user-avatar');
+            const userDropdown = document.getElementById('userDropdown');
 
-            if (!userMenu.contains(event.target)) {
-                dropdown.classList.remove('show');
+            const posForm = document.getElementById('posForm');
+            const posTableBody = document.getElementById('posTableBody');
+            const posEmptyState = document.getElementById('posEmptyState');
+            const amountReceivedInput = document.getElementById('amountReceived');
+
+            const totals = {
+                sales: document.getElementById('salesTotalAmount'),
+                discount: document.getElementById('discountAmount'),
+                vatable: document.getElementById('vatableAmount'),
+                vat: document.getElementById('vatAmount'),
+                topTotal: document.getElementById('topTotalAmountSimple'),
+                change: document.getElementById('changeAmount'),
+            };
+
+            const clearPosTableButton = document.getElementById('clearPosTable');
+            const openProductModalButton = document.getElementById('openProductModal');
+            const productModal = document.getElementById('productModal');
+            const closeProductModalButton = document.getElementById('closeProductModal');
+            const productSearchInput = document.getElementById('productSearchInput');
+            const productSearchTableBody = document.getElementById('productSearchTableBody');
+            const addSelectedProductsButton = document.getElementById('addSelectedProducts');
+
+            const receiptModal = document.getElementById('receiptModal');
+            const closeReceiptModalButton = document.getElementById('closeReceiptModal');
+            const printReceiptButton = document.getElementById('printReceiptButton');
+            const receiptItemsBody = document.getElementById('receiptItemsBody');
+
+            const proofModal = document.getElementById('proofModal');
+            const proofImage = document.getElementById('proofImage');
+            const proofReferenceValue = document.getElementById('proofReferenceValue');
+            const proofCustomerName = document.getElementById('proofCustomerName');
+            const proofNoImage = document.getElementById('proofNoImage');
+            const closeProofModalButton = document.getElementById('closeProofModal');
+
+            const tabButtons = document.querySelectorAll('.pos-tab-button');
+            const tabPanels = {
+                walkin: document.getElementById('walkinTab'),
+                online: document.getElementById('onlineTab'),
+            };
+
+            function formatPeso(value) {
+                const amount = Number(value) || 0;
+                return '₱' + amount.toLocaleString('en-PH', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                });
             }
-        });
 
-        // Close sidebar when clicking outside on mobile
-        document.addEventListener('click', function (event) {
-            const sidebar = document.getElementById('sidebar');
-            const toggle = document.querySelector('.mobile-toggle');
-
-            if (window.innerWidth <= 768 &&
-                !sidebar.contains(event.target) &&
-                !toggle.contains(event.target)) {
-                sidebar.classList.remove('mobile-open');
+            function updateEmptyState() {
+                const hasRows = posTableBody.querySelector('tr') !== null;
+                posEmptyState.style.display = hasRows ? 'none' : 'flex';
             }
-        });
 
-        // FIXED: Restore POS table from localStorage on page load
-        window.addEventListener('DOMContentLoaded', function () {
-            const data = JSON.parse(localStorage.getItem('posTable') || '[]');
-            data.forEach(item => {
-                const product = allProducts.find(p => p.id == item.id);
-                if (product) {
-                    addProductToPOS({
-                        id: item.id,
-                        name: item.name,
-                        price: item.price.replace(/[^\d.]/g, ''), // Remove ₱ and keep number
-                        quantity: item.available,
+            function getSalesTotal() {
+                let subtotal = 0;
+                posTableBody.querySelectorAll('tr').forEach((row) => {
+                    const price = parseFloat(row.querySelector('.pos-price').dataset.rawPrice || '0');
+                    const qty = parseInt(row.querySelector('.pos-qty').value, 10) || 0;
+                    subtotal += price * qty;
+                });
+                return subtotal;
+            }
+
+            function recalcTotals() {
+                const salesTotal = getSalesTotal();
+                const discount = 0;
+                const vatable = salesTotal / 1.12;
+                const vat = salesTotal - vatable;
+                const amountReceived = parseFloat(amountReceivedInput.value || '0');
+                const change = amountReceived - salesTotal;
+
+                totals.sales.textContent = formatPeso(salesTotal);
+                totals.discount.textContent = formatPeso(discount);
+                totals.vatable.textContent = formatPeso(vatable);
+                totals.vat.textContent = formatPeso(vat);
+                totals.topTotal.textContent = formatPeso(salesTotal);
+                totals.change.textContent = formatPeso(change);
+
+                if (salesTotal > 0 && amountReceived < salesTotal) {
+                    totals.change.style.color = '#e74c3c';
+                    totals.change.title = 'Insufficient payment';
+                } else if (salesTotal > 0) {
+                    totals.change.style.color = '#27ae60';
+                    totals.change.title = '';
+                } else {
+                    totals.change.style.color = '';
+                    totals.change.title = '';
+                }
+            }
+
+            function persistTableState() {
+                const rows = [];
+                posTableBody.querySelectorAll('tr').forEach((row) => {
+                    rows.push({
+                        id: row.dataset.productId,
+                        name: row.querySelector('.pos-name').textContent,
+                        price: parseFloat(row.querySelector('.pos-price').dataset.rawPrice || '0'),
+                        available: parseInt(row.querySelector('.pos-available').textContent, 10) || 0,
+                        qty: parseInt(row.querySelector('.pos-qty').value, 10) || 1,
                     });
-                    // Set the correct qty value after row is added
-                    const table = document.getElementById('posTable');
-                    const tr = table.querySelector(`tr[data-product-id='${item.id}']`);
-                    if (tr) {
-                        tr.querySelector('.pos-qty').value = item.qty;
+                });
+
+                try {
+                    if (rows.length > 0) {
+                        localStorage.setItem(posStateKey, JSON.stringify(rows));
+                    } else {
+                        localStorage.removeItem(posStateKey);
+                    }
+                } catch (error) {
+                    console.error('Unable to persist POS table state.', error);
+                }
+            }
+
+            function clearTable() {
+                posTableBody.innerHTML = '';
+                updateEmptyState();
+                recalcTotals();
+                amountReceivedInput.value = '';
+                try {
+                    localStorage.removeItem(posStateKey);
+                } catch (error) {
+                    console.error('Unable to clear POS state.', error);
+                }
+            }
+
+            function createRow(item) {
+                if (posTableBody.querySelector(`[data-product-id="${item.id}"]`)) {
+                    return;
+                }
+
+                const tr = document.createElement('tr');
+                tr.dataset.productId = String(item.id);
+
+                const nameCell = document.createElement('td');
+                nameCell.className = 'pos-name';
+                nameCell.textContent = item.name;
+                tr.appendChild(nameCell);
+
+                const priceCell = document.createElement('td');
+                priceCell.className = 'pos-price';
+                priceCell.dataset.rawPrice = String(item.price);
+                priceCell.textContent = formatPeso(item.price);
+                tr.appendChild(priceCell);
+
+                const availableCell = document.createElement('td');
+                availableCell.className = 'pos-available';
+                availableCell.textContent = Number.isFinite(item.available) ? item.available : 0;
+                tr.appendChild(availableCell);
+
+                const qtyCell = document.createElement('td');
+                qtyCell.className = 'pos-actions';
+
+                const productInput = document.createElement('input');
+                productInput.type = 'hidden';
+                productInput.name = 'product_id[]';
+                productInput.value = item.id;
+                qtyCell.appendChild(productInput);
+
+                const qtyInput = document.createElement('input');
+                qtyInput.type = 'number';
+                qtyInput.className = 'pos-qty';
+                qtyInput.name = 'qty[]';
+                qtyInput.min = '1';
+                if (Number.isFinite(item.max) && item.max > 0) {
+                    qtyInput.max = String(item.max);
+                }
+                qtyInput.value = Math.max(1, item.qty || 1);
+                qtyCell.appendChild(qtyInput);
+
+                const removeButton = document.createElement('button');
+                removeButton.type = 'button';
+                removeButton.className = 'remove-btn';
+                removeButton.setAttribute('aria-label', 'Remove item');
+                removeButton.innerHTML = "<i class='fas fa-times'></i>";
+                qtyCell.appendChild(removeButton);
+
+                tr.appendChild(qtyCell);
+                posTableBody.appendChild(tr);
+            }
+
+            function addProductById(productId) {
+                const product = productCatalog.find((item) => String(item.id) === String(productId));
+                if (!product) {
+                    return;
+                }
+
+                const availableQty = Number(product.quantity) || 0;
+                if (availableQty <= 0) {
+                    alert(`${product.name} is out of stock and cannot be added.`);
+                    return;
+                }
+
+                const existingRow = posTableBody.querySelector(`[data-product-id="${product.id}"]`);
+                if (existingRow) {
+                    const qtyInput = existingRow.querySelector('.pos-qty');
+                    const currentQty = parseInt(qtyInput.value, 10) || 0;
+                    const maxQty = Math.max(parseInt(qtyInput.max, 10) || 0, availableQty);
+                    const newQty = Math.min(currentQty + 1, maxQty);
+                    qtyInput.max = String(maxQty);
+                    existingRow.querySelector('.pos-available').textContent = availableQty;
+                    qtyInput.value = newQty;
+                } else {
+                    createRow({
+                        id: product.id,
+                        name: product.name,
+                        price: Number(product.price) || 0,
+                        available: availableQty,
+                        qty: 1,
+                        max: availableQty,
+                    });
+                }
+
+                updateEmptyState();
+                recalcTotals();
+                persistTableState();
+            }
+
+            function restoreTableState() {
+                let data = [];
+                try {
+                    data = JSON.parse(localStorage.getItem(posStateKey) || '[]');
+                } catch (error) {
+                    data = [];
+                }
+
+                data.forEach((item) => {
+                    const product = productCatalog.find((productItem) => String(productItem.id) === String(item.id));
+                    const availableQty = product ? Number(product.quantity) : Number(item.available);
+                    createRow({
+                        id: item.id,
+                        name: product ? product.name : item.name,
+                        price: product ? Number(product.price) : Number(item.price),
+                        available: Number.isFinite(availableQty) ? availableQty : 0,
+                        qty: Number(item.qty) || 1,
+                        max: Math.max(Number(item.qty) || 1, Number.isFinite(availableQty) ? availableQty : 0),
+                    });
+                });
+
+                updateEmptyState();
+                recalcTotals();
+            }
+
+            function openProductModal() {
+                productModal.style.display = 'flex';
+                productSearchInput.value = '';
+                renderProductTable();
+                productSearchInput.focus();
+            }
+
+            function closeProductModal() {
+                productModal.style.display = 'none';
+            }
+
+            function renderProductTable(filter = '') {
+                if (!productSearchTableBody) {
+                    return;
+                }
+
+                const normalisedFilter = filter.toLowerCase();
+                const filteredProducts = normalisedFilter
+                    ? productCatalog.filter((item) => item.name.toLowerCase().includes(normalisedFilter))
+                    : productCatalog;
+
+                productSearchTableBody.innerHTML = '';
+
+                if (filteredProducts.length === 0) {
+                    const row = document.createElement('tr');
+                    const cell = document.createElement('td');
+                    cell.colSpan = 4;
+                    cell.textContent = 'No products found.';
+                    cell.style.textAlign = 'center';
+                    cell.style.color = '#888';
+                    cell.style.padding = '16px';
+                    row.appendChild(cell);
+                    productSearchTableBody.appendChild(row);
+                    return;
+                }
+
+                filteredProducts.forEach((product) => {
+                    const row = document.createElement('tr');
+
+                    const nameCell = document.createElement('td');
+                    nameCell.textContent = product.name;
+                    row.appendChild(nameCell);
+
+                    const priceCell = document.createElement('td');
+                    priceCell.textContent = formatPeso(product.price);
+                    priceCell.style.textAlign = 'right';
+                    row.appendChild(priceCell);
+
+                    const stockCell = document.createElement('td');
+                    stockCell.textContent = product.quantity;
+                    stockCell.style.textAlign = 'center';
+                    row.appendChild(stockCell);
+
+                    const actionCell = document.createElement('td');
+                    actionCell.style.textAlign = 'center';
+
+                    if (Number(product.quantity) > 0) {
+                        const checkbox = document.createElement('input');
+                        checkbox.type = 'checkbox';
+                        checkbox.className = 'product-select-checkbox';
+                        checkbox.dataset.id = product.id;
+                        actionCell.appendChild(checkbox);
+                    } else {
+                        const span = document.createElement('span');
+                        span.textContent = 'Out of Stock';
+                        span.style.color = '#e74c3c';
+                        span.style.fontSize = '13px';
+                        actionCell.appendChild(span);
+                    }
+
+                    row.appendChild(actionCell);
+                    productSearchTableBody.appendChild(row);
+                });
+            }
+
+            function setActiveTab(tabName, options = {}) {
+                if (!['walkin', 'online'].includes(tabName)) {
+                    return;
+                }
+
+                const { skipPersistence = false } = options;
+
+                tabButtons.forEach((button) => {
+                    button.classList.toggle('active', button.dataset.tab === tabName);
+                });
+
+                Object.entries(tabPanels).forEach(([name, panel]) => {
+                    panel.classList.toggle('active', name === tabName);
+                });
+
+                if (!skipPersistence) {
+                    try {
+                        localStorage.setItem(tabStateKey, tabName);
+                    } catch (error) {
+                        console.error('Unable to persist POS tab state.', error);
+                    }
+
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('tab', tabName);
+                    window.history.replaceState({}, document.title, url.toString());
+                }
+            }
+
+            function initialiseActiveTab() {
+                const url = new URL(window.location.href);
+                const paramTab = url.searchParams.get('tab');
+                if (['walkin', 'online'].includes(paramTab)) {
+                    setActiveTab(paramTab);
+                    return;
+                }
+
+                let storedTab = null;
+                try {
+                    storedTab = localStorage.getItem(tabStateKey);
+                } catch (error) {
+                    storedTab = null;
+                }
+
+                if (['walkin', 'online'].includes(storedTab)) {
+                    setActiveTab(storedTab, { skipPersistence: true });
+                } else {
+                    setActiveTab(initialActiveTab, { skipPersistence: true });
+                }
+            }
+
+            function cleanupSuccessParams() {
+                const url = new URL(window.location.href);
+                ['ok', 'order_id', 'amount_paid', 'change'].forEach((param) => url.searchParams.delete(param));
+                window.history.replaceState({}, document.title, url.toString());
+            }
+
+            function generateReceiptFromTransaction() {
+                const params = new URLSearchParams(window.location.search);
+                if (params.get('ok') !== '1') {
+                    return;
+                }
+
+                let savedRows = [];
+                try {
+                    savedRows = JSON.parse(localStorage.getItem(posStateKey) || '[]');
+                } catch (error) {
+                    savedRows = [];
+                }
+
+                if (savedRows.length === 0) {
+                    cleanupSuccessParams();
+                    return;
+                }
+
+                const amountPaid = parseFloat(params.get('amount_paid') || '0');
+                const change = parseFloat(params.get('change') || '0');
+                const orderId = params.get('order_id') || '';
+
+                receiptItemsBody.innerHTML = '';
+                let salesTotal = 0;
+
+                savedRows.forEach((item) => {
+                    const price = Number(item.price) || 0;
+                    const qty = Number(item.qty) || 0;
+                    const total = price * qty;
+                    salesTotal += total;
+
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td style="text-align:left;">${item.name}</td>
+                        <td style="text-align:right;">${qty}</td>
+                        <td style="text-align:right;">${formatPeso(price)}</td>
+                        <td style="text-align:right;">${formatPeso(total)}</td>
+                    `;
+                    receiptItemsBody.appendChild(row);
+                });
+
+                const discount = 0;
+                const vatable = salesTotal / 1.12;
+                const vat = salesTotal - vatable;
+
+                document.getElementById('receiptNumber').textContent = orderId ? `INV-${orderId}` : `INV-${Date.now()}`;
+                document.getElementById('receiptDate').textContent = new Date().toLocaleString();
+                document.getElementById('receiptCashier').textContent = 'Admin';
+                document.getElementById('receiptSalesTotal').textContent = formatPeso(salesTotal);
+                document.getElementById('receiptDiscount').textContent = formatPeso(discount);
+                document.getElementById('receiptVatable').textContent = formatPeso(vatable);
+                document.getElementById('receiptVat').textContent = formatPeso(vat);
+                document.getElementById('receiptAmountPaid').textContent = formatPeso(amountPaid);
+                document.getElementById('receiptChange').textContent = formatPeso(change);
+
+                receiptModal.style.display = 'flex';
+
+                clearTable();
+                cleanupSuccessParams();
+            }
+
+            function closeReceiptModal() {
+                receiptModal.style.display = 'none';
+            }
+
+            function printReceipt() {
+                const receiptContent = document.getElementById('receiptContent').innerHTML;
+                const w = window.open('', '_blank');
+                if (!w) {
+                    return;
+                }
+                w.document.write(`
+                    <html>
+                        <head>
+                            <title>Print Receipt</title>
+                            <style>
+                                body { font-family: 'Courier New', monospace; font-size: 14px; }
+                                @media print {
+                                    @page { margin: 0; }
+                                    body { margin: 1cm; }
+                                }
+                            </style>
+                        </head>
+                        <body>${receiptContent}</body>
+                    </html>
+                `);
+                w.document.close();
+                w.focus();
+                w.print();
+                w.close();
+            }
+
+            function closeProofModal() {
+                proofModal.classList.remove('show');
+                proofModal.setAttribute('aria-hidden', 'true');
+                proofImage.removeAttribute('src');
+                proofImage.style.display = 'none';
+                proofNoImage.style.display = 'none';
+            }
+
+            // Event bindings
+            mobileToggle?.addEventListener('click', () => {
+                sidebar?.classList.toggle('mobile-open');
+            });
+
+            document.addEventListener('click', (event) => {
+                if (window.innerWidth <= 768 && sidebar && mobileToggle) {
+                    if (!sidebar.contains(event.target) && !mobileToggle.contains(event.target)) {
+                        sidebar.classList.remove('mobile-open');
                     }
                 }
             });
 
-            // Update empty state and recalculate totals
-            updateEmptyStateVisibility();
-            recalcTotal();
-
-            // Handle checkout success
-            if (window.location.search.includes('ok=1')) {
-                generateReceipt();
-                // Clear POS table and localStorage
-                const table = document.getElementById('posTable');
-                while (table.rows.length > 1) {
-                    table.deleteRow(1);
-                }
-                localStorage.removeItem('posTable');
-
-                updateEmptyStateVisibility();
-                recalcTotal();
-
-                // Remove ok=1 from the URL without reloading
-                if (window.history.replaceState) {
-                    const url = window.location.href.replace(/(\?|&)ok=1/, '');
-                    window.history.replaceState({}, document.title, url);
-                }
-            }
-        });
-
-        // FIXED: Event listeners for real-time updates
-        document.addEventListener('DOMContentLoaded', function () {
-            // Listen for quantity changes using event delegation
-            document.getElementById('posTable').addEventListener('input', function (e) {
-                if (e.target.classList.contains('pos-qty')) {
-                    savePosTableToStorage();
-                    recalcTotal();
+            userAvatar?.addEventListener('click', () => {
+                if (userDropdown) {
+                    userDropdown.classList.toggle('show');
                 }
             });
 
-            // Listen for amount received changes
-            document.getElementById('amountReceived').addEventListener('input', function () {
-                recalcTotal();
-            });
-        });
-
-        // Prevent checkout if no products in POS table or insufficient payment
-        document.getElementById('posForm').addEventListener('submit', function (e) {
-            const rows = document.querySelectorAll('#posTable tr[data-product-id]');
-            if (rows.length === 0) {
-                e.preventDefault();
-                document.getElementById('productModal').style.display = 'none';
-                alert('No item selected in POS!');
-                return;
-            }
-
-            const salesTotal = parseFloat(document.getElementById('salesTotalAmount').textContent.replace(
-                /[^\d.-]/g, '')) || 0;
-            const amountReceived = parseFloat(document.getElementById('amountReceived').value) || 0;
-            if (amountReceived < salesTotal) {
-                e.preventDefault();
-                alert('Insufficient payment amount!');
-                return;
-            }
-        });
-
-        // FIXED: Clear function to show empty state and recalculate
-        document.getElementById('clearPosTable').onclick = function () {
-            const table = document.getElementById('posTable');
-            // Remove all rows except the first (header)
-            while (table.rows.length > 1) {
-                table.deleteRow(1);
-            }
-
-            updateEmptyStateVisibility();
-            localStorage.removeItem('posTable');
-
-            // FIXED: Recalculate totals after clearing
-            recalcTotal();
-        };
-
-        // Tab navigation for POS and online orders
-        const tabButtons = document.querySelectorAll('.pos-tab-button');
-        const tabPanels = document.querySelectorAll('.tab-panel');
-
-        const tabStorageKey = 'posActiveTab';
-
-        function persistActiveTab(targetId) {
-            const button = Array.from(tabButtons).find(btn => btn.dataset.target === targetId);
-            if (!button) {
-                return;
-            }
-            const tabName = button.dataset.tab || (targetId === 'onlineTab' ? 'online' : 'walkin');
-            try {
-                localStorage.setItem(tabStorageKey, tabName);
-            } catch (err) {
-                // Ignore storage errors (private mode, etc.)
-            }
-            const url = new URL(window.location);
-            url.searchParams.set('tab', tabName);
-            window.history.replaceState(null, '', url);
-        }
-
-        function setActiveTab(targetId, options = {}) {
-            const {
-                skipPersistence = false
-            } = options;
-            let foundMatch = false;
-
-            tabButtons.forEach(btn => {
-                const isMatch = btn.dataset.target === targetId;
-                btn.classList.toggle('active', isMatch);
-                if (isMatch) {
-                    foundMatch = true;
+            document.addEventListener('click', (event) => {
+                if (userMenu && userDropdown && !userMenu.contains(event.target)) {
+                    userDropdown.classList.remove('show');
                 }
             });
 
-            tabPanels.forEach(panel => {
-                panel.classList.toggle('active', panel.id === targetId);
+            openProductModalButton?.addEventListener('click', openProductModal);
+            closeProductModalButton?.addEventListener('click', closeProductModal);
+            productModal?.addEventListener('click', (event) => {
+                if (event.target === productModal) {
+                    closeProductModal();
+                }
             });
 
-            if (foundMatch && !skipPersistence) {
-                persistActiveTab(targetId);
-            }
-        }
-
-        tabButtons.forEach(button => {
-            button.addEventListener('click', () => {
-                setActiveTab(button.dataset.target);
+            productSearchInput?.addEventListener('input', (event) => {
+                renderProductTable(event.target.value.trim());
             });
-        });
 
-        (function initializeActiveTab() {
-            const params = new URLSearchParams(window.location.search);
-            const paramTab = params.get('tab');
-            if (paramTab === 'online') {
-                setActiveTab('onlineTab');
-                return;
-            }
-            if (paramTab === 'walkin') {
-                setActiveTab('walkinTab');
-                return;
-            }
+            addSelectedProductsButton?.addEventListener('click', () => {
+                const selected = productModal.querySelectorAll('.product-select-checkbox:checked');
+                if (selected.length === 0) {
+                    alert('Please select at least one product to add.');
+                    return;
+                }
 
-            let storedTab = null;
-            try {
-                storedTab = localStorage.getItem(tabStorageKey);
-            } catch (err) {
-                storedTab = null;
-            }
-
-            if (storedTab === 'online') {
-                setActiveTab('onlineTab', {
-                    skipPersistence: true
+                selected.forEach((checkbox) => {
+                    addProductById(checkbox.dataset.id);
+                    checkbox.checked = false;
                 });
-            } else if (storedTab === 'walkin') {
-                setActiveTab('walkinTab', {
-                    skipPersistence: true
+
+                closeProductModal();
+            });
+
+            posTableBody.addEventListener('click', (event) => {
+                const removeButton = event.target.closest('.remove-btn');
+                if (removeButton) {
+                    event.preventDefault();
+                    const row = removeButton.closest('tr');
+                    if (row) {
+                        row.remove();
+                        updateEmptyState();
+                        recalcTotals();
+                        persistTableState();
+                    }
+                }
+            });
+
+            posTableBody.addEventListener('input', (event) => {
+                if (event.target.classList.contains('pos-qty')) {
+                    const input = event.target;
+                    const min = parseInt(input.min, 10) || 1;
+                    const max = parseInt(input.max, 10);
+                    let value = parseInt(input.value, 10);
+
+                    if (!Number.isFinite(value) || value < min) {
+                        value = min;
+                    }
+
+                    if (Number.isFinite(max) && max > 0 && value > max) {
+                        value = max;
+                    }
+
+                    input.value = value;
+                    recalcTotals();
+                    persistTableState();
+                }
+            });
+
+            amountReceivedInput?.addEventListener('input', () => {
+                recalcTotals();
+            });
+
+            clearPosTableButton?.addEventListener('click', () => {
+                clearTable();
+            });
+
+            posForm?.addEventListener('submit', (event) => {
+                const rows = posTableBody.querySelectorAll('tr');
+                if (rows.length === 0) {
+                    event.preventDefault();
+                    closeProductModal();
+                    alert('No item selected in POS!');
+                    return;
+                }
+
+                const salesTotal = getSalesTotal();
+                const amountReceived = parseFloat(amountReceivedInput.value || '0');
+
+                if (amountReceived <= 0) {
+                    event.preventDefault();
+                    alert('Please enter the amount received from the customer!');
+                    amountReceivedInput.focus();
+                    return;
+                }
+
+                if (amountReceived < salesTotal) {
+                    event.preventDefault();
+                    const shortage = salesTotal - amountReceived;
+                    alert(`Insufficient payment! Need ${formatPeso(shortage)} more.`);
+                    amountReceivedInput.focus();
+                }
+            });
+
+            tabButtons.forEach((button) => {
+                button.addEventListener('click', () => {
+                    setActiveTab(button.dataset.tab);
                 });
+            });
+
+            const statusAlert = document.querySelector('.status-alert');
+            if (statusAlert) {
+                const url = new URL(window.location.href);
+                url.searchParams.delete('status_updated');
+                window.history.replaceState({}, document.title, url.toString());
             }
-        })();
 
-        const statusAlert = document.querySelector('.status-alert');
-        if (statusAlert) {
-            const url = new URL(window.location);
-            url.searchParams.delete('status_updated');
-            window.history.replaceState(null, '', url);
-        }
+            document.querySelectorAll('.view-proof-btn').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const image = button.dataset.image;
+                    const reference = button.dataset.reference || '';
+                    const customer = button.dataset.customer || 'Customer';
 
+                    proofReferenceValue.textContent = reference !== '' ? reference : 'Not provided';
+                    proofCustomerName.textContent = customer;
 
-        tabButtons.forEach(button => {
-            button.addEventListener('click', () => {
-                tabButtons.forEach(btn => btn.classList.remove('active'));
-                tabPanels.forEach(panel => panel.classList.remove('active'));
+                    if (image) {
+                        proofImage.src = image;
+                        proofImage.style.display = 'block';
+                        proofNoImage.style.display = 'none';
+                    } else {
+                        proofImage.removeAttribute('src');
+                        proofImage.style.display = 'none';
+                        proofNoImage.style.display = 'flex';
+                    }
 
-                button.classList.add('active');
-                const target = document.getElementById(button.dataset.target);
-                if (target) {
-                    target.classList.add('active');
+                    proofModal.classList.add('show');
+                    proofModal.setAttribute('aria-hidden', 'false');
+                });
+            });
+
+            closeProofModalButton?.addEventListener('click', closeProofModal);
+            proofModal?.addEventListener('click', (event) => {
+                if (event.target === proofModal) {
+                    closeProofModal();
                 }
             });
-        });
 
-
-        // Proof of payment modal logic
-        const proofModal = document.getElementById('proofModal');
-        const proofImage = document.getElementById('proofImage');
-        const proofReferenceValue = document.getElementById('proofReferenceValue');
-        const proofCustomerName = document.getElementById('proofCustomerName');
-        const proofNoImage = document.getElementById('proofNoImage');
-
-        function closeProofModal() {
-            proofModal.classList.remove('show');
-            proofModal.setAttribute('aria-hidden', 'true');
-            proofImage.removeAttribute('src');
-            proofImage.style.display = 'none';
-            proofNoImage.style.display = 'none';
-        }
-
-    });
-    
-    // Listen for amount received changes
-    document.getElementById('amountReceived').addEventListener('input', function() {
-        recalcTotal();
-    });
-});
-
-// Prevent checkout if no products in POS table or insufficient payment
-document.getElementById('posForm').addEventListener('submit', function (e) {
-    const rows = document.querySelectorAll('#posTable tr[data-product-id]');
-    if (rows.length === 0) {
-        e.preventDefault();
-        document.getElementById('productModal').style.display = 'none';
-        alert('No item selected in POS!');
-        return;
-    }
-    
-    const salesTotal = parseFloat(document.getElementById('salesTotalAmount').textContent.replace(/[^\d.-]/g, '')) || 0;
-    const amountReceived = parseFloat(document.getElementById('amountReceived').value) || 0;
-    if (amountReceived < salesTotal) {
-        e.preventDefault();
-        alert('Insufficient payment amount!');
-        return;
-    }
-});
-
-// FIXED: Clear function to show empty state and recalculate
-document.getElementById('clearPosTable').onclick = function () {
-    const table = document.getElementById('posTable');
-    // Remove all rows except the first (header)
-    while (table.rows.length > 1) {
-        table.deleteRow(1);
-    }
-
-    updateEmptyStateVisibility();
-    localStorage.removeItem('posTable');
-
-    // FIXED: Recalculate totals after clearing
-    recalcTotal();
-};
-
-// Tab navigation for POS and online orders
-const tabButtons = document.querySelectorAll('.pos-tab-button');
-const tabPanels = document.querySelectorAll('.tab-panel');
-const tabStorageKey = 'posActiveTab';
-
-function persistActiveTab(targetId) {
-    const button = Array.from(tabButtons).find(btn => btn.dataset.target === targetId);
-    if (!button) {
-        return;
-    }
-    const tabName = button.dataset.tab || (targetId === 'onlineTab' ? 'online' : 'walkin');
-    try {
-        localStorage.setItem(tabStorageKey, tabName);
-    } catch (err) {
-        // Ignore storage errors (private mode, etc.)
-    }
-    const url = new URL(window.location);
-    url.searchParams.set('tab', tabName);
-    window.history.replaceState(null, '', url);
-}
-
-function setActiveTab(targetId, options = {}) {
-    const { skipPersistence = false } = options;
-    let foundMatch = false;
-
-    tabButtons.forEach(btn => {
-        const isMatch = btn.dataset.target === targetId;
-        btn.classList.toggle('active', isMatch);
-        if (isMatch) {
-            foundMatch = true;
-        }
-    });
-
-    tabPanels.forEach(panel => {
-        panel.classList.toggle('active', panel.id === targetId);
-    });
-
-    if (foundMatch && !skipPersistence) {
-        persistActiveTab(targetId);
-    }
-}
-
-tabButtons.forEach(button => {
-    button.addEventListener('click', () => {
-        setActiveTab(button.dataset.target);
-    });
-});
-
-(function initializeActiveTab() {
-    const params = new URLSearchParams(window.location.search);
-    const paramTab = params.get('tab');
-    if (paramTab === 'online') {
-        setActiveTab('onlineTab');
-        return;
-    }
-    if (paramTab === 'walkin') {
-        setActiveTab('walkinTab');
-        return;
-    }
-
-    let storedTab = null;
-    try {
-        storedTab = localStorage.getItem(tabStorageKey);
-    } catch (err) {
-        storedTab = null;
-    }
-
-    if (storedTab === 'online') {
-        setActiveTab('onlineTab', { skipPersistence: true });
-    } else if (storedTab === 'walkin') {
-        setActiveTab('walkinTab', { skipPersistence: true });
-    }
-})();
-
-const statusAlert = document.querySelector('.status-alert');
-if (statusAlert) {
-    const url = new URL(window.location);
-    url.searchParams.delete('status_updated');
-    window.history.replaceState(null, '', url);
-}
-
-// Proof of payment modal logic
-const proofModal = document.getElementById('proofModal');
-const proofImage = document.getElementById('proofImage');
-const proofReferenceValue = document.getElementById('proofReferenceValue');
-const proofCustomerName = document.getElementById('proofCustomerName');
-const proofNoImage = document.getElementById('proofNoImage');
-
-function closeProofModal() {
-    proofModal.classList.remove('show');
-    proofModal.setAttribute('aria-hidden', 'true');
-    proofImage.removeAttribute('src');
-    proofImage.style.display = 'none';
-    proofNoImage.style.display = 'none';
-}
-
-document.querySelectorAll('.view-proof-btn').forEach(button => {
-    button.addEventListener('click', () => {
-        const image = button.dataset.image;
-        const reference = button.dataset.reference || '';
-        const customer = button.dataset.customer || 'Customer';
-
-        proofReferenceValue.textContent = reference !== '' ? reference : 'Not provided';
-        proofCustomerName.textContent = customer;
-
-        if (image) {
-            proofImage.src = image;
-            proofImage.style.display = 'block';
-            proofNoImage.style.display = 'none';
-        } else {
-            proofImage.removeAttribute('src');
-            proofImage.style.display = 'none';
-            proofNoImage.style.display = 'flex';
-        }
-
-        proofModal.classList.add('show');
-        proofModal.setAttribute('aria-hidden', 'false');
-    });
-});
-
-document.getElementById('closeProofModal').addEventListener('click', closeProofModal);
-proofModal.addEventListener('click', (event) => {
-    if (event.target === proofModal) {
-        closeProofModal();
-    }
-});
-
-
-        document.querySelectorAll('.view-proof-btn').forEach(button => {
-            button.addEventListener('click', () => {
-                const image = button.dataset.image;
-                const reference = button.dataset.reference || '';
-                const customer = button.dataset.customer || 'Customer';
-
-                proofReferenceValue.textContent = reference !== '' ? reference : 'Not provided';
-                proofCustomerName.textContent = customer;
-
-                if (image) {
-                    proofImage.src = image;
-                    proofImage.style.display = 'block';
-                    proofNoImage.style.display = 'none';
-                } else {
-                    proofImage.removeAttribute('src');
-                    proofImage.style.display = 'none';
-                    proofNoImage.style.display = 'flex';
+            closeReceiptModalButton?.addEventListener('click', closeReceiptModal);
+            receiptModal?.addEventListener('click', (event) => {
+                if (event.target === receiptModal) {
+                    closeReceiptModal();
                 }
-
-                proofModal.classList.add('show');
-                proofModal.setAttribute('aria-hidden', 'false');
             });
-        });
 
-        document.getElementById('closeProofModal').addEventListener('click', closeProofModal);
-        proofModal.addEventListener('click', (event) => {
-            if (event.target === proofModal) {
-                closeProofModal();
-            }
-        });
+            printReceiptButton?.addEventListener('click', printReceipt);
 
+            // Initialisation
+            restoreTableState();
+            initialiseActiveTab();
+            generateReceiptFromTransaction();
+        });
     </script>
-    // Total Sales Panel
-    <script src="../assets/js/totalPanel.js"></script>
-
-
-
 </body>
 
 </html>
