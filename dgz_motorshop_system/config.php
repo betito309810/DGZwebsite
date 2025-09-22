@@ -23,6 +23,7 @@ function parsePaymentProofValue($value) {
         'image' => null,
     ];
 
+
     if ($value === null) {
         return $details;
     }
@@ -32,6 +33,9 @@ function parsePaymentProofValue($value) {
     }
 
     if ($value === '' || $value === false) {
+
+    if (empty($value)) {
+
         return $details;
     }
 
@@ -43,6 +47,7 @@ function parsePaymentProofValue($value) {
         if (!empty($decoded['image'])) {
             $details['image'] = (string) $decoded['image'];
         }
+
         return $details;
     }
 
@@ -60,6 +65,11 @@ function parsePaymentProofValue($value) {
         $details['image'] = $stringValue;
     } else {
         $details['reference'] = $stringValue;
+
+    } else {
+        // Legacy orders stored only the uploaded image path.
+        $details['image'] = (string) $value;
+
     }
 
     return $details;
