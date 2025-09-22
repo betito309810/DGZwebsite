@@ -17,7 +17,11 @@ function db() {
  * Normalize payment proof information so callers can reliably access
  * the reference number and optional image path.
  */
+
+function parsePaymentProofValue($value, $fallbackReference = null) {
+
 function parsePaymentProofValue($value) {
+
     $details = [
         'reference' => null,
         'image' => null,
@@ -34,7 +38,9 @@ function parsePaymentProofValue($value) {
 
     if ($value === '' || $value === false) {
 
+
     if (empty($value)) {
+
 
         return $details;
     }
@@ -67,9 +73,19 @@ function parsePaymentProofValue($value) {
         $details['reference'] = $stringValue;
 
     }
+
+    if ($details['reference'] === null && $fallbackReference !== null) {
+        $fallbackReference = trim((string) $fallbackReference);
+        if ($fallbackReference !== '') {
+            $details['reference'] = $fallbackReference;
+        }
+
+
+    }
 } else {
         // Legacy orders stored only the uploaded image path.
         $details['image'] = (string) $value;
+
 
     }
 
