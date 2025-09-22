@@ -15,7 +15,11 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
     $out = fopen('php://output', 'w');
     fputcsv($out, ['ID','Customer Name','Contact','Address','Total','Payment Method','Payment Reference','Proof Image','Status','Created At']);
     foreach($export_orders as $o) {
+
         $details = parsePaymentProofValue($o['payment_proof'] ?? null, $o['reference_no'] ?? null);
+
+        $details = parsePaymentProofValue($o['payment_proof'] ?? null);
+
         fputcsv($out, [
             $o['id'],
             $o['customer_name'],
@@ -186,6 +190,9 @@ $end_record = min($offset + $records_per_page, $total_records);
                             <td>₱<?=number_format($o['total'],2)?></td>
                             <td><?=htmlspecialchars($o['payment_method'])?></td>
                             <?php $paymentDetails = parsePaymentProofValue($o['payment_proof'] ?? null, $o['reference_no'] ?? null); ?>
+
+                            <?php $paymentDetails = parsePaymentProofValue($o['payment_proof'] ?? null); ?>
+
                             <td>
                                 <?php if(!empty($paymentDetails['reference'])): ?>
                                     <span style="font-weight:600; color:#1d4ed8;"><?=htmlspecialchars($paymentDetails['reference'])?></span>

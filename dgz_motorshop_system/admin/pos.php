@@ -11,6 +11,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status'])
     if($orderId > 0 && in_array($newStatus, $allowedStatuses, true)) {
         $stmt = $pdo->prepare('UPDATE orders SET status = ? WHERE id = ?');
         $stmt->execute([$newStatus, $orderId]);
+
         $_SESSION['pos_active_tab'] = 'online';
         header('Location: pos.php?tab=online&status_updated=1');
         exit;
@@ -18,6 +19,13 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status'])
 
     $_SESSION['pos_active_tab'] = 'online';
     header('Location: pos.php?tab=online&status_updated=0');
+
+        header('Location: pos.php?status_updated=1');
+        exit;
+    }
+
+    header('Location: pos.php?status_updated=0');
+
     exit;
 }
 
@@ -110,6 +118,7 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['pos_checkout'])) {
     }
 }
 
+
 $onlineOrdersStmt = $pdo->prepare("
     SELECT * FROM orders
     WHERE
@@ -125,6 +134,22 @@ foreach ($onlineOrders as &$onlineOrder) {
         $onlineOrder['payment_proof'] ?? null,
         $onlineOrder['reference_no'] ?? null
     );
+
+
+$onlineOrdersStmt = $pdo->prepare("
+    SELECT * FROM orders
+    WHERE
+        (payment_method IS NOT NULL AND payment_method <> '' AND LOWER(payment_method) <> 'Gcash')
+        OR (payment_proof IS NOT NULL AND payment_proof <> '')
+        OR status IN ('pending','approved')
+    ORDER BY created_at DESC
+");
+
+$onlineOrdersStmt->execute();
+$onlineOrders = $onlineOrdersStmt->fetchAll();
+foreach ($onlineOrders as &$onlineOrder) {
+    $details = parsePaymentProofValue($onlineOrder['payment_proof'] ?? null);
+
     $onlineOrder['reference_number'] = $details['reference'];
     $onlineOrder['proof_image'] = $details['image'];
 }
@@ -134,6 +159,7 @@ $statusOptions = [
     'approved' => 'Approved',
     'completed' => 'Completed'
 ];
+
 ?>
 <!doctype html>
 <html>
@@ -217,17 +243,29 @@ $statusOptions = [
         </header>
 
         <div class="pos-tabs">
+
             <button type="button" class="pos-tab-button<?= $activeTab === 'walkin' ? ' active' : '' ?>" data-target="walkinTab" data-tab="walkin">
                 <i class="fas fa-store"></i>
                 POS Checkout
             </button>
             <button type="button" class="pos-tab-button<?= $activeTab === 'online' ? ' active' : '' ?>" data-target="onlineTab" data-tab="online">
+
+            <button type="button" class="pos-tab-button active" data-target="walkinTab">
+                <i class="fas fa-store"></i>
+                POS Checkout
+            </button>
+            <button type="button" class="pos-tab-button" data-target="onlineTab">
+
                 <i class="fas fa-shopping-bag"></i>
                 Online Orders
             </button>
         </div>
 
+
         <div id="walkinTab" class="tab-panel<?= $activeTab === 'walkin' ? ' active' : '' ?>">
+
+        <div id="walkinTab" class="tab-panel active">
+
         <div style="display: flex; align-items: center; gap: 0px; margin: 15px 0; flex-wrap: wrap;">
             <button type="button" id="openProductModal"
                 style="padding: 8px 18px; background: #3498db; color: #fff; border: none; border-radius: 6px; font-size: 15px; cursor: pointer;"><i
@@ -395,7 +433,11 @@ $statusOptions = [
         </div>
         </div><!-- /#walkinTab -->
 
+
         <div id="onlineTab" class="tab-panel<?= $activeTab === 'online' ? ' active' : '' ?>">
+
+        <div id="onlineTab" class="tab-panel">
+
             <?php if(isset($_GET['status_updated'])): ?>
                 <?php $success = $_GET['status_updated'] === '1'; ?>
                 <div class="status-alert <?= $success ? 'success' : 'error' ?>">
@@ -1013,6 +1055,7 @@ document.getElementById('clearPosTable').onclick = function () {
 // Tab navigation for POS and online orders
 const tabButtons = document.querySelectorAll('.pos-tab-button');
 const tabPanels = document.querySelectorAll('.tab-panel');
+
 const tabStorageKey = 'posActiveTab';
 
 function persistActiveTab(targetId) {
@@ -1090,6 +1133,21 @@ if (statusAlert) {
     url.searchParams.delete('status_updated');
     window.history.replaceState(null, '', url);
 }
+
+
+tabButtons.forEach(button => {
+    button.addEventListener('click', () => {
+        tabButtons.forEach(btn => btn.classList.remove('active'));
+        tabPanels.forEach(panel => panel.classList.remove('active'));
+
+        button.classList.add('active');
+        const target = document.getElementById(button.dataset.target);
+        if (target) {
+            target.classList.add('active');
+        }
+    });
+});
+
 
 // Proof of payment modal logic
 const proofModal = document.getElementById('proofModal');
