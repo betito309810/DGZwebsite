@@ -1,5 +1,5 @@
 <?php
-require 'config.php';
+require __DIR__ . '/config/config.php';
 $pdo = db();
 $products = $pdo->query('SELECT * FROM products ORDER BY name')->fetchAll();
 

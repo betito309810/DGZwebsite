@@ -15,10 +15,7 @@ $order_id = (int)$_GET['order_id'];
 
 try {
     // Get order details
-    $stmt = $pdo->prepare("
-        SELECT * FROM orders 
-        WHERE id = ?
-    ");
+    $stmt = $pdo->prepare("SELECT * FROM orders WHERE id = ?");
     $stmt->execute([$order_id]);
     $order = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -39,6 +36,10 @@ try {
 
     // Send response
     header('Content-Type: application/json');
+    $details = parsePaymentProofValue($order['payment_proof'] ?? null, $order['reference_no'] ?? null);
+
+    $order['reference_number'] = $details['reference'];
+
     echo json_encode([
         'order' => $order,
         'items' => $items

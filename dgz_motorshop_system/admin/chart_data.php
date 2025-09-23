@@ -87,6 +87,7 @@ $sql = "
     INNER JOIN orders o ON o.id = oi.order_id
     INNER JOIN products p ON p.id = oi.product_id
     WHERE $where
+      AND o.status IN ('approved','completed')
     GROUP BY p.id, p.name
     ORDER BY total_qty DESC, p.name ASC
     LIMIT 10

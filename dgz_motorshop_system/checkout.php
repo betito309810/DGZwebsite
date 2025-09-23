@@ -1,5 +1,5 @@
 <?php
-require 'config.php';
+require __DIR__ . '/config/config.php';
 $pdo = db();
 $errors = [];
 $referenceInput = '';
@@ -24,6 +24,42 @@ if (!function_exists('ordersHasReferenceColumn')) {
 }
 
 
+if (!function_exists('normaliseCartItems')) {
+    function normaliseCartItems($items): array
+    {
+        if (!is_array($items)) {
+            return [];
+        }
+
+        $normalised = [];
+
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $id = isset($item['id']) ? (int) $item['id'] : 0;
+            $quantity = isset($item['quantity']) ? (int) $item['quantity'] : 0;
+            $price = isset($item['price']) ? (float) $item['price'] : 0.0;
+            $name = isset($item['name']) ? trim((string) $item['name']) : '';
+
+            if ($id <= 0 || $quantity <= 0) {
+                continue;
+            }
+
+            $normalised[] = [
+                'id' => $id,
+                'name' => $name !== '' ? $name : 'Product',
+                'price' => $price,
+                'quantity' => $quantity,
+            ];
+        }
+
+        return $normalised;
+    }
+}
+
+
 // Handle both single product and cart scenarios
 $product_id = intval($_GET['product_id'] ?? 0);
 $qty = max(1, intval($_GET['qty'] ?? 1));
@@ -37,6 +73,8 @@ if (isset($_GET['cart'])) {
     if (json_last_error() !== JSON_ERROR_NONE) {
         $cartItems = [];
     }
+
+    $cartItems = normaliseCartItems($cartItems);
 }
 
 // Check if we have a single product but no cart
@@ -62,7 +100,11 @@ if (isset($_POST['cart'])) {
     if (json_last_error() !== JSON_ERROR_NONE) {
         $cartItems = [];
     }
+
+    $cartItems = normaliseCartItems($cartItems);
 }
+
+$cartItems = normaliseCartItems($cartItems);
 
 // If no cart items, show error
 if (empty($cartItems)) {
@@ -104,6 +146,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
                 'image/gif' => 'gif',
                 'image/webp' => 'webp',
             ];
+
             $finfo = finfo_open(FILEINFO_MIME_TYPE);
             $mime = $finfo ? finfo_file($finfo, $_FILES['proof']['tmp_name']) : null;
             if ($finfo) {
@@ -113,19 +156,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
             if (!$mime || !isset($allowed[$mime])) {
                 $errors[] = 'Please upload a valid image (JPG, PNG, GIF, or WEBP).';
             } else {
-                if (!is_dir('uploads')) {
-                    mkdir('uploads', 0775, true);
+                $uploadsRoot = __DIR__ . '/uploads';
+                $uploadDir = $uploadsRoot . '/payment-proofs';
+                $publicUploadDir = 'uploads/payment-proofs';
+
+                $setupOk = true;
+                if (!is_dir($uploadsRoot) && !mkdir($uploadsRoot, 0777, true) && !is_dir($uploadsRoot)) {
+                    $errors[] = 'Failed to prepare the uploads storage.';
+                    $setupOk = false;
                 }
-                try {
-                    $random = bin2hex(random_bytes(8));
-                } catch (Exception $e) {
-                    $random = time();
+
+                if ($setupOk && !is_dir($uploadDir) && !mkdir($uploadDir, 0777, true) && !is_dir($uploadDir)) {
+                    $errors[] = 'Failed to prepare the uploads storage.';
+                    $setupOk = false;
                 }
-                $filename = sprintf('uploads/%s.%s', $random, $allowed[$mime]);
-                if (!move_uploaded_file($_FILES['proof']['tmp_name'], $filename)) {
-                    $errors[] = 'Failed to save the uploaded proof of payment.';
-                } else {
-                    $proof_path = $filename;
+
+                if ($setupOk && !is_writable($uploadDir) && !chmod($uploadDir, 0777)) {
+                    $errors[] = 'Uploads folder is not writable.';
+                    $setupOk = false;
+                }
+
+                if ($setupOk) {
+                    try {
+                        $random = bin2hex(random_bytes(8));
+                    } catch (Exception $e) {
+                        $random = (string) time();
+                    }
+
+                    $storedFileName = sprintf('%s.%s', $random, $allowed[$mime]);
+                    $targetPath = $uploadDir . '/' . $storedFileName;
+
+                    $moved = move_uploaded_file($_FILES['proof']['tmp_name'], $targetPath);
+                    if (!$moved) {
+                        $fileContents = @file_get_contents($_FILES['proof']['tmp_name']);
+                        if ($fileContents === false || @file_put_contents($targetPath, $fileContents) === false) {
+                            $errors[] = 'Failed to save the uploaded proof of payment.';
+                        } else {
+                            $proof_path = $publicUploadDir . '/' . $storedFileName;
+                        }
+                    } else {
+                        $proof_path = $publicUploadDir . '/' . $storedFileName;
+                    }
                 }
             }
         }
@@ -137,30 +208,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
         $total += $item['price'] * $item['quantity'];
     }
 
-    $paymentData = json_encode([
-        'reference' => $referenceNumber,
-        'image' => $proof_path,
-    ], JSON_UNESCAPED_SLASHES);
-
-    if ($paymentData === false || strlen($paymentData) > 250) {
-        $errors[] = 'Payment details are too long to be saved. Please try again.';
-    }
-
     if (empty($errors)) {
 
         $hasReferenceColumn = ordersHasReferenceColumn($pdo);
 
         if ($hasReferenceColumn) {
             $stmt = $pdo->prepare('INSERT INTO orders (customer_name, contact, address, total, payment_method, payment_proof, reference_no, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
-            $stmt->execute([$customer_name, $contact, $address, $total, $payment_method, $paymentData, $referenceNumber, 'pending']);
+            $stmt->execute([$customer_name, $contact, $address, $total, $payment_method, $proof_path, $referenceNumber, 'pending']);
         } else {
             $stmt = $pdo->prepare('INSERT INTO orders (customer_name, contact, address, total, payment_method, payment_proof, status) VALUES (?, ?, ?, ?, ?, ?, ?)');
-            $stmt->execute([$customer_name, $contact, $address, $total, $payment_method, $paymentData, 'pending']);
+            $stmt->execute([$customer_name, $contact, $address, $total, $payment_method, $proof_path, 'pending']);
         }
-
-
-        $stmt = $pdo->prepare('INSERT INTO orders (customer_name, contact, address, total, payment_method, payment_proof, status) VALUES (?, ?, ?, ?, ?, ?, ?)');
-        $stmt->execute([$customer_name, $contact, $address, $total, $payment_method, $paymentData, 'pending']);
 
 
         $order_id = $pdo->lastInsertId();
@@ -321,19 +379,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
 
         <!-- Right Column - Order Summary -->
         <div class="order-summary">
-            <?php foreach ($cartItems as $item): ?>
-            <div class="order-item">
-                <div class="item-image">
-                    <i class="fas fa-box"></i>
+            <div id="orderItemsContainer" class="order-items">
+                <?php foreach ($cartItems as $index => $item): ?>
+                <div class="order-item" data-index="<?= $index ?>">
+                    <div class="item-image">
+                        <i class="fas fa-box"></i>
+                    </div>
+                    <div class="item-details">
+                        <div class="item-name"><?= htmlspecialchars($item['name']) ?></div>
+                        <div class="item-category">Product</div>
+                    </div>
+                    <div class="item-meta">
+                        <span class="quantity-badge">×<?= $item['quantity'] ?></span>
+                        <div class="item-price">₱ <?= number_format($item['price'], 2) ?></div>
+                        <button type="button" class="item-remove" data-index="<?= $index ?>">Remove</button>
+                    </div>
                 </div>
-                <div class="item-details">
-                    <div class="item-name"><?= htmlspecialchars($item['name']) ?></div>
-                    <div class="item-category">Product</div>
-                </div>
-                <div class="quantity-badge">×<?= $item['quantity'] ?></div>
-                <div class="item-price">₱ <?= number_format($item['price'], 2) ?></div>
+                <?php endforeach; ?>
             </div>
-            <?php endforeach; ?>
+
+            <div id="orderEmptyState" class="order-empty" style="<?= empty($cartItems) ? '' : 'display:none;' ?>">
+                <i class="fas fa-shopping-basket"></i>
+                <p>Your cart is empty.</p>
+                <a href="index.php" class="order-empty-link">Continue shopping</a>
+            </div>
 
             <div class="discount-section">
                 <div class="discount-input">
@@ -351,8 +420,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
             ?>
 
             <div class="summary-row">
-                <span>Subtotal, <?= count($cartItems) ?> item<?= count($cartItems) > 1 ? 's' : '' ?></span>
-                <span>₱ <?= number_format($subtotal, 2) ?></span>
+                <span id="summarySubtotalLabel">Subtotal, <?= count($cartItems) ?> item<?= count($cartItems) > 1 ? 's' : '' ?></span>
+                <span id="summarySubtotalValue">₱ <?= number_format($subtotal, 2) ?></span>
             </div>
 
             <div class="summary-row discount-row" style="display: none;">
@@ -362,7 +431,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
 
             <div class="summary-row total">
                 <span>Total</span>
-                <span>₱ <?= number_format($total, 2) ?></span>
+                <span id="summaryTotalValue">₱ <?= number_format($total, 2) ?></span>
             </div>
         </div>
     </div>
@@ -389,6 +458,163 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
                 }
             });
         });
+
+        const cartInput = document.querySelector('input[name="cart"]');
+        const orderItemsContainer = document.getElementById('orderItemsContainer');
+        const emptyState = document.getElementById('orderEmptyState');
+        const subtotalLabel = document.getElementById('summarySubtotalLabel');
+        const subtotalValue = document.getElementById('summarySubtotalValue');
+        const totalValue = document.getElementById('summaryTotalValue');
+        const submitButton = document.querySelector('.submit-btn');
+
+        let cartState = [];
+        try {
+            cartState = JSON.parse(cartInput.value || '[]') || [];
+        } catch (error) {
+            cartState = [];
+        }
+
+        function normaliseItem(rawItem = {}) {
+            const price = Number(rawItem.price);
+            const quantity = Number(rawItem.quantity);
+
+            return {
+                id: rawItem.id ?? null,
+                name: rawItem.name ?? 'Product',
+                price: Number.isFinite(price) ? price : 0,
+                quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1,
+            };
+        }
+
+        function formatPeso(value) {
+            const amount = Number(value) || 0;
+            return '₱ ' + amount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function syncCartInput() {
+            try {
+                cartInput.value = JSON.stringify(cartState);
+            } catch (error) {
+                console.error('Unable to synchronise cart state.', error);
+            }
+        }
+
+        function syncBrowserStorage() {
+            try {
+                localStorage.setItem('cartItems', JSON.stringify(cartState));
+                const totalItems = cartState.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+                localStorage.setItem('cartCount', String(totalItems));
+            } catch (error) {
+                console.error('Unable to persist cart to localStorage.', error);
+            }
+        }
+
+        function updateSummary() {
+            const totals = cartState.reduce((acc, item) => {
+                const { price, quantity } = normaliseItem(item);
+                acc.items += quantity;
+                acc.subtotal += price * quantity;
+                return acc;
+            }, { items: 0, subtotal: 0 });
+
+            subtotalLabel.textContent = `Subtotal, ${totals.items} item${totals.items === 1 ? '' : 's'}`;
+            subtotalValue.textContent = formatPeso(totals.subtotal);
+            totalValue.textContent = formatPeso(totals.subtotal);
+
+            const hasItems = cartState.length > 0;
+            submitButton.disabled = !hasItems;
+            emptyState.style.display = hasItems ? 'none' : 'block';
+        }
+
+        function createOrderItemRow(item, index) {
+            const row = document.createElement('div');
+            row.className = 'order-item';
+            row.dataset.index = String(index);
+
+            const image = document.createElement('div');
+            image.className = 'item-image';
+            image.innerHTML = '<i class="fas fa-box"></i>';
+            row.appendChild(image);
+
+            const details = document.createElement('div');
+            details.className = 'item-details';
+
+            const name = document.createElement('div');
+            name.className = 'item-name';
+            name.textContent = item && item.name ? String(item.name) : 'Product';
+            details.appendChild(name);
+
+            const category = document.createElement('div');
+            category.className = 'item-category';
+            category.textContent = 'Product';
+            details.appendChild(category);
+
+            row.appendChild(details);
+
+            const meta = document.createElement('div');
+            meta.className = 'item-meta';
+
+            const qty = document.createElement('span');
+            qty.className = 'quantity-badge';
+            qty.textContent = `×${item.quantity}`;
+            meta.appendChild(qty);
+
+            const price = document.createElement('div');
+            price.className = 'item-price';
+            price.textContent = formatPeso(item.price);
+            meta.appendChild(price);
+
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'item-remove';
+            remove.dataset.index = String(index);
+            remove.textContent = 'Remove';
+            meta.appendChild(remove);
+
+            row.appendChild(meta);
+
+            return row;
+        }
+
+        function renderOrderItems() {
+            if (!orderItemsContainer) {
+                return;
+            }
+
+            orderItemsContainer.innerHTML = '';
+            cartState = cartState.map((item) => normaliseItem(item));
+
+            cartState.forEach((item, index) => {
+                orderItemsContainer.appendChild(createOrderItemRow(item, index));
+            });
+
+            updateSummary();
+            syncCartInput();
+            syncBrowserStorage();
+        }
+
+        orderItemsContainer?.addEventListener('click', (event) => {
+            const target = event.target.closest('.item-remove');
+            if (!target) {
+                return;
+            }
+
+            const index = Number(target.dataset.index);
+            if (!Number.isInteger(index) || index < 0 || index >= cartState.length) {
+                return;
+            }
+
+            cartState.splice(index, 1);
+            renderOrderItems();
+
+            if (cartState.length === 0) {
+                setTimeout(() => {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }, 150);
+            }
+        });
+
+        renderOrderItems();
     </script>
 </body>
 </html>

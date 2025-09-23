@@ -10,18 +10,76 @@ $pdo = db();
 
 $allowedStatuses = ['pending', 'approved', 'completed'];
 
+/**
+ * Generate a unique invoice number with an INV- prefix.
+ */
+function generateInvoiceNumber(PDO $pdo): string
+{
+    $prefix = 'INV-';
+    $stmt = $pdo->query("SELECT invoice_number FROM orders WHERE invoice_number IS NOT NULL AND invoice_number <> '' ORDER BY id DESC LIMIT 1");
+    $lastInvoice = $stmt ? $stmt->fetchColumn() : null;
+
+    $nextNumber = 1;
+    if (is_string($lastInvoice) && preg_match('/(\d+)/', $lastInvoice, $matches)) {
+        $nextNumber = (int) $matches[1] + 1;
+    }
+
+    return $prefix . str_pad((string) $nextNumber, 6, '0', STR_PAD_LEFT);
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status'])) {
     $orderId = isset($_POST['order_id']) ? (int) $_POST['order_id'] : 0;
     $newStatus = isset($_POST['new_status']) ? strtolower(trim((string) $_POST['new_status'])) : '';
 
     $_SESSION['pos_active_tab'] = 'online';
 
-    if ($orderId > 0 && in_array($newStatus, $allowedStatuses, true)) {
-        $stmt = $pdo->prepare('UPDATE orders SET status = ? WHERE id = ?');
-        $success = $stmt->execute([$newStatus, $orderId]);
-        $statusParam = $success ? '1' : '0';
-    } else {
-        $statusParam = '0';
+    $statusParam = '0';
+
+    if ($orderId > 0 && in_array($newStatus, ['approved', 'completed'], true)) {
+        $orderStmt = $pdo->prepare('SELECT status, invoice_number FROM orders WHERE id = ?');
+        $orderStmt->execute([$orderId]);
+        $currentOrder = $orderStmt->fetch();
+
+        if ($currentOrder) {
+            $currentStatus = strtolower((string) ($currentOrder['status'] ?? 'pending'));
+            $transitions = [
+                'pending' => ['approved', 'completed'],
+                'approved' => ['completed'],
+                'completed' => [],
+            ];
+
+            $allowedNext = $transitions[$currentStatus] ?? [];
+
+            if ($newStatus === $currentStatus || in_array($newStatus, $allowedNext, true)) {
+                $fields = [];
+                $params = [];
+
+                if ($newStatus !== $currentStatus) {
+                    $fields[] = 'status = ?';
+                    $params[] = $newStatus;
+                }
+
+                $existingInvoice = (string) ($currentOrder['invoice_number'] ?? '');
+                $needsInvoice = in_array($newStatus, ['approved', 'completed'], true) && $existingInvoice === '';
+
+                if ($needsInvoice) {
+                    $generatedInvoice = generateInvoiceNumber($pdo);
+                    $fields[] = 'invoice_number = ?';
+                    $params[] = $generatedInvoice;
+                }
+
+                if (empty($fields)) {
+                    // No state change required but treat as success.
+                    $statusParam = '1';
+                } else {
+                    $params[] = $orderId;
+                    $updateSql = 'UPDATE orders SET ' . implode(', ', $fields) . ' WHERE id = ?';
+                    $stmt = $pdo->prepare($updateSql);
+                    $success = $stmt->execute($params);
+                    $statusParam = $success ? '1' : '0';
+                }
+            }
+        }
     }
 
     header('Location: pos.php?' . http_build_query([
@@ -102,7 +160,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pos_checkout'])) {
     try {
         $pdo->beginTransaction();
 
-        $orderStmt = $pdo->prepare('INSERT INTO orders (customer_name, contact, address, total, payment_method, status, vatable, vat, amount_paid, change_amount) VALUES (?,?,?,?,?,?,?,?,?,?)');
+        $invoiceNumber = generateInvoiceNumber($pdo);
+
+        $orderStmt = $pdo->prepare('INSERT INTO orders (customer_name, contact, address, total, payment_method, status, vatable, vat, amount_paid, change_amount, invoice_number) VALUES (?,?,?,?,?,?,?,?,?,?,?)');
         $orderStmt->execute([
             'Walk-in',
             'N/A',
@@ -114,6 +174,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pos_checkout'])) {
             $vat,
             $amountPaid,
             $change,
+            $invoiceNumber,
         ]);
 
         $orderId = (int) $pdo->lastInsertId();
@@ -133,6 +194,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pos_checkout'])) {
             'order_id' => $orderId,
             'amount_paid' => number_format($amountPaid, 2, '.', ''),
             'change' => number_format($change, 2, '.', ''),
+            'invoice_number' => $invoiceNumber,
         ];
 
         header('Location: pos.php?' . http_build_query($params));
@@ -188,7 +250,6 @@ foreach ($onlineOrders as &$order) {
 unset($order);
 
 $statusOptions = [
-    'pending' => 'Pending',
     'approved' => 'Approved',
     'completed' => 'Completed',
 ];
@@ -204,7 +265,7 @@ if (isset($_GET['ok'], $_GET['order_id']) && $_GET['ok'] === '1') {
 
     if ($requestedOrderId > 0) {
         $orderStmt = $pdo->prepare(
-            'SELECT id, customer_name, total, vatable, vat, amount_paid, change_amount, created_at
+            'SELECT id, customer_name, total, vatable, vat, amount_paid, change_amount, created_at, invoice_number
              FROM orders
              WHERE id = ?
              LIMIT 1'
@@ -243,6 +304,7 @@ if (isset($_GET['ok'], $_GET['order_id']) && $_GET['ok'] === '1') {
                 'order_id' => (int) $orderRow['id'],
                 'customer_name' => (string) ($orderRow['customer_name'] ?? 'Customer'),
                 'created_at' => (string) ($orderRow['created_at'] ?? ''),
+                'invoice_number' => (string) ($orderRow['invoice_number'] ?? ''),
                 'sales_total' => (float) ($orderRow['total'] ?? 0),
                 'vatable' => (float) ($orderRow['vatable'] ?? 0),
                 'vat' => (float) ($orderRow['vat'] ?? 0),
@@ -454,6 +516,12 @@ if ($receiptDataJson === false) {
                                 }
                                 $statusValue = $order['status'] !== '' ? $order['status'] : 'pending';
                                 $createdAt = !empty($order['created_at']) ? date('M d, Y g:i A', strtotime($order['created_at'])) : 'N/A';
+                                $statusTransitions = [
+                                    'pending' => ['approved', 'completed'],
+                                    'approved' => ['completed'],
+                                    'completed' => [],
+                                ];
+                                $availableStatusChanges = $statusTransitions[$statusValue] ?? [];
                                 ?>
                                 <tr>
                                     <td>#<?= (int) $order['id'] ?></td>
@@ -482,14 +550,16 @@ if ($receiptDataJson === false) {
                                         <form method="post" class="status-form">
                                             <input type="hidden" name="order_id" value="<?= (int) $order['id'] ?>">
                                             <input type="hidden" name="update_order_status" value="1">
-                                            <select name="new_status">
-                                                <?php foreach ($statusOptions as $value => $label): ?>
-                                                    <option value="<?= $value ?>" <?= $statusValue === $value ? 'selected' : '' ?>>
-                                                        <?= $label ?>
-                                                    </option>
-                                                <?php endforeach; ?>
+                                            <select name="new_status" <?= empty($availableStatusChanges) ? 'disabled' : '' ?>>
+                                                <?php if (empty($availableStatusChanges)): ?>
+                                                    <option value="">Completed</option>
+                                                <?php else: ?>
+                                                    <?php foreach ($availableStatusChanges as $value): ?>
+                                                        <option value="<?= $value ?>"><?= $statusOptions[$value] ?></option>
+                                                    <?php endforeach; ?>
+                                                <?php endif; ?>
                                             </select>
-                                            <button type="submit" class="status-save">Update</button>
+                                            <button type="submit" class="status-save" <?= empty($availableStatusChanges) ? 'disabled' : '' ?>>Update</button>
                                         </form>
                                     </td>
                                     <td><?= htmlspecialchars($createdAt, ENT_QUOTES, 'UTF-8') ?></td>
@@ -985,7 +1055,7 @@ if ($receiptDataJson === false) {
 
             function cleanupSuccessParams() {
                 const url = new URL(window.location.href);
-                ['ok', 'order_id', 'amount_paid', 'change'].forEach((param) => url.searchParams.delete(param));
+                ['ok', 'order_id', 'amount_paid', 'change', 'invoice_number'].forEach((param) => url.searchParams.delete(param));
                 window.history.replaceState({}, document.title, url.toString());
             }
 
@@ -1011,6 +1081,7 @@ if ($receiptDataJson === false) {
                 let cashierName = 'Admin';
                 let createdAt = new Date();
                 let orderId = params.get('order_id') || '';
+                let invoiceNumber = params.get('invoice_number') || '';
 
                 if (hasServerReceipt) {
                     items = checkoutReceipt.items.map((item) => {
@@ -1035,6 +1106,10 @@ if ($receiptDataJson === false) {
 
                     if (checkoutReceipt.order_id) {
                         orderId = checkoutReceipt.order_id;
+                    }
+
+                     if (checkoutReceipt.invoice_number) {
+                        invoiceNumber = checkoutReceipt.invoice_number;
                     }
 
                     if (checkoutReceipt.created_at) {
@@ -1096,7 +1171,11 @@ if ($receiptDataJson === false) {
                     receiptItemsBody.appendChild(row);
                 });
 
-                document.getElementById('receiptNumber').textContent = orderId ? `INV-${orderId}` : `INV-${Date.now()}`;
+                if (!invoiceNumber) {
+                    invoiceNumber = orderId ? `INV-${orderId}` : `INV-${Date.now()}`;
+                }
+
+                document.getElementById('receiptNumber').textContent = invoiceNumber;
                 document.getElementById('receiptDate').textContent = Number.isNaN(createdAt.getTime()) ? new Date().toLocaleString() : createdAt.toLocaleString();
                 document.getElementById('receiptCashier').textContent = cashierName || 'Admin';
                 document.getElementById('receiptSalesTotal').textContent = formatPeso(salesTotal);

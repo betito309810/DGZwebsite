@@ -809,6 +809,20 @@ body {
     padding: 28px 24px 20px;
 }
 
+/* Payment proof modal sizing – widen container and allow taller images */
+.proof-modal-content {
+    max-width: 520px; /* adjust this width to experiment with preview size */
+    width: min(90vw, 520px);
+}
+
+.proof-image-wrapper {
+    min-height: 320px; /* taller preview area for longer receipts */
+}
+
+.proof-image-wrapper img {
+    max-height: 480px; /* tweak this to control preview height */
+}
+
 .receipt-content {
     font-family: 'Courier New', Courier, monospace;
     font-size: 13px;

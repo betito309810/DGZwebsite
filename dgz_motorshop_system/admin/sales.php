@@ -7,31 +7,24 @@ $pdo = db();
 // Handle CSV export FIRST - before any other queries
 if(isset($_GET['export']) && $_GET['export'] == 'csv') {
     // Get ALL orders for export
-    $export_sql = "SELECT * FROM orders ORDER BY created_at DESC";
+    $export_sql = "SELECT * FROM orders WHERE status IN ('approved','completed') ORDER BY created_at DESC";
     $export_orders = $pdo->query($export_sql)->fetchAll();
     
     header('Content-Type: text/csv');
     header('Content-Disposition: attachment; filename="sales.csv"');
     $out = fopen('php://output', 'w');
-    fputcsv($out, ['ID','Customer Name','Contact','Address','Total','Payment Method','Payment Reference','Proof Image','Status','Created At']);
+    fputcsv($out, ['ID','Invoice','Customer Name','Contact','Address','Total','Payment Method','Payment Reference','Proof Image','Status','Created At']);
     foreach($export_orders as $o) {
-
-        $details = parsePaymentProofValue($o['payment_proof'] ?? null, $o['reference_no'] ?? null);
-
-
-        $details = parsePaymentProofValue($o['payment_proof'] ?? null, $o['reference_no'] ?? null);
-
-        $details = parsePaymentProofValue($o['payment_proof'] ?? null);
-
 
         fputcsv($out, [
             $o['id'],
+            $o['invoice_number'] ?? '',
             $o['customer_name'],
             $o['contact'],
             $o['address'],
             $o['total'],
             $o['payment_method'],
-            $details['reference'],
+            ($details = parsePaymentProofValue($o['payment_proof'] ?? null, $o['reference_no'] ?? null))['reference'],
             $details['image'],
             $o['status'],
             $o['created_at']
@@ -47,12 +40,12 @@ $current_page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
 $offset = ($current_page - 1) * $records_per_page;
 
 // Count total records
-$count_sql = "SELECT COUNT(*) FROM orders";
+$count_sql = "SELECT COUNT(*) FROM orders WHERE status IN ('approved','completed')";
 $total_records = $pdo->query($count_sql)->fetchColumn();
 $total_pages = ceil($total_records / $records_per_page);
 
 // Get orders with pagination
-$sql = "SELECT * FROM orders ORDER BY created_at DESC LIMIT :limit OFFSET :offset";
+$sql = "SELECT * FROM orders WHERE status IN ('approved','completed') ORDER BY created_at DESC LIMIT :limit OFFSET :offset";
 $stmt = $pdo->prepare($sql);
 $stmt->bindValue(':limit', $records_per_page, PDO::PARAM_INT);
 $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
@@ -164,6 +157,7 @@ $end_record = min($offset + $records_per_page, $total_records);
                     <thead>
                         <tr>
                             <th>ID</th>
+                            <th>Invoice</th>
                             <th>Customer Name</th>
                             <th>Contact</th>
                             <th>Address</th>
@@ -178,7 +172,7 @@ $end_record = min($offset + $records_per_page, $total_records);
                     <tbody>
                         <?php if(empty($orders)): ?>
                         <tr>
-                            <td colspan="10" style="text-align: center; padding: 40px; color: #6b7280;">
+                            <td colspan="11" style="text-align: center; padding: 40px; color: #6b7280;">
                                 <i class="fas fa-inbox"
                                     style="font-size: 48px; margin-bottom: 10px; display: block;"></i>
                                 No sales records found.
@@ -188,17 +182,13 @@ $end_record = min($offset + $records_per_page, $total_records);
                         <?php foreach($orders as $o): ?>
                         <tr class="transaction-row" data-order-id="<?=$o['id']?>" style="cursor: pointer;">
                             <td><?=$o['id']?></td>
+                            <td><?=$o['invoice_number'] ? htmlspecialchars($o['invoice_number']) : 'N/A'?></td>
                             <td><?=htmlspecialchars($o['customer_name'])?></td>
                             <td><?=htmlspecialchars($o['contact'] ?? 'N/A')?></td>
                             <td><?=htmlspecialchars($o['address'] ?? 'N/A')?></td>
                             <td>₱<?=number_format($o['total'],2)?></td>
                             <td><?=htmlspecialchars($o['payment_method'])?></td>
                             <?php $paymentDetails = parsePaymentProofValue($o['payment_proof'] ?? null, $o['reference_no'] ?? null); ?>
-
-
-
-                            <?php $paymentDetails = parsePaymentProofValue($o['payment_proof'] ?? null); ?>
-
 
                             <td>
                                 <?php if(!empty($paymentDetails['reference'])): ?>
@@ -367,6 +357,10 @@ $end_record = min($offset + $records_per_page, $total_records);
                             <span id="modal-customer"></span>
                         </div>
                         <div class="info-item">
+                            <label>Invoice #:</label>
+                            <span id="modal-invoice"></span>
+                        </div>
+                        <div class="info-item">
                             <label>Date:</label>
                             <span id="modal-date"></span>
                         </div>
@@ -377,6 +371,10 @@ $end_record = min($offset + $records_per_page, $total_records);
                         <div class="info-item">
                             <label>Payment Method:</label>
                             <span id="modal-payment"></span>
+                        </div>
+                        <div class="info-item" id="modal-reference-wrapper" style="display:none;">
+                            <label>Reference:</label>
+                            <span id="modal-reference"></span>
                         </div>
                     </div>
                 </div>
@@ -695,6 +693,17 @@ $end_record = min($offset + $records_per_page, $total_records);
                     document.getElementById('modal-date').textContent = new Date(data.order.created_at).toLocaleString();
                     document.getElementById('modal-status').textContent = data.order.status;
                     document.getElementById('modal-payment').textContent = data.order.payment_method;
+                    document.getElementById('modal-invoice').textContent = data.order.invoice_number || 'N/A';
+
+                    const referenceWrapper = document.getElementById('modal-reference-wrapper');
+                    const referenceValue = document.getElementById('modal-reference');
+                    if ((data.order.payment_method || '').toLowerCase() === 'gcash' && data.order.reference_number) {
+                        referenceWrapper.style.display = 'block';
+                        referenceValue.textContent = data.order.reference_number;
+                    } else {
+                        referenceWrapper.style.display = 'none';
+                        referenceValue.textContent = '';
+                    }
                     
                     // Update items table
                     const itemsBody = document.getElementById('modal-items');

@@ -22,7 +22,8 @@ try {
                         COUNT(*) as total_orders, 
                         COALESCE(SUM(total), 0) as total_sales 
                     FROM orders 
-                    WHERE DATE(created_at) = CURDATE()";
+                    WHERE DATE(created_at) = CURDATE()
+                    AND status IN ('approved','completed')";
             break;
             
         case 'weekly':
@@ -31,7 +32,8 @@ try {
                         COUNT(*) as total_orders, 
                         COALESCE(SUM(total), 0) as total_sales 
                     FROM orders 
-                    WHERE YEARWEEK(created_at, 1) = YEARWEEK(CURDATE(), 1)";
+                    WHERE YEARWEEK(created_at, 1) = YEARWEEK(CURDATE(), 1)
+                    AND status IN ('approved','completed')";
             break;
             
         case 'monthly':
@@ -41,7 +43,8 @@ try {
                         COALESCE(SUM(total), 0) as total_sales 
                     FROM orders 
                     WHERE YEAR(created_at) = YEAR(CURDATE()) 
-                    AND MONTH(created_at) = MONTH(CURDATE())";
+                    AND MONTH(created_at) = MONTH(CURDATE())
+                    AND status IN ('approved','completed')";
             break;
             
         default:
