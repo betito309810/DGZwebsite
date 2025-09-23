@@ -156,6 +156,9 @@ if(isset($_GET['delete'])) {
     $product_id = intval($_GET['delete']);
     
     try {
+        // Added: wrap the entire deletion in a transaction so history and clean-up are atomic.
+        $pdo->beginTransaction();
+
         // Get product details before deletion (using prepared statement)
         $stmt = $pdo->prepare("SELECT * FROM products WHERE id = ?");
         $stmt->execute([$product_id]);
@@ -203,10 +206,17 @@ if ($product) {
                 error_log("Failed to record product deletion history: " . $e->getMessage());
             }
             
-            // Delete the product (this should always work)
+            // Added: cascade clean-up for dependent tables to satisfy FK constraints.
+            $pdo->prepare('DELETE FROM stock_entries WHERE product_id = ?')->execute([$product_id]);
+            $pdo->prepare('UPDATE order_items SET product_id = NULL WHERE product_id = ?')->execute([$product_id]);
             $pdo->prepare('DELETE FROM products WHERE id=?')->execute([$product_id]);
         }
+        $pdo->commit();
     } catch (Exception $e) {
+        // Added: rollback on failure to keep DB consistent when any step fails.
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         // Log the error and redirect
         error_log("Product deletion failed: " . $e->getMessage());
     }
