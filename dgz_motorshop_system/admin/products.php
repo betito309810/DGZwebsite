@@ -33,14 +33,83 @@ if (isset($_GET['history']) && $_GET['history'] == '1') {
     </thead>
     <tbody>
         <?php foreach ($rows as $entry): ?>
+        <?php
+            // Added: parse structured history payloads so the table keeps values even after deletion edits.
+            $rawDetails = $entry['details'] ?? '';
+            $decodedDetails = json_decode($rawDetails, true);
+            $detailsIsStructured = json_last_error() === JSON_ERROR_NONE && is_array($decodedDetails);
+            $snapshot = $detailsIsStructured && isset($decodedDetails['snapshot']) && is_array($decodedDetails['snapshot']) ? $decodedDetails['snapshot'] : [];
+            $changes = $detailsIsStructured && isset($decodedDetails['changes']) && is_array($decodedDetails['changes']) ? $decodedDetails['changes'] : [];
+            $summaryText = $detailsIsStructured && !empty($decodedDetails['summary']) ? $decodedDetails['summary'] : '';
+
+            $displayCode = $entry['product_code'] ?? '';
+            if ($displayCode === '' && isset($snapshot['code'])) {
+                $displayCode = $snapshot['code'];
+            }
+
+            $displayName = $entry['product_name'] ?? '';
+            if ($displayName === '' && isset($snapshot['name'])) {
+                $displayName = $snapshot['name'];
+            }
+
+            $displayBrand = $entry['brand'] ?? '';
+            if ($displayBrand === '' && isset($snapshot['brand'])) {
+                $displayBrand = $snapshot['brand'];
+            }
+
+            $displayCategory = $entry['category'] ?? '';
+            if ($displayCategory === '' && isset($snapshot['category'])) {
+                $displayCategory = $snapshot['category'];
+            }
+
+            $displayPrice = $entry['price'];
+            if ($displayPrice === null && isset($snapshot['price'])) {
+                $displayPrice = $snapshot['price'];
+            }
+            $displayPrice = $displayPrice === null ? 0 : (float) $displayPrice;
+
+            $displayQuantity = $entry['quantity'];
+            if ($displayQuantity === null && isset($snapshot['quantity'])) {
+                $displayQuantity = $snapshot['quantity'];
+            }
+            $displayQuantity = $displayQuantity === null ? 0 : (float) $displayQuantity;
+
+            $detailsHtml = '';
+            if ($detailsIsStructured) {
+                if ($summaryText !== '') {
+                    $detailsHtml .= '<div>' . htmlspecialchars($summaryText) . '</div>';
+                }
+                if (!empty($changes)) {
+                    $detailsHtml .= '<ul class="history-change-list">';
+                    foreach ($changes as $change) {
+                        $fromValue = $change['from'];
+                        $toValue = $change['to'];
+                        if (($change['type'] ?? '') === 'currency') {
+                            $fromValue = $fromValue === null ? '-' : '₱' . number_format((float) $fromValue, 2);
+                            $toValue = $toValue === null ? '-' : '₱' . number_format((float) $toValue, 2);
+                        } elseif (($change['type'] ?? '') === 'number') {
+                            $fromValue = $fromValue === null ? '-' : number_format((float) $fromValue);
+                            $toValue = $toValue === null ? '-' : number_format((float) $toValue);
+                        } else {
+                            $fromValue = ($fromValue === null || $fromValue === '') ? '-' : $fromValue;
+                            $toValue = ($toValue === null || $toValue === '') ? '-' : $toValue;
+                        }
+                        $detailsHtml .= '<li>' . htmlspecialchars(($change['label'] ?? 'Field') . ': ' . $fromValue . ' → ' . $toValue) . '</li>';
+                    }
+                    $detailsHtml .= '</ul>';
+                }
+            } elseif ($rawDetails !== '') {
+                $detailsHtml = '<div>' . htmlspecialchars($rawDetails) . '</div>';
+            }
+        ?>
         <tr>
             <td><?= date('M d, Y H:i', strtotime($entry['created_at'])) ?></td>
-            <td><span class="product-code"><?= htmlspecialchars($entry['product_code'] ?? '-') ?></span></td>
-            <td><span class="product-name"><?= htmlspecialchars($entry['product_name'] ?? '-') ?></span></td>
-            <td><span class="brand-badge"><?= htmlspecialchars($entry['brand'] ?? '-') ?></span></td>
-            <td><span class="category-badge"><?= htmlspecialchars($entry['category'] ?? '-') ?></span></td>
-            <td><span class="price">₱<?= number_format($entry['price'] ?? 0, 2) ?></span></td>
-            <td><span class="quantity"><?= number_format($entry['quantity'] ?? 0) ?></span></td>
+            <td><span class="product-code"><?= htmlspecialchars($displayCode !== '' ? $displayCode : '-') ?></span></td>
+            <td><span class="product-name"><?= htmlspecialchars($displayName !== '' ? $displayName : '-') ?></span></td>
+            <td><span class="brand-badge"><?= htmlspecialchars($displayBrand !== '' ? $displayBrand : '-') ?></span></td>
+            <td><span class="category-badge"><?= htmlspecialchars($displayCategory !== '' ? $displayCategory : '-') ?></span></td>
+            <td><span class="price">₱<?= number_format($displayPrice, 2) ?></span></td>
+            <td><span class="quantity"><?= number_format($displayQuantity) ?></span></td>
             <td><span class="user-name"><?= htmlspecialchars($entry['added_by'] ?? '-') ?></span></td>
             <td>
                 <?php 
@@ -62,10 +131,10 @@ if (isset($_GET['history']) && $_GET['history'] == '1') {
                                     $actionText = 'Added';
                             }
                             
-                        ?>
+                ?>
                 <span class="<?= $actionClass ?>"><?= $actionText ?></span>
-                <?php if (!empty($entry['details'])): ?>
-                <div class="action-details"><?= htmlspecialchars($entry['details']) ?></div>
+                <?php if ($detailsHtml !== ''): ?>
+                <div class="action-details"><?= $detailsHtml ?></div>
                 <?php endif; ?>
             </td>
 
@@ -102,9 +171,33 @@ if ($product) {
 }
             // Try to record deletion in history (optional)
             try {
-                $details = "Deleted product - Code: {$product['code']}, Name: {$product['name']}, Brand: {$product['brand']}, Category: {$product['category']}, Stock: {$product['quantity']}, Price: ₱{$product['price']}";
+                // Added: persist a snapshot of the product before it disappears so history remains readable.
+                $historyPayload = [
+                    'summary' => sprintf(
+                        'Deleted %s (%s).',
+                        $product['name'] ?? 'product',
+                        $product['code'] ?? 'no code'
+                    ),
+                    'snapshot' => [
+                        'code' => $product['code'] ?? null,
+                        'name' => $product['name'] ?? null,
+                        'description' => $product['description'] ?? null,
+                        'price' => $product['price'] ?? null,
+                        'quantity' => $product['quantity'] ?? null,
+                        'low_stock_threshold' => $product['low_stock_threshold'] ?? null,
+                        'brand' => $product['brand'] ?? null,
+                        'category' => $product['category'] ?? null,
+                        'supplier' => $product['supplier'] ?? null,
+                    ],
+                ];
+
                 $pdo->prepare('INSERT INTO product_add_history (product_id, user_id, action, details) VALUES (?, ?, ?, ?)')
-                    ->execute([$product_id, $_SESSION['user_id'], 'delete', $details]);
+                    ->execute([
+                        $product_id,
+                        $_SESSION['user_id'],
+                        'delete',
+                        json_encode($historyPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    ]);
             } catch (Exception $e) {
                 // History failed but continue with deletion
                 error_log("Failed to record product deletion history: " . $e->getMessage());
@@ -122,29 +215,52 @@ if ($product) {
     exit;
 }
 if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_product'])){
-    $name = $_POST['name']; 
-    $code = $_POST['code']; 
-    $desc = $_POST['description']; 
-    $price = floatval($_POST['price']); 
-    $qty = intval($_POST['quantity']); 
-    $low = intval($_POST['low_stock_threshold']);
-    $id = intval($_POST['id']);
+    // Added: normalise raw form values once so they can be reused across actions.
+    $name = trim($_POST['name'] ?? '');
+    $code = trim($_POST['code'] ?? '');
+    $desc = trim($_POST['description'] ?? '');
+    $price = isset($_POST['price']) ? (float) $_POST['price'] : 0.0;
+    $qty = isset($_POST['quantity']) ? (int) $_POST['quantity'] : 0;
+    $low = isset($_POST['low_stock_threshold']) ? (int) $_POST['low_stock_threshold'] : 0;
+    $id = isset($_POST['id']) ? (int) $_POST['id'] : 0;
     
     // Handle brand and category
-    $brand = $_POST['brand'];
-    if($brand === '__addnew__' && !empty($_POST['brand_new'])) {
-        $brand = $_POST['brand_new'];
+    $brand = trim($_POST['brand'] ?? '');
+    $brandNew = trim($_POST['brand_new'] ?? '');
+    // Added: honour the optional text input when the select is left empty or set to "Add new".
+    if ($brand === '__addnew__' || ($brand === '' && $brandNew !== '')) {
+        $brand = $brandNew;
     }
-    
-    $category = $_POST['category'];
-    if($category === '__addnew__' && !empty($_POST['category_new'])) {
-        $category = $_POST['category_new'];
+    $brand = $brand === '' ? null : $brand;
+
+    $category = trim($_POST['category'] ?? '');
+    $categoryNew = trim($_POST['category_new'] ?? '');
+    // Added: same fallback behaviour for the category field.
+    if ($category === '__addnew__' || ($category === '' && $categoryNew !== '')) {
+        $category = $categoryNew;
     }
-    
-    $supplier = $_POST['supplier'];
-    if($supplier === '__addnew__' && !empty($_POST['supplier_new'])) {
-        $supplier = $_POST['supplier_new'];
+    $category = $category === '' ? null : $category;
+
+    $supplier = trim($_POST['supplier'] ?? '');
+    $supplierNew = trim($_POST['supplier_new'] ?? '');
+    // Added: allow suppliers typed in the text box without toggling the select.
+    if ($supplier === '__addnew__' || ($supplier === '' && $supplierNew !== '')) {
+        $supplier = $supplierNew;
     }
+    $supplier = $supplier === '' ? null : $supplier;
+
+    // Added: build a snapshot of the latest field values to reuse in history payloads.
+    $currentSnapshot = [
+        'code' => $code,
+        'name' => $name,
+        'description' => $desc,
+        'price' => $price,
+        'quantity' => $qty,
+        'low_stock_threshold' => $low,
+        'brand' => $brand,
+        'category' => $category,
+        'supplier' => $supplier,
+    ];
 
     $user_id = $_SESSION['user_id'];
     
@@ -160,15 +276,54 @@ $old_product = $stmt->fetch();
         
         // Record edit in history
         $changes = [];
-        if($old_product['name'] !== $name) $changes[] = "name: {$old_product['name']} → $name";
-        if($old_product['price'] != $price) $changes[] = "price: ₱{$old_product['price']} → ₱$price";
-        if($old_product['quantity'] != $qty) $changes[] = "quantity: {$old_product['quantity']} → $qty";
-        if($old_product['brand'] !== $brand) $changes[] = "brand: {$old_product['brand']} → $brand";
-        if($old_product['category'] !== $category) $changes[] = "category: {$old_product['category']} → $category";
-        
-        $details = !empty($changes) ? "Changes: " . implode(", ", $changes) : "";
+        $previousSnapshot = [
+            'code' => $old_product['code'] ?? null,
+            'name' => $old_product['name'] ?? null,
+            'description' => $old_product['description'] ?? null,
+            'price' => $old_product['price'] ?? null,
+            'quantity' => $old_product['quantity'] ?? null,
+            'low_stock_threshold' => $old_product['low_stock_threshold'] ?? null,
+            'brand' => $old_product['brand'] ?? null,
+            'category' => $old_product['category'] ?? null,
+            'supplier' => $old_product['supplier'] ?? null,
+        ];
+
+        // Added: build structured change list so history modal can render exact edits.
+        $fieldsToCompare = [
+            'code' => ['label' => 'Code', 'type' => 'text'],
+            'name' => ['label' => 'Name', 'type' => 'text'],
+            'description' => ['label' => 'Description', 'type' => 'text'],
+            'price' => ['label' => 'Price', 'type' => 'currency'],
+            'quantity' => ['label' => 'Quantity', 'type' => 'number'],
+            'low_stock_threshold' => ['label' => 'Low stock threshold', 'type' => 'number'],
+            'brand' => ['label' => 'Brand', 'type' => 'text'],
+            'category' => ['label' => 'Category', 'type' => 'text'],
+            'supplier' => ['label' => 'Supplier', 'type' => 'text'],
+        ];
+
+        foreach ($fieldsToCompare as $field => $meta) {
+            $previousValue = $previousSnapshot[$field];
+            $newValue = $currentSnapshot[$field];
+            if ($previousValue != $newValue) {
+                $changes[] = [
+                    'field' => $field,
+                    'label' => $meta['label'],
+                    'type' => $meta['type'],
+                    'from' => $previousValue,
+                    'to' => $newValue,
+                ];
+            }
+        }
+
+        $historyPayload = [
+            'summary' => sprintf('Updated product information (%d change%s).', count($changes), count($changes) === 1 ? '' : 's'),
+            'changes' => $changes,
+            'snapshot' => $currentSnapshot,
+            'previous' => $previousSnapshot,
+        ];
+
         $pdo->prepare('INSERT INTO product_add_history (product_id, user_id, action, details) VALUES (?, ?, ?, ?)')
-            ->execute([$id, $user_id, 'edit', $details]);
+            ->execute([$id, $user_id, 'edit', json_encode($historyPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)]);
     } else {
         // Insert new product
         $stmt = $pdo->prepare('INSERT INTO products (code, name, description, price, quantity, low_stock_threshold, brand, category, supplier) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
@@ -176,9 +331,22 @@ $old_product = $stmt->fetch();
         $product_id = $pdo->lastInsertId();
         
         // Record addition in history
-        $details = "Initial stock: $qty, Price: ₱$price, Brand: $brand, Category: $category";
+        $historyPayload = [
+            'summary' => sprintf(
+                'Added %s (%s). Stock: %s • Price: ₱%s • Brand: %s • Category: %s • Supplier: %s',
+                $name !== '' ? $name : 'Unnamed product',
+                $code !== '' ? $code : 'no code',
+                number_format($qty),
+                number_format($price, 2),
+                $brand ?? '-',
+                $category ?? '-',
+                $supplier ?? '-'
+            ),
+            'snapshot' => $currentSnapshot,
+        ];
+
         $pdo->prepare('INSERT INTO product_add_history (product_id, user_id, action, details) VALUES (?, ?, ?, ?)')
-            ->execute([$product_id, $user_id, 'add', $details]);
+            ->execute([$product_id, $user_id, 'add', json_encode($historyPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)]);
     }
     header('Location: products.php'); exit;
 }
@@ -425,6 +593,35 @@ $suppliers = $pdo->query('SELECT DISTINCT supplier FROM products WHERE supplier 
                 }
             }
 
+            // Added: helper to synchronise select + optional text input when editing records.
+            function setSelectWithFallback(selectId, inputId, value) {
+                const selectEl = document.getElementById(selectId);
+                const inputEl = document.getElementById(inputId);
+                if (!selectEl || !inputEl) {
+                    return;
+                }
+
+                const normalisedValue = value || '';
+                const hasMatchingOption = Array.from(selectEl.options).some(opt => opt.value === normalisedValue && normalisedValue !== '');
+
+                if (normalisedValue && hasMatchingOption) {
+                    selectEl.value = normalisedValue;
+                    inputEl.style.display = 'none';
+                    inputEl.required = false;
+                    inputEl.value = '';
+                } else if (normalisedValue) {
+                    selectEl.value = '__addnew__';
+                    inputEl.style.display = 'block';
+                    inputEl.required = true;
+                    inputEl.value = normalisedValue;
+                } else {
+                    selectEl.value = '';
+                    inputEl.style.display = 'none';
+                    inputEl.required = false;
+                    inputEl.value = '';
+                }
+            }
+
             function toggleBrandInput(sel) {
                 const input = document.getElementById('brandNewInput');
                 if (sel.value === '__addnew__') {
@@ -479,7 +676,10 @@ $suppliers = $pdo->query('SELECT DISTINCT supplier FROM products WHERE supplier 
                             data-description="<?=htmlspecialchars($p['description'])?>"
                             data-price="<?=htmlspecialchars($p['price'])?>"
                             data-quantity="<?=htmlspecialchars($p['quantity'])?>"
-                            data-low="<?=htmlspecialchars($p['low_stock_threshold'])?>"><i
+                            data-low="<?=htmlspecialchars($p['low_stock_threshold'])?>"
+                            data-brand="<?=htmlspecialchars($p['brand'] ?? '')?>"
+                            data-category="<?=htmlspecialchars($p['category'] ?? '')?>"
+                            data-supplier="<?=htmlspecialchars($p['supplier'] ?? '')?>"><i
                                 class="fas fa-edit"></i>Edit</a>
                         <a href="products.php?delete=<?=$p['id']?>" class="delete-btn action-btn"
                             onclick="return confirm('Delete?')"> <i class="fas fa-trash"></i>Delete</a>
@@ -643,13 +843,9 @@ $suppliers = $pdo->query('SELECT DISTINCT supplier FROM products WHERE supplier 
                 document.getElementById('edit_price').value = this.dataset.price;
                 document.getElementById('edit_quantity').value = this.dataset.quantity;
                 document.getElementById('edit_low').value = this.dataset.low;
-                // Set dropdowns to blank/default for now (backend logic can be added to set correct value)
-                document.getElementById('edit_brand').value = '';
-                document.getElementById('edit_category').value = '';
-                document.getElementById('edit_supplier').value = '';
-                document.getElementById('edit_brand_new').style.display = 'none';
-                document.getElementById('edit_category_new').style.display = 'none';
-                document.getElementById('edit_supplier_new').style.display = 'none';
+                setSelectWithFallback('edit_brand', 'edit_brand_new', this.dataset.brand || '');
+                setSelectWithFallback('edit_category', 'edit_category_new', this.dataset.category || '');
+                setSelectWithFallback('edit_supplier', 'edit_supplier_new', this.dataset.supplier || '');
                 document.getElementById('editImagePreview').src =
                     'https://via.placeholder.com/120x120?text=No+Image';
                 document.getElementById('editModal').style.display = 'flex';
@@ -708,6 +904,10 @@ $suppliers = $pdo->query('SELECT DISTINCT supplier FROM products WHERE supplier 
         // Add product modal functionality
         document.getElementById('openAddModal').onclick = function () {
             document.getElementById('addModal').style.display = 'flex';
+            // Added: reset add-modal selectors every time it opens so previous values don’t bleed over.
+            setSelectWithFallback('brandSelect', 'brandNewInput', '');
+            setSelectWithFallback('categorySelect', 'categoryNewInput', '');
+            setSelectWithFallback('supplierSelect', 'supplierNewInput', '');
         };
         document.getElementById('closeAddModal').onclick = function () {
             document.getElementById('addModal').style.display = 'none';
