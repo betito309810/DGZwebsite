@@ -1,5 +1,5 @@
 <?php
-require __DIR__ . '/../config.php';
+require __DIR__ . '/../config/config.php';
 
 if (empty($_SESSION['user_id'])) {
     header('Location: login.php');
@@ -207,7 +207,7 @@ if ($productCatalogJson === false) {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <title>POS - DGZ</title>
     <link rel="stylesheet" href="../assets/css/style.css">
-    <link rel="stylesheet" href="../assets/css/pos.css">
+    <link rel="stylesheet" href="../assets/css/pos/pos.css">
 </head>
 
 <body>

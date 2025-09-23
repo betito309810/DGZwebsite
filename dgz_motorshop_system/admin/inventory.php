@@ -1,5 +1,5 @@
 <?php
-require '../config.php';
+require __DIR__ . '/../config/config.php';
 if(empty($_SESSION['user_id'])){ header('Location: login.php'); exit; }
 $pdo = db();
 $role = $_SESSION['role'] ?? '';
@@ -80,7 +80,7 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
     <title>Inventory Management</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="../assets/css/style.css">
-    <link rel="stylesheet" href="../assets/css/inventory.css">
+    <link rel="stylesheet" href="../assets/css/inventory/inventory.css">
     <style>
         .inventory-actions {
             margin: 20px 0;

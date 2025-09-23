@@ -1,7 +1,5 @@
 <?php
-require '../config.php';
-
-
+require __DIR__. '/../config/config.php';
 // Ensure user is logged in
 if(empty($_SESSION['user_id'])){ header('Location: login.php'); exit; }
 $pdo = db();

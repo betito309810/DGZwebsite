@@ -1,6 +1,6 @@
 <?php
 // sales_api.php - Create this new file to handle API requests
-require '../config.php';
+require __DIR__. '/../config/config.php';
 header('Content-Type: application/json');
 
 if(empty($_SESSION['user_id'])){ 

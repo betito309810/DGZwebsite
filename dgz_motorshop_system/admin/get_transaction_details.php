@@ -1,5 +1,5 @@
 <?php
-require '../config.php';
+require __DIR__. '/../config/config.php';
 if(empty($_SESSION['user_id'])){ 
     http_response_code(401);
     exit('Unauthorized');

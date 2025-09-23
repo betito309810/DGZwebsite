@@ -1,5 +1,5 @@
 <?php
-require '../config.php';
+require __DIR__ . '/../config/config.php';
 $pdo = db();
 $msg='';
 if($_SERVER['REQUEST_METHOD']==='POST'){
@@ -21,7 +21,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Login</title>
     <link rel="stylesheet" href="../assets/css/style.css">
-    <link rel="stylesheet" href="../assets/css/login.css">
+    <link rel="stylesheet" href="../assets/css/login/login.css">
 </head>
 <body>
     <!-- Logo placeholder - replace src with your logo path -->
