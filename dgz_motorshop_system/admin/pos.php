@@ -197,6 +197,69 @@ $productCatalogJson = json_encode($productCatalog, JSON_HEX_TAG | JSON_HEX_APOS 
 if ($productCatalogJson === false) {
     $productCatalogJson = '[]';
 }
+
+$receiptData = null;
+if (isset($_GET['ok'], $_GET['order_id']) && $_GET['ok'] === '1') {
+    $requestedOrderId = (int) $_GET['order_id'];
+
+    if ($requestedOrderId > 0) {
+        $orderStmt = $pdo->prepare(
+            'SELECT id, customer_name, total, vatable, vat, amount_paid, change_amount, created_at
+             FROM orders
+             WHERE id = ?
+             LIMIT 1'
+        );
+        $orderStmt->execute([$requestedOrderId]);
+        $orderRow = $orderStmt->fetch();
+
+        if ($orderRow) {
+            $itemsStmt = $pdo->prepare(
+                'SELECT oi.product_id, oi.qty, oi.price, p.name
+                 FROM order_items oi
+                 LEFT JOIN products p ON p.id = oi.product_id
+                 WHERE oi.order_id = ?'
+            );
+            $itemsStmt->execute([$requestedOrderId]);
+            $itemRows = $itemsStmt->fetchAll();
+
+            $items = array_map(static function (array $item): array {
+                $name = trim((string) ($item['name'] ?? ''));
+                if ($name === '') {
+                    $name = 'Item #' . (int) ($item['product_id'] ?? 0);
+                }
+
+                $price = (float) ($item['price'] ?? 0);
+                $qty = (int) ($item['qty'] ?? 0);
+
+                return [
+                    'name' => $name,
+                    'price' => $price,
+                    'qty' => $qty,
+                    'total' => $price * $qty,
+                ];
+            }, $itemRows ?: []);
+
+            $receiptData = [
+                'order_id' => (int) $orderRow['id'],
+                'customer_name' => (string) ($orderRow['customer_name'] ?? 'Customer'),
+                'created_at' => (string) ($orderRow['created_at'] ?? ''),
+                'sales_total' => (float) ($orderRow['total'] ?? 0),
+                'vatable' => (float) ($orderRow['vatable'] ?? 0),
+                'vat' => (float) ($orderRow['vat'] ?? 0),
+                'amount_paid' => (float) ($orderRow['amount_paid'] ?? 0),
+                'change' => (float) ($orderRow['change_amount'] ?? 0),
+                'discount' => 0.0,
+                'cashier' => (string) ($_SESSION['username'] ?? 'Admin'),
+                'items' => $items,
+            ];
+        }
+    }
+}
+
+$receiptDataJson = $receiptData ? json_encode($receiptData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) : 'null';
+if ($receiptDataJson === false) {
+    $receiptDataJson = 'null';
+}
 ?>
 <!doctype html>
 <html lang="en">
@@ -293,7 +356,7 @@ if ($productCatalogJson === false) {
                 <button type="button" id="openProductModal" class="primary-button">
                     <i class="fas fa-search"></i> Search Product
                 </button>
-                 <div class="top-total-simple" style="font-size: 2.2rem; font-weight: bold; color: #111; min-width: 85%; text-align: right;">
+                 <div class="top-total-simple">
                     <span id="topTotalAmountSimple">₱0.00</span>
                 </div>
             </div>
@@ -346,7 +409,7 @@ if ($productCatalogJson === false) {
 
                 <div class="pos-actions">
                     <button type="button" id="clearPosTable" class="danger-button">Clear</button>
-                    <button name="pos_checkout" type="submit" class="success-button">Settle Payment (Complete)</button>
+                    <button name="pos_checkout" id="settlePaymentButton" type="submit" class="success-button">Settle Payment (Complete)</button>
                 </div>
             </form>
         </div>
@@ -523,10 +586,12 @@ if ($productCatalogJson === false) {
     <script>
         const productCatalog = <?= $productCatalogJson ?>;
         const initialActiveTab = <?= json_encode($activeTab) ?>;
+        const checkoutReceipt = <?= $receiptDataJson ?>;
 
         document.addEventListener('DOMContentLoaded', () => {
             const posStateKey = 'posTable';
             const tabStateKey = 'posActiveTab';
+            let hasShownCheckoutAlert = false;
 
             const sidebar = document.getElementById('sidebar');
             const mobileToggle = document.querySelector('.mobile-toggle');
@@ -538,6 +603,7 @@ if ($productCatalogJson === false) {
             const posTableBody = document.getElementById('posTableBody');
             const posEmptyState = document.getElementById('posEmptyState');
             const amountReceivedInput = document.getElementById('amountReceived');
+            const settlePaymentButton = document.getElementById('settlePaymentButton');
 
             const totals = {
                 sales: document.getElementById('salesTotalAmount'),
@@ -597,6 +663,18 @@ if ($productCatalogJson === false) {
                 return subtotal;
             }
 
+            function updateSettleButtonState() {
+                if (!settlePaymentButton) {
+                    return;
+                }
+
+                const hasRows = posTableBody.querySelector('tr') !== null;
+                const amountReceived = parseFloat(amountReceivedInput?.value || '0');
+                const shouldEnable = hasRows && amountReceived > 0;
+
+                settlePaymentButton.disabled = !shouldEnable;
+            }
+
             function recalcTotals() {
                 const salesTotal = getSalesTotal();
                 const discount = 0;
@@ -622,6 +700,8 @@ if ($productCatalogJson === false) {
                     totals.change.style.color = '';
                     totals.change.title = '';
                 }
+
+                updateSettleButtonState();
             }
 
             function persistTableState() {
@@ -650,8 +730,10 @@ if ($productCatalogJson === false) {
             function clearTable() {
                 posTableBody.innerHTML = '';
                 updateEmptyState();
+                if (amountReceivedInput) {
+                    amountReceivedInput.value = '';
+                }
                 recalcTotals();
-                amountReceivedInput.value = '';
                 try {
                     localStorage.removeItem(posStateKey);
                 } catch (error) {
@@ -913,48 +995,110 @@ if ($productCatalogJson === false) {
                     return;
                 }
 
-                let savedRows = [];
-                try {
-                    savedRows = JSON.parse(localStorage.getItem(posStateKey) || '[]');
-                } catch (error) {
-                    savedRows = [];
-                }
+                const hasServerReceipt = Boolean(
+                    checkoutReceipt &&
+                    Array.isArray(checkoutReceipt.items) &&
+                    checkoutReceipt.items.length > 0
+                );
 
-                if (savedRows.length === 0) {
-                    cleanupSuccessParams();
-                    return;
-                }
+                let items = [];
+                let salesTotal = 0;
+                let discount = 0;
+                let vatable = 0;
+                let vat = 0;
+                let amountPaid = 0;
+                let change = 0;
+                let cashierName = 'Admin';
+                let createdAt = new Date();
+                let orderId = params.get('order_id') || '';
 
-                const amountPaid = parseFloat(params.get('amount_paid') || '0');
-                const change = parseFloat(params.get('change') || '0');
-                const orderId = params.get('order_id') || '';
+                if (hasServerReceipt) {
+                    items = checkoutReceipt.items.map((item) => {
+                        const price = Number(item.price) || 0;
+                        const qty = Number(item.qty) || 0;
+                        const total = Number(item.total);
+                        return {
+                            name: String(item.name || 'Item'),
+                            price,
+                            qty,
+                            total: Number.isFinite(total) ? total : price * qty,
+                        };
+                    });
+
+                    salesTotal = Number(checkoutReceipt.sales_total) || items.reduce((sum, item) => sum + item.total, 0);
+                    discount = Number(checkoutReceipt.discount) || 0;
+                    vatable = Number(checkoutReceipt.vatable);
+                    vat = Number(checkoutReceipt.vat);
+                    amountPaid = Number(checkoutReceipt.amount_paid) || parseFloat(params.get('amount_paid') || '0');
+                    change = Number(checkoutReceipt.change) || parseFloat(params.get('change') || '0');
+                    cashierName = checkoutReceipt.cashier || cashierName;
+
+                    if (checkoutReceipt.order_id) {
+                        orderId = checkoutReceipt.order_id;
+                    }
+
+                    if (checkoutReceipt.created_at) {
+                        const parsedDate = new Date(checkoutReceipt.created_at);
+                        if (!Number.isNaN(parsedDate.getTime())) {
+                            createdAt = parsedDate;
+                        }
+                    }
+
+                    if (!Number.isFinite(vatable) || vatable <= 0) {
+                        vatable = salesTotal / 1.12;
+                    }
+
+                    if (!Number.isFinite(vat) || vat < 0) {
+                        vat = salesTotal - vatable;
+                    }
+                } else {
+                    let savedRows = [];
+                    try {
+                        savedRows = JSON.parse(localStorage.getItem(posStateKey) || '[]');
+                    } catch (error) {
+                        savedRows = [];
+                    }
+
+                    if (savedRows.length === 0) {
+                        cleanupSuccessParams();
+                        return;
+                    }
+
+                    items = savedRows.map((item) => {
+                        const price = Number(item.price) || 0;
+                        const qty = Number(item.qty) || 0;
+                        return {
+                            name: String(item.name || 'Item'),
+                            price,
+                            qty,
+                            total: price * qty,
+                        };
+                    });
+
+                    salesTotal = items.reduce((sum, item) => sum + item.total, 0);
+                    amountPaid = parseFloat(params.get('amount_paid') || '0');
+                    change = parseFloat(params.get('change') || '0');
+                    vatable = salesTotal / 1.12;
+                    vat = salesTotal - vatable;
+                    cashierName = 'Admin';
+                    createdAt = new Date();
+                }
 
                 receiptItemsBody.innerHTML = '';
-                let salesTotal = 0;
-
-                savedRows.forEach((item) => {
-                    const price = Number(item.price) || 0;
-                    const qty = Number(item.qty) || 0;
-                    const total = price * qty;
-                    salesTotal += total;
-
+                items.forEach((item) => {
                     const row = document.createElement('tr');
                     row.innerHTML = `
                         <td style="text-align:left;">${item.name}</td>
-                        <td style="text-align:right;">${qty}</td>
-                        <td style="text-align:right;">${formatPeso(price)}</td>
-                        <td style="text-align:right;">${formatPeso(total)}</td>
+                        <td style="text-align:right;">${item.qty}</td>
+                        <td style="text-align:right;">${formatPeso(item.price)}</td>
+                        <td style="text-align:right;">${formatPeso(item.total)}</td>
                     `;
                     receiptItemsBody.appendChild(row);
                 });
 
-                const discount = 0;
-                const vatable = salesTotal / 1.12;
-                const vat = salesTotal - vatable;
-
                 document.getElementById('receiptNumber').textContent = orderId ? `INV-${orderId}` : `INV-${Date.now()}`;
-                document.getElementById('receiptDate').textContent = new Date().toLocaleString();
-                document.getElementById('receiptCashier').textContent = 'Admin';
+                document.getElementById('receiptDate').textContent = Number.isNaN(createdAt.getTime()) ? new Date().toLocaleString() : createdAt.toLocaleString();
+                document.getElementById('receiptCashier').textContent = cashierName || 'Admin';
                 document.getElementById('receiptSalesTotal').textContent = formatPeso(salesTotal);
                 document.getElementById('receiptDiscount').textContent = formatPeso(discount);
                 document.getElementById('receiptVatable').textContent = formatPeso(vatable);
@@ -963,6 +1107,11 @@ if ($productCatalogJson === false) {
                 document.getElementById('receiptChange').textContent = formatPeso(change);
 
                 receiptModal.style.display = 'flex';
+
+                if (!hasShownCheckoutAlert) {
+                    alert('Payment settled successfully.');
+                    hasShownCheckoutAlert = true;
+                }
 
                 clearTable();
                 cleanupSuccessParams();
@@ -973,11 +1122,17 @@ if ($productCatalogJson === false) {
             }
 
             function printReceipt() {
-                const receiptContent = document.getElementById('receiptContent').innerHTML;
-                const w = window.open('', '_blank');
-                if (!w) {
+                const receiptContentElement = document.getElementById('receiptContent');
+                if (!receiptContentElement) {
                     return;
                 }
+
+                const w = window.open('', '_blank');
+                if (!w) {
+                    alert('Unable to open the receipt print preview. Please allow pop-ups for this site.');
+                    return;
+                }
+
                 w.document.write(`
                     <html>
                         <head>
@@ -990,13 +1145,32 @@ if ($productCatalogJson === false) {
                                 }
                             </style>
                         </head>
-                        <body>${receiptContent}</body>
+                        <body>${receiptContentElement.innerHTML}</body>
                     </html>
                 `);
                 w.document.close();
-                w.focus();
-                w.print();
-                w.close();
+
+                const triggerPrint = () => {
+                    w.focus();
+                    if ('onafterprint' in w) {
+                        w.addEventListener('afterprint', () => w.close(), { once: true });
+                    } else {
+                        setTimeout(() => {
+                            try {
+                                w.close();
+                            } catch (error) {
+                                console.error('Unable to close print preview window.', error);
+                            }
+                        }, 500);
+                    }
+                    w.print();
+                };
+
+                if (w.document.readyState === 'complete') {
+                    triggerPrint();
+                } else {
+                    w.addEventListener('load', triggerPrint, { once: true });
+                }
             }
 
             function closeProofModal() {
@@ -1096,6 +1270,7 @@ if ($productCatalogJson === false) {
 
             amountReceivedInput?.addEventListener('input', () => {
                 recalcTotals();
+                updateSettleButtonState();
             });
 
             clearPosTableButton?.addEventListener('click', () => {
@@ -1183,7 +1358,27 @@ if ($productCatalogJson === false) {
             printReceiptButton?.addEventListener('click', printReceipt);
 
             // Initialisation
-            restoreTableState();
+            updateSettleButtonState();
+            const urlParams = new URLSearchParams(window.location.search);
+            const shouldRestoreTableState = !(
+                urlParams.get('ok') === '1' &&
+                checkoutReceipt &&
+                Array.isArray(checkoutReceipt.items) &&
+                checkoutReceipt.items.length > 0
+            );
+
+            if (shouldRestoreTableState) {
+                restoreTableState();
+            } else {
+                try {
+                    localStorage.removeItem(posStateKey);
+                } catch (error) {
+                    console.error('Unable to clear POS state after checkout.', error);
+                }
+                updateEmptyState();
+                recalcTotals();
+            }
+
             initialiseActiveTab();
             generateReceiptFromTransaction();
         });
