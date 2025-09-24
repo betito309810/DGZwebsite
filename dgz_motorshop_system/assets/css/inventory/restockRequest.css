@@ -1,0 +1,184 @@
+.restock-request {
+    margin: 20px 0;
+    padding: 24px;
+    background-color: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+
+.restock-request h3 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.25rem;
+    color: #1f2937;
+}
+
+.restock-form {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+/* Grid layout keeps three balanced columns for the form inputs */
+.restock-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(260px, 1fr));
+    gap: 18px 24px;
+    align-items: start;
+}
+
+.restock-grid .span-two {
+    grid-column: span 2;
+}
+
+.restock-grid .span-three {
+    grid-column: span 3;
+}
+
+.notes-group textarea {
+    min-height: 180px;
+}
+
+.needed-group {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+}
+
+.restock-form label {
+    display: block;
+    font-weight: 600;
+    color: #1f2937;
+    margin-bottom: 6px;
+}
+
+.restock-form input,
+.restock-form select,
+.restock-form textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background-color: #f9fafb;
+    font-size: 0.95rem;
+    color: #111827;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.restock-form input:focus,
+.restock-form select:focus,
+.restock-form textarea:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+    background-color: #ffffff;
+}
+
+
+.restock-form textarea {
+    min-height: 160px;
+    resize: vertical;
+}
+
+.restock-form .optional-input {
+    display: none;
+    margin-top: 8px;
+}
+
+/* Make sure the quantity input behaves like the rest of the inputs */
+.quantity-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.quantity-group input[type="number"] {
+    width: 100%;
+    min-width: 150px;
+}
+
+/* Buttons row stretches across the grid but stays aligned to the left edge */
+.restock-actions {
+    display: flex;
+    justify-content: flex-start;
+    gap: 12px;
+    flex-wrap: wrap;
+    width: 100%;
+    align-items: center;
+}
+
+.restock-actions .submit-btn {
+    background-color: #10b981;
+    color: #ffffff;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.restock-actions .submit-btn:hover {
+    background-color: #0ea371;
+    box-shadow: 0 6px 16px rgba(16, 185, 129, 0.25);
+}
+
+.restock-actions .btn-secondary {
+    background-color: #4b5563;
+    color: #ffffff;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: background-color 0.2s ease;
+}
+
+.restock-actions .btn-secondary:hover {
+    background-color: #374151;
+}
+
+@media (max-width: 1024px) {
+    .restock-grid {
+        grid-template-columns: repeat(2, minmax(240px, 1fr));
+    }
+
+    .restock-grid .span-two {
+        grid-column: span 2;
+    }
+
+    .restock-grid .span-three {
+        grid-column: span 2;
+    }
+}
+
+@media (max-width: 720px) {
+    .restock-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .restock-grid .span-two {
+        grid-column: auto;
+    }
+
+    .restock-grid .span-three {
+        grid-column: auto;
+    }
+
+    .restock-actions {
+        justify-content: flex-start;
+    }
+}
+.restock-form input[type="number"] {
+    width: 100%;
+    min-height: 48px;
+    box-sizing: border-box;
+}

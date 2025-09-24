@@ -3,6 +3,124 @@ require __DIR__ . '/../config/config.php';
 if(empty($_SESSION['user_id'])){ header('Location: login.php'); exit; }
 $pdo = db();
 $role = $_SESSION['role'] ?? '';
+$userId = $_SESSION['user_id'] ?? 0;
+$allowedPriorities = ['low', 'medium', 'high'];
+
+$restockFormDefaults = [
+    'product' => '',
+    'quantity' => '',
+    'category' => '',
+    'category_new' => '',
+    'brand' => '',
+    'brand_new' => '',
+    'supplier' => '',
+    'supplier_new' => '',
+    'priority' => '',
+    'needed_by' => '',
+    'notes' => '',
+];
+$restockFormData = $restockFormDefaults;
+
+// Handle restock request submission (available to any authenticated user)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_restock_request'])) {
+    $restockFormData = [
+        'product' => $_POST['restock_product'] ?? '',
+        'quantity' => $_POST['restock_quantity'] ?? '',
+        'category' => $_POST['restock_category'] ?? '',
+        'category_new' => $_POST['restock_category_new'] ?? '',
+        'brand' => $_POST['restock_brand'] ?? '',
+        'brand_new' => $_POST['restock_brand_new'] ?? '',
+        'supplier' => $_POST['restock_supplier'] ?? '',
+        'supplier_new' => $_POST['restock_supplier_new'] ?? '',
+        'priority' => $_POST['restock_priority'] ?? '',
+        'needed_by' => $_POST['restock_needed_by'] ?? '',
+        'notes' => $_POST['restock_notes'] ?? '',
+    ];
+    $productId = intval($_POST['restock_product'] ?? 0);
+    $requestedQuantity = intval($_POST['restock_quantity'] ?? 0);
+    $priority = strtolower(trim($_POST['restock_priority'] ?? ''));
+    $neededByRaw = trim($_POST['restock_needed_by'] ?? '');
+    $notes = trim($_POST['restock_notes'] ?? '');
+    $categoryChoice = trim($_POST['restock_category'] ?? '');
+    $categoryNew = trim($_POST['restock_category_new'] ?? '');
+    $brandChoice = trim($_POST['restock_brand'] ?? '');
+    $brandNew = trim($_POST['restock_brand_new'] ?? '');
+    $supplierChoice = trim($_POST['restock_supplier'] ?? '');
+    $supplierNew = trim($_POST['restock_supplier_new'] ?? '');
+
+    $resolveChoice = static function (string $selected, string $newValue): string {
+        if ($selected === '__addnew__') {
+            return $newValue;
+        }
+        if ($selected !== '') {
+            return $selected;
+        }
+        return $newValue;
+    };
+
+    $category = trim($resolveChoice($categoryChoice, $categoryNew));
+    $brand = trim($resolveChoice($brandChoice, $brandNew));
+    $supplier = trim($resolveChoice($supplierChoice, $supplierNew));
+
+    if (!$userId) {
+        $error_message = 'Unable to submit restock request: user not found.';
+    } elseif (!$productId || $requestedQuantity <= 0) {
+        $error_message = 'Please select a product and enter a valid quantity for the restock request.';
+    } elseif (!in_array($priority, $allowedPriorities, true)) {
+        $error_message = 'Please choose a valid priority level.';
+    } else {
+        $neededBy = null;
+        if ($neededByRaw !== '') {
+            $date = DateTime::createFromFormat('Y-m-d', $neededByRaw);
+            if ($date && $date->format('Y-m-d') === $neededByRaw) {
+                $neededBy = $date->format('Y-m-d');
+            } else {
+                $error_message = 'Invalid date provided for "Needed By".';
+            }
+        }
+
+        if (!isset($error_message)) {
+            try {
+                $productStmt = $pdo->prepare('SELECT category, brand, supplier FROM products WHERE id = ?');
+                $productStmt->execute([$productId]);
+                $productMeta = $productStmt->fetch(PDO::FETCH_ASSOC);
+                if (!$productMeta) {
+                    throw new RuntimeException('Selected product could not be found.');
+                }
+                $category = trim($category !== '' ? $category : ($productMeta['category'] ?? ''));
+                $brand = trim($brand !== '' ? $brand : ($productMeta['brand'] ?? ''));
+                $supplier = trim($supplier !== '' ? $supplier : ($productMeta['supplier'] ?? ''));
+            } catch (Exception $e) {
+                $error_message = 'Unable to load product details: ' . $e->getMessage();
+            }
+        }
+
+        if (!isset($error_message)) {
+            try {
+                $stmt = $pdo->prepare('INSERT INTO restock_requests (product_id, requested_by, quantity_requested, priority_level, needed_by, notes, category, brand, supplier) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                $stmt->execute([
+                    $productId,
+                    $userId,
+                    $requestedQuantity,
+                    $priority,
+                    $neededBy,
+                    $notes,
+                    $category === '' ? null : $category,
+                    $brand === '' ? null : $brand,
+                    $supplier === '' ? null : $supplier
+                ]);
+                $requestId = (int) $pdo->lastInsertId();
+
+                $logStmt = $pdo->prepare('INSERT INTO restock_request_history (request_id, status, noted_by) VALUES (?, ?, ?)');
+                $logStmt->execute([$requestId, 'pending', $userId ?: null]);
+                $success_message = 'Restock request submitted successfully!';
+                $restockFormData = $restockFormDefaults;
+            } catch (Exception $e) {
+                $error_message = 'Failed to submit restock request: ' . $e->getMessage();
+            }
+        }
+    }
+}
 
 
 // Handle stock updates (admin only)
@@ -58,6 +176,88 @@ $recent_entries = $pdo->query("
 // Get all products for the main inventory table
 $products = $pdo->query('SELECT * FROM products ORDER BY created_at DESC')->fetchAll();
 
+// Lookups for restock request form selects
+$categoryOptions = $pdo->query('SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND category != "" ORDER BY category ASC')->fetchAll(PDO::FETCH_COLUMN);
+$brandOptions = $pdo->query('SELECT DISTINCT brand FROM products WHERE brand IS NOT NULL AND brand != "" ORDER BY brand ASC')->fetchAll(PDO::FETCH_COLUMN);
+$supplierOptions = $pdo->query('SELECT DISTINCT supplier FROM products WHERE supplier IS NOT NULL AND supplier != "" ORDER BY supplier ASC')->fetchAll(PDO::FETCH_COLUMN);
+
+// Restock requests overview data
+$restockRequests = $pdo->query('
+    SELECT rr.*, p.name AS product_name, p.code AS product_code,
+           requester.name AS requester_name, reviewer.name AS reviewer_name
+    FROM restock_requests rr
+    LEFT JOIN products p ON p.id = rr.product_id
+    LEFT JOIN users requester ON requester.id = rr.requested_by
+    LEFT JOIN users reviewer ON reviewer.id = rr.reviewed_by
+    ORDER BY rr.created_at DESC
+')->fetchAll(PDO::FETCH_ASSOC);
+
+$pendingRestockRequests = array_values(array_filter($restockRequests, function ($row) {
+    return strtolower($row['status'] ?? 'pending') === 'pending';
+}));
+
+$resolvedRestockRequests = array_values(array_filter($restockRequests, function ($row) {
+    return strtolower($row['status'] ?? 'pending') !== 'pending';
+}));
+
+$defaultRestockTab = !empty($pendingRestockRequests) ? 'pending' : 'processed';
+if (!empty($pendingRestockRequests)) {
+    $defaultRestockTab = 'pending';
+}
+
+$restockHistory = $pdo->query('
+    SELECT h.*, 
+           rr.quantity_requested AS request_quantity,
+           rr.priority_level AS request_priority,
+           rr.needed_by AS request_needed_by,
+           rr.notes AS request_notes,
+           rr.category AS request_category,
+           rr.brand AS request_brand,
+           rr.supplier AS request_supplier,
+           p.name AS product_name, p.code AS product_code,
+           requester.name AS requester_name,
+           reviewer.name AS reviewer_name,
+           status_user.name AS status_user_name
+    FROM restock_request_history h
+    JOIN restock_requests rr ON rr.id = h.request_id
+    LEFT JOIN products p ON p.id = rr.product_id
+    LEFT JOIN users requester ON requester.id = rr.requested_by
+    LEFT JOIN users reviewer ON reviewer.id = rr.reviewed_by
+    LEFT JOIN users status_user ON status_user.id = h.noted_by
+    ORDER BY h.created_at DESC
+')->fetchAll(PDO::FETCH_ASSOC);
+
+if (!function_exists('getPriorityClass')) {
+    function getPriorityClass(string $priority): string
+    {
+        switch ($priority) {
+            case 'high':
+                return 'badge-high';
+            case 'medium':
+                return 'badge-medium';
+            default:
+                return 'badge-low';
+        }
+    }
+}
+
+if (!function_exists('getStatusClass')) {
+    function getStatusClass(string $status): string
+    {
+        switch ($status) {
+            case 'approved':
+                return 'status-approved';
+            case 'denied':
+            case 'declined':
+                return 'status-denied';
+            case 'fulfilled':
+                return 'status-fulfilled';
+            default:
+                return 'status-pending';
+        }
+    }
+}
+
 // Handle export to CSV
 if(isset($_GET['export']) && $_GET['export'] == 'csv') {
     header('Content-Type: text/csv');
@@ -81,6 +281,7 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="../assets/css/style.css">
     <link rel="stylesheet" href="../assets/css/inventory/inventory.css">
+    <link rel="stylesheet" href="../assets/css/inventory/restockRequest.css">
     <style>
         .inventory-actions {
             margin: 20px 0;
@@ -146,42 +347,6 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
             cursor: pointer;
         }
 
-        .form-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 20px;
-            margin-bottom: 20px;
-        }
-
-        .form-group {
-            margin-bottom: 15px;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
-
-        .form-group input, .form-group select, .form-group textarea {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-
-        .submit-btn {
-            background-color: #28a745;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 4px;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-        }
-
         /* Recent Entries Styles */
         .recent-entries {
             margin-top: 30px;
@@ -226,27 +391,222 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
             display: none;
         }
 
-        .restock-request {
+        .status-toggle-btn {
+            background-color: #17a2b8;
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-toggle-btn.active {
+            box-shadow: inset 0 0 0 2px rgba(255,255,255,0.4);
+        }
+
+        .restock-status {
             margin: 20px 0;
-            padding: 20px;
             background-color: white;
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            padding: 20px;
         }
 
-        .restock-request h3 {
-            margin-top: 0;
-            margin-bottom: 15px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 1.2rem;
-        }
-
-        .restock-actions {
+        .tab-controls {
             display: flex;
             gap: 10px;
+            margin-bottom: 16px;
             flex-wrap: wrap;
+        }
+
+        .status-history-header {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+
+        .status-history-header .tab-btn {
+            cursor: default;
+        }
+
+        .tab-btn {
+            background-color: #e9ecef;
+            border: none;
+            border-radius: 999px;
+            padding: 8px 18px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #495057;
+        }
+
+        .tab-btn.active {
+            background-color: #17a2b8;
+            color: #fff;
+        }
+
+        .tab-panel {
+            display: none;
+        }
+
+        .tab-panel.active {
+            display: block;
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+        }
+
+        .requests-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .requests-table th,
+        .requests-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e9ecef;
+            vertical-align: top;
+        }
+
+        .requests-table th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+        }
+
+        .product-cell {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .product-name {
+            font-weight: 600;
+            color: #343a40;
+        }
+
+        .product-code {
+            color: #6c757d;
+            font-size: 0.85rem;
+        }
+
+        .priority-badge,
+        .status-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: capitalize;
+        }
+
+        .badge-high {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        .badge-medium {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+
+        .badge-low {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .status-pending {
+            background-color: #e2e3e5;
+            color: #383d41;
+        }
+
+        .status-approved {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .status-denied {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-fulfilled {
+            background-color: #cce5ff;
+            color: #004085;
+        }
+
+        .notes-cell {
+            white-space: pre-wrap;
+            max-width: 260px;
+        }
+
+        .muted {
+            color: #6c757d;
+        }
+
+        .action-cell {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .inline-form {
+            margin: 0;
+        }
+
+        .btn-approve,
+        .btn-decline {
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            width: 100%;
+            justify-content: center;
+        }
+
+        .btn-approve {
+            background-color: #28a745;
+            color: #fff;
+        }
+
+        .btn-decline {
+            background-color: #dc3545;
+            color: #fff;
+        }
+
+        .btn-approve:hover {
+            background-color: #218838;
+        }
+
+        .btn-decline:hover {
+            background-color: #c82333;
+        }
+
+        .action-cell form + form {
+            margin-top: 4px;
+        }
+
+        @media (max-width: 768px) {
+            .action-cell {
+                flex-direction: row;
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+
+            .btn-approve,
+            .btn-decline {
+                width: auto;
+            }
         }
 
         /* Alert Styles */
@@ -309,6 +669,12 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                     Inventory
                 </a>
             </div>
+            <div class="nav-item">
+                <a href="stockRequests.php" class="nav-link">
+                    <i class="fas fa-clipboard-list nav-icon"></i>
+                    Stock Requests
+                </a>
+            </div>
         </nav>
     </aside>
     <!-- Main Content -->
@@ -332,6 +698,11 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                     <a href="settings.php" class="dropdown-item">
                         <i class="fas fa-cog"></i> Settings
                     </a>
+                    <?php if ($role === 'admin'): ?>
+                    <a href="userManagement.php" class="dropdown-item">
+                        <i class="fas fa-users-cog"></i> User Management
+                    </a>
+                    <?php endif; ?>
                     <a href="login.php?logout=1" class="dropdown-item logout">
                         <i class="fas fa-sign-out-alt"></i> Logout
                     </a>
@@ -354,20 +725,41 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
             <button class="btn-accent" onclick="toggleRestockForm()" type="button">
                 <i class="fas fa-truck-loading"></i> Restock Request
             </button>
+            <button class="status-toggle-btn" type="button" onclick="toggleRestockStatus()" id="restockStatusButton">
+                <i class="fas fa-clipboard-check"></i> Request Status
+            </button>
            
         </div>
         <!-- Restock Request Form -->
 
         <div id="restockRequestForm" class="restock-request hidden">
             <h3><i class="fas fa-clipboard-list"></i> Submit Restock Request</h3>
-            <form>
-                <div class="form-grid">
+            <form method="post" class="restock-form"
+                data-initial-product="<?php echo htmlspecialchars($restockFormData['product']); ?>"
+                data-initial-quantity="<?php echo htmlspecialchars($restockFormData['quantity']); ?>"
+                data-initial-category="<?php echo htmlspecialchars($restockFormData['category']); ?>"
+                data-initial-category-new="<?php echo htmlspecialchars($restockFormData['category_new']); ?>"
+                data-initial-brand="<?php echo htmlspecialchars($restockFormData['brand']); ?>"
+                data-initial-brand-new="<?php echo htmlspecialchars($restockFormData['brand_new']); ?>"
+                data-initial-supplier="<?php echo htmlspecialchars($restockFormData['supplier']); ?>"
+                data-initial-supplier-new="<?php echo htmlspecialchars($restockFormData['supplier_new']); ?>"
+                data-initial-priority="<?php echo htmlspecialchars($restockFormData['priority']); ?>"
+                data-initial-needed-by="<?php echo htmlspecialchars($restockFormData['needed_by']); ?>"
+                data-initial-notes="<?php echo htmlspecialchars($restockFormData['notes']); ?>">
+                <input type="hidden" name="submit_restock_request" value="1">
+                <div class="restock-grid">
                     <div class="form-group">
                         <label for="restock_product">Product</label>
-                        <select id="restock_product" required>
+                        <select id="restock_product" name="restock_product" required>
                             <option value="">Select Product</option>
                             <?php foreach ($products as $product): ?>
-                                <option value="<?php echo $product['id']; ?>">
+                                <option 
+                                    value="<?php echo $product['id']; ?>"
+                                    data-category="<?php echo htmlspecialchars($product['category'] ?? ''); ?>"
+                                    data-brand="<?php echo htmlspecialchars($product['brand'] ?? ''); ?>"
+                                    data-supplier="<?php echo htmlspecialchars($product['supplier'] ?? ''); ?>"
+                                    <?php echo ($restockFormData['product'] === (string) $product['id']) ? 'selected' : ''; ?>
+                                >
                                     <?php echo htmlspecialchars($product['name']); ?>
                                     (Current: <?php echo $product['quantity']; ?>)
                                 </option>
@@ -375,39 +767,151 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                         </select>
                     </div>
                     <div class="form-group">
+                        <label for="restock_category">Category</label>
+                        <select id="restock_category" name="restock_category">
+                            <option value="">Select category</option>
+                            <?php foreach ($categoryOptions as $categoryOption): ?>
+                                <option value="<?php echo htmlspecialchars($categoryOption); ?>" <?php echo ($restockFormData['category'] === $categoryOption) ? 'selected' : ''; ?>><?php echo htmlspecialchars($categoryOption); ?></option>
+                            <?php endforeach; ?>
+                            <option value="__addnew__" <?php echo ($restockFormData['category'] === '__addnew__' || ($restockFormData['category'] === '' && $restockFormData['category_new'] !== '')) ? 'selected' : ''; ?>>Add new category...</option>
+                        </select>
+                        <input type="text" id="restock_category_new" name="restock_category_new" class="optional-input" placeholder="Enter new category" value="<?php echo htmlspecialchars($restockFormData['category_new']); ?>">
+                    </div>
+                    <div class="form-group">
+                        <label for="restock_brand">Brand</label>
+                        <select id="restock_brand" name="restock_brand">
+                            <option value="">Select brand</option>
+                            <?php foreach ($brandOptions as $brandOption): ?>
+                                <option value="<?php echo htmlspecialchars($brandOption); ?>" <?php echo ($restockFormData['brand'] === $brandOption) ? 'selected' : ''; ?>><?php echo htmlspecialchars($brandOption); ?></option>
+                            <?php endforeach; ?>
+                            <option value="__addnew__" <?php echo ($restockFormData['brand'] === '__addnew__' || ($restockFormData['brand'] === '' && $restockFormData['brand_new'] !== '')) ? 'selected' : ''; ?>>Add new brand...</option>
+                        </select>
+                        <input type="text" id="restock_brand_new" name="restock_brand_new" class="optional-input" placeholder="Enter new brand" value="<?php echo htmlspecialchars($restockFormData['brand_new']); ?>">
+                    </div>
+                    <div class="form-group">
+                        <label for="restock_supplier">Supplier</label>
+                        <select id="restock_supplier" name="restock_supplier">
+                            <option value="">Select supplier</option>
+                            <?php foreach ($supplierOptions as $supplierOption): ?>
+                                <option value="<?php echo htmlspecialchars($supplierOption); ?>" <?php echo ($restockFormData['supplier'] === $supplierOption) ? 'selected' : ''; ?>><?php echo htmlspecialchars($supplierOption); ?></option>
+                            <?php endforeach; ?>
+                            <option value="__addnew__" <?php echo ($restockFormData['supplier'] === '__addnew__' || ($restockFormData['supplier'] === '' && $restockFormData['supplier_new'] !== '')) ? 'selected' : ''; ?>>Add new supplier...</option>
+                        </select>
+                        <input type="text" id="restock_supplier_new" name="restock_supplier_new" class="optional-input" placeholder="Enter new supplier" value="<?php echo htmlspecialchars($restockFormData['supplier_new']); ?>">
+                    </div>
+                    <div class="form-group quantity-group">
                         <label for="restock_quantity">Requested Quantity</label>
-                        <input type="number" id="restock_quantity" min="1" placeholder="Enter quantity" required>
+                        <input type="number" id="restock_quantity" name="restock_quantity" min="1" placeholder="Enter quantity" required value="<?php echo htmlspecialchars($restockFormData['quantity']); ?>">
                     </div>
                     <div class="form-group">
                         <label for="restock_priority">Priority Level</label>
-                        <select id="restock_priority" required>
+                        <select id="restock_priority" name="restock_priority" required>
                             <option value="">Select Priority</option>
-                            <option value="low">Low</option>
-                            <option value="medium">Medium</option>
-                            <option value="high">High</option>
+                            <option value="low" <?php echo ($restockFormData['priority'] === 'low') ? 'selected' : ''; ?>>Low</option>
+                            <option value="medium" <?php echo ($restockFormData['priority'] === 'medium') ? 'selected' : ''; ?>>Medium</option>
+                            <option value="high" <?php echo ($restockFormData['priority'] === 'high') ? 'selected' : ''; ?>>High</option>
                         </select>
                     </div>
-                    <div class="form-group">
-                        <label for="restock_needed_by">Needed By</label>
-                        <input type="date" id="restock_needed_by">
+                    <div class="form-group notes-group span-two">
+                        <label for="restock_notes">Reason / Notes</label>
+                        <textarea id="restock_notes" name="restock_notes" placeholder="Provide additional details for the restock request..."><?php echo htmlspecialchars($restockFormData['notes']); ?></textarea>
                     </div>
-                </div>
-                <div class="form-group">
-                    <label for="restock_notes">Reason / Notes</label>
-                    <textarea id="restock_notes" placeholder="Provide additional details for the restock request..."></textarea>
-                </div>
-                <div class="restock-actions">
-                    <button type="submit" class="submit-btn">
-                        <i class="fas fa-paper-plane"></i> Submit Request
-                    </button>
-                    <button type="button" class="btn-secondary" onclick="toggleRestockForm()">
-                        <i class="fas fa-times"></i> Cancel
-                    </button>
+                    <div class="form-group needed-group">
+                        <label for="restock_needed_by">Needed By</label>
+                        <input type="date" id="restock_needed_by" name="restock_needed_by" value="<?php echo htmlspecialchars($restockFormData['needed_by']); ?>">
+                    </div>
+                    <div class="restock-actions span-three">
+                        <button type="submit" class="submit-btn">
+                            <i class="fas fa-paper-plane"></i> Submit Request
+                        </button>
+                        <button type="button" class="btn-secondary" onclick="toggleRestockForm()">
+                            <i class="fas fa-times"></i> Cancel
+                        </button>
+                    </div>
                 </div>
             </form>
         </div>
 
-        
+        <div id="restockStatusPanel" class="restock-status hidden">
+            <h3 style="margin-top:0; display:flex; align-items:center; gap:10px;">
+                <i class="fas fa-clipboard-list"></i> Request Status
+            </h3>
+            <?php if (empty($restockRequests)): ?>
+                <p class="muted" style="margin: 12px 0 0;"><i class="fas fa-inbox"></i> No restock requests yet.</p>
+            <?php else: ?>
+                <div class="status-history-header">
+                    <span class="tab-btn active" aria-current="true">
+                        <i class="fas fa-clipboard-check"></i> Status History
+                    </span>
+                </div>
+
+                <div id="processedRequests" class="tab-panel active">
+                    <?php if (empty($restockHistory)): ?>
+                        <p class="muted" style="margin: 12px 0 0;"><i class="fas fa-inbox"></i> No request history logged yet.</p>
+                    <?php else: ?>
+                        <div class="table-wrapper">
+                            <table class="requests-table">
+                                <thead>
+                                    <tr>
+                                        <th>Logged At</th>
+                                        <th>Product</th>
+                                        <th>Category</th>
+                                        <th>Brand</th>
+                                        <th>Supplier</th>
+                                        <th>Quantity</th>
+                                        <th>Priority</th>
+                                        <th>Needed By</th>
+                                        <th>Requested By</th>
+                                        <th>Status</th>
+                                        <th>Logged By</th>
+                                        <th>Approved / Declined By</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($restockHistory as $entry): ?>
+                                        <?php $status = strtolower($entry['status'] ?? 'pending'); ?>
+                                        <tr>
+                                            <td><?php echo date('M d, Y H:i', strtotime($entry['created_at'])); ?></td>
+                                            <td>
+                                                <div class="product-cell">
+                                                    <span class="product-name"><?php echo htmlspecialchars($entry['product_name'] ?? 'Product removed'); ?></span>
+                                                    <?php if (!empty($entry['product_code'])): ?>
+                                                        <span class="product-code">Code: <?php echo htmlspecialchars($entry['product_code']); ?></span>
+                                                    <?php endif; ?>
+                                                </div>
+                                            </td>
+                                            <td><?php echo htmlspecialchars($entry['request_category'] ?? ''); ?></td>
+                                            <td><?php echo htmlspecialchars($entry['request_brand'] ?? ''); ?></td>
+                                            <td><?php echo htmlspecialchars($entry['request_supplier'] ?? ''); ?></td>
+                                            <td><?php echo (int) $entry['request_quantity']; ?></td>
+                                            <td>
+                                                <?php $priority = strtolower($entry['request_priority'] ?? ''); ?>
+                                                <span class="priority-badge <?php echo getPriorityClass($priority); ?>"><?php echo ucfirst($priority); ?></span>
+                                            </td>
+                                            <td>
+                                                <?php if (!empty($entry['request_needed_by'])): ?>
+                                                    <?php echo date('M d, Y', strtotime($entry['request_needed_by'])); ?>
+                                                <?php else: ?>
+                                                    <span class="muted">Not set</span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td><?php echo htmlspecialchars($entry['requester_name'] ?? 'Unknown'); ?></td>
+                                            <td>
+                                                <span class="status-badge <?php echo getStatusClass($status); ?>"><?php echo ucfirst($status); ?></span>
+                                            </td>
+                                            <td><?php echo htmlspecialchars($entry['status_user_name'] ?? 'System'); ?></td>
+                                            <td><?php echo ($status === 'approved' || $status === 'declined') ? htmlspecialchars($entry['reviewer_name'] ?? 'Unknown') : '—'; ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
+        </div>
+
+
 
 
         <!-- Main Inventory Table -->
@@ -544,6 +1048,19 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
             form.classList.toggle('hidden');
         }
 
+        function toggleRestockStatus() {
+            const panel = document.getElementById('restockStatusPanel');
+            const button = document.getElementById('restockStatusButton');
+            if (!panel || !button) {
+                return;
+            }
+            const isHidden = panel.classList.toggle('hidden');
+            button.classList.toggle('active', !isHidden);
+            if (!isHidden) {
+                panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+
         // Close modal when clicking outside
         window.onclick = function(event) {
             const modal = document.getElementById('stockEntryModal');
@@ -575,6 +1092,159 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                     setTimeout(() => alert.remove(), 500);
                 }, 5000);
             });
+
+            const restockFormEl = document.querySelector('.restock-form');
+            const productSelect = document.getElementById('restock_product');
+            const categorySelect = document.getElementById('restock_category');
+            const categoryNewInput = document.getElementById('restock_category_new');
+            const brandSelect = document.getElementById('restock_brand');
+            const brandNewInput = document.getElementById('restock_brand_new');
+            const supplierSelect = document.getElementById('restock_supplier');
+            const supplierNewInput = document.getElementById('restock_supplier_new');
+            const statusPanel = document.getElementById('restockStatusPanel');
+            const statusButton = document.getElementById('restockStatusButton');
+            const quantityInput = document.getElementById('restock_quantity');
+            const prioritySelect = document.getElementById('restock_priority');
+            const neededByInput = document.getElementById('restock_needed_by');
+            const notesTextarea = document.getElementById('restock_notes');
+
+            function handleSelectChange(selectEl, inputEl) {
+                if (!selectEl || !inputEl) {
+                    return;
+                }
+                const needsInput = selectEl.value === '__addnew__';
+                inputEl.style.display = needsInput ? 'block' : 'none';
+                inputEl.required = needsInput;
+                if (!needsInput) {
+                    inputEl.value = '';
+                }
+            }
+
+            function setSelectOrInput(selectEl, inputEl, value) {
+                if (!selectEl || !inputEl) {
+                    return;
+                }
+                const trimmed = (value || '').trim();
+                const options = Array.from(selectEl.options).map(opt => opt.value);
+
+                if (trimmed !== '' && options.includes(trimmed)) {
+                    selectEl.value = trimmed;
+                    inputEl.style.display = 'none';
+                    inputEl.required = false;
+                    inputEl.value = '';
+                } else if (trimmed !== '') {
+                    selectEl.value = '__addnew__';
+                    inputEl.style.display = 'block';
+                    inputEl.required = true;
+                    inputEl.value = trimmed;
+                } else {
+                    selectEl.value = '';
+                    inputEl.style.display = 'none';
+                    inputEl.required = false;
+                    inputEl.value = '';
+                }
+            }
+
+            const selectMappings = [
+                { select: categorySelect, input: categoryNewInput },
+                { select: brandSelect, input: brandNewInput },
+                { select: supplierSelect, input: supplierNewInput },
+            ];
+
+            selectMappings.forEach(({ select, input }) => {
+                if (select && input) {
+                    select.addEventListener('change', () => handleSelectChange(select, input));
+                    handleSelectChange(select, input);
+                }
+            });
+
+            function updateProductMeta() {
+                if (!productSelect) {
+                    return;
+                }
+
+                const selectedOption = productSelect.options[productSelect.selectedIndex];
+                if (!selectedOption) {
+                    selectMappings.forEach(({ select, input }) => {
+                        setSelectOrInput(select, input, '');
+                        handleSelectChange(select, input);
+                    });
+                    return;
+                }
+
+                setSelectOrInput(categorySelect, categoryNewInput, selectedOption.getAttribute('data-category') || '');
+                setSelectOrInput(brandSelect, brandNewInput, selectedOption.getAttribute('data-brand') || '');
+                setSelectOrInput(supplierSelect, supplierNewInput, selectedOption.getAttribute('data-supplier') || '');
+                handleSelectChange(categorySelect, categoryNewInput);
+                handleSelectChange(brandSelect, brandNewInput);
+                handleSelectChange(supplierSelect, supplierNewInput);
+            }
+
+            let hasInitialFormData = false;
+            if (restockFormEl) {
+                const data = restockFormEl.dataset;
+                const initialCategoryValue = data.initialCategoryNew || data.initialCategory;
+                const initialBrandValue = data.initialBrandNew || data.initialBrand;
+                const initialSupplierValue = data.initialSupplierNew || data.initialSupplier;
+
+                if (
+                    data.initialProduct || data.initialQuantity || initialCategoryValue ||
+                    initialBrandValue || initialSupplierValue || data.initialPriority ||
+                    data.initialNeededBy || data.initialNotes
+                ) {
+                    hasInitialFormData = true;
+                    if (productSelect) {
+                        productSelect.value = data.initialProduct || '';
+                    }
+                    if (quantityInput) {
+                        quantityInput.value = data.initialQuantity || '';
+                    }
+                    setSelectOrInput(categorySelect, categoryNewInput, initialCategoryValue || '');
+                    handleSelectChange(categorySelect, categoryNewInput);
+                    setSelectOrInput(brandSelect, brandNewInput, initialBrandValue || '');
+                    handleSelectChange(brandSelect, brandNewInput);
+                    setSelectOrInput(supplierSelect, supplierNewInput, initialSupplierValue || '');
+                    handleSelectChange(supplierSelect, supplierNewInput);
+                    if (prioritySelect) {
+                        prioritySelect.value = data.initialPriority || '';
+                    }
+                    if (neededByInput) {
+                        neededByInput.value = data.initialNeededBy || '';
+                    }
+                    if (notesTextarea) {
+                        notesTextarea.value = data.initialNotes || '';
+                    }
+                }
+            }
+
+            if (productSelect) {
+                productSelect.addEventListener('change', () => {
+                    updateProductMeta();
+                });
+                if (!hasInitialFormData) {
+                    updateProductMeta();
+                }
+            }
+
+            if (statusPanel && statusButton && !statusPanel.classList.contains('hidden')) {
+                statusButton.classList.add('active');
+            }
+
+            if (statusPanel) {
+                const tabButtons = statusPanel.querySelectorAll('.tab-btn');
+                const tabPanels = statusPanel.querySelectorAll('.tab-panel');
+
+                tabButtons.forEach(button => {
+                    button.addEventListener('click', () => {
+                        const targetId = button.getAttribute('data-target');
+
+                        tabButtons.forEach(btn => btn.classList.toggle('active', btn === button));
+                        tabPanels.forEach(panel => {
+                            panel.classList.toggle('active', panel.id === targetId);
+                        });
+                    });
+                });
+            }
         });
     </script>
 </body>

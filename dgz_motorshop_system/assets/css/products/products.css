@@ -207,6 +207,27 @@ h3 {
     transition: background 0.2s;
     
 }
+
+.history-btn {
+    background:#3498db;
+    color:#fff;
+    border:none;
+    border-radius:6px;
+    font-size:15px;
+    padding:10px 20px;
+    cursor:pointer;
+    display:block;
+    align-items:center;
+    gap:8px;
+    font-weight:600;
+    width: fit-content;
+    margin-top:18px;
+    transition:background 0.2s;
+}
+
+.history-btn:hover {
+    background: linear-gradient(135deg, #2563eb, #1e40af);
+}
 .add-btn:hover {
     background: linear-gradient(135deg, #2563eb, #1e40af);
 }

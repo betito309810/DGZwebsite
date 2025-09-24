@@ -3,6 +3,7 @@ require __DIR__ . '/../config/config.php';
 if(empty($_SESSION['user_id'])){ header('Location: login.php'); exit; }
 
 $pdo = db();
+$role = $_SESSION['role'] ?? '';
 
 // Handle CSV export FIRST - before any other queries
 if(isset($_GET['export']) && $_GET['export'] == 'csv') {
@@ -110,7 +111,13 @@ $end_record = min($offset + $records_per_page, $total_records);
                 </a>
             </div>
 
-              
+            <div class="nav-item">
+                <a href="stockRequests.php" class="nav-link">
+                    <i class="fas fa-clipboard-list nav-icon"></i>
+                    Stock Requests
+                </a>
+            </div>
+
 
         </nav>
     </aside>
@@ -135,6 +142,11 @@ $end_record = min($offset + $records_per_page, $total_records);
                     <a href="settings.php" class="dropdown-item">
                         <i class="fas fa-cog"></i> Settings
                     </a>
+                    <?php if ($role === 'admin'): ?>
+                    <a href="userManagement.php" class="dropdown-item">
+                        <i class="fas fa-users-cog"></i> User Management
+                    </a>
+                    <?php endif; ?>
                     <a href="login.php?logout=1" class="dropdown-item logout">
                         <i class="fas fa-sign-out-alt"></i> Logout
                     </a>

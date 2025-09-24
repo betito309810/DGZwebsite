@@ -7,6 +7,7 @@ if (empty($_SESSION['user_id'])) {
 }
 
 $pdo = db();
+$role = $_SESSION['role'] ?? '';
 
 $allowedStatuses = ['pending', 'approved', 'completed'];
 
@@ -373,6 +374,12 @@ if ($receiptDataJson === false) {
                     Inventory
                 </a>
             </div>
+            <div class="nav-item">
+                <a href="stockRequests.php" class="nav-link">
+                    <i class="fas fa-clipboard-list nav-icon"></i>
+                    Stock Requests
+                </a>
+            </div>
         </nav>
     </aside>
 
@@ -395,6 +402,11 @@ if ($receiptDataJson === false) {
                     <a href="settings.php" class="dropdown-item">
                         <i class="fas fa-cog"></i> Settings
                     </a>
+                    <?php if ($role === 'admin'): ?>
+                    <a href="userManagement.php" class="dropdown-item">
+                        <i class="fas fa-users-cog"></i> User Management
+                    </a>
+                    <?php endif; ?>
                     <a href="login.php?logout=1" class="dropdown-item logout">
                         <i class="fas fa-sign-out-alt"></i> Logout
                     </a>

@@ -12,6 +12,8 @@ try {
     die("Database connection error. Please try again later.");
 }
 
+$role = $_SESSION['role'] ?? '';
+
 // Fetch the authenticated user's information for the profile modal
 $current_user = null;
 try {
@@ -255,6 +257,13 @@ $profile_created = format_profile_date($current_user['created_at'] ?? null);
                 </a>
             </div>
 
+            <div class="nav-item">
+                <a href="stockRequests.php" class="nav-link">
+                    <i class="fas fa-clipboard-list nav-icon"></i>
+                    Stock Requests
+                </a>
+            </div>
+
         </nav>
     </aside>
 
@@ -332,6 +341,11 @@ $profile_created = format_profile_date($current_user['created_at'] ?? null);
                         <a href="settings.php" class="dropdown-item">
                             <i class="fas fa-cog"></i> Settings
                         </a>
+                        <?php if ($role === 'admin'): ?>
+                        <a href="userManagement.php" class="dropdown-item">
+                            <i class="fas fa-users-cog"></i> User Management
+                        </a>
+                        <?php endif; ?>
                         <a href="login.php?logout=1" class="dropdown-item logout">
                             <i class="fas fa-sign-out-alt"></i> Logout
                         </a>
