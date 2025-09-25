@@ -46,29 +46,96 @@ $profile_created = format_profile_date($current_user['created_at'] ?? null);
 
 $allowedStatuses = ['pending', 'approved', 'completed'];
 
+function ordersSupportsInvoiceNumbers(PDO $pdo): bool
+{
+    static $supports = null;
+
+    if ($supports !== null) {
+        return $supports;
+    }
+
+    try {
+        $stmt = $pdo->query("SHOW COLUMNS FROM orders LIKE 'invoice_number'");
+        $supports = $stmt !== false && $stmt->fetch() !== false;
+    } catch (Throwable $e) {
+        $supports = false;
+        error_log('Unable to detect invoice_number column: ' . $e->getMessage());
+    }
+
+    return $supports;
+}
+
 /**
  * Generate a unique invoice number with an INV- prefix.
  */
 function generateInvoiceNumber(PDO $pdo): string
 {
+    if (!ordersSupportsInvoiceNumbers($pdo)) {
+        return '';
+    }
+
     $prefix = 'INV-';
-    // ✅ fixed SQL
-    $stmt = $pdo->query(
-        "SELECT invoice_number\n"
-        . "         FROM orders\n"
-        . "         WHERE invoice_number IS NOT NULL\n"
-        . "           AND invoice_number <> ''\n"
-        . "         ORDER BY id DESC\n"
-        . "         LIMIT 1"
-    );
-    $lastInvoice = $stmt ? $stmt->fetchColumn() : null;
+    $offset = strlen($prefix) + 1;
+    $forUpdate = $pdo->inTransaction() ? ' FOR UPDATE' : '';
+
+    try {
+        $stmt = $pdo->prepare(
+            "SELECT invoice_number\n"
+            . "  FROM orders\n"
+            . " WHERE invoice_number LIKE ?\n"
+            . " ORDER BY CAST(SUBSTRING(invoice_number, {$offset}) AS UNSIGNED) DESC\n"
+            . " LIMIT 1{$forUpdate}"
+        );
+        $stmt->execute([$prefix . '%']);
+        $lastInvoice = $stmt->fetchColumn();
+    } catch (Throwable $e) {
+        error_log('Unable to fetch last invoice number: ' . $e->getMessage());
+        $lastInvoice = null;
+    }
 
     $nextNumber = 1;
     if (is_string($lastInvoice) && preg_match('/(\d+)/', $lastInvoice, $matches)) {
         $nextNumber = (int) $matches[1] + 1;
     }
 
-    return $prefix . str_pad((string) $nextNumber, 6, '0', STR_PAD_LEFT);
+    $checkStmt = null;
+    try {
+        $checkStmt = $pdo->prepare('SELECT COUNT(*) FROM orders WHERE invoice_number = ?');
+    } catch (Throwable $e) {
+        error_log('Unable to prepare invoice uniqueness check: ' . $e->getMessage());
+    }
+
+    $counter = 0;
+    do {
+        $candidate = $prefix . str_pad((string) $nextNumber, 6, '0', STR_PAD_LEFT);
+        $exists = false;
+
+        if ($checkStmt) {
+            try {
+                $checkStmt->execute([$candidate]);
+                $exists = ((int) $checkStmt->fetchColumn()) > 0;
+            } catch (Throwable $e) {
+                error_log('Unable to verify invoice uniqueness: ' . $e->getMessage());
+                $exists = false;
+            }
+        }
+
+        if (!$exists) {
+            return $candidate;
+        }
+
+        $nextNumber++;
+        $counter++;
+    } while ($counter < 25);
+
+    try {
+        $fallback = $prefix . strtoupper(bin2hex(random_bytes(4)));
+    } catch (Throwable $e) {
+        error_log('Unable to generate random invoice number: ' . $e->getMessage());
+        $fallback = $prefix . (string) time();
+    }
+
+    return $fallback;
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status'])) {
@@ -78,9 +145,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
     $_SESSION['pos_active_tab'] = 'online';
 
     $statusParam = '0';
+    $supportsInvoiceNumbers = ordersSupportsInvoiceNumbers($pdo);
 
     if ($orderId > 0 && in_array($newStatus, ['approved', 'completed'], true)) {
-        $orderStmt = $pdo->prepare('SELECT status, invoice_number FROM orders WHERE id = ?');
+        $selectSql = $supportsInvoiceNumbers
+            ? 'SELECT status, invoice_number FROM orders WHERE id = ?'
+            : 'SELECT status FROM orders WHERE id = ?';
+        $orderStmt = $pdo->prepare($selectSql);
         $orderStmt->execute([$orderId]);
         $currentOrder = $orderStmt->fetch();
 
@@ -110,13 +181,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                     $params[] = $newStatus;
                 }
 
-                $existingInvoice = (string) ($currentOrder['invoice_number'] ?? '');
-                $needsInvoice = in_array($newStatus, ['approved', 'completed'], true) && $existingInvoice === '';
+                $existingInvoice = $supportsInvoiceNumbers
+                    ? (string) ($currentOrder['invoice_number'] ?? '')
+                    : '';
+                $needsInvoice = $supportsInvoiceNumbers
+                    && in_array($newStatus, ['approved', 'completed'], true)
+                    && $existingInvoice === '';
 
                 if ($needsInvoice) {
                     $generatedInvoice = generateInvoiceNumber($pdo);
-                    $fields[] = 'invoice_number = ?';
-                    $params[] = $generatedInvoice;
+                    if ($generatedInvoice !== '') {
+                        $fields[] = 'invoice_number = ?';
+                        $params[] = $generatedInvoice;
+                    }
                 }
 
                 if (empty($fields)) {
@@ -212,10 +289,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pos_checkout'])) {
     try {
         $pdo->beginTransaction();
 
-        $invoiceNumber = generateInvoiceNumber($pdo);
+        $supportsInvoiceNumbers = ordersSupportsInvoiceNumbers($pdo);
+        $invoiceNumber = $supportsInvoiceNumbers ? generateInvoiceNumber($pdo) : '';
 
-        $orderStmt = $pdo->prepare('INSERT INTO orders (customer_name, contact, address, total, payment_method, status, vatable, vat, amount_paid, change_amount, invoice_number) VALUES (?,?,?,?,?,?,?,?,?,?,?)');
-        $orderStmt->execute([
+        $orderColumns = [
+            'customer_name',
+            'contact',
+            'address',
+            'total',
+            'payment_method',
+            'status',
+            'vatable',
+            'vat',
+            'amount_paid',
+            'change_amount',
+        ];
+
+        $orderValues = [
             'Walk-in',
             'N/A',
             'N/A',
@@ -226,8 +316,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pos_checkout'])) {
             $vat,
             $amountPaid,
             $change,
-            $invoiceNumber,
-        ]);
+        ];
+
+        if ($supportsInvoiceNumbers) {
+            $orderColumns[] = 'invoice_number';
+            $orderValues[] = $invoiceNumber;
+        }
+
+        $placeholders = implode(', ', array_fill(0, count($orderColumns), '?'));
+        $orderStmt = $pdo->prepare(
+            'INSERT INTO orders (' . implode(', ', $orderColumns) . ') VALUES (' . $placeholders . ')'
+        );
+        $orderStmt->execute($orderValues);
 
         $orderId = (int) $pdo->lastInsertId();
 
@@ -246,8 +346,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pos_checkout'])) {
             'order_id' => $orderId,
             'amount_paid' => number_format($amountPaid, 2, '.', ''),
             'change' => number_format($change, 2, '.', ''),
-            'invoice_number' => $invoiceNumber,
         ];
+
+        if ($supportsInvoiceNumbers) {
+            $params['invoice_number'] = $invoiceNumber;
+        }
 
         header('Location: pos.php?' . http_build_query($params));
         exit;
