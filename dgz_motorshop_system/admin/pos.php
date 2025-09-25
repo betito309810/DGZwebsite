@@ -156,7 +156,7 @@ function generateInvoiceNumber(PDO $pdo): string
 
     return $fallback;
 }
-
+//fixed approving status 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status'])) {
     $orderId = isset($_POST['order_id']) ? (int) $_POST['order_id'] : 0;
     $newStatus = isset($_POST['new_status']) ? strtolower(trim((string) $_POST['new_status'])) : '';
