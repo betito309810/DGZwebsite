@@ -483,49 +483,45 @@ $suppliers = $pdo->query('SELECT DISTINCT supplier FROM products WHERE supplier 
         </div>
 
         <script>
-            // Product Add History Modal functionality (like stockEntry.php)
-            document.addEventListener('DOMContentLoaded', function () {
-                const modal = document.getElementById('historyModal');
-                const list = document.getElementById('historyList');
+            function toggleDropdown() {
+                const dropdown = document.getElementById('userDropdown');
+                if (!dropdown) {
+                    return;
+                }
 
-                // Open modal and load history
-                document.getElementById('openHistoryModal').onclick = function () {
-                    modal.style.display = 'flex';
-                    list.innerHTML =
-                        '<div style="text-align:center;padding:20px;"><i class="fas fa-spinner fa-spin"></i> Loading history...</div>';
+                dropdown.classList.toggle('show');
+            }
 
-                    fetch('products.php?history=1', {
-                            cache: 'no-store'
-                        })
-                        .then(response => response.text())
-                        .then(html => list.innerHTML = html)
-                        .catch(error => list.innerHTML =
-                            '<div style="text-align:center;color:#dc3545;padding:20px;">Error loading history: ' +
-                            error + '</div>');
-                };
+            function toggleSidebar() {
+                const sidebar = document.getElementById('sidebar');
+                if (!sidebar) {
+                    return;
+                }
 
-                // Close modal on X button click
-                document.getElementById('closeHistoryModal').onclick = function () {
-                    modal.style.display = 'none';
-                };
+                sidebar.classList.toggle('mobile-open');
+            }
 
-                // Close modal on outside click
-                modal.onclick = function (e) {
-                    if (e.target === modal) {
-                        modal.style.display = 'none';
-                    }
-                };
+            function openProfileModal() {
+                const profileModal = document.getElementById('profileModal');
+                if (!profileModal) {
+                    return;
+                }
 
-                // Close modal on Escape key
-                document.addEventListener('keydown', function (e) {
-                    if (e.key === 'Escape' && modal.style.display === 'flex') {
-                        modal.style.display = 'none';
-                    }
-                });
-            });
-            document.getElementById('historyModal').addEventListener('click', function (e) {
-                if (e.target === this) this.style.display = 'none';
-            });
+                profileModal.classList.add('show');
+                profileModal.setAttribute('aria-hidden', 'false');
+                document.body.classList.add('modal-open');
+            }
+
+            function closeProfileModal() {
+                const profileModal = document.getElementById('profileModal');
+                if (!profileModal) {
+                    return;
+                }
+
+                profileModal.classList.remove('show');
+                profileModal.setAttribute('aria-hidden', 'true');
+                document.body.classList.remove('modal-open');
+            }
         </script>
         <!-- Add Product Modal -->
         <div id="addModal"
@@ -810,136 +806,6 @@ $suppliers = $pdo->query('SELECT DISTINCT supplier FROM products WHERE supplier 
         </div>
     </div>
     <script>
-        document.getElementById('openHistoryModal').addEventListener('click', () => {
-            const modal = document.getElementById('historyModal');
-            const list = document.getElementById('historyList');
-            modal.style.display = 'flex';
-            list.innerHTML =
-                '<div style="text-align:center;padding:0px;"><i class="fas fa-spinner fa-spin"></i> Loading history...</div>';
-
-            fetch('products.php?history=1', {
-                    cache: 'no-store',
-                    headers: {
-                        'Accept': 'text/html'
-                    }
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-                    return response.text();
-                })
-                .then(html => {
-                    list.innerHTML = html;
-                })
-                .catch(error => {
-                    list.innerHTML = `<div style="text-align:center;padding:20px;color:#dc3545;">
-                    <i class="fas fa-exclamation-circle"></i> Error loading history: ${error.message}
-                </div>`;
-                });
-        });
-
-        // Toggle user dropdown
-        function toggleDropdown() {
-            const dropdown = document.getElementById('userDropdown');
-            dropdown.classList.toggle('show');
-        }
-
-        // Toggle mobile sidebar
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            sidebar.classList.toggle('mobile-open');
-        }
-
-        const profileButton = document.getElementById('profileTrigger');
-        const profileModal = document.getElementById('profileModal');
-        const profileModalClose = document.getElementById('profileModalClose');
-
-        function openProfileModal() {
-            if (!profileModal) {
-                return;
-            }
-
-            profileModal.classList.add('show');
-            profileModal.setAttribute('aria-hidden', 'false');
-            document.body.classList.add('modal-open');
-        }
-
-        function closeProfileModal() {
-            if (!profileModal) {
-                return;
-            }
-
-            profileModal.classList.remove('show');
-            profileModal.setAttribute('aria-hidden', 'true');
-            document.body.classList.remove('modal-open');
-        }
-
-        // Close dropdown when clicking outside
-        document.addEventListener('click', function (event) {
-            const userMenu = document.querySelector('.user-menu');
-            const dropdown = document.getElementById('userDropdown');
-
-            if (!userMenu.contains(event.target)) {
-                dropdown.classList.remove('show');
-            }
-        });
-
-        profileButton?.addEventListener('click', function(event) {
-            event.preventDefault();
-            const dropdown = document.getElementById('userDropdown');
-            dropdown?.classList.remove('show');
-            openProfileModal();
-        });
-
-        profileModalClose?.addEventListener('click', function() {
-            closeProfileModal();
-        });
-
-        profileModal?.addEventListener('click', function(event) {
-            if (event.target === profileModal) {
-                closeProfileModal();
-            }
-        });
-
-        document.addEventListener('keydown', function(event) {
-            if (event.key === 'Escape' && profileModal?.classList.contains('show')) {
-                closeProfileModal();
-            }
-        });
-
-        // Close sidebar when clicking outside on mobile
-        document.addEventListener('click', function (event) {
-            const sidebar = document.getElementById('sidebar');
-            const toggle = document.querySelector('.mobile-toggle');
-
-            if (window.innerWidth <= 768 &&
-                !sidebar.contains(event.target) &&
-                !toggle.contains(event.target)) {
-                sidebar.classList.remove('mobile-open');
-            }
-        });
-
-        // Edit product functionality
-        document.querySelectorAll('.edit-btn').forEach(btn => {
-            btn.addEventListener('click', function (e) {
-                e.preventDefault();
-                document.getElementById('edit_id').value = this.dataset.id;
-                document.getElementById('edit_code').value = this.dataset.code;
-                document.getElementById('edit_name').value = this.dataset.name;
-                document.getElementById('edit_description').value = this.dataset.description;
-                document.getElementById('edit_price').value = this.dataset.price;
-                document.getElementById('edit_quantity').value = this.dataset.quantity;
-                document.getElementById('edit_low').value = this.dataset.low;
-                setSelectWithFallback('edit_brand', 'edit_brand_new', this.dataset.brand || '');
-                setSelectWithFallback('edit_category', 'edit_category_new', this.dataset.category || '');
-                setSelectWithFallback('edit_supplier', 'edit_supplier_new', this.dataset.supplier || '');
-                document.getElementById('editImagePreview').src =
-                    'https://via.placeholder.com/120x120?text=No+Image';
-                document.getElementById('editModal').style.display = 'flex';
-            });
-        });
-        // Edit modal dropdown/input toggles and image preview
         function previewEditImage(event) {
             const [file] = event.target.files;
             if (file) {
@@ -981,27 +847,166 @@ $suppliers = $pdo->query('SELECT DISTINCT supplier FROM products WHERE supplier 
                 input.required = false;
             }
         }
-        document.getElementById('closeEditModal').onclick = function () {
-            document.getElementById('editModal').style.display = 'none';
-        };
-        // Optional: close modal when clicking outside the modal content
-        document.getElementById('editModal').addEventListener('click', function (e) {
-            if (e.target === this) this.style.display = 'none';
-        });
 
-        // Add product modal functionality
-        document.getElementById('openAddModal').onclick = function () {
-            document.getElementById('addModal').style.display = 'flex';
-            // Added: reset add-modal selectors every time it opens so previous values don’t bleed over.
-            setSelectWithFallback('brandSelect', 'brandNewInput', '');
-            setSelectWithFallback('categorySelect', 'categoryNewInput', '');
-            setSelectWithFallback('supplierSelect', 'supplierNewInput', '');
-        };
-        document.getElementById('closeAddModal').onclick = function () {
-            document.getElementById('addModal').style.display = 'none';
-        };
-        document.getElementById('addModal').addEventListener('click', function (e) {
-            if (e.target === this) this.style.display = 'none';
+        document.addEventListener('DOMContentLoaded', () => {
+            const historyModal = document.getElementById('historyModal');
+            const historyList = document.getElementById('historyList');
+            const openHistoryButton = document.getElementById('openHistoryModal');
+            const closeHistoryButton = document.getElementById('closeHistoryModal');
+
+            openHistoryButton?.addEventListener('click', () => {
+                if (!historyModal || !historyList) {
+                    return;
+                }
+
+                historyModal.style.display = 'flex';
+                historyList.innerHTML =
+                    '<div style="text-align:center;padding:20px;"><i class="fas fa-spinner fa-spin"></i> Loading history...</div>';
+
+                fetch('products.php?history=1', {
+                    cache: 'no-store',
+                    headers: { 'Accept': 'text/html' }
+                })
+                    .then((response) => {
+                        if (!response.ok) {
+                            throw new Error('Network response was not ok');
+                        }
+                        return response.text();
+                    })
+                    .then((html) => {
+                        historyList.innerHTML = html;
+                    })
+                    .catch((error) => {
+                        historyList.innerHTML = `
+                            <div style="text-align:center;padding:20px;color:#dc3545;">
+                                <i class="fas fa-exclamation-circle"></i> Error loading history: ${error.message}
+                            </div>`;
+                    });
+            });
+
+            closeHistoryButton?.addEventListener('click', () => {
+                if (historyModal) {
+                    historyModal.style.display = 'none';
+                }
+            });
+
+            historyModal?.addEventListener('click', (event) => {
+                if (event.target === historyModal) {
+                    historyModal.style.display = 'none';
+                }
+            });
+
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape' && historyModal?.style.display === 'flex') {
+                    historyModal.style.display = 'none';
+                }
+            });
+
+            const profileButton = document.getElementById('profileTrigger');
+            const profileModal = document.getElementById('profileModal');
+            const profileModalClose = document.getElementById('profileModalClose');
+
+            profileButton?.addEventListener('click', (event) => {
+                event.preventDefault();
+                document.getElementById('userDropdown')?.classList.remove('show');
+                openProfileModal();
+            });
+
+            profileModalClose?.addEventListener('click', () => {
+                closeProfileModal();
+            });
+
+            profileModal?.addEventListener('click', (event) => {
+                if (event.target === profileModal) {
+                    closeProfileModal();
+                }
+            });
+
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape' && profileModal?.classList.contains('show')) {
+                    closeProfileModal();
+                }
+            });
+
+            const sidebar = document.getElementById('sidebar');
+            const mobileToggle = document.querySelector('.mobile-toggle');
+
+            document.addEventListener('click', (event) => {
+                const userMenu = document.querySelector('.user-menu');
+                if (userMenu && !userMenu.contains(event.target)) {
+                    document.getElementById('userDropdown')?.classList.remove('show');
+                }
+
+                if (
+                    window.innerWidth <= 768 &&
+                    sidebar &&
+                    mobileToggle &&
+                    !sidebar.contains(event.target) &&
+                    !mobileToggle.contains(event.target)
+                ) {
+                    sidebar.classList.remove('mobile-open');
+                }
+            });
+
+            const editModal = document.getElementById('editModal');
+
+            document.querySelectorAll('.edit-btn').forEach((btn) => {
+                btn.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    (document.getElementById('edit_id') ?? {}).value = btn.dataset.id ?? '';
+                    (document.getElementById('edit_code') ?? {}).value = btn.dataset.code ?? '';
+                    (document.getElementById('edit_name') ?? {}).value = btn.dataset.name ?? '';
+                    (document.getElementById('edit_description') ?? {}).value = btn.dataset.description ?? '';
+                    (document.getElementById('edit_price') ?? {}).value = btn.dataset.price ?? '';
+                    (document.getElementById('edit_quantity') ?? {}).value = btn.dataset.quantity ?? '';
+                    (document.getElementById('edit_low') ?? {}).value = btn.dataset.low ?? '';
+                    setSelectWithFallback('edit_brand', 'edit_brand_new', btn.dataset.brand || '');
+                    setSelectWithFallback('edit_category', 'edit_category_new', btn.dataset.category || '');
+                    setSelectWithFallback('edit_supplier', 'edit_supplier_new', btn.dataset.supplier || '');
+                    const preview = document.getElementById('editImagePreview');
+                    if (preview) {
+                        preview.src = 'https://via.placeholder.com/120x120?text=No+Image';
+                    }
+                    if (editModal) {
+                        editModal.style.display = 'flex';
+                    }
+                });
+            });
+
+            document.getElementById('closeEditModal')?.addEventListener('click', () => {
+                if (editModal) {
+                    editModal.style.display = 'none';
+                }
+            });
+
+            editModal?.addEventListener('click', (event) => {
+                if (event.target === editModal) {
+                    editModal.style.display = 'none';
+                }
+            });
+
+            const addModal = document.getElementById('addModal');
+
+            document.getElementById('openAddModal')?.addEventListener('click', () => {
+                if (addModal) {
+                    addModal.style.display = 'flex';
+                }
+                setSelectWithFallback('brandSelect', 'brandNewInput', '');
+                setSelectWithFallback('categorySelect', 'categoryNewInput', '');
+                setSelectWithFallback('supplierSelect', 'supplierNewInput', '');
+            });
+
+            document.getElementById('closeAddModal')?.addEventListener('click', () => {
+                if (addModal) {
+                    addModal.style.display = 'none';
+                }
+            });
+
+            addModal?.addEventListener('click', (event) => {
+                if (event.target === addModal) {
+                    addModal.style.display = 'none';
+                }
+            });
         });
     </script>
 
