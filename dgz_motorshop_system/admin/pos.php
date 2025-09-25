@@ -52,7 +52,15 @@ $allowedStatuses = ['pending', 'approved', 'completed'];
 function generateInvoiceNumber(PDO $pdo): string
 {
     $prefix = 'INV-';
-    $stmt = $pdo->query("SELECT invoice_number FROM orders WHERE invoice_number IS NOT NULL AND invoice_number <> '' ORDER BY id DESC LIMIT 1");
+    // ✅ fixed SQL
+    $stmt = $pdo->query(
+        "SELECT invoice_number\n"
+        . "         FROM orders\n"
+        . "         WHERE invoice_number IS NOT NULL\n"
+        . "           AND invoice_number <> ''\n"
+        . "         ORDER BY id DESC\n"
+        . "         LIMIT 1"
+    );
     $lastInvoice = $stmt ? $stmt->fetchColumn() : null;
 
     $nextNumber = 1;
