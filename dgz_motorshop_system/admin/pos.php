@@ -75,6 +75,7 @@ function generateInvoiceNumber(PDO $pdo): string
     }
 
     $prefix = 'INV-';
+
     $offset = strlen($prefix) + 1;
     $forUpdate = $pdo->inTransaction() ? ' FOR UPDATE' : '';
 
@@ -92,6 +93,24 @@ function generateInvoiceNumber(PDO $pdo): string
         error_log('Unable to fetch last invoice number: ' . $e->getMessage());
         $lastInvoice = null;
     }
+
+    // ✅ fixed SQL
+    try {
+        $stmt = $pdo->query(
+            "SELECT invoice_number\n"
+            . "         FROM orders\n"
+            . "         WHERE invoice_number IS NOT NULL\n"
+            . "           AND invoice_number <> ''\n"
+            . "         ORDER BY id DESC\n"
+            . "         LIMIT 1"
+        );
+    } catch (Throwable $e) {
+        error_log('Unable to fetch last invoice number: ' . $e->getMessage());
+        $stmt = false;
+    }
+
+    $lastInvoice = $stmt ? $stmt->fetchColumn() : null;
+
 
     $nextNumber = 1;
     if (is_string($lastInvoice) && preg_match('/(\d+)/', $lastInvoice, $matches)) {
