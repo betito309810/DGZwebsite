@@ -1076,23 +1076,26 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
         </div>
     </main>
     <script>
-        // Toggle user dropdown
         function toggleDropdown() {
             const dropdown = document.getElementById('userDropdown');
+            if (!dropdown) {
+                return;
+            }
+
             dropdown.classList.toggle('show');
         }
 
-        // Toggle mobile sidebar
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
+            if (!sidebar) {
+                return;
+            }
+
             sidebar.classList.toggle('mobile-open');
         }
 
-        const profileButton = document.getElementById('profileTrigger');
-        const profileModal = document.getElementById('profileModal');
-        const profileModalClose = document.getElementById('profileModalClose');
-
         function openProfileModal() {
+            const profileModal = document.getElementById('profileModal');
             if (!profileModal) {
                 return;
             }
@@ -1103,6 +1106,7 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
         }
 
         function closeProfileModal() {
+            const profileModal = document.getElementById('profileModal');
             if (!profileModal) {
                 return;
             }
@@ -1112,63 +1116,23 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
             document.body.classList.remove('modal-open');
         }
 
-        // Close dropdown when clicking outside
-        document.addEventListener('click', function (event) {
-            const userMenu = document.querySelector('.user-menu');
-            const dropdown = document.getElementById('userDropdown');
-
-            if (!userMenu.contains(event.target)) {
-                dropdown.classList.remove('show');
-            }
-        });
-
-        profileButton?.addEventListener('click', function(event) {
-            event.preventDefault();
-            const dropdown = document.getElementById('userDropdown');
-            dropdown?.classList.remove('show');
-            openProfileModal();
-        });
-
-        profileModalClose?.addEventListener('click', function() {
-            closeProfileModal();
-        });
-
-        profileModal?.addEventListener('click', function(event) {
-            if (event.target === profileModal) {
-                closeProfileModal();
-            }
-        });
-
-        document.addEventListener('keydown', function(event) {
-            if (event.key === 'Escape' && profileModal?.classList.contains('show')) {
-                closeProfileModal();
-            }
-        });
-
-        // Close sidebar when clicking outside on mobile
-        document.addEventListener('click', function (event) {
-            const sidebar = document.getElementById('sidebar');
-            const toggle = document.querySelector('.mobile-toggle');
-
-            if (window.innerWidth <= 768 &&
-                !sidebar.contains(event.target) &&
-                !toggle.contains(event.target)) {
-                sidebar.classList.remove('mobile-open');
-            }
-        });
-
-        // Stock Entry Modal Functions
         function openStockModal() {
-            document.getElementById('stockEntryModal').style.display = 'block';
+            const modal = document.getElementById('stockEntryModal');
+            if (modal) {
+                modal.style.display = 'block';
+            }
         }
 
         function closeStockModal() {
-            document.getElementById('stockEntryModal').style.display = 'none';
+            const modal = document.getElementById('stockEntryModal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
         }
 
         function toggleRestockForm() {
             const form = document.getElementById('restockRequestForm');
-            form.classList.toggle('hidden');
+            form?.classList.toggle('hidden');
         }
 
         function toggleRestockStatus() {
@@ -1177,6 +1141,7 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
             if (!panel || !button) {
                 return;
             }
+
             const isHidden = panel.classList.toggle('hidden');
             button.classList.toggle('active', !isHidden);
             if (!isHidden) {
@@ -1184,31 +1149,74 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
             }
         }
 
-        // Close modal when clicking outside
-        window.onclick = function(event) {
-            const modal = document.getElementById('stockEntryModal');
-            if (event.target == modal) {
-                closeStockModal();
-            }
-        }
-
-        // Toggle Recent Entries Section
         function toggleRecentEntries() {
             const content = document.getElementById('recentEntriesContent');
             const icon = document.getElementById('toggleIcon');
-            
-            content.classList.toggle('hidden');
-            if (content.classList.contains('hidden')) {
-                icon.className = 'fas fa-chevron-down';
-            } else {
-                icon.className = 'fas fa-chevron-up';
+            if (!content || !icon) {
+                return;
             }
+
+            const isHidden = content.classList.toggle('hidden');
+            icon.className = isHidden ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
         }
 
-        // Show alerts for 5 seconds then fade out
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', () => {
+            const profileButton = document.getElementById('profileTrigger');
+            const profileModal = document.getElementById('profileModal');
+            const profileModalClose = document.getElementById('profileModalClose');
+
+            document.addEventListener('click', (event) => {
+                const userMenu = document.querySelector('.user-menu');
+                const dropdown = document.getElementById('userDropdown');
+
+                if (userMenu && dropdown && !userMenu.contains(event.target)) {
+                    dropdown.classList.remove('show');
+                }
+
+                const sidebar = document.getElementById('sidebar');
+                const toggleButton = document.querySelector('.mobile-toggle');
+                if (
+                    window.innerWidth <= 768 &&
+                    sidebar &&
+                    toggleButton &&
+                    !sidebar.contains(event.target) &&
+                    !toggleButton.contains(event.target)
+                ) {
+                    sidebar.classList.remove('mobile-open');
+                }
+            });
+
+            profileButton?.addEventListener('click', (event) => {
+                event.preventDefault();
+                document.getElementById('userDropdown')?.classList.remove('show');
+                openProfileModal();
+            });
+
+            profileModalClose?.addEventListener('click', () => {
+                closeProfileModal();
+            });
+
+            profileModal?.addEventListener('click', (event) => {
+                if (event.target === profileModal) {
+                    closeProfileModal();
+                }
+            });
+
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape' && profileModal?.classList.contains('show')) {
+                    closeProfileModal();
+                }
+            });
+
+            window.addEventListener('click', (event) => {
+                const modal = document.getElementById('stockEntryModal');
+                if (event.target === modal) {
+                    closeStockModal();
+                }
+            });
+
             const alerts = document.querySelectorAll('.alert');
-            alerts.forEach(alert => {
+            alerts.forEach((alert) => {
                 setTimeout(() => {
                     alert.style.transition = 'opacity 0.5s';
                     alert.style.opacity = '0';
@@ -1357,15 +1365,15 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                 const tabButtons = statusPanel.querySelectorAll('.tab-btn[data-target]');
                 const tabPanels = statusPanel.querySelectorAll('.tab-panel');
 
-                tabButtons.forEach(button => {
+                tabButtons.forEach((button) => {
                     button.addEventListener('click', () => {
                         const targetId = button.getAttribute('data-target');
                         if (!targetId) {
                             return;
                         }
 
-                        tabButtons.forEach(btn => btn.classList.toggle('active', btn === button));
-                        tabPanels.forEach(panel => {
+                        tabButtons.forEach((btn) => btn.classList.toggle('active', btn === button));
+                        tabPanels.forEach((panel) => {
                             panel.classList.toggle('active', panel.id === targetId);
                         });
                     });

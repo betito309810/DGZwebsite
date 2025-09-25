@@ -436,6 +436,49 @@ $end_record = min($offset + $records_per_page, $total_records);
     </div>
 
     <script>
+        function toggleDropdown() {
+            const dropdown = document.getElementById('userDropdown');
+            if (!dropdown) {
+                return;
+            }
+
+            dropdown.classList.toggle('show');
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            if (!sidebar) {
+                return;
+            }
+
+            sidebar.classList.toggle('mobile-open');
+        }
+
+        function openProfileModal() {
+            const profileModal = document.getElementById('profileModal');
+            if (!profileModal) {
+                return;
+            }
+
+            profileModal.classList.add('show');
+            profileModal.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('modal-open');
+        }
+
+        function closeProfileModal() {
+            const profileModal = document.getElementById('profileModal');
+            if (!profileModal) {
+                return;
+            }
+
+            profileModal.classList.remove('show');
+            profileModal.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('modal-open');
+        }
+    </script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
         // sales trend piechart
         (function(){
     const ctx = document.getElementById('salesPieChart').getContext('2d');
@@ -658,48 +701,16 @@ $end_record = min($offset + $records_per_page, $total_records);
             updateStats(currentPeriod);
         }, 30000);
 
-        // Toggle user dropdown
-        function toggleDropdown() {
-            const dropdown = document.getElementById('userDropdown');
-            dropdown.classList.toggle('show');
-        }
-
-        // Toggle mobile sidebar
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            sidebar.classList.toggle('mobile-open');
-        }
-
         const profileButton = document.getElementById('profileTrigger');
         const profileModal = document.getElementById('profileModal');
         const profileModalClose = document.getElementById('profileModalClose');
-
-        function openProfileModal() {
-            if (!profileModal) {
-                return;
-            }
-
-            profileModal.classList.add('show');
-            profileModal.setAttribute('aria-hidden', 'false');
-            document.body.classList.add('modal-open');
-        }
-
-        function closeProfileModal() {
-            if (!profileModal) {
-                return;
-            }
-
-            profileModal.classList.remove('show');
-            profileModal.setAttribute('aria-hidden', 'true');
-            document.body.classList.remove('modal-open');
-        }
 
         // Close dropdown when clicking outside
         document.addEventListener('click', function (event) {
             const userMenu = document.querySelector('.user-menu');
             const dropdown = document.getElementById('userDropdown');
 
-            if (!userMenu.contains(event.target)) {
+            if (userMenu && dropdown && !userMenu.contains(event.target)) {
                 dropdown.classList.remove('show');
             }
         });
@@ -804,6 +815,8 @@ $end_record = min($offset + $records_per_page, $total_records);
                     alert('Failed to load transaction details. Please try again.');
                 }
             });
+        });
+
         });
     </script>
     <script src="../assets/js/notifications.js"></script>
