@@ -16,6 +16,34 @@ $inventoryNotificationData = loadInventoryNotifications($pdo);
 $inventoryNotifications = $inventoryNotificationData['notifications'];
 $inventoryNotificationCount = $inventoryNotificationData['active_count'];
 
+// Fetch the authenticated user's information for the profile modal
+$current_user = null;
+try {
+    $stmt = $pdo->prepare('SELECT name, role, created_at FROM users WHERE id = ?');
+    $stmt->execute([$_SESSION['user_id']]);
+    $current_user = $stmt->fetch();
+} catch (Exception $e) {
+    error_log('User lookup failed: ' . $e->getMessage());
+}
+
+function format_profile_date(?string $datetime): string
+{
+    if (!$datetime) {
+        return 'N/A';
+    }
+
+    $timestamp = strtotime($datetime);
+    if ($timestamp === false) {
+        return 'N/A';
+    }
+
+    return date('F j, Y g:i A', $timestamp);
+}
+
+$profile_name = $current_user['name'] ?? 'N/A';
+$profile_role = !empty($current_user['role']) ? ucfirst($current_user['role']) : 'N/A';
+$profile_created = format_profile_date($current_user['created_at'] ?? null);
+
 $allowedStatuses = ['pending', 'approved', 'completed'];
 
 /**
@@ -24,7 +52,15 @@ $allowedStatuses = ['pending', 'approved', 'completed'];
 function generateInvoiceNumber(PDO $pdo): string
 {
     $prefix = 'INV-';
-    $stmt = $pdo->query("SELECT invoice_number FROM orders WHERE invoice_number IS NOT NULL AND invoice_number <> '' ORDER BY id DESC LIMIT 1");
+    // ✅ fixed SQL
+    $stmt = $pdo->query(
+        "SELECT invoice_number\n"
+        . "         FROM orders\n"
+        . "         WHERE invoice_number IS NOT NULL\n"
+        . "           AND invoice_number <> ''\n"
+        . "         ORDER BY id DESC\n"
+        . "         LIMIT 1"
+    );
     $lastInvoice = $stmt ? $stmt->fetchColumn() : null;
 
     $nextNumber = 1;
@@ -49,12 +85,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
         $currentOrder = $orderStmt->fetch();
 
         if ($currentOrder) {
-            $currentStatus = strtolower((string) ($currentOrder['status'] ?? 'pending'));
+            $currentStatus = strtolower((string) ($currentOrder['status'] ?? ''));
+            if ($currentStatus === '') {
+                $currentStatus = 'pending';
+            }
             $transitions = [
                 'pending' => ['approved', 'completed'],
                 'approved' => ['completed'],
                 'completed' => [],
             ];
+
+            if (!array_key_exists($currentStatus, $transitions)) {
+                $currentStatus = 'pending';
+            }
 
             $allowedNext = $transitions[$currentStatus] ?? [];
 
@@ -275,8 +318,7 @@ if (isset($_GET['ok'], $_GET['order_id']) && $_GET['ok'] === '1') {
         $orderStmt = $pdo->prepare(
             'SELECT id, customer_name, total, vatable, vat, amount_paid, change_amount, created_at, invoice_number
              FROM orders
-             WHERE id = ?
-             LIMIT 1'
+             WHERE id = ? LIMIT 1'
         );
         $orderStmt->execute([$requestedOrderId]);
         $orderRow = $orderStmt->fetch();
@@ -360,13 +402,13 @@ if ($receiptDataJson === false) {
             <div class="header-right">
                 <?php include __DIR__ . '/partials/notification_menu.php'; ?>
                 <div class="user-menu">
-                    <button type="button" class="user-avatar" aria-haspopup="true" aria-expanded="false">
+                    <div class="user-avatar">
                         <i class="fas fa-user"></i>
-                    </button>
+                    </div>
                     <div class="dropdown-menu" id="userDropdown">
-                        <a href="profile.php" class="dropdown-item">
+                        <button type="button" class="dropdown-item" id="profileTrigger">
                             <i class="fas fa-user-cog"></i> Profile
-                        </a>
+                        </button>
                         <a href="settings.php" class="dropdown-item">
                             <i class="fas fa-cog"></i> Settings
                         </a>
@@ -553,6 +595,29 @@ if ($receiptDataJson === false) {
         </div>
     </main>
 
+    <div class="modal-overlay" id="profileModal" aria-hidden="true">
+        <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="profileModalTitle">
+            <button type="button" class="modal-close" id="profileModalClose" aria-label="Close profile information">
+                <i class="fas fa-times"></i>
+            </button>
+            <h3 id="profileModalTitle">Profile information</h3>
+            <div class="profile-info">
+                <div class="profile-row">
+                    <span class="profile-label">Name</span>
+                    <span class="profile-value"><?= htmlspecialchars($profile_name) ?></span>
+                </div>
+                <div class="profile-row">
+                    <span class="profile-label">Role</span>
+                    <span class="profile-value"><?= htmlspecialchars($profile_role) ?></span>
+                </div>
+                <div class="profile-row">
+                    <span class="profile-label">Date created</span>
+                    <span class="profile-value"><?= htmlspecialchars($profile_created) ?></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="productModal" class="modal-overlay" style="display:none;">
         <div class="modal-content large-modal">
             <button id="closeProductModal" type="button" class="modal-close">&times;</button>
@@ -655,6 +720,9 @@ if ($receiptDataJson === false) {
             const posEmptyState = document.getElementById('posEmptyState');
             const amountReceivedInput = document.getElementById('amountReceived');
             const settlePaymentButton = document.getElementById('settlePaymentButton');
+            const profileButton = document.getElementById('profileTrigger');
+            const profileModal = document.getElementById('profileModal');
+            const profileModalClose = document.getElementById('profileModalClose');
 
             const totals = {
                 sales: document.getElementById('salesTotalAmount'),
@@ -689,6 +757,26 @@ if ($receiptDataJson === false) {
             const tabPanels = {
                 walkin: document.getElementById('walkinTab'),
                 online: document.getElementById('onlineTab'),
+            };
+
+            const openProfileModal = () => {
+                if (!profileModal) {
+                    return;
+                }
+
+                profileModal.classList.add('show');
+                profileModal.setAttribute('aria-hidden', 'false');
+                document.body.classList.add('modal-open');
+            };
+
+            const closeProfileModal = () => {
+                if (!profileModal) {
+                    return;
+                }
+
+                profileModal.classList.remove('show');
+                profileModal.setAttribute('aria-hidden', 'true');
+                document.body.classList.remove('modal-open');
             };
 
             function formatPeso(value) {
@@ -1263,6 +1351,28 @@ if ($receiptDataJson === false) {
             document.addEventListener('click', (event) => {
                 if (userMenu && userDropdown && !userMenu.contains(event.target)) {
                     userDropdown.classList.remove('show');
+                }
+            });
+
+            profileButton?.addEventListener('click', (event) => {
+                event.preventDefault();
+                userDropdown?.classList.remove('show');
+                openProfileModal();
+            });
+
+            profileModalClose?.addEventListener('click', () => {
+                closeProfileModal();
+            });
+
+            profileModal?.addEventListener('click', (event) => {
+                if (event.target === profileModal) {
+                    closeProfileModal();
+                }
+            });
+
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape' && profileModal?.classList.contains('show')) {
+                    closeProfileModal();
                 }
             });
 
