@@ -28,6 +28,34 @@ $inventoryNotificationData = loadInventoryNotifications($pdo);
 $inventoryNotifications = $inventoryNotificationData['notifications'];
 $inventoryNotificationCount = $inventoryNotificationData['active_count'];
 
+// Fetch the authenticated user's information for the profile modal
+$current_user = null;
+try {
+    $stmt = $pdo->prepare('SELECT name, role, created_at FROM users WHERE id = ?');
+    $stmt->execute([$_SESSION['user_id']]);
+    $current_user = $stmt->fetch();
+} catch (Exception $e) {
+    error_log('User lookup failed: ' . $e->getMessage());
+}
+
+function format_profile_date(?string $datetime): string
+{
+    if (!$datetime) {
+        return 'N/A';
+    }
+
+    $timestamp = strtotime($datetime);
+    if ($timestamp === false) {
+        return 'N/A';
+    }
+
+    return date('F j, Y g:i A', $timestamp);
+}
+
+$profile_name = $current_user['name'] ?? 'N/A';
+$profile_role = !empty($current_user['role']) ? ucfirst($current_user['role']) : 'N/A';
+$profile_created = format_profile_date($current_user['created_at'] ?? null);
+
 // Handle restock request submission (available to any authenticated user)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_restock_request'])) {
     $restockFormData = [
@@ -660,9 +688,9 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                         <i class="fas fa-user"></i>
                     </div>
                     <div class="dropdown-menu" id="userDropdown">
-                        <a href="profile.php" class="dropdown-item">
+                        <button type="button" class="dropdown-item" id="profileTrigger">
                             <i class="fas fa-user-cog"></i> Profile
-                        </a>
+                        </button>
                         <a href="settings.php" class="dropdown-item">
                             <i class="fas fa-cog"></i> Settings
                         </a>
@@ -1060,6 +1088,30 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
             sidebar.classList.toggle('mobile-open');
         }
 
+        const profileButton = document.getElementById('profileTrigger');
+        const profileModal = document.getElementById('profileModal');
+        const profileModalClose = document.getElementById('profileModalClose');
+
+        function openProfileModal() {
+            if (!profileModal) {
+                return;
+            }
+
+            profileModal.classList.add('show');
+            profileModal.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('modal-open');
+        }
+
+        function closeProfileModal() {
+            if (!profileModal) {
+                return;
+            }
+
+            profileModal.classList.remove('show');
+            profileModal.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('modal-open');
+        }
+
         // Close dropdown when clicking outside
         document.addEventListener('click', function (event) {
             const userMenu = document.querySelector('.user-menu');
@@ -1067,6 +1119,29 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
 
             if (!userMenu.contains(event.target)) {
                 dropdown.classList.remove('show');
+            }
+        });
+
+        profileButton?.addEventListener('click', function(event) {
+            event.preventDefault();
+            const dropdown = document.getElementById('userDropdown');
+            dropdown?.classList.remove('show');
+            openProfileModal();
+        });
+
+        profileModalClose?.addEventListener('click', function() {
+            closeProfileModal();
+        });
+
+        profileModal?.addEventListener('click', function(event) {
+            if (event.target === profileModal) {
+                closeProfileModal();
+            }
+        });
+
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape' && profileModal?.classList.contains('show')) {
+                closeProfileModal();
             }
         });
 
@@ -1298,6 +1373,28 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
             }
         });
     </script>
+    <div class="modal-overlay" id="profileModal" aria-hidden="true">
+        <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="profileModalTitle">
+            <button type="button" class="modal-close" id="profileModalClose" aria-label="Close profile information">
+                <i class="fas fa-times"></i>
+            </button>
+            <h3 id="profileModalTitle">Profile information</h3>
+            <div class="profile-info">
+                <div class="profile-row">
+                    <span class="profile-label">Name</span>
+                    <span class="profile-value"><?= htmlspecialchars($profile_name) ?></span>
+                </div>
+                <div class="profile-row">
+                    <span class="profile-label">Role</span>
+                    <span class="profile-value"><?= htmlspecialchars($profile_role) ?></span>
+                </div>
+                <div class="profile-row">
+                    <span class="profile-label">Date created</span>
+                    <span class="profile-value"><?= htmlspecialchars($profile_created) ?></span>
+                </div>
+            </div>
+        </div>
+    </div>
     <script src="../assets/js/notifications.js"></script>
 </body>
 </html>
