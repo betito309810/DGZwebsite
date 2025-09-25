@@ -310,8 +310,7 @@ if (isset($_GET['ok'], $_GET['order_id']) && $_GET['ok'] === '1') {
         $orderStmt = $pdo->prepare(
             'SELECT id, customer_name, total, vatable, vat, amount_paid, change_amount, created_at, invoice_number
              FROM orders
-             WHERE id = ?
-             LIMIT 1'
+             WHERE id = ? LIMIT 1'
         );
         $orderStmt->execute([$requestedOrderId]);
         $orderRow = $orderStmt->fetch();
@@ -395,9 +394,9 @@ if ($receiptDataJson === false) {
             <div class="header-right">
                 <?php include __DIR__ . '/partials/notification_menu.php'; ?>
                 <div class="user-menu">
-                    <button type="button" class="user-avatar" aria-haspopup="true" aria-expanded="false">
+                    <div class="user-avatar">
                         <i class="fas fa-user"></i>
-                    </button>
+                    </div>
                     <div class="dropdown-menu" id="userDropdown">
                         <button type="button" class="dropdown-item" id="profileTrigger">
                             <i class="fas fa-user-cog"></i> Profile
