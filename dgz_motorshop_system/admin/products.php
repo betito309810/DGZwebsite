@@ -3,6 +3,7 @@ require __DIR__. '/../config/config.php';
 if(empty($_SESSION['user_id'])){ header('Location: login.php'); exit; }
 $pdo = db();
 $role = $_SESSION['role'] ?? '';
+enforceStaffAccess();
 // Product Add History for modal (HTML table, not JSON)
 if (isset($_GET['history']) && $_GET['history'] == '1') {
     $sql = "
@@ -388,52 +389,10 @@ $suppliers = $pdo->query('SELECT DISTINCT supplier FROM products WHERE supplier 
 
 <body>
     <!-- Sidebar -->
-    <aside class="sidebar" id="sidebar">
-        <div class="sidebar-header">
-            <div class="logo">
-                <img src="../assets/logo.png" alt="Company Logo">
-            </div>
-        </div>
-        <nav class="nav-menu">
-            <div class="nav-item">
-                <a href="dashboard.php" class="nav-link">
-                    <i class="fas fa-home nav-icon"></i>
-                    Dashboard
-                </a>
-            </div>
-            <div class="nav-item">
-                <a href="products.php" class="nav-link active">
-                    <i class="fas fa-box nav-icon"></i>
-                    Products
-                </a>
-            </div>
-            <div class="nav-item">
-                <a href="sales.php" class="nav-link">
-                    <i class="fas fa-chart-line nav-icon"></i>
-                    Sales
-                </a>
-            </div>
-            <div class="nav-item">
-                <a href="pos.php" class="nav-link">
-                    <i class="fas fa-cash-register nav-icon"></i>
-                    POS
-                </a>
-            </div>
-            <div class="nav-item">
-                <a href="inventory.php" class="nav-link">
-                    <i class="fas fa-boxes nav-icon"></i>
-                    Inventory
-                </a>
-            </div>
-
-            <div class="nav-item">
-                <a href="stockRequests.php" class="nav-link">
-                    <i class="fas fa-clipboard-list nav-icon"></i>
-                    Stock Requests
-                </a>
-            </div>
-        </nav>
-    </aside>
+    <?php
+        $activePage = 'products.php';
+        include __DIR__ . '/includes/sidebar.php';
+    ?>
 
     <!-- Main Content -->
     <main class="main-content">
