@@ -140,6 +140,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
     exit;
 }
 
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pos_checkout'])) {
     $productIds = isset($_POST['product_id']) ? (array) $_POST['product_id'] : [];
     $quantities = isset($_POST['qty']) ? (array) $_POST['qty'] : [];

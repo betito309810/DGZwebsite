@@ -787,6 +787,28 @@ $suppliers = $pdo->query('SELECT DISTINCT supplier FROM products WHERE supplier 
             </div>
         </div>
     </main>
+     <div class="modal-overlay" id="profileModal" aria-hidden="true">
+        <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="profileModalTitle">
+            <button type="button" class="modal-close" id="profileModalClose" aria-label="Close profile information">
+                <i class="fas fa-times"></i>
+            </button>
+            <h3 id="profileModalTitle">Profile information</h3>
+            <div class="profile-info">
+                <div class="profile-row">
+                    <span class="profile-label">Name</span>
+                    <span class="profile-value"><?= htmlspecialchars($profile_name) ?></span>
+                </div>
+                <div class="profile-row">
+                    <span class="profile-label">Role</span>
+                    <span class="profile-value"><?= htmlspecialchars($profile_role) ?></span>
+                </div>
+                <div class="profile-row">
+                    <span class="profile-label">Date created</span>
+                    <span class="profile-value"><?= htmlspecialchars($profile_created) ?></span>
+                </div>
+            </div>
+        </div>
+    </div>
     <script>
         document.getElementById('openHistoryModal').addEventListener('click', () => {
             const modal = document.getElementById('historyModal');
@@ -983,28 +1005,7 @@ $suppliers = $pdo->query('SELECT DISTINCT supplier FROM products WHERE supplier 
         });
     </script>
 
-    <div class="modal-overlay" id="profileModal" aria-hidden="true">
-        <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="profileModalTitle">
-            <button type="button" class="modal-close" id="profileModalClose" aria-label="Close profile information">
-                <i class="fas fa-times"></i>
-            </button>
-            <h3 id="profileModalTitle">Profile information</h3>
-            <div class="profile-info">
-                <div class="profile-row">
-                    <span class="profile-label">Name</span>
-                    <span class="profile-value"><?= htmlspecialchars($profile_name) ?></span>
-                </div>
-                <div class="profile-row">
-                    <span class="profile-label">Role</span>
-                    <span class="profile-value"><?= htmlspecialchars($profile_role) ?></span>
-                </div>
-                <div class="profile-row">
-                    <span class="profile-label">Date created</span>
-                    <span class="profile-value"><?= htmlspecialchars($profile_created) ?></span>
-                </div>
-            </div>
-        </div>
-    </div>
+   
 
     <script src="../assets/js/notifications.js"></script>
 
