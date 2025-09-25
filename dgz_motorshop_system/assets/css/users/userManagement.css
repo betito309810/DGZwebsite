@@ -1,11 +1,19 @@
-.main-content {
-    background-color: #f4f6f9;
+
+html, body {
+    height: 100%;
 }
 
-.page-actions {
+.main-content {
+    background-color: #f4f6f9;
+    padding: 28px 36px;
+    min-height: 100vh;
+}
+
+.page-toolbar {
     display: flex;
-    justify-content: flex-end;
-    margin-bottom: 16px;
+    justify-content: flex-start;
+    gap: 12px;
+    margin-bottom: 20px;
 }
 
 .primary-action {
@@ -38,12 +46,25 @@
     font-weight: 600;
 }
 
+.content-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+    align-items: start;
+}
+
 .card {
     background: #ffffff;
     border-radius: 12px;
     padding: 24px;
     box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
     margin-bottom: 24px;
+    width: 100%;
+}
+
+.user-card,
+.user-list {
+    max-width: 100%;
 }
 
 .card h3 {
@@ -54,10 +75,11 @@
     gap: 10px;
 }
 
+
 .user-form {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 18px 24px;
+    grid-template-columns: 1fr;
+    gap: 18px 0;
 }
 
 .form-row {
@@ -101,6 +123,10 @@
     border-collapse: collapse;
 }
 
+.user-list {
+    margin-top: 0;
+}
+
 .users-table th,
 .users-table td {
     padding: 12px;
@@ -137,6 +163,7 @@
     text-align: center;
     color: #6b7280;
 }
+
 
 .hidden {
     display: none;

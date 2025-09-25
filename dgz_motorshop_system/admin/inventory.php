@@ -21,6 +21,12 @@ $restockFormDefaults = [
 ];
 $restockFormData = $restockFormDefaults;
 
+require_once __DIR__ . '/includes/inventory_notifications.php';
+$notificationManageLink = 'inventory.php';
+$inventoryNotificationData = loadInventoryNotifications($pdo);
+$inventoryNotifications = $inventoryNotificationData['notifications'];
+$inventoryNotificationCount = $inventoryNotificationData['active_count'];
+
 // Handle restock request submission (available to any authenticated user)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_restock_request'])) {
     $restockFormData = [
@@ -687,25 +693,28 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                 </button>
                 <h2>Inventory</h2>
             </div>
-            <div class="user-menu">
-                <div class="user-avatar" onclick="toggleDropdown()">
-                    <i class="fas fa-user"></i>
-                </div>
-                <div class="dropdown-menu" id="userDropdown">
-                    <a href="profile.php" class="dropdown-item">
-                        <i class="fas fa-user-cog"></i> Profile
-                    </a>
-                    <a href="settings.php" class="dropdown-item">
-                        <i class="fas fa-cog"></i> Settings
-                    </a>
-                    <?php if ($role === 'admin'): ?>
-                    <a href="userManagement.php" class="dropdown-item">
-                        <i class="fas fa-users-cog"></i> User Management
-                    </a>
-                    <?php endif; ?>
-                    <a href="login.php?logout=1" class="dropdown-item logout">
-                        <i class="fas fa-sign-out-alt"></i> Logout
-                    </a>
+            <div class="header-right">
+                <?php include __DIR__ . '/partials/notification_menu.php'; ?>
+                <div class="user-menu">
+                    <div class="user-avatar" onclick="toggleDropdown()">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <div class="dropdown-menu" id="userDropdown">
+                        <a href="profile.php" class="dropdown-item">
+                            <i class="fas fa-user-cog"></i> Profile
+                        </a>
+                        <a href="settings.php" class="dropdown-item">
+                            <i class="fas fa-cog"></i> Settings
+                        </a>
+                        <?php if ($role === 'admin'): ?>
+                        <a href="userManagement.php" class="dropdown-item">
+                            <i class="fas fa-users-cog"></i> User Management
+                        </a>
+                        <?php endif; ?>
+                        <a href="login.php?logout=1" class="dropdown-item logout">
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </a>
+                    </div>
                 </div>
             </div>
         </header>
@@ -1247,5 +1256,6 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
             }
         });
     </script>
+    <script src="../assets/js/notifications.js"></script>
 </body>
 </html>

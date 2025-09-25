@@ -14,6 +14,12 @@ if ($role !== 'admin') {
     exit;
 }
 
+$notificationManageLink = 'inventory.php';
+require_once __DIR__ . '/includes/inventory_notifications.php';
+$inventoryNotificationData = loadInventoryNotifications($pdo);
+$inventoryNotifications = $inventoryNotificationData['notifications'];
+$inventoryNotificationCount = $inventoryNotificationData['active_count'];
+
 $successMessage = null;
 $errorMessage = null;
 
@@ -122,20 +128,23 @@ $users = $pdo->query('SELECT id, name, email, contact_number, role, created_at F
                 </button>
                 <h2>User Management</h2>
             </div>
-            <div class="user-menu">
-                <div class="user-avatar" onclick="toggleDropdown()">
-                    <i class="fas fa-user"></i>
-                </div>
-                <div class="dropdown-menu" id="userDropdown">
-                    <a href="profile.php" class="dropdown-item">
-                        <i class="fas fa-user-cog"></i> Profile
-                    </a>
-                    <a href="settings.php" class="dropdown-item">
-                        <i class="fas fa-cog"></i> Settings
-                    </a>
-                    <a href="login.php?logout=1" class="dropdown-item logout">
-                        <i class="fas fa-sign-out-alt"></i> Logout
-                    </a>
+            <div class="header-right">
+                <?php include __DIR__ . '/partials/notification_menu.php'; ?>
+                <div class="user-menu">
+                    <div class="user-avatar" onclick="toggleDropdown()">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <div class="dropdown-menu" id="userDropdown">
+                        <a href="profile.php" class="dropdown-item">
+                            <i class="fas fa-user-cog"></i> Profile
+                        </a>
+                        <a href="settings.php" class="dropdown-item">
+                            <i class="fas fa-cog"></i> Settings
+                        </a>
+                        <a href="login.php?logout=1" class="dropdown-item logout">
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </a>
+                    </div>
                 </div>
             </div>
         </header>
@@ -292,6 +301,7 @@ $users = $pdo->query('SELECT id, name, email, contact_number, role, created_at F
             }
         });
     </script>
+    <script src="../assets/js/notifications.js"></script>
 </body>
 
 </html>

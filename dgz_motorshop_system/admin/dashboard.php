@@ -14,6 +14,12 @@ $pdo = db();
 
 $role = $_SESSION['role'] ?? '';
 
+require_once __DIR__ . '/includes/inventory_notifications.php';
+$notificationManageLink = 'inventory.php';
+$inventoryNotificationData = loadInventoryNotifications($pdo);
+$inventoryNotifications = $inventoryNotificationData['notifications'];
+$inventoryNotificationCount = $inventoryNotificationData['active_count'];
+
 // Fetch the authenticated user's information for the profile modal
 $current_user = null;
 try {
@@ -76,120 +82,6 @@ try {
 } catch (Exception $e) {
     error_log("Top products query failed: " . $e->getMessage());
     $top = [];
-}
-
-// Ensure notification storage exists and update notification feed
-$notifications = [];
-$active_notification_count = 0;
-
-try {
-    $pdo->exec("CREATE TABLE IF NOT EXISTS inventory_notifications (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        product_id INT NULL,
-        title VARCHAR(255) NOT NULL,
-        message TEXT NOT NULL,
-        status ENUM('active','resolved') DEFAULT 'active',
-        is_read TINYINT(1) NOT NULL DEFAULT 0,
-        quantity_at_event INT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        resolved_at TIMESTAMP NULL DEFAULT NULL,
-        CONSTRAINT fk_inventory_notifications_product
-            FOREIGN KEY (product_id) REFERENCES products(id)
-            ON DELETE SET NULL
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-
-    $columnCheck = $pdo->query("SHOW COLUMNS FROM inventory_notifications LIKE 'is_read'")->fetch(PDO::FETCH_ASSOC);
-    if (!$columnCheck) {
-        $pdo->exec("ALTER TABLE inventory_notifications ADD COLUMN is_read TINYINT(1) NOT NULL DEFAULT 0 AFTER status");
-    }
-
-    // Insert notifications for items that are currently low on stock and have no active alert yet
-    $low_stock_now = $pdo->query("SELECT id, name, quantity, low_stock_threshold FROM products WHERE quantity <= low_stock_threshold")
-                         ->fetchAll(PDO::FETCH_ASSOC);
-
-    $check_notification_stmt = $pdo->prepare("SELECT id FROM inventory_notifications WHERE product_id = ? AND status = 'active' LIMIT 1");
-    $create_notification_stmt = $pdo->prepare('INSERT INTO inventory_notifications (product_id, title, message, quantity_at_event, is_read) VALUES (?, ?, ?, ?, 0)');
-
-    foreach ($low_stock_now as $item) {
-        $check_notification_stmt->execute([$item['id']]);
-        if (!$check_notification_stmt->fetchColumn()) {
-            $title = $item['name'] . ' is low on stock';
-            $message = 'Only ' . intval($item['quantity']) . ' left (minimum ' . intval($item['low_stock_threshold']) . ').';
-            $create_notification_stmt->execute([
-                $item['id'],
-                $title,
-                $message,
-                intval($item['quantity'])
-            ]);
-        }
-    }
-
-    // Resolve notifications if the product has been restocked
-    $active_notifications = $pdo->query("SELECT n.id, p.quantity, p.low_stock_threshold FROM inventory_notifications n LEFT JOIN products p ON p.id = n.product_id WHERE n.status = 'active'")
-                               ->fetchAll(PDO::FETCH_ASSOC);
-    $resolve_notification_stmt = $pdo->prepare("UPDATE inventory_notifications SET status = 'resolved', resolved_at = IF(resolved_at IS NULL, NOW(), resolved_at) WHERE id = ? AND status = 'active'");
-
-    foreach ($active_notifications as $record) {
-        $product_quantity = isset($record['quantity']) ? (int) $record['quantity'] : null;
-        $threshold = isset($record['low_stock_threshold']) ? (int) $record['low_stock_threshold'] : null;
-
-        if ($product_quantity === null || ($threshold !== null && $product_quantity > $threshold)) {
-            $resolve_notification_stmt->execute([$record['id']]);
-        }
-    }
-
-    // Fetch the latest notifications for display
-    $notifications = $pdo->query("SELECT n.*, p.name AS product_name FROM inventory_notifications n LEFT JOIN products p ON p.id = n.product_id ORDER BY n.created_at DESC LIMIT 10")
-                         ->fetchAll(PDO::FETCH_ASSOC);
-
-    $active_notification_count = (int) $pdo->query("SELECT COUNT(*) FROM inventory_notifications WHERE status = 'active' AND is_read = 0")->fetchColumn();
-} catch (Exception $e) {
-    error_log("Low stock notification query failed: " . $e->getMessage());
-    $notifications = [];
-    $active_notification_count = 0;
-}
-
-function format_time_ago(?string $datetime): string
-{
-    if (!$datetime) {
-        return '';
-    }
-
-    $timestamp = strtotime($datetime);
-    if ($timestamp === false) {
-        return '';
-    }
-
-    $diff = time() - $timestamp;
-    if ($diff < 0) {
-        $diff = 0;
-    }
-
-    if ($diff < 60) {
-        return 'Just now';
-    }
-
-    $minutes = floor($diff / 60);
-    if ($minutes < 60) {
-        return $minutes === 1 ? '1 minute ago' : $minutes . ' minutes ago';
-    }
-
-    $hours = floor($diff / 3600);
-    if ($hours < 24) {
-        return $hours === 1 ? '1 hour ago' : $hours . ' hours ago';
-    }
-
-    $days = floor($diff / 86400);
-    if ($days < 7) {
-        return $days === 1 ? '1 day ago' : $days . ' days ago';
-    }
-
-    $weeks = floor($diff / 604800);
-    if ($weeks < 4) {
-        return $weeks === 1 ? '1 week ago' : $weeks . ' weeks ago';
-    }
-
-    return date('M j, Y', $timestamp);
 }
 
 function format_profile_date(?string $datetime): string
@@ -287,55 +179,7 @@ $profile_created = format_profile_date($current_user['created_at'] ?? null);
                 <h2>Dashboard</h2>
             </div>
             <div class="header-right">
-                <div class="notif-menu">
-                    <button class="notif-bell" id="notifBell" aria-label="Notifications">
-                        <i class="fas fa-bell"></i>
-                        <?php if (!empty($active_notification_count)) : ?>
-                        <span class="badge"><?= htmlspecialchars($active_notification_count) ?></span>
-                        <?php endif; ?>
-                    </button>
-
-                    <div class="notif-dropdown" id="notifDropdown">
-                        <div class="notif-head">
-                            <i class="fas fa-bell" aria-hidden="true"></i>
-                            Notifications
-                        </div>
-                        <?php if (empty($notifications)): ?>
-                        <div class="notif-empty">
-                            <i class="fas fa-check-circle" aria-hidden="true"></i>
-                            <p>No notifications yet.</p>
-                        </div>
-                        <?php else: ?>
-                        <ul class="notif-list">
-                            <?php foreach ($notifications as $note): ?>
-                            <li class="notif-item <?= $note['status'] === 'resolved' ? 'resolved' : ($note['is_read'] ? 'active read' : 'active unread') ?>">
-                                <div class="notif-row">
-                                    <span class="notif-title">
-                                        <?= htmlspecialchars($note['title']) ?>
-                                    </span>
-                                    <?php if ($note['status'] === 'resolved'): ?>
-                                    <span class="notif-status">Resolved</span>
-                                    <?php endif; ?>
-                                </div>
-                                <?php if (!empty($note['message'])): ?>
-                                <p class="notif-message"><?= htmlspecialchars($note['message']) ?></p>
-                                <?php endif; ?>
-                                <?php if (!empty($note['product_name'])): ?>
-                                <span class="notif-product"><?= htmlspecialchars($note['product_name']) ?></span>
-                                <?php endif; ?>
-                                <span class="notif-time"><?= htmlspecialchars(format_time_ago($note['created_at'])) ?></span>
-                            </li>
-                            <?php endforeach; ?>
-                        </ul>
-                        <div class="notif-footer">
-                            <a href="inventory.php" class="notif-link">
-                                <i class="fas fa-arrow-right"></i>
-                                Manage inventory
-                            </a>
-                        </div>
-                        <?php endif; ?>
-                    </div>
-                </div>
+                <?php include __DIR__ . '/partials/notification_menu.php'; ?>
                 <div class="user-menu">
                     <div class="user-avatar" onclick="toggleDropdown()">
                         <i class="fas fa-user"></i>
@@ -477,6 +321,7 @@ $profile_created = format_profile_date($current_user['created_at'] ?? null);
         </div>
     </div>
 
+    <script src="../assets/js/notifications.js"></script>
     <script>
         // Toggle user dropdown
         function toggleDropdown() {
@@ -493,8 +338,6 @@ $profile_created = format_profile_date($current_user['created_at'] ?? null);
         document.addEventListener('DOMContentLoaded', function() {
             const userMenu = document.querySelector('.user-menu');
             const dropdown = document.getElementById('userDropdown');
-            const bell = document.getElementById('notifBell');
-            const panel = document.getElementById('notifDropdown');
             const profileButton = document.getElementById('profileTrigger');
             const profileModal = document.getElementById('profileModal');
             const profileModalClose = document.getElementById('profileModalClose');
@@ -514,55 +357,6 @@ $profile_created = format_profile_date($current_user['created_at'] ?? null);
                     sidebar.classList.remove('mobile-open');
                 }
             });
-
-            let notificationsMarkedRead = false;
-
-            if (bell && panel) {
-                bell.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-
-                    if (dropdown) {
-                        dropdown.classList.remove('show');
-                    }
-
-                    const isOpening = !panel.classList.contains('show');
-                    panel.classList.toggle('show');
-
-                    if (isOpening && !notificationsMarkedRead) {
-                        fetch('markNotificationsRead.php', {
-                            method: 'POST',
-                            headers: {
-                                'X-Requested-With': 'XMLHttpRequest'
-                            }
-                        }).then(function(response) {
-                            if (!response.ok) {
-                                throw new Error('Failed to mark notifications as read');
-                            }
-                            notificationsMarkedRead = true;
-                            const badge = bell.querySelector('.badge');
-                            if (badge) {
-                                badge.remove();
-                            }
-                            panel.querySelectorAll('.notif-item.unread').forEach(function(item) {
-                                item.classList.remove('unread');
-                            });
-                        }).catch(function() {
-                            // No-op: badge will remain if update fails
-                        });
-                    }
-                });
-
-                document.addEventListener('click', function(e) {
-                    if (!panel.contains(e.target) && !bell.contains(e.target)) {
-                        panel.classList.remove('show');
-                    }
-                });
-
-                panel.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                });
-            }
 
             if (profileButton && profileModal) {
                 const openProfileModal = function() {

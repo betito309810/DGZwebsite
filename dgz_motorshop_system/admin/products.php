@@ -153,6 +153,12 @@ if (isset($_GET['history']) && $_GET['history'] == '1') {
     exit;
 }
 
+require_once __DIR__ . '/includes/inventory_notifications.php';
+$notificationManageLink = 'inventory.php';
+$inventoryNotificationData = loadInventoryNotifications($pdo);
+$inventoryNotifications = $inventoryNotificationData['notifications'];
+$inventoryNotificationCount = $inventoryNotificationData['active_count'];
+
 if(isset($_GET['delete'])) {
     $product_id = intval($_GET['delete']);
     
@@ -439,25 +445,28 @@ $suppliers = $pdo->query('SELECT DISTINCT supplier FROM products WHERE supplier 
                 </button>
                 <h2>Products - Add / Edit </h2>
             </div>
-            <div class="user-menu">
-                <div class="user-avatar" onclick="toggleDropdown()">
-                    <i class="fas fa-user"></i>
-                </div>
-                <div class="dropdown-menu" id="userDropdown">
-                    <a href="profile.php" class="dropdown-item">
-                        <i class="fas fa-user-cog"></i> Profile
-                    </a>
-                    <a href="settings.php" class="dropdown-item">
-                        <i class="fas fa-cog"></i> Settings
-                    </a>
-                    <?php if ($role === 'admin'): ?>
-                    <a href="userManagement.php" class="dropdown-item">
-                        <i class="fas fa-users-cog"></i> User Management
-                    </a>
-                    <?php endif; ?>
-                    <a href="login.php?logout=1" class="dropdown-item logout">
-                        <i class="fas fa-sign-out-alt"></i> Logout
-                    </a>
+            <div class="header-right">
+                <?php include __DIR__ . '/partials/notification_menu.php'; ?>
+                <div class="user-menu">
+                    <div class="user-avatar" onclick="toggleDropdown()">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <div class="dropdown-menu" id="userDropdown">
+                        <a href="profile.php" class="dropdown-item">
+                            <i class="fas fa-user-cog"></i> Profile
+                        </a>
+                        <a href="settings.php" class="dropdown-item">
+                            <i class="fas fa-cog"></i> Settings
+                        </a>
+                        <?php if ($role === 'admin'): ?>
+                        <a href="userManagement.php" class="dropdown-item">
+                            <i class="fas fa-users-cog"></i> User Management
+                        </a>
+                        <?php endif; ?>
+                        <a href="login.php?logout=1" class="dropdown-item logout">
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </a>
+                    </div>
                 </div>
             </div>
         </header>
@@ -939,6 +948,8 @@ $suppliers = $pdo->query('SELECT DISTINCT supplier FROM products WHERE supplier 
             if (e.target === this) this.style.display = 'none';
         });
     </script>
+
+    <script src="../assets/js/notifications.js"></script>
 
 </body>
 

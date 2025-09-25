@@ -3,6 +3,12 @@ require __DIR__ . '/../config/config.php';
 if(empty($_SESSION['user_id'])){ header('Location: login.php'); exit; }
 $pdo = db();
 $role = $_SESSION['role'] ?? '';
+$notificationManageLink = 'inventory.php';
+
+require_once __DIR__ . '/includes/inventory_notifications.php';
+$inventoryNotificationData = loadInventoryNotifications($pdo);
+$inventoryNotifications = $inventoryNotificationData['notifications'];
+$inventoryNotificationCount = $inventoryNotificationData['active_count'];
 
 // Handle stock entry submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_stock'])) {
@@ -117,25 +123,28 @@ $recent_entries = $pdo->query("
                 </button>
                 <h2>Stock Entry</h2>
             </div>
-            <div class="user-menu">
-                <div class="user-avatar" onclick="toggleDropdown()">
-                    <i class="fas fa-user"></i>
-                </div>
-                <div class="dropdown-menu" id="userDropdown">
-                    <a href="profile.php" class="dropdown-item">
-                        <i class="fas fa-user-cog"></i> Profile
-                    </a>
-                    <a href="settings.php" class="dropdown-item">
-                        <i class="fas fa-cog"></i> Settings
-                    </a>
-                    <?php if ($role === 'admin'): ?>
-                    <a href="userManagement.php" class="dropdown-item">
-                        <i class="fas fa-users-cog"></i> User Management
-                    </a>
-                    <?php endif; ?>
-                    <a href="login.php?logout=1" class="dropdown-item logout">
-                        <i class="fas fa-sign-out-alt"></i> Logout
-                    </a>
+            <div class="header-right">
+                <?php include __DIR__ . '/partials/notification_menu.php'; ?>
+                <div class="user-menu">
+                    <div class="user-avatar" onclick="toggleDropdown()">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <div class="dropdown-menu" id="userDropdown">
+                        <a href="profile.php" class="dropdown-item">
+                            <i class="fas fa-user-cog"></i> Profile
+                        </a>
+                        <a href="settings.php" class="dropdown-item">
+                            <i class="fas fa-cog"></i> Settings
+                        </a>
+                        <?php if ($role === 'admin'): ?>
+                        <a href="userManagement.php" class="dropdown-item">
+                            <i class="fas fa-users-cog"></i> User Management
+                        </a>
+                        <?php endif; ?>
+                        <a href="login.php?logout=1" class="dropdown-item logout">
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </a>
+                    </div>
                 </div>
             </div>
         </header>
@@ -271,5 +280,6 @@ $recent_entries = $pdo->query("
             }
         });
     </script>
+    <script src="../assets/js/notifications.js"></script>
 </body>
 </html>

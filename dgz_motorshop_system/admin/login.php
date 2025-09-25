@@ -7,11 +7,23 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     $stmt = $pdo->prepare('SELECT * FROM users WHERE email=?');
     $stmt->execute([$email]);
     $u = $stmt->fetch();
-    if($u && hash('sha256',$pass) === $u['password']){
-        $_SESSION['user_id']=$u['id'];
-        $_SESSION['role']=$u['role'];
-        header('Location: dashboard.php'); exit;
-    } else $msg='Invalid credentials';
+    if ($u) {
+        $storedHash = (string) $u['password'];
+        $isPasswordHash = password_get_info($storedHash)['algo'] !== 0;
+        if ($isPasswordHash) {
+            $isValid = password_verify($pass, $storedHash);
+        } else {
+            $sha256 = hash('sha256', $pass);
+            $isValid = hash_equals(strtolower($storedHash), strtolower($sha256));
+        }
+
+        if($isValid){
+            $_SESSION['user_id']=$u['id'];
+            $_SESSION['role']=$u['role'];
+            header('Location: dashboard.php'); exit;
+        }
+    }
+    $msg='Invalid credentials';
 }
 ?>
 <!doctype html>
