@@ -96,3 +96,33 @@ function parsePaymentProofValue($value, $fallbackReference = null): array
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+
+function staffAllowedAdminPages(): array
+{
+    return [
+        'dashboard.php',
+        'sales.php',
+        'pos.php',
+        'inventory.php',
+    ];
+}
+
+function enforceStaffAccess(array $additionalAllowed = []): void
+{
+    $role = $_SESSION['role'] ?? '';
+    if ($role !== 'staff') {
+        return;
+    }
+
+    $currentScript = basename($_SERVER['PHP_SELF'] ?? '');
+    if ($currentScript === '') {
+        return;
+    }
+
+    $allowedPages = array_unique(array_merge(staffAllowedAdminPages(), $additionalAllowed));
+
+    if (!in_array($currentScript, $allowedPages, true)) {
+        header('Location: dashboard.php');
+        exit;
+    }
+}

@@ -3,6 +3,7 @@ require __DIR__ . '/../config/config.php';
 if(empty($_SESSION['user_id'])){ header('Location: login.php'); exit; }
 $pdo = db();
 $role = $_SESSION['role'] ?? '';
+enforceStaffAccess();
 $userId = $_SESSION['user_id'] ?? 0;
 $allowedPriorities = ['low', 'medium', 'high'];
 
@@ -435,8 +436,8 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
             flex-wrap: wrap;
         }
 
-        .status-history-header .tab-btn {
-            cursor: default;
+        .open-requests {
+            margin-bottom: 20px;
         }
 
         .tab-btn {
@@ -638,51 +639,10 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
 
 <body>
     <!-- Sidebar -->
-    <aside class="sidebar" id="sidebar">
-        <div class="sidebar-header">
-            <div class="logo">
-                <img src="../assets/logo.png" alt="Company Logo">
-            </div>
-        </div>
-        <nav class="nav-menu">
-            <div class="nav-item">
-                <a href="dashboard.php" class="nav-link ">
-                    <i class="fas fa-home nav-icon"></i>
-                    Dashboard
-                </a>
-            </div>
-            <div class="nav-item">
-                <a href="products.php" class="nav-link">
-                    <i class="fas fa-box nav-icon"></i>
-                    Products
-                </a>
-            </div>
-            <div class="nav-item">
-                <a href="sales.php" class="nav-link">
-                    <i class="fas fa-chart-line nav-icon"></i>
-                    Sales
-                </a>
-            </div>
-            <div class="nav-item">
-                <a href="pos.php" class="nav-link">
-                    <i class="fas fa-cash-register nav-icon"></i>
-                    POS
-                </a>
-            </div>
-            <div class="nav-item">
-                <a href="inventory.php" class="nav-link active">
-                    <i class="fas fa-boxes nav-icon"></i>
-                    Inventory
-                </a>
-            </div>
-            <div class="nav-item">
-                <a href="stockRequests.php" class="nav-link">
-                    <i class="fas fa-clipboard-list nav-icon"></i>
-                    Stock Requests
-                </a>
-            </div>
-        </nav>
-    </aside>
+    <?php
+        $activePage = 'inventory.php';
+        include __DIR__ . '/includes/sidebar.php';
+    ?>
     <!-- Main Content -->
     <main class="main-content">
         <!-- Header -->
@@ -848,13 +808,90 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
             <?php if (empty($restockRequests)): ?>
                 <p class="muted" style="margin: 12px 0 0;"><i class="fas fa-inbox"></i> No restock requests yet.</p>
             <?php else: ?>
+                <?php $hasPendingRequests = !empty($pendingRestockRequests); ?>
                 <div class="status-history-header">
-                    <span class="tab-btn active" aria-current="true">
+                    <button type="button" class="tab-btn <?php echo $hasPendingRequests ? 'active' : ''; ?>" id="openRequestsButton" data-target="openRequestsPanel">
+                        <i class="fas fa-hourglass-half"></i> Open Requests
+                    </button>
+                    <button type="button" class="tab-btn <?php echo $hasPendingRequests ? '' : 'active'; ?>" id="statusHistoryTab" data-target="processedRequests">
                         <i class="fas fa-clipboard-check"></i> Status History
-                    </span>
+                    </button>
                 </div>
 
-                <div id="processedRequests" class="tab-panel active">
+                <div id="openRequestsPanel" class="tab-panel open-requests <?php echo $hasPendingRequests ? 'active' : ''; ?>">
+                    <?php if (empty($pendingRestockRequests)): ?>
+                        <p class="muted" style="margin: 12px 0 20px;">
+                            <i class="fas fa-check-circle"></i> No open restock requests at the moment.
+                        </p>
+                    <?php else: ?>
+                        <div class="table-wrapper">
+                            <table class="requests-table">
+                                <thead>
+                                    <tr>
+                                        <th>Requested At</th>
+                                        <th>Product</th>
+                                        <th>Quantity</th>
+                                        <th>Priority</th>
+                                        <th>Needed By</th>
+                                        <th>Status</th>
+                                        <th>Requested By</th>
+                                        <th>Last Update</th>
+                                        <th>Notes</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($pendingRestockRequests as $request): ?>
+                                        <?php
+                                            $status = strtolower($request['status'] ?? 'pending');
+                                            $priority = strtolower($request['priority_level'] ?? '');
+                                            $neededBy = $request['needed_by'] ?? null;
+                                            $updatedAt = $request['updated_at'] ?? null;
+                                            $lastTimestamp = $updatedAt ?: ($request['created_at'] ?? null);
+                                        ?>
+                                        <tr>
+                                            <td>
+                                                <?php echo !empty($request['created_at']) ? date('M d, Y H:i', strtotime($request['created_at'])) : '—'; ?>
+                                            </td>
+                                            <td>
+                                                <div class="product-cell">
+                                                    <span class="product-name"><?php echo htmlspecialchars($request['product_name'] ?? 'Product removed'); ?></span>
+                                                    <?php if (!empty($request['product_code'])): ?>
+                                                        <span class="product-code">Code: <?php echo htmlspecialchars($request['product_code']); ?></span>
+                                                    <?php endif; ?>
+                                                </div>
+                                            </td>
+                                            <td><?php echo (int) ($request['quantity_requested'] ?? 0); ?></td>
+                                            <td>
+                                                <?php if ($priority !== ''): ?>
+                                                    <span class="priority-badge <?php echo getPriorityClass($priority); ?>"><?php echo ucfirst($priority); ?></span>
+                                                <?php else: ?>
+                                                    <span class="muted">Not set</span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <?php if (!empty($neededBy)): ?>
+                                                    <?php echo date('M d, Y', strtotime($neededBy)); ?>
+                                                <?php else: ?>
+                                                    <span class="muted">Not set</span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <span class="status-badge <?php echo getStatusClass($status); ?>"><?php echo ucfirst($status); ?></span>
+                                            </td>
+                                            <td><?php echo htmlspecialchars($request['requester_name'] ?? 'Unknown'); ?></td>
+                                            <td>
+                                                <?php echo $lastTimestamp ? date('M d, Y H:i', strtotime($lastTimestamp)) : '—'; ?>
+                                            </td>
+                                            <td><?php echo !empty($request['notes']) ? nl2br(htmlspecialchars($request['notes'])) : '—'; ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php endif; ?>
+                </div>
+
+                <div id="processedRequests" class="tab-panel <?php echo $hasPendingRequests ? '' : 'active'; ?>">
                     <?php if (empty($restockHistory)): ?>
                         <p class="muted" style="margin: 12px 0 0;"><i class="fas fa-inbox"></i> No request history logged yet.</p>
                     <?php else: ?>
@@ -926,7 +963,9 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
         <!-- Main Inventory Table -->
 
         <div class="inventory-actions">
+            <?php if ($role === 'admin'): ?>
             <a href="stockEntry.php" class="btn-action add-stock-btn">Add Stock</a>
+            <?php endif; ?>
             <a href="inventory.php?export=csv" class="btn-action export-btn">Export CSV</a>
         </div>
 
@@ -1240,12 +1279,15 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
             }
 
             if (statusPanel) {
-                const tabButtons = statusPanel.querySelectorAll('.tab-btn');
+                const tabButtons = statusPanel.querySelectorAll('.tab-btn[data-target]');
                 const tabPanels = statusPanel.querySelectorAll('.tab-panel');
 
                 tabButtons.forEach(button => {
                     button.addEventListener('click', () => {
                         const targetId = button.getAttribute('data-target');
+                        if (!targetId) {
+                            return;
+                        }
 
                         tabButtons.forEach(btn => btn.classList.toggle('active', btn === button));
                         tabPanels.forEach(panel => {
