@@ -75,6 +75,25 @@ function generateInvoiceNumber(PDO $pdo): string
     }
 
     $prefix = 'INV-';
+
+    $offset = strlen($prefix) + 1;
+    $forUpdate = $pdo->inTransaction() ? ' FOR UPDATE' : '';
+
+    try {
+        $stmt = $pdo->prepare(
+            "SELECT invoice_number\n"
+            . "  FROM orders\n"
+            . " WHERE invoice_number LIKE ?\n"
+            . " ORDER BY CAST(SUBSTRING(invoice_number, {$offset}) AS UNSIGNED) DESC\n"
+            . " LIMIT 1{$forUpdate}"
+        );
+        $stmt->execute([$prefix . '%']);
+        $lastInvoice = $stmt->fetchColumn();
+    } catch (Throwable $e) {
+        error_log('Unable to fetch last invoice number: ' . $e->getMessage());
+        $lastInvoice = null;
+    }
+
     // ✅ fixed SQL
     try {
         $stmt = $pdo->query(
@@ -92,12 +111,50 @@ function generateInvoiceNumber(PDO $pdo): string
 
     $lastInvoice = $stmt ? $stmt->fetchColumn() : null;
 
+
     $nextNumber = 1;
     if (is_string($lastInvoice) && preg_match('/(\d+)/', $lastInvoice, $matches)) {
         $nextNumber = (int) $matches[1] + 1;
     }
 
-    return $prefix . str_pad((string) $nextNumber, 6, '0', STR_PAD_LEFT);
+    $checkStmt = null;
+    try {
+        $checkStmt = $pdo->prepare('SELECT COUNT(*) FROM orders WHERE invoice_number = ?');
+    } catch (Throwable $e) {
+        error_log('Unable to prepare invoice uniqueness check: ' . $e->getMessage());
+    }
+
+    $counter = 0;
+    do {
+        $candidate = $prefix . str_pad((string) $nextNumber, 6, '0', STR_PAD_LEFT);
+        $exists = false;
+
+        if ($checkStmt) {
+            try {
+                $checkStmt->execute([$candidate]);
+                $exists = ((int) $checkStmt->fetchColumn()) > 0;
+            } catch (Throwable $e) {
+                error_log('Unable to verify invoice uniqueness: ' . $e->getMessage());
+                $exists = false;
+            }
+        }
+
+        if (!$exists) {
+            return $candidate;
+        }
+
+        $nextNumber++;
+        $counter++;
+    } while ($counter < 25);
+
+    try {
+        $fallback = $prefix . strtoupper(bin2hex(random_bytes(4)));
+    } catch (Throwable $e) {
+        error_log('Unable to generate random invoice number: ' . $e->getMessage());
+        $fallback = $prefix . (string) time();
+    }
+
+    return $fallback;
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status'])) {
@@ -251,10 +308,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pos_checkout'])) {
     try {
         $pdo->beginTransaction();
 
-        $invoiceNumber = generateInvoiceNumber($pdo);
+        $supportsInvoiceNumbers = ordersSupportsInvoiceNumbers($pdo);
+        $invoiceNumber = $supportsInvoiceNumbers ? generateInvoiceNumber($pdo) : '';
 
-        $orderStmt = $pdo->prepare('INSERT INTO orders (customer_name, contact, address, total, payment_method, status, vatable, vat, amount_paid, change_amount, invoice_number) VALUES (?,?,?,?,?,?,?,?,?,?,?)');
-        $orderStmt->execute([
+        $orderColumns = [
+            'customer_name',
+            'contact',
+            'address',
+            'total',
+            'payment_method',
+            'status',
+            'vatable',
+            'vat',
+            'amount_paid',
+            'change_amount',
+        ];
+
+        $orderValues = [
             'Walk-in',
             'N/A',
             'N/A',
@@ -265,8 +335,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pos_checkout'])) {
             $vat,
             $amountPaid,
             $change,
-            $invoiceNumber,
-        ]);
+        ];
+
+        if ($supportsInvoiceNumbers) {
+            $orderColumns[] = 'invoice_number';
+            $orderValues[] = $invoiceNumber;
+        }
+
+        $placeholders = implode(', ', array_fill(0, count($orderColumns), '?'));
+        $orderStmt = $pdo->prepare(
+            'INSERT INTO orders (' . implode(', ', $orderColumns) . ') VALUES (' . $placeholders . ')'
+        );
+        $orderStmt->execute($orderValues);
 
         $orderId = (int) $pdo->lastInsertId();
 
@@ -285,8 +365,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pos_checkout'])) {
             'order_id' => $orderId,
             'amount_paid' => number_format($amountPaid, 2, '.', ''),
             'change' => number_format($change, 2, '.', ''),
-            'invoice_number' => $invoiceNumber,
         ];
+
+        if ($supportsInvoiceNumbers) {
+            $params['invoice_number'] = $invoiceNumber;
+        }
 
         header('Location: pos.php?' . http_build_query($params));
         exit;
