@@ -20,20 +20,32 @@ $errorMessage = null;
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_user'])) {
     $name = trim($_POST['name'] ?? '');
     $contact = trim($_POST['contact_number'] ?? '');
+    $email = trim($_POST['email'] ?? '');
+    $password = $_POST['password'] ?? '';
+    $confirmPassword = $_POST['confirm_password'] ?? '';
     $newRole = $_POST['role'] ?? 'staff';
     $newRole = in_array($newRole, ['admin', 'staff'], true) ? $newRole : 'staff';
 
     if ($name === '') {
         $errorMessage = 'Name is required.';
+    } elseif ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $errorMessage = 'A valid email is required.';
+    } elseif ($password === '') {
+        $errorMessage = 'Password is required.';
+    } elseif ($password !== $confirmPassword) {
+        $errorMessage = 'Passwords do not match.';
     } else {
         try {
-            $stmt = $pdo->prepare('INSERT INTO users (name, contact_number, role, created_at) VALUES (?, ?, ?, NOW())');
+            $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+            $stmt = $pdo->prepare('INSERT INTO users (name, email, password, contact_number, role, created_at) VALUES (?, ?, ?, ?, ?, NOW())');
             $stmt->execute([
                 $name,
+                $email,
+                $hashedPassword,
                 $contact !== '' ? $contact : null,
                 $newRole
             ]);
-            $successMessage = 'New user account recorded successfully.';
+            $successMessage = 'New user account created successfully.';
         } catch (Exception $e) {
             $errorMessage = 'Failed to add user: ' . $e->getMessage();
         }
@@ -99,12 +111,6 @@ $users = $pdo->query('SELECT id, name, email, contact_number, role, created_at F
                     Stock Requests
                 </a>
             </div>
-            <div class="nav-item">
-                <a href="userManagement.php" class="nav-link active">
-                    <i class="fas fa-users-cog nav-icon"></i>
-                    User Management
-                </a>
-            </div>
         </nav>
     </aside>
 
@@ -141,13 +147,17 @@ $users = $pdo->query('SELECT id, name, email, contact_number, role, created_at F
             <div class="alert alert-error"><?php echo htmlspecialchars($errorMessage); ?></div>
         <?php endif; ?>
 
-        <div class="page-actions">
+        <div class="page-toolbar">
+            <button type="button" class="secondary-action" id="backButton">
+                <i class="fas fa-arrow-left"></i> Back
+            </button>
             <button id="toggleAddUser" class="primary-action" type="button">
                 <i class="fas fa-user-plus"></i> Add New User
             </button>
         </div>
 
-        <section id="addUserSection" class="card hidden">
+        <div class="content-grid">
+        <section id="addUserSection" class="card user-card hidden">
             <h3><i class="fas fa-id-card"></i> New User Details</h3>
             <form method="post" class="user-form">
                 <input type="hidden" name="add_user" value="1">
@@ -158,6 +168,18 @@ $users = $pdo->query('SELECT id, name, email, contact_number, role, created_at F
                 <div class="form-row">
                     <label for="user_contact">Contact Number</label>
                     <input type="tel" id="user_contact" name="contact_number" placeholder="Optional">
+                </div>
+                <div class="form-row">
+                    <label for="user_email">Email</label>
+                    <input type="email" id="user_email" name="email" required>
+                </div>
+                <div class="form-row">
+                    <label for="user_password">Password</label>
+                    <input type="password" id="user_password" name="password" required>
+                </div>
+                <div class="form-row">
+                    <label for="user_password_confirm">Confirm Password</label>
+                    <input type="password" id="user_password_confirm" name="confirm_password" required>
                 </div>
                 <div class="form-row">
                     <label for="user_role">Role</label>
@@ -176,7 +198,7 @@ $users = $pdo->query('SELECT id, name, email, contact_number, role, created_at F
             <p class="form-hint">Email and password can be assigned later by editing the user profile.</p>
         </section>
 
-        <section class="card">
+        <section class="card user-list">
             <h3><i class="fas fa-users"></i> Registered Users</h3>
             <div class="table-wrapper">
                 <table class="users-table">
@@ -214,6 +236,7 @@ $users = $pdo->query('SELECT id, name, email, contact_number, role, created_at F
                 </table>
             </div>
         </section>
+        </div>
     </main>
 
     <script>
@@ -248,6 +271,7 @@ $users = $pdo->query('SELECT id, name, email, contact_number, role, created_at F
             const toggleBtn = document.getElementById('toggleAddUser');
             const cancelBtn = document.getElementById('cancelAddUser');
             const section = document.getElementById('addUserSection');
+            const backButton = document.getElementById('backButton');
 
             function toggleSection() {
                 section.classList.toggle('hidden');
@@ -259,6 +283,12 @@ $users = $pdo->query('SELECT id, name, email, contact_number, role, created_at F
 
             if (cancelBtn) {
                 cancelBtn.addEventListener('click', toggleSection);
+            }
+
+            if (backButton) {
+                backButton.addEventListener('click', function () {
+                    window.history.back();
+                });
             }
         });
     </script>

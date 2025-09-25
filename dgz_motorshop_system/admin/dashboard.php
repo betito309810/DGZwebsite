@@ -6,7 +6,7 @@ if (empty($_SESSION['user_id'])) {
 }
 
 try {
-    $pdo = db();
+$pdo = db();
 } catch (Exception $e) {
     error_log("Database connection failed: " . $e->getMessage());
     die("Database connection error. Please try again later.");
@@ -89,6 +89,7 @@ try {
         title VARCHAR(255) NOT NULL,
         message TEXT NOT NULL,
         status ENUM('active','resolved') DEFAULT 'active',
+        is_read TINYINT(1) NOT NULL DEFAULT 0,
         quantity_at_event INT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         resolved_at TIMESTAMP NULL DEFAULT NULL,
@@ -97,12 +98,17 @@ try {
             ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+    $columnCheck = $pdo->query("SHOW COLUMNS FROM inventory_notifications LIKE 'is_read'")->fetch(PDO::FETCH_ASSOC);
+    if (!$columnCheck) {
+        $pdo->exec("ALTER TABLE inventory_notifications ADD COLUMN is_read TINYINT(1) NOT NULL DEFAULT 0 AFTER status");
+    }
+
     // Insert notifications for items that are currently low on stock and have no active alert yet
     $low_stock_now = $pdo->query("SELECT id, name, quantity, low_stock_threshold FROM products WHERE quantity <= low_stock_threshold")
                          ->fetchAll(PDO::FETCH_ASSOC);
 
     $check_notification_stmt = $pdo->prepare("SELECT id FROM inventory_notifications WHERE product_id = ? AND status = 'active' LIMIT 1");
-    $create_notification_stmt = $pdo->prepare('INSERT INTO inventory_notifications (product_id, title, message, quantity_at_event) VALUES (?, ?, ?, ?)');
+    $create_notification_stmt = $pdo->prepare('INSERT INTO inventory_notifications (product_id, title, message, quantity_at_event, is_read) VALUES (?, ?, ?, ?, 0)');
 
     foreach ($low_stock_now as $item) {
         $check_notification_stmt->execute([$item['id']]);
@@ -136,7 +142,7 @@ try {
     $notifications = $pdo->query("SELECT n.*, p.name AS product_name FROM inventory_notifications n LEFT JOIN products p ON p.id = n.product_id ORDER BY n.created_at DESC LIMIT 10")
                          ->fetchAll(PDO::FETCH_ASSOC);
 
-    $active_notification_count = (int) $pdo->query("SELECT COUNT(*) FROM inventory_notifications WHERE status = 'active'")->fetchColumn();
+    $active_notification_count = (int) $pdo->query("SELECT COUNT(*) FROM inventory_notifications WHERE status = 'active' AND is_read = 0")->fetchColumn();
 } catch (Exception $e) {
     error_log("Low stock notification query failed: " . $e->getMessage());
     $notifications = [];
@@ -302,7 +308,7 @@ $profile_created = format_profile_date($current_user['created_at'] ?? null);
                         <?php else: ?>
                         <ul class="notif-list">
                             <?php foreach ($notifications as $note): ?>
-                            <li class="notif-item <?= $note['status'] === 'resolved' ? 'resolved' : 'active' ?>">
+                            <li class="notif-item <?= $note['status'] === 'resolved' ? 'resolved' : ($note['is_read'] ? 'active read' : 'active unread') ?>">
                                 <div class="notif-row">
                                     <span class="notif-title">
                                         <?= htmlspecialchars($note['title']) ?>
@@ -509,6 +515,8 @@ $profile_created = format_profile_date($current_user['created_at'] ?? null);
                 }
             });
 
+            let notificationsMarkedRead = false;
+
             if (bell && panel) {
                 bell.addEventListener('click', function(e) {
                     e.preventDefault();
@@ -518,7 +526,31 @@ $profile_created = format_profile_date($current_user['created_at'] ?? null);
                         dropdown.classList.remove('show');
                     }
 
+                    const isOpening = !panel.classList.contains('show');
                     panel.classList.toggle('show');
+
+                    if (isOpening && !notificationsMarkedRead) {
+                        fetch('markNotificationsRead.php', {
+                            method: 'POST',
+                            headers: {
+                                'X-Requested-With': 'XMLHttpRequest'
+                            }
+                        }).then(function(response) {
+                            if (!response.ok) {
+                                throw new Error('Failed to mark notifications as read');
+                            }
+                            notificationsMarkedRead = true;
+                            const badge = bell.querySelector('.badge');
+                            if (badge) {
+                                badge.remove();
+                            }
+                            panel.querySelectorAll('.notif-item.unread').forEach(function(item) {
+                                item.classList.remove('unread');
+                            });
+                        }).catch(function() {
+                            // No-op: badge will remain if update fails
+                        });
+                    }
                 });
 
                 document.addEventListener('click', function(e) {
