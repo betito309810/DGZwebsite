@@ -87,6 +87,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_user'])) {
     }
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_user'])) {
+    $userId = filter_input(INPUT_POST, 'delete_user_id', FILTER_VALIDATE_INT);
+
+    if (!$userId) {
+        $errorMessage = 'Invalid user selection.';
+    } elseif ((int) $_SESSION['user_id'] === $userId) {
+        $errorMessage = 'You cannot delete your own account.';
+    } else {
+        try {
+            $pdo->beginTransaction();
+
+            $stmt = $pdo->prepare('SELECT role FROM users WHERE id = ? FOR UPDATE');
+            $stmt->execute([$userId]);
+            $userToDelete = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$userToDelete) {
+                $pdo->rollBack();
+                $errorMessage = 'The selected user no longer exists.';
+            } elseif ($userToDelete['role'] !== 'staff') {
+                $pdo->rollBack();
+                $errorMessage = 'Only staff accounts can be removed.';
+            } else {
+                $deleteStmt = $pdo->prepare('DELETE FROM users WHERE id = ?');
+                $deleteStmt->execute([$userId]);
+                $pdo->commit();
+                $successMessage = 'Staff account removed successfully.';
+            }
+        } catch (Exception $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            $errorMessage = 'Failed to remove staff account: ' . $e->getMessage();
+        }
+    }
+}
+
 $users = $pdo->query('SELECT id, name, email, contact_number, role, created_at FROM users ORDER BY created_at DESC')->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!doctype html>
@@ -207,6 +243,7 @@ $users = $pdo->query('SELECT id, name, email, contact_number, role, created_at F
                             <th>Contact Number</th>
                             <th>Role</th>
                             <th>Created</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -222,6 +259,19 @@ $users = $pdo->query('SELECT id, name, email, contact_number, role, created_at F
                                     </span>
                                 </td>
                                 <td><?php echo date('M d, Y H:i', strtotime($user['created_at'])); ?></td>
+                                <td class="table-actions">
+                                    <?php if ($user['role'] === 'staff'): ?>
+                                        <form method="post" class="inline-form" onsubmit="return confirm('Remove this staff account? This action cannot be undone.');">
+                                            <input type="hidden" name="delete_user" value="1">
+                                            <input type="hidden" name="delete_user_id" value="<?php echo (int) $user['id']; ?>">
+                                            <button type="submit" class="danger-action">
+                                                <i class="fas fa-user-minus"></i> Remove
+                                            </button>
+                                        </form>
+                                    <?php else: ?>
+                                        <span class="muted">—</span>
+                                    <?php endif; ?>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
                         <?php if (empty($users)): ?>

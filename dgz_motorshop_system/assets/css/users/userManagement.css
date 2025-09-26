@@ -140,6 +140,39 @@ html, body {
     font-weight: 600;
 }
 
+.table-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.inline-form {
+    display: inline-flex;
+    margin: 0;
+}
+
+.danger-action {
+    background: #dc2626;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.2s ease;
+}
+
+.danger-action:hover {
+    background: #b91c1c;
+}
+
+.muted {
+    color: #9ca3af;
+}
+
 .role-badge {
     display: inline-block;
     padding: 4px 10px;
