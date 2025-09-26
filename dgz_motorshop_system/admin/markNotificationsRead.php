@@ -1,5 +1,6 @@
 <?php
 require __DIR__ . '/../config/config.php';
+require_once __DIR__ . '/includes/inventory_notifications.php';
 
 header('Content-Type: application/json');
 
@@ -17,6 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 try {
     $pdo = db();
+    ensureInventoryNotificationSchema($pdo); // Keep created_at immutable before we mark rows as read.
     $stmt = $pdo->prepare("UPDATE inventory_notifications SET is_read = 1 WHERE status = 'active' AND is_read = 0");
     $stmt->execute();
 

@@ -27,21 +27,22 @@ if (!function_exists('loadInventoryNotifications')) {
             $pdo->exec("ALTER TABLE inventory_notifications ADD COLUMN is_read TINYINT(1) NOT NULL DEFAULT 0 AFTER status");
         }
 
-        $createdColumn = $pdo->query("SHOW COLUMNS FROM inventory_notifications LIKE 'created_at'");
-        if ($createdColumn) {
-            $createdInfo = $createdColumn->fetch(PDO::FETCH_ASSOC);
-            $type = strtolower((string) ($createdInfo['Type'] ?? ''));
-            $extra = strtolower((string) ($createdInfo['Extra'] ?? ''));
+        $tableSql = $pdo->query('SHOW CREATE TABLE inventory_notifications');
+        if ($tableSql) {
+            $definitionRow = $tableSql->fetch(PDO::FETCH_ASSOC);
+            $definition = $definitionRow && isset($definitionRow['Create Table'])
+                ? strtolower((string) $definitionRow['Create Table'])
+                : '';
 
-            if (
-                $createdInfo
-                && (
-                    strpos($type, 'timestamp') !== false
-                    || strpos($extra, 'update') !== false
-                )
-            ) {
-                // Fix: keep notification timestamps stable so "time ago" stops resetting to "Just now".
-                $pdo->exec("ALTER TABLE inventory_notifications MODIFY created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP");
+            if ($definition && preg_match('/`created_at`\s+([^,]+)/', $definition, $match)) {
+                $createdClause = $match[1];
+                $hasOnUpdate = strpos($createdClause, 'on update') !== false;
+                $isTimestamp = strpos($createdClause, 'timestamp') !== false && strpos($createdClause, 'datetime') === false;
+
+                if ($hasOnUpdate || $isTimestamp) {
+                    // Fix: keep notification timestamps stable so "time ago" stops resetting after marking as read.
+                    $pdo->exec("ALTER TABLE inventory_notifications MODIFY created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP");
+                }
             }
         }
 
@@ -122,47 +123,41 @@ if (!function_exists('loadInventoryNotifications')) {
                 return '';
             }
 
-            $timestamp = strtotime($datetime);
-            if ($timestamp === false) {
+            try {
+                $timezone = new DateTimeZone(date_default_timezone_get());
+                $now = new DateTimeImmutable('now', $timezone);
+                $then = new DateTimeImmutable($datetime, $timezone);
+            } catch (Exception $exception) {
                 return '';
             }
 
-            $diff = time() - $timestamp;
-            if ($diff < 0) {
-                // Fix: when MySQL stores times in a timezone ahead of PHP, treat the skew as "ago" instead of "Just now".
-                $timezoneSkew = abs($diff);
-                if ($timezoneSkew <= 86400) {
-                    $diff = $timezoneSkew;
-                } else {
-                    return date('M j, Y', $timestamp);
-                }
-            }
+            $diffSeconds = abs($now->getTimestamp() - $then->getTimestamp());
 
-            if ($diff < 60) {
+            if ($diffSeconds < 60) {
                 return 'Just now';
             }
 
-            $minutes = floor($diff / 60);
+            $minutes = floor($diffSeconds / 60);
             if ($minutes < 60) {
                 return $minutes === 1 ? '1 minute ago' : $minutes . ' minutes ago';
             }
 
-            $hours = floor($diff / 3600);
+            $hours = floor($diffSeconds / 3600);
             if ($hours < 24) {
                 return $hours === 1 ? '1 hour ago' : $hours . ' hours ago';
             }
 
-            $days = floor($diff / 86400);
+            $days = floor($diffSeconds / 86400);
             if ($days < 7) {
                 return $days === 1 ? '1 day ago' : $days . ' days ago';
             }
 
-            $weeks = floor($diff / 604800);
+            $weeks = floor($diffSeconds / 604800);
             if ($weeks < 4) {
                 return $weeks === 1 ? '1 week ago' : $weeks . ' weeks ago';
             }
 
-            return date('M j, Y', $timestamp);
+            return $then->format('M j, Y');
         }
     }
 }
