@@ -981,85 +981,141 @@ body {
     background-color: #f3f4f6;
 }
 
-.online-order-modal {
-    max-width: 720px;
-    width: 100%;
+.modal-overlay .modal-content.transaction-modal {
+    max-width: 800px;
+    width: min(90vw, 800px);
+    padding: 0;
+    border-radius: 12px;
+    box-shadow: 0 5px 25px rgba(15, 23, 42, 0.25);
+}
+
+.modal-overlay .transaction-modal .modal-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid #e2e8f0;
     display: flex;
-    flex-direction: column;
-    gap: 20px;
+    align-items: center;
+    justify-content: space-between;
 }
 
-.online-order-details-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 12px;
+.modal-overlay .transaction-modal .modal-header h3 {
+    margin: 0;
+    font-size: 1.5rem;
+    color: #1e293b;
 }
 
-.online-order-details-grid .detail-item {
-    background: #f8fafc;
-    border-radius: 8px;
-    padding: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.online-order-details-grid .detail-label {
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+.modal-overlay .transaction-modal .modal-close {
+    position: static;
+    background: none;
+    border: none;
+    font-size: 28px;
     color: #64748b;
+    cursor: pointer;
+    line-height: 1;
+    transition: color 0.2s ease;
 }
 
-.online-order-details-grid .detail-value {
-    font-size: 15px;
+.modal-overlay .transaction-modal .modal-close:hover,
+.modal-overlay .transaction-modal .modal-close:focus-visible {
+    color: #1e293b;
+    outline: none;
+}
+
+.modal-overlay .transaction-modal .modal-body {
+    padding: 24px;
+}
+
+.modal-overlay .transaction-modal .transaction-info {
+    margin-bottom: 28px;
+}
+
+.modal-overlay .transaction-modal .transaction-info h4,
+.modal-overlay .transaction-modal .order-items h4 {
+    margin: 0 0 12px 0;
+    color: #1e293b;
+    font-size: 1.1rem;
+}
+
+.modal-overlay .transaction-modal .info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+}
+
+.modal-overlay .transaction-modal .info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.modal-overlay .transaction-modal .info-item label {
+    color: #64748b;
+    font-size: 0.85rem;
+}
+
+.modal-overlay .transaction-modal .info-item span {
     color: #1f2937;
     font-weight: 600;
     word-break: break-word;
 }
 
-.online-order-items h4 {
-    margin: 0;
-    font-size: 16px;
-    font-weight: 600;
-    color: #1e293b;
+.modal-overlay .transaction-modal .order-items {
+    margin-top: 24px;
 }
 
-.online-order-items .modal-table-wrapper {
-    margin-top: 10px;
-    max-height: 260px;
-    overflow-y: auto;
+.modal-overlay .transaction-modal .table-responsive {
     border: 1px solid #e2e8f0;
-    border-radius: 8px;
+    border-radius: 10px;
+    overflow-x: auto;
     background: #fff;
 }
 
-.online-order-items table {
+.modal-overlay .transaction-modal .items-table {
     width: 100%;
     border-collapse: collapse;
 }
 
-.online-order-items th,
-.online-order-items td {
-    padding: 10px 12px;
-    border-bottom: 1px solid #e2e8f0;
+.modal-overlay .transaction-modal .items-table thead th {
+    background: #f8fafc;
+    padding: 12px 16px;
     text-align: left;
-    font-size: 14px;
+    font-weight: 600;
+    color: #475569;
+}
+
+.modal-overlay .transaction-modal .items-table tbody td {
+    padding: 12px 16px;
+    border-top: 1px solid #e2e8f0;
     color: #1f2937;
 }
 
-.online-order-items th {
-    background: #f1f5f9;
+.modal-overlay .transaction-modal .items-table tfoot td {
+    padding: 12px 16px;
+    border-top: 2px solid #e2e8f0;
     font-weight: 600;
-    color: #0f172a;
+    color: #1f2937;
 }
 
-.online-order-items tfoot td {
-    font-weight: 600;
-}
-
-.online-order-items tfoot td:last-child {
+.modal-overlay .transaction-modal .items-table tfoot td:last-child {
     text-align: right;
+}
+
+@media (max-width: 768px) {
+    .modal-overlay .modal-content.transaction-modal {
+        width: 100%;
+    }
+
+    .modal-overlay .transaction-modal .modal-body {
+        padding: 18px;
+    }
+
+    .modal-overlay .transaction-modal .info-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .modal-overlay .transaction-modal .table-responsive {
+        border-radius: 8px;
+    }
 }
 
 /* Responsive */

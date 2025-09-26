@@ -718,57 +718,64 @@ if ($receiptDataJson === false) {
         </div>
     </main>
 
-    <!-- Online order details modal -->
+    <!-- Online order details modal (POS online orders detail feature) -->
     <div id="onlineOrderModal" class="modal-overlay" style="display:none;">
-        <div class="modal-content online-order-modal">
-            <button type="button" class="modal-close" id="closeOnlineOrderModal" aria-label="Close order details">&times;</button>
-            <h3>Online Order Details</h3>
-            <div class="online-order-details-grid">
-                <div class="detail-item">
-                    <span class="detail-label">Customer</span>
-                    <span class="detail-value" id="onlineOrderCustomer">N/A</span>
-                </div>
-                <div class="detail-item">
-                    <span class="detail-label">Invoice #</span>
-                    <span class="detail-value" id="onlineOrderInvoice">N/A</span>
-                </div>
-                <div class="detail-item">
-                    <span class="detail-label">Placed</span>
-                    <span class="detail-value" id="onlineOrderDate">N/A</span>
-                </div>
-                <div class="detail-item">
-                    <span class="detail-label">Status</span>
-                    <span class="detail-value" id="onlineOrderStatus">N/A</span>
-                </div>
-                <div class="detail-item">
-                    <span class="detail-label">Payment Method</span>
-                    <span class="detail-value" id="onlineOrderPayment">N/A</span>
-                </div>
-                <div class="detail-item" id="onlineOrderReferenceWrapper" style="display:none;">
-                    <span class="detail-label">Reference</span>
-                    <span class="detail-value" id="onlineOrderReference"></span>
-                </div>
+        <div class="modal-content transaction-modal">
+            <div class="modal-header">
+                <h3>Transaction Details</h3>
+                <button type="button" class="modal-close" id="closeOnlineOrderModal" aria-label="Close order details">&times;</button>
             </div>
-            <div class="online-order-items">
-                <h4>Order Items</h4>
-                <div class="modal-table-wrapper">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Product</th>
-                                <th>Quantity</th>
-                                <th>Price</th>
-                                <th>Subtotal</th>
-                            </tr>
-                        </thead>
-                        <tbody id="onlineOrderItemsBody"></tbody>
-                        <tfoot>
-                            <tr>
-                                <td colspan="3" style="text-align:right;">Total:</td>
-                                <td id="onlineOrderTotal">₱0.00</td>
-                            </tr>
-                        </tfoot>
-                    </table>
+            <div class="modal-body">
+                <div class="transaction-info">
+                    <h4>Order Information</h4>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <label>Customer:</label>
+                            <span id="onlineOrderCustomer">N/A</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Invoice #:</label>
+                            <span id="onlineOrderInvoice">N/A</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Date:</label>
+                            <span id="onlineOrderDate">N/A</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Status:</label>
+                            <span id="onlineOrderStatus">N/A</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Payment Method:</label>
+                            <span id="onlineOrderPayment">N/A</span>
+                        </div>
+                        <div class="info-item" id="onlineOrderReferenceWrapper" style="display:none;">
+                            <label>Reference:</label>
+                            <span id="onlineOrderReference"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="order-items">
+                    <h4>Order Items</h4>
+                    <div class="table-responsive">
+                        <table class="items-table">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Quantity</th>
+                                    <th>Price</th>
+                                    <th>Subtotal</th>
+                                </tr>
+                            </thead>
+                            <tbody id="onlineOrderItemsBody"></tbody>
+                            <tfoot>
+                                <tr>
+                                    <td colspan="3" style="text-align: right;"><strong>Total:</strong></td>
+                                    <td id="onlineOrderTotal">₱0.00</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
