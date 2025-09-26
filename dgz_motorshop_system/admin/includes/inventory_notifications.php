@@ -3,7 +3,11 @@
 
 if (!function_exists('loadInventoryNotifications')) {
     /**
-     * Ensure the notification table and columns exist.
+     * Ensure the inventory notification table has the columns we expect.
+     *
+     * The old implementation mutated rows through ON UPDATE metadata which
+     * caused timestamps to jump forward. We rebuild the schema guarantees here
+     * so the new service always works with static creation dates.
      */
     function ensureInventoryNotificationSchema(PDO $pdo): void
     {
@@ -12,7 +16,7 @@ if (!function_exists('loadInventoryNotifications')) {
             product_id INT NULL,
             title VARCHAR(255) NOT NULL,
             message TEXT NOT NULL,
-            status ENUM('active','resolved') DEFAULT 'active',
+            status ENUM('active','resolved') NOT NULL DEFAULT 'active',
             is_read TINYINT(1) NOT NULL DEFAULT 0,
             quantity_at_event INT NULL,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -22,56 +26,79 @@ if (!function_exists('loadInventoryNotifications')) {
                 ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-        $columnCheck = $pdo->query("SHOW COLUMNS FROM inventory_notifications LIKE 'is_read'");
-        if ($columnCheck && !$columnCheck->fetch(PDO::FETCH_ASSOC)) {
-            $pdo->exec("ALTER TABLE inventory_notifications ADD COLUMN is_read TINYINT(1) NOT NULL DEFAULT 0 AFTER status");
-        }
+        $tableSql = $pdo->query('SHOW CREATE TABLE inventory_notifications');
+        if ($tableSql) {
+            $definitionRow = $tableSql->fetch(PDO::FETCH_ASSOC);
+            $definition = strtolower((string) ($definitionRow['Create Table'] ?? ''));
 
-        $createdColumn = $pdo->query("SHOW COLUMNS FROM inventory_notifications LIKE 'created_at'");
-        if ($createdColumn) {
-            $createdInfo = $createdColumn->fetch(PDO::FETCH_ASSOC);
-            if ($createdInfo && stripos((string) ($createdInfo['Type'] ?? ''), 'timestamp') !== false) {
-                $pdo->exec("ALTER TABLE inventory_notifications MODIFY created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP");
+            if ($definition && preg_match('/`created_at`\s+([^,]+)/', $definition, $match)) {
+                $createdClause = $match[1];
+                $hasOnUpdate = strpos($createdClause, 'on update') !== false;
+                $isTimestamp = strpos($createdClause, 'timestamp') !== false && strpos($createdClause, 'datetime') === false;
+
+                if ($hasOnUpdate || $isTimestamp) {
+                    // Fix: freeze created_at so the new "time ago" builder never sees future timestamps.
+                    $pdo->exec("ALTER TABLE inventory_notifications MODIFY created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP");
+                }
             }
-        }
 
-        $resolvedColumn = $pdo->query("SHOW COLUMNS FROM inventory_notifications LIKE 'resolved_at'");
-        if ($resolvedColumn) {
-            $resolvedInfo = $resolvedColumn->fetch(PDO::FETCH_ASSOC);
-            if ($resolvedInfo && stripos((string) ($resolvedInfo['Type'] ?? ''), 'timestamp') !== false) {
-                $pdo->exec("ALTER TABLE inventory_notifications MODIFY resolved_at DATETIME NULL DEFAULT NULL");
+            if ($definition && preg_match('/`resolved_at`\s+([^,]+)/', $definition, $match)) {
+                $resolvedClause = $match[1];
+                $isTimestamp = strpos($resolvedClause, 'timestamp') !== false && strpos($resolvedClause, 'datetime') === false;
+
+                if ($isTimestamp) {
+                    $pdo->exec("ALTER TABLE inventory_notifications MODIFY resolved_at DATETIME NULL DEFAULT NULL");
+                }
             }
         }
     }
 
     /**
      * Insert new low stock notifications and resolve restocked ones.
+     *
+     * This replaces the previous ad-hoc scripts so only one synchronisation
+     * path creates and closes notifications.
      */
-    function refreshInventoryNotifications(PDO $pdo): void
+    function syncInventoryNotifications(PDO $pdo): void
     {
-        $lowStock = $pdo->query("SELECT id, name, quantity, low_stock_threshold FROM products WHERE quantity <= low_stock_threshold")
-                         ->fetchAll(PDO::FETCH_ASSOC);
+        $lowStock = $pdo->query(
+            "SELECT id, name, quantity, low_stock_threshold FROM products WHERE quantity <= low_stock_threshold"
+        )->fetchAll(PDO::FETCH_ASSOC);
 
-        $checkStmt = $pdo->prepare("SELECT id FROM inventory_notifications WHERE product_id = ? AND status = 'active' LIMIT 1");
-        $createStmt = $pdo->prepare('INSERT INTO inventory_notifications (product_id, title, message, quantity_at_event, is_read) VALUES (?, ?, ?, ?, 0)');
+        $checkStmt = $pdo->prepare(
+            "SELECT id FROM inventory_notifications WHERE product_id = ? AND status = 'active' LIMIT 1"
+        );
+        $createStmt = $pdo->prepare(
+            'INSERT INTO inventory_notifications (product_id, title, message, quantity_at_event, is_read, created_at) '
+            . 'VALUES (?, ?, ?, ?, 0, NOW())'
+        );
 
         foreach ($lowStock as $item) {
             $checkStmt->execute([$item['id']]);
             if (!$checkStmt->fetchColumn()) {
-                $title = $item['name'] . ' is low on stock';
-                $message = 'Only ' . intval($item['quantity']) . ' left (minimum ' . intval($item['low_stock_threshold']) . ').';
+                $quantity = (int) ($item['quantity'] ?? 0);
+                $threshold = (int) ($item['low_stock_threshold'] ?? 0);
+                $title = ($item['name'] ?? 'Unknown item') . ' is low on stock';
+                $message = 'Only ' . $quantity . ' left (minimum ' . $threshold . ').';
+
                 $createStmt->execute([
                     $item['id'],
                     $title,
                     $message,
-                    intval($item['quantity'])
+                    $quantity,
                 ]);
             }
         }
 
-        $activeRecords = $pdo->query("SELECT n.id, p.quantity, p.low_stock_threshold FROM inventory_notifications n LEFT JOIN products p ON p.id = n.product_id WHERE n.status = 'active'")
-                              ->fetchAll(PDO::FETCH_ASSOC);
-        $resolveStmt = $pdo->prepare("UPDATE inventory_notifications SET status = 'resolved', resolved_at = IF(resolved_at IS NULL, NOW(), resolved_at) WHERE id = ? AND status = 'active'");
+        $activeRecords = $pdo->query(
+            "SELECT n.id, p.quantity, p.low_stock_threshold FROM inventory_notifications n "
+            . "LEFT JOIN products p ON p.id = n.product_id WHERE n.status = 'active'"
+        )->fetchAll(PDO::FETCH_ASSOC);
+
+        $resolveStmt = $pdo->prepare(
+            "UPDATE inventory_notifications SET status = 'resolved', resolved_at = IF(resolved_at IS NULL, NOW(), resolved_at) "
+            . "WHERE id = ? AND status = 'active'"
+        );
 
         foreach ($activeRecords as $record) {
             $quantity = isset($record['quantity']) ? (int) $record['quantity'] : null;
@@ -84,17 +111,34 @@ if (!function_exists('loadInventoryNotifications')) {
     }
 
     /**
-     * Fetch notifications and active count for display.
+     * Build the public notification payload with preformatted "time ago" strings.
+     *
+     * Computing the age in SQL (TIMESTAMPDIFF) removes PHP/DB timezone drift so
+     * notifications no longer stick at "Just now" after being ignored for minutes.
      */
     function loadInventoryNotifications(PDO $pdo): array
     {
         ensureInventoryNotificationSchema($pdo);
-        refreshInventoryNotifications($pdo);
+        syncInventoryNotifications($pdo);
 
-        $notifications = $pdo->query("SELECT n.*, p.name AS product_name FROM inventory_notifications n LEFT JOIN products p ON p.id = n.product_id ORDER BY n.created_at DESC LIMIT 10")
-                             ->fetchAll(PDO::FETCH_ASSOC);
-        $count = (int) $pdo->query("SELECT COUNT(*) FROM inventory_notifications WHERE status = 'active' AND is_read = 0")
-                           ->fetchColumn();
+        $stmt = $pdo->query(
+            "SELECT n.*, p.name AS product_name, "
+            . "TIMESTAMPDIFF(SECOND, n.created_at, NOW()) AS seconds_ago "
+            . "FROM inventory_notifications n "
+            . "LEFT JOIN products p ON p.id = n.product_id "
+            . "ORDER BY n.created_at DESC LIMIT 10"
+        );
+
+        $notifications = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $secondsAgo = isset($row['seconds_ago']) ? (int) $row['seconds_ago'] : null;
+            $row['time_ago'] = format_inventory_notification_age($secondsAgo, $row['created_at'] ?? null);
+            $notifications[] = $row;
+        }
+
+        $count = (int) $pdo->query(
+            "SELECT COUNT(*) FROM inventory_notifications WHERE status = 'active' AND is_read = 0"
+        )->fetchColumn();
 
         return [
             'notifications' => $notifications,
@@ -102,48 +146,58 @@ if (!function_exists('loadInventoryNotifications')) {
         ];
     }
 
-    if (!function_exists('format_time_ago')) {
-        function format_time_ago(?string $datetime): string
+    if (!function_exists('format_inventory_notification_age')) {
+        /**
+         * Convert an elapsed-second value into a human-friendly label.
+         */
+        function format_inventory_notification_age(?int $secondsAgo, ?string $fallbackDate = null): string
         {
-            if (!$datetime) {
-                return '';
+            if ($secondsAgo === null || $secondsAgo < 0) {
+                if (!$fallbackDate) {
+                    return '';
+                }
+
+                try {
+                    $secondsAgo = (int) (time() - strtotime($fallbackDate));
+                } catch (Exception $exception) {
+                    return '';
+                }
             }
 
-            $timestamp = strtotime($datetime);
-            if ($timestamp === false) {
-                return '';
-            }
-
-            $diff = time() - $timestamp;
-            if ($diff < 0) {
-                $diff = 0;
-            }
-
-            if ($diff < 60) {
+            if ($secondsAgo < 60) {
                 return 'Just now';
             }
 
-            $minutes = floor($diff / 60);
+            $minutes = (int) floor($secondsAgo / 60);
             if ($minutes < 60) {
                 return $minutes === 1 ? '1 minute ago' : $minutes . ' minutes ago';
             }
 
-            $hours = floor($diff / 3600);
+            $hours = (int) floor($secondsAgo / 3600);
             if ($hours < 24) {
                 return $hours === 1 ? '1 hour ago' : $hours . ' hours ago';
             }
 
-            $days = floor($diff / 86400);
+            $days = (int) floor($secondsAgo / 86400);
             if ($days < 7) {
                 return $days === 1 ? '1 day ago' : $days . ' days ago';
             }
 
-            $weeks = floor($diff / 604800);
+            $weeks = (int) floor($secondsAgo / 604800);
             if ($weeks < 4) {
                 return $weeks === 1 ? '1 week ago' : $weeks . ' weeks ago';
             }
 
-            return date('M j, Y', $timestamp);
+            if (!$fallbackDate) {
+                return '';
+            }
+
+            try {
+                $date = new DateTimeImmutable($fallbackDate);
+                return $date->format('M j, Y');
+            } catch (Exception $exception) {
+                return '';
+            }
         }
     }
 }
