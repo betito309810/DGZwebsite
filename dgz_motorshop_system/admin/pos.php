@@ -669,7 +669,7 @@ if ($receiptDataJson === false) {
                                 ];
                                 $availableStatusChanges = $statusTransitions[$statusValue] ?? [];
                                 ?>
-                                <tr>
+                                <tr class="online-order-row" data-order-id="<?= (int) $order['id'] ?>">
                                     <td>#<?= (int) $order['id'] ?></td>
                                     <td><?= htmlspecialchars($order['customer_name'] ?? 'Customer', ENT_QUOTES, 'UTF-8') ?></td>
                                     <td><?= htmlspecialchars($order['contact'] ?? 'N/A', ENT_QUOTES, 'UTF-8') ?></td>
@@ -717,6 +717,62 @@ if ($receiptDataJson === false) {
             </div>
         </div>
     </main>
+
+    <!-- Online order details modal -->
+    <div id="onlineOrderModal" class="modal-overlay" style="display:none;">
+        <div class="modal-content online-order-modal">
+            <button type="button" class="modal-close" id="closeOnlineOrderModal" aria-label="Close order details">&times;</button>
+            <h3>Online Order Details</h3>
+            <div class="online-order-details-grid">
+                <div class="detail-item">
+                    <span class="detail-label">Customer</span>
+                    <span class="detail-value" id="onlineOrderCustomer">N/A</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Invoice #</span>
+                    <span class="detail-value" id="onlineOrderInvoice">N/A</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Placed</span>
+                    <span class="detail-value" id="onlineOrderDate">N/A</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Status</span>
+                    <span class="detail-value" id="onlineOrderStatus">N/A</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Payment Method</span>
+                    <span class="detail-value" id="onlineOrderPayment">N/A</span>
+                </div>
+                <div class="detail-item" id="onlineOrderReferenceWrapper" style="display:none;">
+                    <span class="detail-label">Reference</span>
+                    <span class="detail-value" id="onlineOrderReference"></span>
+                </div>
+            </div>
+            <div class="online-order-items">
+                <h4>Order Items</h4>
+                <div class="modal-table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>Quantity</th>
+                                <th>Price</th>
+                                <th>Subtotal</th>
+                            </tr>
+                        </thead>
+                        <tbody id="onlineOrderItemsBody"></tbody>
+                        <tfoot>
+                            <tr>
+                                <td colspan="3" style="text-align:right;">Total:</td>
+                                <td id="onlineOrderTotal">₱0.00</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <div class="modal-overlay" id="profileModal" aria-hidden="true">
         <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="profileModalTitle">
@@ -876,6 +932,18 @@ if ($receiptDataJson === false) {
             const proofNoImage = document.getElementById('proofNoImage');
             const closeProofModalButton = document.getElementById('closeProofModal');
 
+            const onlineOrderModal = document.getElementById('onlineOrderModal');
+            const closeOnlineOrderModalButton = document.getElementById('closeOnlineOrderModal');
+            const onlineOrderCustomer = document.getElementById('onlineOrderCustomer');
+            const onlineOrderInvoice = document.getElementById('onlineOrderInvoice');
+            const onlineOrderDate = document.getElementById('onlineOrderDate');
+            const onlineOrderStatus = document.getElementById('onlineOrderStatus');
+            const onlineOrderPayment = document.getElementById('onlineOrderPayment');
+            const onlineOrderReferenceWrapper = document.getElementById('onlineOrderReferenceWrapper');
+            const onlineOrderReference = document.getElementById('onlineOrderReference');
+            const onlineOrderItemsBody = document.getElementById('onlineOrderItemsBody');
+            const onlineOrderTotal = document.getElementById('onlineOrderTotal');
+
             const tabButtons = document.querySelectorAll('.pos-tab-button');
             const tabPanels = {
                 walkin: document.getElementById('walkinTab'),
@@ -900,6 +968,106 @@ if ($receiptDataJson === false) {
                 profileModal.classList.remove('show');
                 profileModal.setAttribute('aria-hidden', 'true');
                 document.body.classList.remove('modal-open');
+            };
+
+            // ===== Online order details modal functionality =====
+            const openOnlineOrderModalOverlay = () => {
+                if (!onlineOrderModal) {
+                    return;
+                }
+
+                onlineOrderModal.style.display = 'flex';
+                document.body.classList.add('modal-open');
+            };
+
+            const closeOnlineOrderModalOverlay = () => {
+                if (!onlineOrderModal) {
+                    return;
+                }
+
+                onlineOrderModal.style.display = 'none';
+                document.body.classList.remove('modal-open');
+            };
+
+            const populateOnlineOrderModal = (order, items) => {
+                if (!onlineOrderModal) {
+                    return;
+                }
+
+                const safeCustomer = (order.customer_name || 'Customer').toString();
+                const safeInvoice = (order.invoice_number || 'N/A').toString();
+                const safeStatus = (order.status || 'pending').toString().toLowerCase();
+                const safePayment = (order.payment_method || 'N/A').toString();
+                const referenceNumber = (order.reference_number || '').toString();
+
+                onlineOrderCustomer.textContent = safeCustomer;
+                onlineOrderInvoice.textContent = safeInvoice !== '' ? safeInvoice : 'N/A';
+
+                if (order.created_at) {
+                    const createdDate = new Date(order.created_at);
+                    onlineOrderDate.textContent = Number.isNaN(createdDate.getTime())
+                        ? order.created_at
+                        : createdDate.toLocaleString();
+                } else {
+                    onlineOrderDate.textContent = 'N/A';
+                }
+
+                const capitalisedStatus = safeStatus.charAt(0).toUpperCase() + safeStatus.slice(1);
+                onlineOrderStatus.textContent = capitalisedStatus;
+                onlineOrderPayment.textContent = safePayment !== '' ? safePayment : 'N/A';
+
+                if (referenceNumber && safePayment.toLowerCase() === 'gcash') {
+                    onlineOrderReferenceWrapper.style.display = 'flex';
+                    onlineOrderReference.textContent = referenceNumber;
+                } else {
+                    onlineOrderReferenceWrapper.style.display = 'none';
+                    onlineOrderReference.textContent = '';
+                }
+
+                while (onlineOrderItemsBody.firstChild) {
+                    onlineOrderItemsBody.removeChild(onlineOrderItemsBody.firstChild);
+                }
+
+                if (!Array.isArray(items) || items.length === 0) {
+                    const emptyRow = document.createElement('tr');
+                    const emptyCell = document.createElement('td');
+                    emptyCell.colSpan = 4;
+                    emptyCell.textContent = 'No items found for this order.';
+                    emptyCell.style.textAlign = 'center';
+                    emptyCell.style.color = '#6b7280';
+                    emptyCell.style.padding = '12px';
+                    emptyRow.appendChild(emptyCell);
+                    onlineOrderItemsBody.appendChild(emptyRow);
+                } else {
+                    items.forEach((item) => {
+                        const qty = Number(item.qty) || 0;
+                        const price = Number(item.price) || 0;
+                        const subtotal = qty * price;
+
+                        const row = document.createElement('tr');
+
+                        const nameCell = document.createElement('td');
+                        nameCell.textContent = (item.name || `Item #${item.product_id || ''}`).toString();
+                        row.appendChild(nameCell);
+
+                        const qtyCell = document.createElement('td');
+                        qtyCell.textContent = qty.toString();
+                        row.appendChild(qtyCell);
+
+                        const priceCell = document.createElement('td');
+                        priceCell.textContent = formatPeso(price);
+                        row.appendChild(priceCell);
+
+                        const subtotalCell = document.createElement('td');
+                        subtotalCell.textContent = formatPeso(subtotal);
+                        row.appendChild(subtotalCell);
+
+                        onlineOrderItemsBody.appendChild(row);
+                    });
+                }
+
+                const totalAmount = Number(order.total) || 0;
+                onlineOrderTotal.textContent = formatPeso(totalAmount);
             };
 
             function formatPeso(value) {
@@ -1494,8 +1662,14 @@ if ($receiptDataJson === false) {
             });
 
             document.addEventListener('keydown', (event) => {
-                if (event.key === 'Escape' && profileModal?.classList.contains('show')) {
-                    closeProfileModal();
+                if (event.key === 'Escape') {
+                    if (profileModal?.classList.contains('show')) {
+                        closeProfileModal();
+                    }
+
+                    if (onlineOrderModal && onlineOrderModal.style.display !== 'none') {
+                        closeOnlineOrderModalOverlay();
+                    }
                 }
             });
 
@@ -1634,10 +1808,49 @@ if ($receiptDataJson === false) {
                 });
             });
 
+            document.querySelectorAll('.online-order-row').forEach((row) => {
+                row.addEventListener('click', async (event) => {
+                    if (
+                        event.target.closest('.status-form') ||
+                        event.target.closest('.view-proof-btn') ||
+                        event.target.tagName === 'BUTTON' ||
+                        event.target.tagName === 'SELECT'
+                    ) {
+                        return;
+                    }
+
+                    const orderId = row.dataset.orderId;
+                    if (!orderId) {
+                        return;
+                    }
+
+                    try {
+                        const response = await fetch(`get_transaction_details.php?order_id=${encodeURIComponent(orderId)}`);
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+
+                        const data = await response.json();
+                        populateOnlineOrderModal(data.order || {}, Array.isArray(data.items) ? data.items : []);
+                        openOnlineOrderModalOverlay();
+                    } catch (error) {
+                        console.error('Unable to load online order details.', error);
+                        alert('Failed to load order details. Please try again.');
+                    }
+                });
+            });
+
             closeProofModalButton?.addEventListener('click', closeProofModal);
             proofModal?.addEventListener('click', (event) => {
                 if (event.target === proofModal) {
                     closeProofModal();
+                }
+            });
+
+            closeOnlineOrderModalButton?.addEventListener('click', closeOnlineOrderModalOverlay);
+            onlineOrderModal?.addEventListener('click', (event) => {
+                if (event.target === onlineOrderModal) {
+                    closeOnlineOrderModalOverlay();
                 }
             });
 
