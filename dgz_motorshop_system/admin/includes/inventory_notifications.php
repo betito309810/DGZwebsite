@@ -129,7 +129,13 @@ if (!function_exists('loadInventoryNotifications')) {
 
             $diff = time() - $timestamp;
             if ($diff < 0) {
-                $diff = 0;
+                // Fix: when MySQL stores times in a timezone ahead of PHP, treat the skew as "ago" instead of "Just now".
+                $timezoneSkew = abs($diff);
+                if ($timezoneSkew <= 86400) {
+                    $diff = $timezoneSkew;
+                } else {
+                    return date('M j, Y', $timestamp);
+                }
             }
 
             if ($diff < 60) {
