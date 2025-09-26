@@ -30,7 +30,17 @@ if (!function_exists('loadInventoryNotifications')) {
         $createdColumn = $pdo->query("SHOW COLUMNS FROM inventory_notifications LIKE 'created_at'");
         if ($createdColumn) {
             $createdInfo = $createdColumn->fetch(PDO::FETCH_ASSOC);
-            if ($createdInfo && stripos((string) ($createdInfo['Type'] ?? ''), 'timestamp') !== false) {
+            $type = strtolower((string) ($createdInfo['Type'] ?? ''));
+            $extra = strtolower((string) ($createdInfo['Extra'] ?? ''));
+
+            if (
+                $createdInfo
+                && (
+                    strpos($type, 'timestamp') !== false
+                    || strpos($extra, 'update') !== false
+                )
+            ) {
+                // Fix: keep notification timestamps stable so "time ago" stops resetting to "Just now".
                 $pdo->exec("ALTER TABLE inventory_notifications MODIFY created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP");
             }
         }
@@ -103,6 +113,9 @@ if (!function_exists('loadInventoryNotifications')) {
     }
 
     if (!function_exists('format_time_ago')) {
+        /**
+         * Helper: present notification timestamps as human friendly "time ago" text.
+         */
         function format_time_ago(?string $datetime): string
         {
             if (!$datetime) {
