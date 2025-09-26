@@ -39,7 +39,7 @@ $notificationManageLink = $notificationManageLink ?? 'inventory.php';
                 <?php if (!empty($note['product_name'])) : ?>
                 <span class="notif-product"><?= htmlspecialchars($note['product_name']) ?></span>
                 <?php endif; ?>
-                <span class="notif-time"><?= htmlspecialchars(format_time_ago($note['created_at'])) ?></span>
+                <span class="notif-time"><?= htmlspecialchars($note['time_ago'] ?? '') ?></span>
             </li>
             <?php endforeach; ?>
         </ul>
