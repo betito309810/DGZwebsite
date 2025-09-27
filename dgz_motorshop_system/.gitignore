@@ -1,0 +1,22 @@
+# Environment variables
+.env
+
+# Vendor directory
+vendor/
+
+# Uploads
+uploads/
+
+# Cache and logs
+*.log
+cache/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db

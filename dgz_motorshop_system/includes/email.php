@@ -13,16 +13,34 @@ function sendEmail(string $to, string $subject, string $body): bool
     $mail = getMailer();
 
     try {
-        //Recipients
+        // Recipients
         $mail->addAddress($to);
 
         // Content
         $mail->isHTML(true);
         $mail->Subject = $subject;
         $mail->Body    = $body;
+        
+        // Add plain text version for better deliverability
+        $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $body));
+        
+        // Additional headers for better deliverability
+        $mail->addCustomHeader('X-Mailer', 'DGZ Motorshop System');
+        $mail->addCustomHeader('X-Priority', '3');
+        $mail->addCustomHeader('X-MSMail-Priority', 'Normal');
+        $mail->addCustomHeader('Importance', 'Normal');
+        
+        // Set encoding
+        $mail->CharSet = 'UTF-8';
+        $mail->Encoding = 'base64';
 
         $result = $mail->send();
         error_log("Email send result: " . ($result ? 'SUCCESS' : 'FAILED'));
+        
+        // Clear addresses for next use
+        $mail->clearAddresses();
+        $mail->clearAttachments();
+        
         return $result;
     } catch (Exception $e) {
         error_log("Message could not be sent. Mailer Error: {$mail->ErrorInfo}");
