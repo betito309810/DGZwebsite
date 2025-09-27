@@ -24,6 +24,24 @@ if (!function_exists('ordersHasReferenceColumn')) {
 }
 
 
+if (!function_exists('ordersHasColumn')) {
+    function ordersHasColumn(PDO $pdo, string $column): bool
+    {
+        static $cache = [];
+        if (array_key_exists($column, $cache)) {
+            return $cache[$column];
+        }
+        try {
+            $stmt = $pdo->prepare("SHOW COLUMNS FROM orders LIKE ?");
+            $stmt->execute([$column]);
+            $cache[$column] = $stmt !== false && $stmt->fetch() !== false;
+        } catch (Throwable $e) {
+            $cache[$column] = false;
+        }
+        return $cache[$column];
+    }
+}
+
 if (!function_exists('normaliseCartItems')) {
     function normaliseCartItems($items): array
     {
@@ -106,8 +124,8 @@ if (isset($_POST['cart'])) {
 
 $cartItems = normaliseCartItems($cartItems);
 
-// If no cart items, show error
-if (empty($cartItems)) {
+// If no cart items, show error (unless success page)
+if (empty($cartItems) && !(isset($_GET['success']) && $_GET['success'] === '1')) {
     echo '<div style="max-width: 400px; margin: 50px auto; background: white; padding: 40px; border-radius: 20px; text-align: center;">';
     echo '<i class="fas fa-shopping-cart" style="font-size: 48px; color: #636e72; margin-bottom: 20px;"></i>';
     echo '<h2 style="color: #2d3436; margin-bottom: 15px;">Your Cart is Empty</h2>';
@@ -120,11 +138,17 @@ if (empty($cartItems)) {
 // Process the order when form is submitted
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
     $customer_name = trim($_POST['customer_name']);
-    $contact = trim($_POST['contact']);
+    $email = trim($_POST['email'] ?? '');
+    $phone = trim($_POST['phone'] ?? '');
     $address = trim($_POST['address']);
     $payment_method = $_POST['payment_method'] ?? '';
     $referenceInput = trim($_POST['reference_number'] ?? '');
     $proof_path = null;
+
+    // Validate required email
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $errors[] = 'A valid email address is required.';
+    }
 
     $referenceNumber = preg_replace('/[^A-Za-z0-9\- ]/', '', $referenceInput);
     $referenceNumber = strtoupper(substr($referenceNumber, 0, 50));
@@ -212,13 +236,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
 
         $hasReferenceColumn = ordersHasReferenceColumn($pdo);
 
-        if ($hasReferenceColumn) {
-            $stmt = $pdo->prepare('INSERT INTO orders (customer_name, contact, address, total, payment_method, payment_proof, reference_no, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
-            $stmt->execute([$customer_name, $contact, $address, $total, $payment_method, $proof_path, $referenceNumber, 'pending']);
-        } else {
-            $stmt = $pdo->prepare('INSERT INTO orders (customer_name, contact, address, total, payment_method, payment_proof, status) VALUES (?, ?, ?, ?, ?, ?, ?)');
-            $stmt->execute([$customer_name, $contact, $address, $total, $payment_method, $proof_path, 'pending']);
-        }
+        $columns = ['customer_name', 'address', 'total', 'payment_method', 'payment_proof'];
+        $values  = [$customer_name, $address, $total, $payment_method, $proof_path];
+
+        // Write to new columns when present
+        try { $hasEmailColumn = ordersHasColumn($pdo, 'email'); } catch (Throwable $e) { $hasEmailColumn = false; }
+        try { $hasPhoneColumn = ordersHasColumn($pdo, 'phone'); } catch (Throwable $e) { $hasPhoneColumn = false; }
+        try { $hasLegacyContact = ordersHasColumn($pdo, 'contact'); } catch (Throwable $e) { $hasLegacyContact = false; }
+
+        if ($hasEmailColumn) { $columns[] = 'email'; $values[] = $email; }
+        if ($hasPhoneColumn) { $columns[] = 'phone'; $values[] = $phone; }
+        if ($hasLegacyContact) { $columns[] = 'contact'; $values[] = $email; }
+
+        if ($hasReferenceColumn) { $columns[] = 'reference_no'; $values[] = $referenceNumber; }
+
+        $columns[] = 'status';
+        $values[]  = 'pending';
+
+        $placeholders = implode(', ', array_fill(0, count($columns), '?'));
+        $sql = 'INSERT INTO orders (' . implode(', ', $columns) . ') VALUES (' . $placeholders . ')';
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($values);
 
 
         $order_id = $pdo->lastInsertId();
@@ -238,19 +276,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
             }
         }
 
-        // Clear cart using JavaScript
-        echo '<script>localStorage.removeItem("cartItems"); localStorage.removeItem("cartCount");</script>';
-
-        // Success message
-        echo '<div style="max-width: 600px; margin: 50px auto; background: white; padding: 40px; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); text-align: center;">';
-        echo '<i class="fas fa-check-circle" style="font-size: 48px; color: #00b894; margin-bottom: 20px;"></i>';
-        echo '<h2 style="color: #2d3436; margin-bottom: 20px;">Order Placed Successfully!</h2>';
-        echo '<p style="color: #636e72; margin-bottom: 10px;">Order ID: <strong>' . $order_id . '</strong></p>';
-        echo '<p style="color: #636e72; margin-bottom: 30px;">Status: <span style="background: #fdcb6e; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">Pending</span></p>';
-        echo '<a href="index.php" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; padding: 15px 30px; border-radius: 8px; font-weight: 600;">Back to Shop</a>';
-        echo '</div>';
+        // Redirect (PRG) to avoid resubmission
+        header('Location: checkout.php?success=1&order_id=' . urlencode((string) $order_id));
         exit;
     }
+}
+
+// Success page via GET (PRG target)
+if (isset($_GET['success']) && $_GET['success'] === '1') {
+    $order_id = (int) ($_GET['order_id'] ?? 0);
+    echo '<div style="max-width: 600px; margin: 50px auto; background: white; padding: 40px; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); text-align: center;">';
+    echo '<i class="fas fa-check-circle" style="font-size: 48px; color: #00b894; margin-bottom: 20px;"></i>';
+    echo '<h2 style="color: #2d3436; margin-bottom: 20px;">Order Placed Successfully!</h2>';
+    echo '<p style="color: #636e72; margin-bottom: 10px;">Order ID: <strong>' . $order_id . '</strong></p>';
+    echo '<p style="color: #636e72; margin-bottom: 30px;">Status: <span style="background: #fdcb6e; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">Pending</span></p>';
+    echo '<a href="index.php" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; padding: 15px 30px; border-radius: 8px; font-weight: 600;">Back to Shop</a>';
+    echo '<script>try{localStorage.removeItem("cartItems");localStorage.removeItem("cartCount");}catch(e){}</script>';
+    echo '</div>';
+    exit;
 }
 
 // Show checkout form
@@ -299,7 +342,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
                         Contact
                     </h2>
                     <div class="form-group">
-                        <input type="text" name="contact" placeholder="Mobile No. or Email" value="<?= htmlspecialchars($_POST['contact'] ?? '') ?>" required>
+                        <label>Email</label>
+                        <input type="email" name="email" placeholder="you@example.com" value="<?= htmlspecialchars($_POST['email'] ?? '') ?>" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Mobile number (optional)</label>
+                        <input type="tel" name="phone" placeholder="Mobile No." value="<?= htmlspecialchars($_POST['phone'] ?? '') ?>">
                     </div>
                 </div>
 

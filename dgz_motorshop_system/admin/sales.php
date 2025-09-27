@@ -378,6 +378,14 @@ $end_record = min($offset + $records_per_page, $total_records);
                             <label>Payment Method:</label>
                             <span id="modal-payment"></span>
                         </div>
+                        <div class="info-item">
+                            <label>Email:</label>
+                            <span id="modal-email"></span>
+                        </div>
+                        <div class="info-item">
+                            <label>Phone:</label>
+                            <span id="modal-phone"></span>
+                        </div>
                         <div class="info-item" id="modal-reference-wrapper" style="display:none;">
                             <label>Reference:</label>
                             <span id="modal-reference"></span>
@@ -781,6 +789,8 @@ $end_record = min($offset + $records_per_page, $total_records);
                     document.getElementById('modal-status').textContent = data.order.status;
                     document.getElementById('modal-payment').textContent = data.order.payment_method;
                     document.getElementById('modal-invoice').textContent = data.order.invoice_number || 'N/A';
+                    document.getElementById('modal-email').textContent = data.order.email || '';
+                    document.getElementById('modal-phone').textContent = data.order.phone || '';
 
                     const referenceWrapper = document.getElementById('modal-reference-wrapper');
                     const referenceValue = document.getElementById('modal-reference');

@@ -1,5 +1,6 @@
 <?php
 require __DIR__ . '/../config/config.php';
+require_once __DIR__ . '/../includes/email.php';
 
 if (empty($_SESSION['user_id'])) {
     header('Location: login.php');
@@ -224,6 +225,85 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                     $stmt = $pdo->prepare($updateSql);
                     $success = $stmt->execute($params);
                     $statusParam = $success ? '1' : '0';
+
+                    if ($success && $newStatus === 'approved') {
+                        // Send email to customer with detailed order summary
+                        $orderInfoStmt = $pdo->prepare(
+                            'SELECT customer_name, email, phone, invoice_number, total, created_at FROM orders WHERE id = ? LIMIT 1'
+                        );
+                        $orderInfoStmt->execute([$orderId]);
+                        $orderInfo = $orderInfoStmt->fetch();
+
+                        $customerEmail = $orderInfo['email'] ?? '';
+                        if ($customerEmail && filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
+                            // Load order items
+                            $itemsStmt = $pdo->prepare(
+                                'SELECT oi.qty, oi.price, p.name AS product_name
+                                 FROM order_items oi
+                                 LEFT JOIN products p ON p.id = oi.product_id
+                                 WHERE oi.order_id = ?'
+                            );
+                            $itemsStmt->execute([$orderId]);
+                            $items = $itemsStmt->fetchAll() ?: [];
+
+                            $itemsHtml = '';
+                            $itemsTotal = 0.0;
+                            foreach ($items as $it) {
+                                $name = htmlspecialchars($it['product_name'] ?? 'Item', ENT_QUOTES, 'UTF-8');
+                                $qty = (int) ($it['qty'] ?? 0);
+                                $price = (float) ($it['price'] ?? 0);
+                                $line = $qty * $price;
+                                $itemsTotal += $line;
+                                $itemsHtml .= sprintf(
+                                    '<tr><td style="padding:6px 8px; border-bottom:1px solid #eee;">%s</td><td style="padding:6px 8px; text-align:center; border-bottom:1px solid #eee;">%d</td><td style="padding:6px 8px; text-align:right; border-bottom:1px solid #eee;">₱%s</td><td style="padding:6px 8px; text-align:right; border-bottom:1px solid #eee;">₱%s</td></tr>',
+                                    $name,
+                                    $qty,
+                                    number_format($price, 2),
+                                    number_format($line, 2)
+                                );
+                            }
+
+                            $customerName = trim((string) ($orderInfo['customer_name'] ?? 'Customer'));
+                            $invoiceNumber = trim((string) ($orderInfo['invoice_number'] ?? ''));
+                            $createdAt = (string) ($orderInfo['created_at'] ?? '');
+                            $orderTotal = (float) ($orderInfo['total'] ?? $itemsTotal);
+
+                            $prettyDate = $createdAt !== '' ? date('F j, Y g:i A', strtotime($createdAt)) : date('F j, Y g:i A');
+                            $displayInvoice = $invoiceNumber !== '' ? $invoiceNumber : 'INV-' . str_pad((string) $orderId, 6, '0', STR_PAD_LEFT);
+
+                            $subject = 'Order Approved - DGZ Motorshop Invoice ' . $displayInvoice;
+
+                            $body = '<div style="font-family: Arial, sans-serif; font-size:14px; color:#333;">'
+                                . '<h2 style="color:#111; margin-bottom:8px;">Your Order is Approved</h2>'
+                                . '<p style="margin:0 0 12px;">Hi ' . htmlspecialchars($customerName, ENT_QUOTES, 'UTF-8') . ',</p>'
+                                . '<p style="margin:0 0 12px;">Good news! Your order #' . (int) $orderId . ' has been approved and is now being processed.</p>'
+                                . '<p style="margin:0 0 12px;">Invoice Number: <strong>' . htmlspecialchars($displayInvoice, ENT_QUOTES, 'UTF-8') . '</strong><br>'
+                                . 'Order Date: ' . htmlspecialchars($prettyDate, ENT_QUOTES, 'UTF-8') . '</p>'
+                                . '<h3 style="margin:16px 0 8px;">Order Summary</h3>'
+                                . '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; border:1px solid #eee;">'
+                                . '<thead>'
+                                . '<tr style="background:#f9f9f9;">'
+                                . '<th style="text-align:left; padding:8px; border-bottom:1px solid #eee;">Item</th>'
+                                . '<th style="text-align:center; padding:8px; border-bottom:1px solid #eee;">Qty</th>'
+                                . '<th style="text-align:right; padding:8px; border-bottom:1px solid #eee;">Price</th>'
+                                . '<th style="text-align:right; padding:8px; border-bottom:1px solid #eee;">Subtotal</th>'
+                                . '</tr>'
+                                . '</thead>'
+                                . '<tbody>' . $itemsHtml . '</tbody>'
+                                . '<tfoot>'
+                                . '<tr>'
+                                . '<td colspan="3" style="padding:8px; text-align:right;"><strong>Total:</strong></td>'
+                                . '<td style="padding:8px; text-align:right;"><strong>₱' . number_format($orderTotal, 2) . '</strong></td>'
+                                . '</tr>'
+                                . '</tfoot>'
+                                . '</table>'
+                                . '<p style="margin:16px 0 0;">Thank you for shopping with <strong>DGZ Motorshop</strong>!</p>'
+                                . '</div>';
+
+                            // Fire and forget email
+                            try { sendEmail($customerEmail, $subject, $body); } catch (Throwable $e) { /* already logged in helper */ }
+                        }
+                    }
                 }
             }
         }
@@ -672,7 +752,12 @@ if ($receiptDataJson === false) {
                                 <tr class="online-order-row" data-order-id="<?= (int) $order['id'] ?>">
                                     <td>#<?= (int) $order['id'] ?></td>
                                     <td><?= htmlspecialchars($order['customer_name'] ?? 'Customer', ENT_QUOTES, 'UTF-8') ?></td>
-                                    <td><?= htmlspecialchars($order['contact'] ?? 'N/A', ENT_QUOTES, 'UTF-8') ?></td>
+                                    <td><?php 
+                                        $display = '';
+                                        if (!empty($order['email'])) { $display = $order['email']; }
+                                        elseif (!empty($order['phone'])) { $display = $order['phone']; }
+                                        echo htmlspecialchars($display, ENT_QUOTES, 'UTF-8');
+                                    ?></td>
                                     <td>₱<?= number_format((float) $order['total'], 2) ?></td>
                                     <td>
                                         <?php if (!empty($order['reference_number'])): ?>
@@ -748,6 +833,14 @@ if ($receiptDataJson === false) {
                         <div class="info-item">
                             <label>Payment Method:</label>
                             <span id="onlineOrderPayment">N/A</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Email:</label>
+                            <span id="onlineOrderEmail"></span>
+                        </div>
+                        <div class="info-item">
+                            <label>Phone:</label>
+                            <span id="onlineOrderPhone"></span>
                         </div>
                         <div class="info-item" id="onlineOrderReferenceWrapper" style="display:none;">
                             <label>Reference:</label>
@@ -946,6 +1039,8 @@ if ($receiptDataJson === false) {
             const onlineOrderDate = document.getElementById('onlineOrderDate');
             const onlineOrderStatus = document.getElementById('onlineOrderStatus');
             const onlineOrderPayment = document.getElementById('onlineOrderPayment');
+            const onlineOrderEmail = document.getElementById('onlineOrderEmail');
+            const onlineOrderPhone = document.getElementById('onlineOrderPhone');
             const onlineOrderReferenceWrapper = document.getElementById('onlineOrderReferenceWrapper');
             const onlineOrderReference = document.getElementById('onlineOrderReference');
             const onlineOrderItemsBody = document.getElementById('onlineOrderItemsBody');
@@ -1022,6 +1117,8 @@ if ($receiptDataJson === false) {
                 const capitalisedStatus = safeStatus.charAt(0).toUpperCase() + safeStatus.slice(1);
                 onlineOrderStatus.textContent = capitalisedStatus;
                 onlineOrderPayment.textContent = safePayment !== '' ? safePayment : 'N/A';
+                onlineOrderEmail.textContent = (order.email || '').toString();
+                onlineOrderPhone.textContent = (order.phone || '').toString();
 
                 if (referenceNumber && safePayment.toLowerCase() === 'gcash') {
                     onlineOrderReferenceWrapper.style.display = 'flex';

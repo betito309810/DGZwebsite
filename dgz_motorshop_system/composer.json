@@ -1,0 +1,12 @@
+{
+    "name": "dgz/motorshop",
+    "description": "DGZ Motorshop System",
+    "require": {
+        "phpmailer/phpmailer": "^6.9"
+    },
+    "autoload": {
+        "psr-4": {
+            "DGZ\\": "src/"
+        }
+    }
+}
