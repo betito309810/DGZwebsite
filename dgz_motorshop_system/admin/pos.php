@@ -484,15 +484,54 @@ if (!empty($_SESSION['pos_active_tab']) && in_array($_SESSION['pos_active_tab'],
     $activeTab = $_GET['tab'];
 }
 
-$onlineOrdersStmt = $pdo->prepare(
-    "SELECT * FROM orders
-     WHERE
-        (payment_method IS NOT NULL AND payment_method <> '' AND LOWER(payment_method) = 'gcash')
-        OR (payment_proof IS NOT NULL AND payment_proof <> '')
-        OR status IN ('pending','approved')
-     ORDER BY created_at DESC"
-);
-$onlineOrdersStmt->execute();
+// Pagination and filtering for online orders
+$page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+$perPage = 15;
+$offset = ($page - 1) * $perPage;
+
+$statusFilter = '';
+if (isset($_GET['status_filter'])) {
+    $tmp = strtolower(trim((string) $_GET['status_filter']));
+    if (in_array($tmp, ['pending', 'approved', 'completed'], true)) {
+        $statusFilter = $tmp;
+    }
+}
+
+// Build the WHERE clause for online orders
+$whereConditions = [
+    "(payment_method IS NOT NULL AND payment_method <> '' AND LOWER(payment_method) = 'gcash')",
+    "(payment_proof IS NOT NULL AND payment_proof <> '')",
+    "status IN ('pending','approved')"
+];
+$whereClause = "(" . implode(" OR ", $whereConditions) . ")";
+
+// Add status filter if specified
+$params = [];
+if ($statusFilter) {
+    $whereClause .= " AND status = ?";
+    $params[] = $statusFilter;
+}
+
+// Get total count for pagination
+$countParams = $params;
+$countStmt = $pdo->prepare("SELECT COUNT(*) FROM orders WHERE " . $whereClause);
+$countStmt->execute($countParams);
+$totalOrders = (int) $countStmt->fetchColumn();
+$totalPages = (int) ceil($totalOrders / $perPage);
+
+// Clamp current page to valid range
+if ($totalPages > 0 && $page > $totalPages) {
+    $page = $totalPages;
+    $offset = ($page - 1) * $perPage;
+}
+
+// Get orders for current page (inject safe integers for LIMIT/OFFSET)
+$sqlOnlineOrders = "SELECT * FROM orders
+     WHERE " . $whereClause . "
+     ORDER BY created_at DESC
+     LIMIT " . (int) $perPage . " OFFSET " . (int) $offset;
+$onlineOrdersStmt = $pdo->prepare($sqlOnlineOrders);
+$onlineOrdersStmt->execute($params);
 $onlineOrders = $onlineOrdersStmt->fetchAll();
 
 foreach ($onlineOrders as &$order) {
@@ -711,6 +750,21 @@ if ($receiptDataJson === false) {
                 </div>
             <?php endif; ?>
 
+            <div class="online-orders-filters">
+                <div class="filter-group">
+                    <label for="statusFilter">Filter by Status:</label>
+                    <select id="statusFilter" name="status_filter">
+                        <option value="">All Orders</option>
+                        <option value="pending" <?= $statusFilter === 'pending' ? 'selected' : '' ?>>Pending</option>
+                        <option value="approved" <?= $statusFilter === 'approved' ? 'selected' : '' ?>>Approved</option>
+                        <option value="completed" <?= $statusFilter === 'completed' ? 'selected' : '' ?>>Completed</option>
+                    </select>
+                </div>
+                <div class="orders-info">
+                    <span>Showing <?= count($onlineOrders) ?> of <?= $totalOrders ?> orders</span>
+                </div>
+            </div>
+
             <div class="online-orders-container">
                 <table class="online-orders-table">
                     <thead>
@@ -800,6 +854,47 @@ if ($receiptDataJson === false) {
                     </tbody>
                 </table>
             </div>
+
+            <?php if ($totalPages > 1): ?>
+            <div class="pagination-container">
+                <div class="pagination">
+                    <?php if ($page > 1): ?>
+                        <a href="?tab=online&page=<?= $page - 1 ?><?= $statusFilter ? '&status_filter=' . urlencode($statusFilter) : '' ?>" class="pagination-btn">
+                            <i class="fas fa-chevron-left"></i> Previous
+                        </a>
+                    <?php endif; ?>
+
+                    <?php
+                    $startPage = max(1, $page - 2);
+                    $endPage = min($totalPages, $page + 2);
+                    
+                    if ($startPage > 1): ?>
+                        <a href="?tab=online&page=1<?= $statusFilter ? '&status_filter=' . urlencode($statusFilter) : '' ?>" class="pagination-btn">1</a>
+                        <?php if ($startPage > 2): ?>
+                            <span class="pagination-ellipsis">...</span>
+                        <?php endif; ?>
+                    <?php endif; ?>
+
+                    <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
+                        <a href="?tab=online&page=<?= $i ?><?= $statusFilter ? '&status_filter=' . urlencode($statusFilter) : '' ?>" 
+                           class="pagination-btn <?= $i === $page ? 'active' : '' ?>"><?= $i ?></a>
+                    <?php endfor; ?>
+
+                    <?php if ($endPage < $totalPages): ?>
+                        <?php if ($endPage < $totalPages - 1): ?>
+                            <span class="pagination-ellipsis">...</span>
+                        <?php endif; ?>
+                        <a href="?tab=online&page=<?= $totalPages ?><?= $statusFilter ? '&status_filter=' . urlencode($statusFilter) : '' ?>" class="pagination-btn"><?= $totalPages ?></a>
+                    <?php endif; ?>
+
+                    <?php if ($page < $totalPages): ?>
+                        <a href="?tab=online&page=<?= $page + 1 ?><?= $statusFilter ? '&status_filter=' . urlencode($statusFilter) : '' ?>" class="pagination-btn">
+                            Next <i class="fas fa-chevron-right"></i>
+                        </a>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <?php endif; ?>
         </div>
     </main>
 
@@ -1949,6 +2044,23 @@ if ($receiptDataJson === false) {
                 if (event.target === proofModal) {
                     closeProofModal();
                 }
+            });
+
+            // Status filter functionality
+            const statusFilter = document.getElementById('statusFilter');
+            statusFilter?.addEventListener('change', (event) => {
+                const selectedStatus = event.target.value;
+                const url = new URL(window.location.href);
+                url.searchParams.set('tab', 'online');
+                url.searchParams.set('page', '1'); // Reset to first page when filtering
+                
+                if (selectedStatus) {
+                    url.searchParams.set('status_filter', selectedStatus);
+                } else {
+                    url.searchParams.delete('status_filter');
+                }
+                
+                window.location.href = url.toString();
             });
 
             closeOnlineOrderModalButton?.addEventListener('click', closeOnlineOrderModalOverlay);
