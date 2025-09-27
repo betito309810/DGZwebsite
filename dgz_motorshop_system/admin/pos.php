@@ -760,9 +760,7 @@ if ($receiptDataJson === false) {
                         <option value="completed" <?= $statusFilter === 'completed' ? 'selected' : '' ?>>Completed</option>
                     </select>
                 </div>
-                <div class="orders-info">
-                    <span>Showing <?= count($onlineOrders) ?> of <?= $totalOrders ?> orders</span>
-                </div>
+              
             </div>
 
             <div class="online-orders-container">
@@ -891,9 +889,13 @@ if ($receiptDataJson === false) {
                         <a href="?tab=online&page=<?= $page + 1 ?><?= $statusFilter ? '&status_filter=' . urlencode($statusFilter) : '' ?>" class="pagination-btn">
                             Next <i class="fas fa-chevron-right"></i>
                         </a>
+                          <div class="orders-info">
+                    <span>Showing <?= count($onlineOrders) ?> of <?= $totalOrders ?> orders</span>
+                </div>
                     <?php endif; ?>
                 </div>
             </div>
+            
             <?php endif; ?>
         </div>
     </main>
@@ -968,7 +970,37 @@ if ($receiptDataJson === false) {
             </div>
         </div>
     </div>
+    <script>
+    function toggleSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        sidebar.classList.toggle('mobile-open');
+    }
 
+    function openProfileModal() {
+        if (!document.getElementById('profileModal')) {
+            return;
+        }
+
+        const profileModal = document.getElementById('profileModal');
+        profileModal.classList.add('show');
+        profileModal.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('modal-open');
+    }
+
+    function closeProfileModal() {
+        if (!document.getElementById('profileModal')) {
+            return;
+        }
+
+        const profileModal = document.getElementById('profileModal');
+        profileModal.classList.remove('show');
+        profileModal.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('modal-open');
+    }
+
+    
+</script>
+    <!-- Profile modal -->
     <div class="modal-overlay" id="profileModal" aria-hidden="true">
         <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="profileModalTitle">
             <button type="button" class="modal-close" id="profileModalClose" aria-label="Close profile information">

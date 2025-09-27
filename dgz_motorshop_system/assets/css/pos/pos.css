@@ -101,77 +101,7 @@ body {
     font-weight: 600;
 }
 
-.user-menu {
-    position: relative;
-}
 
-.user-avatar {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    background: #3498db;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    cursor: pointer;
-    font-size: 16px;
-    transition: background 0.3s ease, box-shadow 0.3s ease;
-    border: 0;
-    outline: none;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
-}
-
-.user-avatar:hover {
-    background: #2980b9;
-}
-
-.user-avatar:focus-visible {
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.45);
-}
-
-.dropdown-menu {
-    position: absolute;
-    top: 50px;
-    right: 0;
-    background: white;
-    border-radius: 8px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-    min-width: 150px;
-    opacity: 0;
-    visibility: hidden;
-    transform: translateY(-10px);
-    transition: all 0.3s ease;
-    z-index: 1001;
-}
-
-.dropdown-menu.show {
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(0);
-}
-
-.dropdown-item {
-    display: block;
-    padding: 12px 20px;
-    color: #333;
-    text-decoration: none;
-    transition: background 0.3s ease;
-    font-size: 14px;
-}
-
-.dropdown-item:hover {
-    background: #f8f9fa;
-}
-
-.dropdown-item.logout {
-    color: #e74c3c;
-    border-top: 1px solid #eee;
-}
-
-.dropdown-item.logout:hover {
-    background: #fee;
-}
 
 .pos-tabs {
     display: flex;
@@ -425,7 +355,7 @@ body {
 }
 
 /* Online Orders Filters */
-.online-orders-filters {
+.online-orders-filters, .pagination-container {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -925,6 +855,10 @@ body {
     justify-content: center;
     padding: 24px;
     z-index: 11000;
+}
+
+.modal-overlay.show {
+    display: flex;
 }
 
 .modal-overlay .modal-content {

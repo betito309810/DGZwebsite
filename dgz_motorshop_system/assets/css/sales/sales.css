@@ -107,70 +107,6 @@ body {
     gap: 15px;
 }
 
-.user-menu {
-    position: relative;
-}
-
-.user-avatar {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    background: #3498db;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    cursor: pointer;
-    font-size: 16px;
-    transition: background 0.3s ease;
-}
-
-.user-avatar:hover {
-    background: #2980b9;
-}
-
-.dropdown-menu {
-    position: absolute;
-    top: 50px;
-    right: 0;
-    background: white;
-    border-radius: 8px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-    min-width: 150px;
-    opacity: 0;
-    visibility: hidden;
-    transform: translateY(-10px);
-    transition: all 0.3s ease;
-    z-index: 1001;
-}
-
-.dropdown-menu.show {
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(0);
-}
-
-.dropdown-item {
-    display: block;
-    padding: 12px 20px;
-    color: #333;
-    text-decoration: none;
-    transition: background 0.3s ease;
-    font-size: 14px;
-}
-
-.dropdown-item:hover {
-    background: #f8f9fa;
-}
-
-.dropdown-item.logout {
-    color: #e74c3c;
-    border-top: 1px solid #eee;
-}
-
-.dropdown-item.logout:hover {
-    background: #fee;
-}
 
 /* Export CSV Button */
 a[href*="export=csv"] {
@@ -322,6 +258,7 @@ table tr:last-child td {
     color: white;
     border-color: #3498db;
 }
+
 
 .pagination .prev,
 .pagination .next {
@@ -837,3 +774,69 @@ table tr:last-child td {
         display: block;
     }
 }
+
+/* Profile Modal Overrides for Consistency 
+#profileModal .modal-content {
+    padding: 28px !important;
+    background: #ffffff !important;
+    width: min(420px, 100%) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 20px 50px rgba(15, 23, 42, 0.2) !important;
+    border: none !important;
+}
+
+#profileModal h3 {
+    border-bottom: none !important;
+    margin-bottom: 20px !important;
+    padding-bottom: 0 !important;
+    color: #1f2937 !important;
+    font-weight: 600 !important;
+    font-size: 18px !important;
+}
+
+#profileModal .profile-info {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+    margin-top: 20px !important;
+}
+
+#profileModal .profile-row {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    gap: 16px !important;
+}
+
+#profileModal .profile-label {
+    font-weight: 500 !important;
+    color: #6b7280 !important;
+    font-size: 14px !important;
+}
+
+#profileModal .profile-value {
+    color: #1f2937 !important;
+    font-weight: 600 !important;
+    font-size: 14px !important;
+    text-align: right !important;
+}
+
+#profileModal .modal-close {
+    position: absolute !important;
+    top: 12px !important;
+    right: 12px !important;
+    background: none !important;
+    border: none !important;
+    font-size: 18px !important;
+    color: #64748b !important;
+    cursor: pointer !important;
+    padding: 6px !important;
+    border-radius: 50% !important;
+    transition: background 0.2s ease, color 0.2s ease !important;
+}
+
+#profileModal .modal-close:hover {
+    background: #f1f5f9 !important;
+    color: #0f172a !important;
+}
+*/
