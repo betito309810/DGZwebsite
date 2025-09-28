@@ -396,11 +396,76 @@ $old_product = $stmt->fetch();
     }
     header('Location: products.php'); exit;
 }
-$products = $pdo->query('SELECT * FROM products')->fetchAll();
-// Fetch unique brands and categories
+// Fetch unique brands and categories (before pagination to avoid unnecessary full fetch)
 $brands = $pdo->query('SELECT DISTINCT brand FROM products WHERE brand IS NOT NULL AND brand != ""')->fetchAll(PDO::FETCH_COLUMN);
 $categories = $pdo->query('SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND category != ""')->fetchAll(PDO::FETCH_COLUMN);
 $suppliers = $pdo->query('SELECT DISTINCT supplier FROM products WHERE supplier IS NOT NULL AND supplier != ""')->fetchAll(PDO::FETCH_COLUMN);
+
+/**
+ * Handle product filtering, search, and pagination functionality (styled after sales.php).
+ * Retrieves GET parameters for search term, brand, category, supplier filters, and page.
+ * Builds dynamic SQL queries: one for COUNT(*) to get total records, and one for paginated results using named parameters.
+ * Uses prepared statements with bindValue to prevent SQL injection.
+ * Pagination: max 15 entries per page, calculates offset based on page number.
+ * Preserves filters in pagination links.
+ */
+$search = $_GET['search'] ?? '';
+$brand_filter = $_GET['brand'] ?? '';
+$category_filter = $_GET['category'] ?? '';
+$supplier_filter = $_GET['supplier'] ?? '';
+
+// Pagination setup (matching sales.php style)
+$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+$page = max(1, $page); // Ensure page is at least 1
+$limit = 15;
+$offset = ($page - 1) * $limit;
+
+// Build the base WHERE clause (shared for COUNT and SELECT)
+$where_sql = 'WHERE 1=1';
+$filter_params = []; // Params for filters only
+if ($search) {
+    // Search in product name or code
+    $where_sql .= ' AND (name LIKE ? OR code LIKE ?)';
+    $filter_params[] = "%$search%";
+    $filter_params[] = "%$search%";
+}
+if ($brand_filter) {
+    // Filter by specific brand
+    $where_sql .= ' AND brand = ?';
+    $filter_params[] = $brand_filter;
+}
+if ($category_filter) {
+    // Filter by specific category
+    $where_sql .= ' AND category = ?';
+    $filter_params[] = $category_filter;
+}
+if ($supplier_filter) {
+    // Filter by specific supplier
+    $where_sql .= ' AND supplier = ?';
+    $filter_params[] = $supplier_filter;
+}
+
+// First, get total count for pagination (using filter params)
+$count_sql = 'SELECT COUNT(*) FROM products ' . $where_sql;
+$count_stmt = $pdo->prepare($count_sql);
+$count_stmt->execute($filter_params);
+$total_products = $count_stmt->fetchColumn();
+$total_pages = ceil($total_products / $limit);
+
+// Main query with LIMIT and OFFSET (using named params like sales.php)
+$sql = 'SELECT * FROM products ' . $where_sql . ' ORDER BY id DESC LIMIT :limit OFFSET :offset';
+$stmt = $pdo->prepare($sql);
+foreach ($filter_params as $param) {
+    $stmt->bindValue($stmt->paramCount + 1, $param); // Bind filter params positionally first
+}
+$stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+$stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+$stmt->execute();
+$products = $stmt->fetchAll();
+
+// Calculate showing info (like sales.php)
+$start_record = $offset + 1;
+$end_record = min($offset + $limit, $total_products);
 ?>
 <!doctype html>
 <html>
@@ -411,6 +476,7 @@ $suppliers = $pdo->query('SELECT DISTINCT supplier FROM products WHERE supplier 
     <title>Products</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="../assets/css/style.css">
+<link rel="stylesheet" href="../assets/css/sales/sales.css">
     <link rel="stylesheet" href="../assets/css/products/products.css">
 
 </head>
@@ -457,14 +523,46 @@ $suppliers = $pdo->query('SELECT DISTINCT supplier FROM products WHERE supplier 
                 </div>
             </div>
         </header>
-        <div style="display:flex; gap:12px; margin-bottom:12px;">
-            <button id="openAddModal" class="add-btn" type="button">
-                <i class="fas fa-plus"></i> Add Product
-            </button>
-            <button id="openHistoryModal" class="history-btn" type="button">
-                <i class="fas fa-history"></i> History
-            </button>
+        <!-- Header row aligning "All Products" title with action buttons to save space -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h3>All Products</h3>
+            <div style="display: flex; gap: 12px;">
+                <button id="openAddModal" class="add-btn" type="button">
+                    <i class="fas fa-plus"></i> Add Product
+                </button>
+                <button id="openHistoryModal" class="history-btn" type="button">
+                    <i class="fas fa-history"></i> History
+                </button>
+            </div>
         </div>
+
+        <!-- Filter and search form for products by category, brand, supplier, and search term -->
+        <form method="GET" style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; align-items: end;">
+            <input type="text" name="search" placeholder="Search product by name or code..." value="<?= htmlspecialchars($search ?? '') ?>" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; min-width: 200px;">
+            
+            <select name="brand" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                <option value="">All Brands</option>
+                <?php foreach ($brands as $b): ?>
+                <option value="<?= htmlspecialchars($b) ?>" <?= ($brand_filter ?? '') === $b ? 'selected' : '' ?>><?= htmlspecialchars($b) ?></option>
+                <?php endforeach; ?>
+            </select>
+            
+            <select name="category" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                <option value="">All Categories</option>
+                <?php foreach ($categories as $c): ?>
+                <option value="<?= htmlspecialchars($c) ?>" <?= ($category_filter ?? '') === $c ? 'selected' : '' ?>><?= htmlspecialchars($c) ?></option>
+                <?php endforeach; ?>
+            </select>
+            
+            <select name="supplier" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                <option value="">All Suppliers</option>
+                <?php foreach ($suppliers as $s): ?>
+                <option value="<?= htmlspecialchars($s) ?>" <?= ($supplier_filter ?? '') === $s ? 'selected' : '' ?>><?= htmlspecialchars($s) ?></option>
+                <?php endforeach; ?>
+            </select>
+            
+            <button type="submit" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Filter</button>
+        </form>
 
         <!-- Product Add History Modal (like stockEntry.php) -->
         <div id="historyModal"
@@ -670,7 +768,7 @@ $suppliers = $pdo->query('SELECT DISTINCT supplier FROM products WHERE supplier 
                 }
             }
         </script>
-        <h3>All Products</h3>
+        <!-- Products table displaying filtered/search results -->
         <div id="productsTable">
             <table>
                 <tr>
@@ -680,29 +778,105 @@ $suppliers = $pdo->query('SELECT DISTINCT supplier FROM products WHERE supplier 
                     <th>Price</th>
                     <th>Action</th>
                 </tr>
-                <?php foreach($products as $p): ?>
-                <tr>
-                    <td><?=htmlspecialchars($p['code'])?></td>
-                    <td><?=htmlspecialchars($p['name'])?></td>
-                    <td><?=intval($p['quantity'])?></td>
-                    <td>₱<?=number_format($p['price'],2)?></td>
-                    <td> <a href="#" class="edit-btn action-btn" data-id="<?=$p['id']?>"
-                            data-code="<?=htmlspecialchars($p['code'])?>" data-name="<?=htmlspecialchars($p['name'])?>"
-                            data-description="<?=htmlspecialchars($p['description'])?>"
-                            data-price="<?=htmlspecialchars($p['price'])?>"
-                            data-quantity="<?=htmlspecialchars($p['quantity'])?>"
-                            data-low="<?=htmlspecialchars($p['low_stock_threshold'])?>"
-                            data-brand="<?=htmlspecialchars($p['brand'] ?? '')?>"
-                            data-category="<?=htmlspecialchars($p['category'] ?? '')?>"
-                            data-supplier="<?=htmlspecialchars($p['supplier'] ?? '')?>"><i
-                                class="fas fa-edit"></i>Edit</a>
-                        <a href="products.php?delete=<?=$p['id']?>" class="delete-btn action-btn"
-                            onclick="return confirm('Delete?')"> <i class="fas fa-trash"></i>Delete</a>
-                    </td>
-                </tr>
-                <?php endforeach; ?>
-            </table>
+            <?php if (empty($products)): ?>
+            <tr>
+                <td colspan="5" style="text-align: center; padding: 20px;">No products found matching the criteria.</td>
+            </tr>
+            <?php else: ?>
+            <?php foreach($products as $p): ?>
+            <tr>
+                <td><?=htmlspecialchars($p['code'])?></td>
+                <td><?=htmlspecialchars($p['name'])?></td>
+                <td><?=intval($p['quantity'])?></td>
+                <td>₱<?=number_format($p['price'],2)?></td>
+                <td> <a href="#" class="edit-btn action-btn" data-id="<?=$p['id']?>"
+                        data-code="<?=htmlspecialchars($p['code'])?>" data-name="<?=htmlspecialchars($p['name'])?>"
+                        data-description="<?=htmlspecialchars($p['description'])?>"
+                        data-price="<?=htmlspecialchars($p['price'])?>"
+                        data-quantity="<?=htmlspecialchars($p['quantity'])?>"
+                        data-low="<?=htmlspecialchars($p['low_stock_threshold'])?>"
+                        data-brand="<?=htmlspecialchars($p['brand'] ?? '')?>"
+                        data-category="<?=htmlspecialchars($p['category'] ?? '')?>"
+                        data-supplier="<?=htmlspecialchars($p['supplier'] ?? '')?>"><i
+                            class="fas fa-edit"></i>Edit</a>
+                <a href="products.php?delete=<?=$p['id']?>" class="delete-btn action-btn"
+                    onclick="return confirm('Delete?')"> <i class="fas fa-trash"></i>Delete</a>
+                </td>
+            </tr>
+            <?php endforeach; ?>
+            <?php endif; ?>
+        </table>
+
+        <?php if ($total_products > 0): ?>
+        <!-- Pagination container (styled after sales.php: info + links, preserving filter parameters) -->
+        <div class="pagination-container">
+            <div class="pagination-info">
+                Showing <?=$start_record?> to <?=$end_record?> of <?=$total_products?> entries
+            </div>
+            <div class="pagination">
+                <?php
+                // Prepare current parameters without 'page' for base links (to preserve filters)
+                $current_params = $_GET;
+                unset($current_params['page']);
+                $base_query = http_build_query($current_params);
+                $separator = $base_query ? '&' : '?';
+                ?>
+
+                <!-- Previous button -->
+                <?php if ($page > 1): ?>
+                <a href="?<?= $base_query . $separator ?>page=<?= ($page - 1) ?>" class="prev">
+                    <i class="fas fa-chevron-left"></i> Prev
+                </a>
+                <?php else: ?>
+                <span class="prev disabled">
+                    <i class="fas fa-chevron-left"></i> Prev
+                </span>
+                <?php endif; ?>
+
+                <!-- Page numbers -->
+                <?php
+                $start_page = max(1, $page - 2);
+                $end_page = min($total_pages, $page + 2);
+                
+                // Show first page if not in range
+                if ($start_page > 1): ?>
+                <a href="?<?= $base_query . $separator ?>page=1">1</a>
+                <?php if ($start_page > 2): ?>
+                <span>...</span>
+                <?php endif; ?>
+                <?php endif; ?>
+                
+                <!-- Show page numbers in range -->
+                <?php for ($i = $start_page; $i <= $end_page; $i++): ?>
+                <?php if ($i == $page): ?>
+                <span class="current"><?= $i ?></span>
+                <?php else: ?>
+                <a href="?<?= $base_query . $separator ?>page=<?= $i ?>"><?= $i ?></a>
+                <?php endif; ?>
+                <?php endfor; ?>
+                
+                <!-- Show last page if not in range -->
+                <?php if ($end_page < $total_pages): ?>
+                <?php if ($end_page < $total_pages - 1): ?>
+                <span>...</span>
+                <?php endif; ?>
+                <a href="?<?= $base_query . $separator ?>page=<?= $total_pages ?>"><?= $total_pages ?></a>
+                <?php endif; ?>
+
+                <!-- Next button -->
+                <?php if ($page < $total_pages): ?>
+                <a href="?<?= $base_query . $separator ?>page=<?= ($page + 1) ?>" class="next">
+                    Next <i class="fas fa-chevron-right"></i>
+                </a>
+                <?php else: ?>
+                <span class="next disabled">
+                    Next <i class="fas fa-chevron-right"></i>
+                </span>
+                <?php endif; ?>
+            </div>
         </div>
+        <?php endif; ?>
+    </div>
         <!-- Edit Product Modal -->
         <div id="editModal"
             style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.3); z-index:9999; align-items:center; justify-content:center;">
