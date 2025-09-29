@@ -393,7 +393,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pos_checkout'])) {
 
         $orderColumns = [
             'customer_name',
-            'contact',
             'address',
             'total',
             'payment_method',

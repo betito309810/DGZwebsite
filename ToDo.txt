@@ -1,0 +1,1 @@
+Decline order email for the customer
