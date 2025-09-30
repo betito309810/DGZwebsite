@@ -110,6 +110,7 @@ if (!function_exists('staffAllowedAdminPages')) {
             'pos.php',
             'inventory.php',
             'sales_report_pdf.php',
+            'stockEntry.php',
         ];
     }
 }

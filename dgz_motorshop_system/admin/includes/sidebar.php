@@ -43,6 +43,7 @@ $staffAllowedPages = [
     'sales.php',
     'pos.php',
     'inventory.php',
+    'stockEntry.php',
 ];
 
 ?>

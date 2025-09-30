@@ -68,8 +68,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_stock'])) {
     }
 }
 
-// Get all products for dropdown
+/**
+ * Fetch all products for the product selection dropdown.
+ * This will be used to populate the product options in the form.
+ */
 $products = $pdo->query("SELECT * FROM products ORDER BY name")->fetchAll();
+
+/**
+ * Fetch distinct categories from products table to populate the category filter dropdown.
+ * Only non-empty categories are included.
+ */
+$categories = $pdo->query("SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND category != '' ORDER BY category")->fetchAll(PDO::FETCH_COLUMN);
+
+/**
+ * Fetch distinct brands from products table to populate the brand filter dropdown.
+ * Only non-empty brands are included.
+ */
+$brands = $pdo->query("SELECT DISTINCT brand FROM products WHERE brand IS NOT NULL AND brand != '' ORDER BY brand")->fetchAll(PDO::FETCH_COLUMN);
+
+/**
+ * Fetch distinct suppliers from products table to populate the supplier dropdown.
+ * Only non-empty suppliers are included.
+ */
+$suppliers = $pdo->query("SELECT DISTINCT supplier FROM products WHERE supplier IS NOT NULL AND supplier != '' ORDER BY supplier")->fetchAll(PDO::FETCH_COLUMN);
 
 // Get recent stock entries with user information
 $recent_entries = $pdo->query("
@@ -156,32 +177,71 @@ $recent_entries = $pdo->query("
                 <h3 style="margin-bottom: 20px;">Add New Stock</h3>
                 <form method="POST" action="">
                     <div class="form-grid">
-                        <div class="form-group">
-                            <label for="product_id">Product</label>
-                            <select name="product_id" id="product_id" required>
-                                <option value="">Select Product</option>
-                                <?php foreach ($products as $product): ?>
-                                    <option value="<?php echo $product['id']; ?>">
-                                        <?php echo htmlspecialchars($product['name']); ?> 
-                                        (Current: <?php echo $product['quantity']; ?>)
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="quantity">Quantity to Add</label>
-                            <input type="number" name="quantity" id="quantity" min="1" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="purchase_price">Purchased Price per Unit</label>
-                            <input type="number" name="purchase_price" id="purchase_price" min="0" step="0.01" required>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="supplier">Supplier</label>
-                            <input type="text" name="supplier" id="supplier" required>
-                        </div>
+                    <div class="form-group">
+                        <label for="product_search">Search Product</label>
+                        <input type="text" id="product_search" placeholder="Search products..." autocomplete="off">
+                        <div id="autocomplete-list" class="autocomplete-items"></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="product_id">Product</label>
+                        <select name="product_id" id="product_id" required>
+                            <option value="">Select Product</option>
+                            <?php
+                            // Populate product dropdown with products from database
+                            foreach ($products as $product) {
+                                echo '<option value="' . htmlspecialchars($product['id']) . '">' . htmlspecialchars($product['name']) . '</option>';
+                            }
+                            ?>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="category_filter">Filter by Category</label>
+                        <select id="category_filter" name="category_filter">
+                            <option value="">All Categories</option>
+                            <?php
+                            // Populate category filter dropdown with distinct categories from products
+                            foreach ($categories as $category) {
+                                echo '<option value="' . htmlspecialchars($category) . '">' . htmlspecialchars($category) . '</option>';
+                            }
+                            ?>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="brand_filter">Filter by Brand</label>
+                        <select id="brand_filter" name="brand_filter">
+                            <option value="">All Brands</option>
+                            <?php
+                            // Populate brand filter dropdown with distinct brands from products
+                            foreach ($brands as $brand) {
+                                echo '<option value="' . htmlspecialchars($brand) . '">' . htmlspecialchars($brand) . '</option>';
+                            }
+                            ?>
+                        </select>
+                    </div>
+
+                    <!-- Removed duplicate search product input on the right as per user request -->
+
+                    <div class="form-group">
+                        <label for="quantity">Quantity to Add</label>
+                        <input type="number" name="quantity" id="quantity" min="1" required>
+                    </div>
+                    <!-- Removed Purchased Price per Unit input as per user request -->
+                    
+                    <div class="form-group">
+                        <label for="supplier">Supplier</label>
+                        <select name="supplier" id="supplier" required>
+                            <option value="">Select Supplier</option>
+                            <?php
+                            // Populate supplier dropdown with distinct suppliers from products
+                            foreach ($suppliers as $supplier) {
+                                echo '<option value="' . htmlspecialchars($supplier) . '">' . htmlspecialchars($supplier) . '</option>';
+                            }
+                            ?>
+                        </select>
+                    </div>
                     </div>
                     
                     <div class="form-group">
@@ -204,7 +264,7 @@ $recent_entries = $pdo->query("
                             <th>Date</th>
                             <th>Product</th>
                             <th>Quantity Added</th>
-                            <th>Cost (per unit)</th>
+                            <!-- Removed Cost (per unit) column as per user request -->
                             <th>Supplier</th>
                             <th>Stock in by</th>
                             <th>Notes</th>
@@ -216,7 +276,6 @@ $recent_entries = $pdo->query("
                                 <td><?php echo date('M d, Y H:i', strtotime($entry['created_at'])); ?></td>
                                 <td><?php echo htmlspecialchars($entry['product_name']); ?></td>
                                 <td><?php echo $entry['quantity_added']; ?></td>
-                                <td>₱<?php echo number_format($entry['purchase_price'], 2); ?></td>
                                 <td><?php echo htmlspecialchars($entry['supplier']); ?></td>
                                 <td><?php echo htmlspecialchars($entry['user_name'] ?? 'Unknown'); ?></td>
                                 <td><?php echo htmlspecialchars($entry['notes']); ?></td>
@@ -339,5 +398,262 @@ $recent_entries = $pdo->query("
         });
     </script>
     <script src="../assets/js/notifications.js"></script>
+    <style>
+        /* Styles for autocomplete items */
+        .autocomplete-items {
+            position: absolute;
+            border: 1px solid #d4d4d4;
+            border-bottom: none;
+            border-top: none;
+            z-index: 9999;
+            /* position the autocomplete items to be the same width as the container: */
+            top: 100%;
+            left: 0;
+            right: 0;
+            max-height: 200px;
+            overflow-y: auto;
+            background-color: white;
+        }
+        /* Ensure the parent container of autocomplete is positioned relative for correct absolute positioning */
+        .form-group {
+            position: relative;
+        }
+
+        .autocomplete-items div {
+            padding: 10px;
+            cursor: pointer;
+            border-bottom: 1px solid #d4d4d4;
+        }
+
+        .autocomplete-items div:hover {
+            background-color: #e9e9e9;
+        }
+    </style>
+
+    <script>
+        // Pass all products data to JavaScript for client-side filtering and autocomplete
+        const allProducts = <?php echo json_encode($products); ?>;
+
+        // Get references to filter dropdowns, product dropdown, search input, and autocomplete list container
+        const categoryFilter = document.getElementById('category_filter');
+        const brandFilter = document.getElementById('brand_filter');
+        const supplierFilter = document.getElementById('supplier');
+        const productDropdown = document.getElementById('product_id');
+        const productSearch = document.getElementById('product_search');
+        const autocompleteList = document.getElementById('autocomplete-list');
+
+        // Function to filter products based on selected filters
+        function filterProducts() {
+            const selectedCategory = categoryFilter.value;
+            const selectedBrand = brandFilter.value;
+            const selectedSupplier = supplierFilter.value;
+
+            // Filter products based on selected filters
+            return allProducts.filter(product => {
+                const matchesCategory = selectedCategory === '' || product.category === selectedCategory;
+                const matchesBrand = selectedBrand === '' || product.brand === selectedBrand;
+                const matchesSupplier = selectedSupplier === '' || product.supplier === selectedSupplier;
+                return matchesCategory && matchesBrand && matchesSupplier;
+            });
+        }
+
+        // Function to show autocomplete suggestions based on search input and filters
+        function showAutocomplete() {
+            const searchText = productSearch.value.trim().toLowerCase();
+            autocompleteList.innerHTML = '';
+
+            if (!searchText) {
+                return;
+            }
+
+            const filteredProducts = filterProducts().filter(product =>
+                product.name.toLowerCase().includes(searchText)
+            );
+
+            filteredProducts.forEach(product => {
+                const item = document.createElement('div');
+                item.textContent = product.name;
+                item.addEventListener('click', () => {
+                    productSearch.value = product.name;
+                    autocompleteList.innerHTML = '';
+                    // Set the product dropdown to the selected product
+                    productDropdown.value = product.id;
+                });
+                autocompleteList.appendChild(item);
+            });
+        }
+
+        // Event listeners for filters to clear search and autocomplete and update product dropdown
+        categoryFilter.addEventListener('change', () => {
+            productSearch.value = '';
+            autocompleteList.innerHTML = '';
+            updateProductDropdown();
+            updateBrandAndSupplierDropdowns();
+        });
+        // Flag to prevent infinite loop when updating dropdowns
+        let isUpdatingDropdowns = false;
+
+        brandFilter.addEventListener('change', () => {
+            if (isUpdatingDropdowns) return;
+            productSearch.value = '';
+            autocompleteList.innerHTML = '';
+
+            // Preserve selected product if it matches the selected brand and supplier
+            const selectedProductId = productDropdown.value;
+            const selectedBrand = brandFilter.value;
+            const selectedSupplier = supplierFilter.value;
+            const selectedProduct = allProducts.find(p => p.id == selectedProductId);
+
+            isUpdatingDropdowns = true;
+            if (selectedProduct && 
+                (selectedBrand === '' || selectedProduct.brand === selectedBrand) &&
+                (selectedSupplier === '' || selectedProduct.supplier === selectedSupplier)) {
+                // Keep the selected product
+                updateProductDropdown(true);
+            } else {
+                // Reset product selection
+                productDropdown.value = '';
+                updateProductDropdown(false);
+            }
+            updateBrandAndSupplierDropdowns();
+            isUpdatingDropdowns = false;
+        });
+
+        supplierFilter.addEventListener('change', () => {
+            if (isUpdatingDropdowns) return;
+            productSearch.value = '';
+            autocompleteList.innerHTML = '';
+
+            // Preserve selected product if it matches the selected brand and supplier
+            const selectedProductId = productDropdown.value;
+            const selectedBrand = brandFilter.value;
+            const selectedSupplier = supplierFilter.value;
+            const selectedProduct = allProducts.find(p => p.id == selectedProductId);
+
+            isUpdatingDropdowns = true;
+            if (selectedProduct && 
+                (selectedBrand === '' || selectedProduct.brand === selectedBrand) &&
+                (selectedSupplier === '' || selectedProduct.supplier === selectedSupplier)) {
+                // Keep the selected product
+                updateProductDropdown(true);
+            } else {
+                // Reset product selection
+                productDropdown.value = '';
+                updateProductDropdown(false);
+            }
+            updateBrandAndSupplierDropdowns();
+            isUpdatingDropdowns = false;
+        });
+
+        // Event listener for product dropdown change to update category, brand, and supplier
+        productDropdown.addEventListener('change', () => {
+            const selectedProductId = productDropdown.value;
+            const selectedProduct = allProducts.find(p => p.id == selectedProductId);
+
+            if (selectedProduct) {
+                // Automatically fill category with only the selected product's category
+                categoryFilter.innerHTML = '';
+                if (selectedProduct.category) {
+                    const option = document.createElement('option');
+                    option.value = selectedProduct.category;
+                    option.textContent = selectedProduct.category;
+                    option.selected = true;
+                    categoryFilter.appendChild(option);
+                }
+
+                // Filter brand and supplier dropdowns based on selected product
+                updateBrandAndSupplierDropdowns(selectedProduct);
+            } else {
+                // Reset category dropdown to show all categories
+                categoryFilter.innerHTML = '<option value="">All Categories</option>';
+                <?php foreach ($categories as $category): ?>
+                {
+                    const option = document.createElement('option');
+                    option.value = <?= json_encode($category) ?>;
+                    option.textContent = <?= json_encode($category) ?>;
+                    categoryFilter.appendChild(option);
+                }
+                <?php endforeach; ?>
+
+                updateBrandAndSupplierDropdowns();
+            }
+        });
+
+        // Event listener for search input to show autocomplete suggestions
+        productSearch.addEventListener('input', showAutocomplete);
+
+        // Function to update product dropdown based on filters (without search)
+        // If keepSelected is true, preserve the current selected product if it exists in the filtered list
+        function updateProductDropdown(keepSelected = false) {
+            const filteredProducts = filterProducts();
+            const currentSelected = productDropdown.value;
+            productDropdown.innerHTML = '<option value="">Select Product</option>';
+            filteredProducts.forEach(product => {
+                const option = document.createElement('option');
+                option.value = product.id;
+                option.textContent = product.name;
+                productDropdown.appendChild(option);
+            });
+            if (keepSelected && currentSelected) {
+                const exists = filteredProducts.some(p => p.id == currentSelected);
+                if (exists) {
+                    productDropdown.value = currentSelected;
+                }
+            }
+        }
+
+        // Function to update brand and supplier dropdowns based on selected product or filters
+        function updateBrandAndSupplierDropdowns(selectedProduct = null) {
+            let brandsToShow = [];
+            let suppliersToShow = [];
+
+            if (selectedProduct) {
+                // Show only the brand and supplier of the selected product
+                brandsToShow = [selectedProduct.brand].filter(Boolean);
+                suppliersToShow = [selectedProduct.supplier].filter(Boolean);
+            } else {
+                // Show all brands and suppliers based on current filters
+                const filteredProducts = filterProducts();
+                brandsToShow = [...new Set(filteredProducts.map(p => p.brand).filter(Boolean))];
+                suppliersToShow = [...new Set(filteredProducts.map(p => p.supplier).filter(Boolean))];
+            }
+
+            // Update brand dropdown options
+            const currentBrandValue = brandFilter.value;
+            brandFilter.innerHTML = '<option value="">All Brands</option>';
+            brandsToShow.forEach(brand => {
+                const option = document.createElement('option');
+                option.value = brand;
+                option.textContent = brand;
+                if (brand === currentBrandValue) {
+                    option.selected = true;
+                }
+                brandFilter.appendChild(option);
+            });
+
+            // Update supplier dropdown options
+            const currentSupplierValue = supplierFilter.value;
+            supplierFilter.innerHTML = '<option value="">Select Supplier</option>';
+            suppliersToShow.forEach(supplier => {
+                const option = document.createElement('option');
+                option.value = supplier;
+                option.textContent = supplier;
+                if (supplier === currentSupplierValue) {
+                    option.selected = true;
+                }
+                supplierFilter.appendChild(option);
+            });
+        }
+
+        // Initial population of product dropdown
+        updateProductDropdown();
+
+        // Close autocomplete list when clicking outside
+        document.addEventListener('click', function (e) {
+            if (e.target !== productSearch) {
+                autocompleteList.innerHTML = '';
+            }
+        });
+    </script>
 </body>
 </html>

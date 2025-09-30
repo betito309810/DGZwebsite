@@ -991,9 +991,9 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
         <!-- Main Inventory Table -->
 
         <div class="inventory-actions">
-            <?php if ($role === 'admin'): ?>
-            <a href="stockEntry.php" class="btn-action add-stock-btn">Add Stock</a>
-            <?php endif; ?>
+        <?php if ($role === 'admin' || $role === 'staff'): ?>
+        <a href="stockEntry.php" class="btn-action add-stock-btn">Add Stock</a>
+        <?php endif; ?>
             <a href="inventory.php?export=csv" class="btn-action export-btn">Export CSV</a>
         </div>
 
