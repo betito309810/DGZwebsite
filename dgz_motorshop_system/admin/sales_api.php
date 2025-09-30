@@ -12,6 +12,13 @@ if(empty($_SESSION['user_id'])){
 $pdo = db();
 $period = $_GET['period'] ?? 'daily';
 
+/**
+ * sales_api.php
+ * API endpoint to provide sales analytics data for different periods.
+ * Supports 'daily', 'weekly', 'monthly', and 'annually' periods.
+ * Returns JSON with total sales and total orders.
+ */
+
 try {
     $data = [];
     
@@ -44,6 +51,16 @@ try {
                     FROM orders 
                     WHERE YEAR(created_at) = YEAR(CURDATE()) 
                     AND MONTH(created_at) = MONTH(CURDATE())
+                    AND status IN ('approved','completed')";
+            break;
+
+        case 'annually':
+            // Get this year's sales
+            $sql = "SELECT 
+                        COUNT(*) as total_orders, 
+                        COALESCE(SUM(total), 0) as total_sales 
+                    FROM orders 
+                    WHERE YEAR(created_at) = YEAR(CURDATE())
                     AND status IN ('approved','completed')";
             break;
             

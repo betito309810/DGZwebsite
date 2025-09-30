@@ -59,9 +59,15 @@ try {
     exit;
 }
 
-// Whitelist period
+/**
+ * chart_data.php
+ * Returns JSON data for the pie chart (most bought items) based on the selected period.
+ * Supports 'daily', 'weekly', 'monthly', and 'annually' periods.
+ */
+
+ // Whitelist period
 $period = isset($_GET['period']) ? strtolower(trim($_GET['period'])) : 'daily';
-if (!in_array($period, ['daily','weekly','monthly'], true)) {
+if (!in_array($period, ['daily','weekly','monthly','annually'], true)) {
     $period = 'daily';
 }
 
@@ -77,6 +83,9 @@ switch ($period) {
         break;
     case 'monthly':
         $where = "YEAR(o.created_at) = YEAR(CURDATE()) AND MONTH(o.created_at) = MONTH(CURDATE())";
+        break;
+    case 'annually':
+        $where = "YEAR(o.created_at) = YEAR(CURDATE())";
         break;
 }
 

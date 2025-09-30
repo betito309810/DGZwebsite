@@ -167,7 +167,8 @@ $end_record = min($offset + $records_per_page, $total_records);
     <link rel="stylesheet" href="../assets/css/style.css">
     <link rel="stylesheet" href="../assets/css/sales/sales.css">
     <link rel="stylesheet" href="../assets/css/sales/piechart.css">
-     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="../assets/css/sales/transaction-modal.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <title>Sales</title>
 </head>
 
@@ -414,6 +415,7 @@ $end_record = min($offset + $records_per_page, $total_records);
                             <option value="daily">Daily</option>
                             <option value="weekly">Weekly</option>
                             <option value="monthly">Monthly</option>
+                            <option value="annually">Annually</option>
                         </select>
                     </div>
                 </div>
@@ -449,6 +451,7 @@ $end_record = min($offset + $records_per_page, $total_records);
                         <option value="daily">Daily</option>
                         <option value="weekly">Weekly</option>
                         <option value="monthly">Monthly</option>
+                        <option value="annually">Annually</option>
                     </select>
                 </div>
                 <div class="chart-canvas-wrap">
@@ -464,74 +467,12 @@ $end_record = min($offset + $records_per_page, $total_records);
     </main>
 
     <!-- Transaction Details Modal -->
-    <div id="transactionModal" class="modal" style="display: none;">
+        <!-- Transaction Details Modal -->
+    <div id="transactionModal" class="modal">
         <div class="modal-content">
-            <div class="modal-header">
-                <h3>Transaction Details</h3>
-                <span class="close">&times;</span>
-            </div>
+            <span class="close">&times;</span>
             <div class="modal-body">
-                <div class="transaction-info">
-                    <h4>Order Information</h4>
-                    <div class="info-grid">
-                        <div class="info-item">
-                            <label>Customer:</label>
-                            <span id="modal-customer"></span>
-                        </div>
-                        <div class="info-item">
-                            <label>Invoice #:</label>
-                            <span id="modal-invoice"></span>
-                        </div>
-                        <div class="info-item">
-                            <label>Date:</label>
-                            <span id="modal-date"></span>
-                        </div>
-                        <div class="info-item">
-                            <label>Status:</label>
-                            <span id="modal-status"></span>
-                        </div>
-                        <div class="info-item">
-                            <label>Payment Method:</label>
-                            <span id="modal-payment"></span>
-                        </div>
-                        <div class="info-item">
-                            <label>Email:</label>
-                            <span id="modal-email"></span>
-                        </div>
-                        <div class="info-item">
-                            <label>Phone:</label>
-                            <span id="modal-phone"></span>
-                        </div>
-                        <div class="info-item" id="modal-reference-wrapper" style="display:none;">
-                            <label>Reference:</label>
-                            <span id="modal-reference"></span>
-                        </div>
-                    </div>
-                </div>
-                <div class="order-items">
-                    <h4>Order Items</h4>
-                    <div class="table-responsive">
-                        <table class="items-table">
-                            <thead>
-                                <tr>
-                                    <th>Product</th>
-                                    <th>Quantity</th>
-                                    <th>Price</th>
-                                    <th>Subtotal</th>
-                                </tr>
-                            </thead>
-                            <tbody id="modal-items">
-                                <!-- Items will be inserted here -->
-                            </tbody>
-                            <tfoot>
-                                <tr>
-                                    <td colspan="3" style="text-align: right;"><strong>Total:</strong></td>
-                                    <td id="modal-total"></td>
-                                </tr>
-                            </tfoot>
-                        </table>
-                    </div>
-                </div>
+                <!-- Content will be dynamically inserted here -->
             </div>
         </div>
     </div>
@@ -586,137 +527,291 @@ $end_record = min($offset + $records_per_page, $total_records);
     </div>
 
     <script>
-        function toggleDropdown() {
-            const dropdown = document.getElementById('userDropdown');
-            if (!dropdown) {
+    // Profile and dropdown functions
+    function toggleDropdown() {
+        const dropdown = document.getElementById('userDropdown');
+        if (!dropdown) return;
+        dropdown.classList.toggle('show');
+    }
+
+    function toggleSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        if (!sidebar) return;
+        sidebar.classList.toggle('mobile-open');
+    }
+
+    function openProfileModal() {
+        const profileModal = document.getElementById('profileModal');
+        if (!profileModal) return;
+        profileModal.classList.add('show');
+        profileModal.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('modal-open');
+    }
+
+    function closeProfileModal() {
+        const profileModal = document.getElementById('profileModal');
+        if (!profileModal) return;
+        profileModal.classList.remove('show');
+        profileModal.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('modal-open');
+    }
+
+    // Sales Report Modal functions
+    function openSalesReportModal() {
+        document.getElementById('salesReportModal').style.display = 'flex';
+    }
+
+    function closeSalesReportModal() {
+        document.getElementById('salesReportModal').style.display = 'none';
+    }
+
+    // Event listeners for profile modal
+    document.addEventListener('DOMContentLoaded', () => {
+        const profileTrigger = document.getElementById('profileTrigger');
+        if (profileTrigger) {
+            profileTrigger.addEventListener('click', openProfileModal);
+        }
+
+        const profileModalClose = document.getElementById('profileModalClose');
+        if (profileModalClose) {
+            profileModalClose.addEventListener('click', closeProfileModal);
+        }
+
+        // Close modal when clicking outside
+        const salesReportModal = document.getElementById('salesReportModal');
+        if (salesReportModal) {
+            salesReportModal.addEventListener('click', function(event) {
+                if (event.target === this) {
+                    closeSalesReportModal();
+                }
+            });
+        }
+
+        // Initialize sales analytics
+        initializeSalesAnalytics();
+        initializePieChart();
+    });
+
+    // Sales Analytics Widget
+    function initializeSalesAnalytics() {
+        const periodSelector = document.getElementById('periodSelector');
+        const totalSalesEl = document.getElementById('totalSales');
+        const totalOrdersEl = document.getElementById('totalOrders');
+        const widget = document.querySelector('.sales-widget');
+
+        if (!periodSelector || !totalSalesEl || !totalOrdersEl) {
+            console.error('Sales analytics elements not found');
+            return;
+        }
+
+        /**
+         * Fetch sales analytics data from backend API
+         */
+        async function fetchSalesData(period) {
+            try {
+                console.log(`Fetching sales data for period: ${period}`);
+                const response = await fetch(`sales_api.php?period=${period}`);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                // Check if we got an error response
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                return data;
+            } catch (error) {
+                console.error('Error fetching sales data:', error);
+                // Return fallback data
+                return {
+                    totalSales: 0,
+                    totalOrders: 0,
+                    period: 'Error'
+                };
+            }
+        }
+
+        /**
+         * Update the sales analytics widget
+         */
+        async function updateStats(period) {
+            // Add loading state
+            if (widget) {
+                widget.classList.add('loading');
+            }
+
+            try {
+                const data = await fetchSalesData(period);
+                console.log('Sales data received:', data);
+
+                // Update values with formatted numbers
+                totalSalesEl.textContent = `₱${data.totalSales.toLocaleString('en-US', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                })}`;
+
+                totalOrdersEl.textContent = data.totalOrders.toLocaleString();
+
+            } catch (error) {
+                console.error('Error updating stats:', error);
+                // Show error state
+                totalSalesEl.textContent = 'Error';
+                totalOrdersEl.textContent = 'Error';
+            } finally {
+                // Remove loading state
+                if (widget) {
+                    widget.classList.remove('loading');
+                }
+            }
+        }
+
+        // Event listener for period selector
+        periodSelector.addEventListener('change', function() {
+            updateStats(this.value);
+        });
+
+        // Initialize with default period
+        updateStats('daily');
+    }
+
+    // Pie Chart functionality
+    function initializePieChart() {
+        const ctx = document.getElementById('salesPieChart');
+        const timeFilter = document.getElementById('timeFilter');
+        
+        if (!ctx || !timeFilter) {
+            console.error('Pie chart elements not found');
+            return;
+        }
+
+        let salesChart = null;
+
+        /**
+         * Load and render pie chart data
+         */
+        function loadChartData(period = 'daily') {
+            console.log(`Loading chart data for period: ${period}`);
+            
+            fetch(`chart_data.php?period=${period}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Chart data received:', data);
+                    
+                    const labels = data.map(item => item.product_name);
+                    const values = data.map(item => item.total_qty);
+                    const colors = data.map(item => item.color);
+
+                    // Destroy existing chart
+                    if (salesChart) {
+                        salesChart.destroy();
+                    }
+
+                    // Create new chart
+                    salesChart = new Chart(ctx, {
+                        type: 'pie',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                data: values,
+                                backgroundColor: colors,
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { 
+                                    display: false 
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        label: (context) => {
+                                            const label = context.label || "";
+                                            const value = context.parsed || 0;
+                                            return `${label}: ${value}`;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+
+                    // Update legend
+                    updateLegend(data, colors, values);
+                })
+                .catch(error => {
+                    console.error('Error loading chart data:', error);
+                    updateLegend([], [], []);
+                });
+        }
+
+        /**
+         * Update the chart legend
+         */
+        function updateLegend(data, colors, values) {
+            const legendContainer = document.getElementById('chartLegend');
+            if (!legendContainer) return;
+
+            legendContainer.innerHTML = '';
+            
+            if (!data.length) {
+                legendContainer.innerHTML = "<div class='legend-empty'>No data for this period.</div>";
                 return;
             }
 
-            dropdown.classList.toggle('show');
+            data.forEach((item, index) => {
+                const legendItem = document.createElement('div');
+                legendItem.classList.add('legend-item');
+                legendItem.innerHTML = `
+                    <span class="legend-color" style="background-color:${colors[index]}"></span>
+                    ${item.product_name} (${values[index]})
+                `;
+                legendContainer.appendChild(legendItem);
+            });
         }
 
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            if (!sidebar) {
-                return;
-            }
+        // Event listener for time filter
+        timeFilter.addEventListener('change', function() {
+            loadChartData(this.value);
+        });
 
-            sidebar.classList.toggle('mobile-open');
-        }
-
-        function openProfileModal() {
-            const profileModal = document.getElementById('profileModal');
-            if (!profileModal) {
-                return;
-            }
-
-            profileModal.classList.add('show');
-            profileModal.setAttribute('aria-hidden', 'false');
-            document.body.classList.add('modal-open');
-        }
-
-        function closeProfileModal() {
-            const profileModal = document.getElementById('profileModal');
-            if (!profileModal) {
-                return;
-            }
-
-            profileModal.classList.remove('show');
-            profileModal.setAttribute('aria-hidden', 'true');
-            document.body.classList.remove('modal-open');
-        }
-    </script>
+        // Initial load
+        loadChartData();
+    }
+</script>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-        // sales trend piechart
-        (function(){
-    const ctx = document.getElementById('salesPieChart').getContext('2d');
-    let salesChart = null;
-
-    function renderChart(payload) {
-        const labels = payload.map(item => item.product_name);
-        const values = payload.map(item => Number(item.total_qty));
-        const colors = payload.map(item => item.color);
-
-        if (salesChart) {
-            salesChart.destroy();
-        }
-
-        salesChart = new Chart(ctx, {
-            type: 'pie',
-            data: {
-                labels,
-                datasets: [{
-                    data: values,
-                    backgroundColor: colors,
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        callbacks: {
-                            label: (context) => {
-                                const label = context.label || "";
-                                const value = context.parsed || 0;
-                                return `${label}: ${value}`;
-                            }
-                        }
-                    }
-                }
-            });
-
-        // Render custom legend below the chart
-        const legend = document.getElementById('chartLegend');
-        legend.innerHTML = "";
-        if (!payload.length) {
-            legend.innerHTML = "<div class='legend-empty'>No data for this period.</div>";
-            return;
-        }
-        payload.forEach((item) => {
-            const row = document.createElement('div');
-            row.className = 'legend-item';
-            row.innerHTML = `
-                <span class="legend-swatch" style="background:${item.color}"></span>
-                <span class="legend-name">${item.product_name}</span>
-                <span class="legend-count">${item.total_qty}</span>
-            `;
-            legend.appendChild(row);
-        });
-    }
-
-    async function loadChartData(period='daily') {
-        try {
-            const res = await fetch(`chart_data.php?period=${encodeURIComponent(period)}`, { cache: 'no-store' });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data = await res.json();
-            renderChart(Array.isArray(data) ? data : []);
-        } catch (e) {
-            console.error(e);
-            renderChart([]);
-        }
-    }
-
-    document.getElementById('timeFilter').addEventListener('change', function() {
-        loadChartData(this.value);
-    });
-
-    // Initial load
-    loadChartData('daily');
-})();
-
-
-
-        // sales analytics chart
+        console.log('DOMContentLoaded event fired, initializing sales analytics and pie chart');
+        // sales analytics and pie chart rendering
         const ctx = document.getElementById('salesPieChart').getContext('2d');
         let salesChart;
 
+        /**
+         * Load and render the sales pie chart data for the given period.
+         * @param {string} period - The period to filter data by (daily, weekly, monthly, annually).
+         */
         function loadChartData(period = 'daily') {
             fetch(`chart_data.php?period=${period}`)
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        console.error('Network response was not ok for chart_data.php:', response.statusText);
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
                 .then(data => {
+                    console.log('Chart data received:', data);
                     const labels = data.map(item => item.product_name);
                     const values = data.map(item => item.total_qty);
                     const colors = data.map(item => item.color);
@@ -733,12 +828,31 @@ $end_record = min($offset + $records_per_page, $total_records);
                                 data: values,
                                 backgroundColor: colors
                             }]
+                        },
+                        options: {
+                            responsive: true,
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: {
+                                    callbacks: {
+                                        label: (context) => {
+                                            const label = context.label || "";
+                                            const value = context.parsed || 0;
+                                            return `${label}: ${value}`;
+                                        }
+                                    }
+                                }
+                            }
                         }
                     });
 
-                    // Custom legend
+                    // Custom legend rendering below the chart
                     const legendContainer = document.getElementById('chartLegend');
                     legendContainer.innerHTML = '';
+                    if (!data.length) {
+                        legendContainer.innerHTML = "<div class='legend-empty'>No data for this period.</div>";
+                        return;
+                    }
                     data.forEach((item, index) => {
                         const legendItem = document.createElement('div');
                         legendItem.classList.add('legend-item');
@@ -748,36 +862,45 @@ $end_record = min($offset + $records_per_page, $total_records);
                     `;
                         legendContainer.appendChild(legendItem);
                     });
+                })
+                .catch(error => {
+                    console.error('Error loading chart data:', error);
+                    const legendContainer = document.getElementById('chartLegend');
+                    legendContainer.innerHTML = "<div class='legend-empty'>Failed to load data.</div>";
                 });
         }
 
+        // Event listener for pie chart period filter change
         document.getElementById('timeFilter').addEventListener('change', function () {
             loadChartData(this.value);
         });
 
-        // Load default
+        // Initial load of pie chart data with default period 'daily'
         loadChartData();
 
-
         //
-        // Replace the sample data section with this code:
-
+        // Sales analytics widget logic
         const periodSelector = document.getElementById('periodSelector');
         const totalSalesEl = document.getElementById('totalSales');
         const totalOrdersEl = document.getElementById('totalOrders');
-        //const chartTitleEl = document.getElementById('chartTitle');
         const widget = document.querySelector('.sales-widget');
 
-        // Function to fetch sales data from PHP backend
+        /**
+         * Fetch sales analytics data from backend API for the given period.
+         * @param {string} period - The period to filter data by (daily, weekly, monthly, annually).
+         * @returns {Promise<Object>} - The sales data object with totalSales and totalOrders.
+         */
         async function fetchSalesData(period) {
             try {
                 const response = await fetch(`sales_api.php?period=${period}`);
 
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    console.error('Network response was not ok for sales_api.php:', response.statusText);
+                    throw new Error('Network response was not ok');
                 }
 
                 const data = await response.json();
+                console.log('Sales data received:', data);
                 return data;
             } catch (error) {
                 console.error('Error fetching sales data:', error);
@@ -790,7 +913,10 @@ $end_record = min($offset + $records_per_page, $total_records);
             }
         }
 
-        // Function to update stats with real data
+        /**
+         * Update the sales analytics widget with fetched data.
+         * @param {string} period - The period to filter data by.
+         */
         async function updateStats(period) {
             // Add loading state
             widget.classList.add('loading');
@@ -799,21 +925,13 @@ $end_record = min($offset + $records_per_page, $total_records);
                 // Fetch real data from backend
                 const data = await fetchSalesData(period);
 
-                // Update values with animation
+                // Update values with formatted numbers
                 totalSalesEl.textContent = `₱${data.totalSales.toLocaleString('en-US', {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2
         })}`;
 
                 totalOrdersEl.textContent = data.totalOrders.toLocaleString();
-
-                /* Update chart title
-                const periodNames = {
-                    daily: 'Daily',
-                    weekly: 'Weekly', 
-                    monthly: 'Monthly'
-                };
-                chartTitleEl.textContent = `${periodNames[period]} Sales Trend`;*/
 
             } catch (error) {
                 console.error('Error updating stats:', error);
@@ -826,15 +944,15 @@ $end_record = min($offset + $records_per_page, $total_records);
             }
         }
 
-        // Event listener for period change
+        // Event listener for sales analytics period selector change
         periodSelector.addEventListener('change', function () {
             updateStats(this.value);
         });
 
-        // Initialize with daily data
+        // Initialize sales analytics widget with default period 'daily'
         updateStats('daily');
 
-        // Add some interactivity
+        // Add interactivity animation on stat cards
         document.querySelectorAll('.stat-card').forEach(card => {
             card.addEventListener('click', function () {
                 this.style.transform = 'scale(0.98)';
@@ -844,143 +962,24 @@ $end_record = min($offset + $records_per_page, $total_records);
             });
         });
 
-        // Optional: Auto-refresh data every 30 seconds
+        // Optional: Auto-refresh sales analytics data every 30 seconds
         setInterval(() => {
             const currentPeriod = periodSelector.value;
             updateStats(currentPeriod);
         }, 30000);
 
-        const profileButton = document.getElementById('profileTrigger');
-        const profileModal = document.getElementById('profileModal');
-        const profileModalClose = document.getElementById('profileModalClose');
 
-        // Close dropdown when clicking outside
-        document.addEventListener('click', function (event) {
-            const userMenu = document.querySelector('.user-menu');
-            const dropdown = document.getElementById('userDropdown');
 
-            if (userMenu && dropdown && !userMenu.contains(event.target)) {
-                dropdown.classList.remove('show');
-            }
-        });
-
-        profileButton?.addEventListener('click', function(event) {
-            event.preventDefault();
-            const dropdown = document.getElementById('userDropdown');
-            dropdown?.classList.remove('show');
-            openProfileModal();
-        });
-
-        profileModalClose?.addEventListener('click', function() {
-            closeProfileModal();
-        });
-
-        profileModal?.addEventListener('click', function(event) {
-            if (event.target === profileModal) {
-                closeProfileModal();
-            }
-        });
-
-        document.addEventListener('keydown', function(event) {
-            if (event.key === 'Escape' && profileModal?.classList.contains('show')) {
-                closeProfileModal();
-            }
-        });
-
-        // Close sidebar when clicking outside on mobile
-        document.addEventListener('click', function (event) {
-            const sidebar = document.getElementById('sidebar');
-            const toggle = document.querySelector('.mobile-toggle');
-
-            if (window.innerWidth <= 768 &&
-                !sidebar.contains(event.target) &&
-                !toggle.contains(event.target)) {
-                sidebar.classList.remove('mobile-open');
-            }
-        });
-
-        // Transaction Modal Functionality
-        const transactionModal = document.getElementById('transactionModal');
-        const closeBtn = document.querySelector('.modal .close');
-
-        // Close modal when clicking the close button
-        closeBtn.onclick = function() {
-            transactionModal.style.display = "none";
-        }
-
-        // Close modal when clicking outside
-        window.onclick = function(event) {
-            if (event.target == transactionModal) {
-                transactionModal.style.display = "none";
-            }
-        }
-
-        // Add click event to transaction rows
-        document.querySelectorAll('.transaction-row').forEach(row => {
-            row.addEventListener('click', async function() {
-                const orderId = this.getAttribute('data-order-id');
-                try {
-                    const response = await fetch(`get_transaction_details.php?order_id=${orderId}`);
-                    if (!response.ok) throw new Error('Failed to fetch transaction details');
-                    const data = await response.json();
-                    
-                    // Update modal content
-                    document.getElementById('modal-customer').textContent = data.order.customer_name;
-                    document.getElementById('modal-date').textContent = new Date(data.order.created_at).toLocaleString();
-                    document.getElementById('modal-status').textContent = data.order.status;
-                    document.getElementById('modal-payment').textContent = data.order.payment_method;
-                    document.getElementById('modal-invoice').textContent = data.order.invoice_number || 'N/A';
-                    document.getElementById('modal-email').textContent = data.order.email || '';
-                    document.getElementById('modal-phone').textContent = data.order.phone || '';
-
-                    const referenceWrapper = document.getElementById('modal-reference-wrapper');
-                    const referenceValue = document.getElementById('modal-reference');
-                    if ((data.order.payment_method || '').toLowerCase() === 'gcash' && data.order.reference_number) {
-                        referenceWrapper.style.display = 'block';
-                        referenceValue.textContent = data.order.reference_number;
-                    } else {
-                        referenceWrapper.style.display = 'none';
-                        referenceValue.textContent = '';
-                    }
-                    
-                    // Update items table
-                    const itemsBody = document.getElementById('modal-items');
-                    itemsBody.innerHTML = '';
-                    data.items.forEach(item => {
-                        const row = document.createElement('tr');
-                        row.innerHTML = `
-                            <td>${item.name}</td>
-                            <td>${item.qty}</td>
-                            <td>₱${parseFloat(item.price).toFixed(2)}</td>
-                            <td>₱${(item.qty * item.price).toFixed(2)}</td>
-                        `;
-                        itemsBody.appendChild(row);
-                    });
-                    
-                    document.getElementById('modal-total').textContent = `₱${parseFloat(data.order.total).toFixed(2)}`;
-                    
-                    // Show modal
-                    transactionModal.style.display = "block";
-                } catch (error) {
-                    console.error('Error fetching transaction details:', error);
-                    alert('Failed to load transaction details. Please try again.');
-                }
-            });
-        });
+        // Removed duplicate sales analytics chart block to fix 'ctx' redeclaration error and JS conflicts.
 
         // Ensure modal visibility
         const salesReportModal = document.getElementById('salesReportModal');
-        const openModalButton = document.getElementById('generateReportButton');
         const closeModalButton = document.getElementById('closeModal');
 
-        if (!salesReportModal || !openModalButton || !closeModalButton) {
+        if (!salesReportModal || !closeModalButton) {
             console.error('Modal or button elements not found');
             return;
         }
-
-        openModalButton.addEventListener('click', () => {
-            salesReportModal.style.display = 'block';
-        });
 
         closeModalButton.addEventListener('click', () => {
             salesReportModal.style.display = 'none';
@@ -991,8 +990,93 @@ $end_record = min($offset + $records_per_page, $total_records);
                 salesReportModal.style.display = 'none';
             }
         });
+
+        // Transaction details modal logic
+        const transactionModal = document.getElementById('transactionModal');
+        const modalCloseBtn = transactionModal.querySelector('.close');
+
+        // Event listener for transaction row clicks
+        document.querySelectorAll('.transaction-row').forEach(row => {
+            row.addEventListener('click', function() {
+                const orderId = this.getAttribute('data-order-id');
+                if (orderId) {
+                    loadTransactionDetails(orderId);
+                }
+            });
+        });
+
+        // Close modal when clicking the close button
+        modalCloseBtn.addEventListener('click', () => {
+            transactionModal.style.display = 'none';
+        });
+
+        // Close modal when clicking outside
+        window.addEventListener('click', (event) => {
+            if (event.target === transactionModal) {
+                transactionModal.style.display = 'none';
+            }
+        });
+
+        /**
+         * Load and display transaction details in the modal.
+         * @param {string} orderId - The order ID to fetch details for.
+         */
+        async function loadTransactionDetails(orderId) {
+            try {
+                const response = await fetch(`order_details.php?order_id=${orderId}`);
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                const data = await response.json();
+
+                // Populate order information
+                document.getElementById('modal-customer').textContent = data.order.customer_name;
+                document.getElementById('modal-invoice').textContent = data.order.invoice_number;
+                document.getElementById('modal-date').textContent = new Date(data.order.created_at).toLocaleString();
+                document.getElementById('modal-status').textContent = data.order.status;
+                document.getElementById('modal-payment').textContent = data.order.payment_method;
+                document.getElementById('modal-email').textContent = data.order.email;
+                document.getElementById('modal-phone').textContent = data.order.contact;
+
+                // Handle reference if available
+                const referenceWrapper = document.getElementById('modal-reference-wrapper');
+                const referenceSpan = document.getElementById('modal-reference');
+                if (data.order.reference) {
+                    referenceSpan.textContent = data.order.reference;
+                    referenceWrapper.style.display = 'block';
+                } else {
+                    referenceWrapper.style.display = 'none';
+                }
+
+                // Populate order items
+                const itemsTableBody = document.getElementById('modal-items');
+                itemsTableBody.innerHTML = '';
+                let total = 0;
+                data.items.forEach(item => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${item.product_name}</td>
+                        <td>${item.quantity}</td>
+                        <td>₱${parseFloat(item.price).toFixed(2)}</td>
+                        <td>₱${parseFloat(item.subtotal).toFixed(2)}</td>
+                    `;
+                    itemsTableBody.appendChild(row);
+                    total += parseFloat(item.subtotal);
+                });
+
+                // Set total
+                document.getElementById('modal-total').textContent = `₱${total.toFixed(2)}`;
+
+                // Show modal
+                transactionModal.style.display = 'block';
+
+            } catch (error) {
+                console.error('Error loading transaction details:', error);
+                alert('Failed to load transaction details. Please try again.');
+            }
     </script>
     <script src="../assets/js/notifications.js"></script>
+    <script src="../assets/js/transaction-details.js"></script>
 </body>
 
 </html>
