@@ -6,6 +6,71 @@ $pdo = db();
 $role = $_SESSION['role'] ?? '';
 enforceStaffAccess();
 
+/**
+ * Generate sales report for a given period.
+ * Supports 'daily', 'weekly', 'monthly', and 'annually' periods.
+ * Returns an associative array with total orders and total sales amount.
+ *
+ * @param PDO $pdo The PDO database connection object.
+ * @param string $period The period for the report: 'daily', 'weekly', 'monthly', or 'annually'.
+ * @return array Associative array with keys 'total_orders' and 'total_sales'.
+ */
+function generateSalesReport(PDO $pdo, string $period): array
+{
+    $sql = '';
+    switch ($period) {
+        case 'daily':
+            // Sales for today
+            $sql = "SELECT 
+                        COUNT(*) AS total_orders, 
+                        COALESCE(SUM(total), 0) AS total_sales 
+                    FROM orders 
+                    WHERE DATE(created_at) = CURDATE()
+                    AND status IN ('approved','completed')";
+            break;
+        case 'weekly':
+            // Sales for current week (Monday to Sunday)
+            $sql = "SELECT 
+                        COUNT(*) AS total_orders, 
+                        COALESCE(SUM(total), 0) AS total_sales 
+                    FROM orders 
+                    WHERE YEARWEEK(created_at, 1) = YEARWEEK(CURDATE(), 1)
+                    AND status IN ('approved','completed')";
+            break;
+        case 'monthly':
+            // Sales for current month
+            $sql = "SELECT 
+                        COUNT(*) AS total_orders, 
+                        COALESCE(SUM(total), 0) AS total_sales 
+                    FROM orders 
+                    WHERE YEAR(created_at) = YEAR(CURDATE()) 
+                    AND MONTH(created_at) = MONTH(CURDATE())
+                    AND status IN ('approved','completed')";
+            break;
+        case 'annually':
+            // Sales for current year
+            $sql = "SELECT 
+                        COUNT(*) AS total_orders, 
+                        COALESCE(SUM(total), 0) AS total_sales 
+                    FROM orders 
+                    WHERE YEAR(created_at) = YEAR(CURDATE())
+                    AND status IN ('approved','completed')";
+            break;
+        default:
+            // Invalid period, return zeros
+            return ['total_orders' => 0, 'total_sales' => 0.0];
+    }
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute();
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    return [
+        'total_orders' => (int)($result['total_orders'] ?? 0),
+        'total_sales' => (float)($result['total_sales'] ?? 0.0)
+    ];
+}
+
 // Handle CSV export FIRST - before any other queries
 if(isset($_GET['export']) && $_GET['export'] == 'csv') {
     // Get ALL orders for export
@@ -148,11 +213,28 @@ $end_record = min($offset + $records_per_page, $total_records);
             </div>
         </header>
 
-        <!-- Export Button -->
-        <div style="margin-bottom: 20px;">
-            <a href="?export=csv">
+        <!-- Export Button and PDF Report Generator -->
+        <div style="margin-bottom: 20px; display: flex; gap: 10px; align-items: center; justify-content: flex-end;">
+            <a href="?export=csv" style="padding: 8px 15px; background-color: #007bff; color: white; border-radius: 3px; text-decoration: none;">
                 Export to CSV
             </a>
+
+            <form action="sales_report_pdf.php" method="get" target="_blank" style="display: flex; gap: 10px; align-items: center;">
+                <select name="period" style="padding: 5px; border: 1px solid #ccc; border-radius: 3px;">
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="annually">Annually</option>
+                </select>
+                <select name="customer_type" style="padding: 5px; border: 1px solid #ccc; border-radius: 3px;">
+                    <option value="all">All Customers</option>
+                    <option value="walkin">Walk-in Customers</option>
+                    <option value="online">Online Customers</option>
+                </select>
+                <button type="submit" style="padding: 8px 15px; background-color: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer;">
+                    Generate PDF Report
+                </button>
+            </form>
         </div>
 
 
