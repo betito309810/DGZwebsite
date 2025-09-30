@@ -1004,6 +1004,56 @@ body {
     box-shadow: 0 8px 32px rgba(0,0,0,0.18);
 }
 
+/* Added styles for product modal large modal */
+#productModal {
+    display: none;
+    position: fixed;
+    top: 0; left: 260px;
+    width: calc(100vw - 260px); height: 100vh;
+    background: rgba(0,0,0,0.3);
+    z-index: 9999;
+    display: flex; /* added for centering */
+    align-items: center; /* vertical center */
+    justify-content: center; /* horizontal center */
+}
+
+#productModal .modal-content.large-modal {
+    width: 1200px !important;
+    height: 700px !important;
+    max-width: none !important;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Adjust select filters width and spacing */
+#categoryFilter, #brandFilter {
+    max-width: 300px;
+    width: 100%;
+    margin-right: 10px;
+    box-sizing: border-box;
+}
+
+/* Fix table column widths and alignment */
+#productSearchTable th:nth-child(2),
+#productSearchTable td:nth-child(2) {
+    width: 120px;
+    text-align: right;
+}
+
+#productSearchTable th:nth-child(3),
+#productSearchTable td:nth-child(3) {
+    width: 80px;
+    text-align: center;
+}
+
+#productSearchTable th:nth-child(4),
+#productSearchTable td:nth-child(4) {
+    width: 80px;
+    text-align: center;
+}
+
 #closeProductModal {
     position: absolute;
     top: 10px;

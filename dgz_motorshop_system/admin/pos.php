@@ -1290,8 +1290,8 @@ if ($receiptDataJson === false) {
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="modal-table-wrapper">
-                <table id="productSearchTable">
+            <div class="modal-table-wrapper" style="flex: 1 1 auto; overflow-y: auto; max-height: 450px;">
+                <table id="productSearchTable" style="width: 100%;">
                     <thead>
                         <tr>
                             <th>Product</th>
