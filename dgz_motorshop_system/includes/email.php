@@ -1,12 +1,19 @@
 <?php
 
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\Exception;
-use PHPMailer\PHPMailer\SMTP;
-
 require_once __DIR__ . '/../config/mailer.php';
 
-function sendEmail(string $to, string $subject, string $body): bool
+/**
+ * Send an email with optional PDF attachment
+ * 
+ * @param string $to Recipient email address
+ * @param string $subject Email subject
+ * @param string $body Email body content (HTML)
+ * @param string|null $pdfContent Optional PDF content to attach
+ * @param string $pdfFilename Optional filename for the PDF attachment (default: 'document.pdf')
+ * @return bool True if email was sent successfully, false otherwise
+ */
+if (!function_exists('sendEmail')) {
+function sendEmail(string $to, string $subject, string $body, ?string $pdfContent = null, string $pdfFilename = 'document.pdf'): bool
 {
     error_log("Attempting to send email to: $to with subject: $subject");
     
@@ -23,6 +30,11 @@ function sendEmail(string $to, string $subject, string $body): bool
         
         // Add plain text version for better deliverability
         $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $body));
+
+        // Attach PDF if content is provided
+        if ($pdfContent !== null) {
+            $mail->addStringAttachment($pdfContent, $pdfFilename, 'base64', 'application/pdf');
+        }
         
         // Additional headers for better deliverability
         $mail->addCustomHeader('X-Mailer', 'DGZ Motorshop System');
@@ -47,4 +59,5 @@ function sendEmail(string $to, string $subject, string $body): bool
         error_log("Exception: " . $e->getMessage());
         return false;
     }
+}
 }
