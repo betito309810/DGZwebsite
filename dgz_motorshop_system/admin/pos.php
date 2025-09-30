@@ -1,6 +1,87 @@
 <?php
 require __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../includes/email.php';
+require_once __DIR__ . '/../vendor/autoload.php';
+
+use Dompdf\Dompdf;
+use Dompdf\Options;
+
+/**
+ * Generate a PDF receipt from the order data
+ */
+function generateReceiptPDF(array $data): ?string {
+    try {
+        require_once __DIR__ . '/../vendor/autoload.php';
+
+        // Configure Dompdf exactly like the test file
+        $options = new Options();
+        $options->set('defaultFont', 'Arial');
+        $dompdf = new Dompdf($options);
+    
+    // Create the HTML content
+    $html = '<html><body style="font-family: Arial, sans-serif;">';
+    
+    // Header with logo
+    $html .= '<div style="text-align: center; margin-bottom: 20px;">';
+    $html .= '<h1 style="color: #333;">DGZ Motorshop</h1>';
+    $html .= '<p style="font-size: 18px; font-weight: bold;">Official Receipt</p>';
+    $html .= '</div>';
+    
+    // Order Info
+    $html .= '<div style="margin-bottom: 20px;">';
+    $html .= '<p>Order #: ' . htmlspecialchars($data['order_id']) . '</p>';
+    if (!empty($data['invoice_number'])) {
+        $html .= '<p>Invoice #: ' . htmlspecialchars($data['invoice_number']) . '</p>';
+    }
+    $html .= '<p>Date: ' . htmlspecialchars($data['created_at']) . '</p>';
+    $html .= '<p>Cashier: ' . htmlspecialchars($data['cashier']) . '</p>';
+    $html .= '</div>';
+    
+    // Items
+    $html .= '<table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">';
+    $html .= '<tr style="background-color: #f0f0f0;">';
+    $html .= '<th style="border: 1px solid #ddd; padding: 8px;">Item</th>';
+    $html .= '<th style="border: 1px solid #ddd; padding: 8px;">Qty</th>';
+    $html .= '<th style="border: 1px solid #ddd; padding: 8px;">Price</th>';
+    $html .= '<th style="border: 1px solid #ddd; padding: 8px;">Total</th>';
+    $html .= '</tr>';
+    
+    foreach ($data['items'] as $item) {
+        $html .= '<tr>';
+        $html .= '<td style="border: 1px solid #ddd; padding: 8px;">' . htmlspecialchars($item['name']) . '</td>';
+        $html .= '<td style="border: 1px solid #ddd; padding: 8px; text-align: center;">' . htmlspecialchars($item['quantity']) . '</td>';
+        $html .= '<td style="border: 1px solid #ddd; padding: 8px; text-align: right;">₱' . number_format($item['price'], 2) . '</td>';
+        $html .= '<td style="border: 1px solid #ddd; padding: 8px; text-align: right;">₱' . number_format($item['total'], 2) . '</td>';
+        $html .= '</tr>';
+    }
+    
+    $html .= '</table>';
+    
+    // Totals
+    $html .= '<div style="width: 300px; margin-left: auto;">';
+    $html .= '<p style="display: flex; justify-content: space-between;"><span>Vatable:</span> <span>₱' . number_format($data['vatable'], 2) . '</span></p>';
+    $html .= '<p style="display: flex; justify-content: space-between;"><span>VAT:</span> <span>₱' . number_format($data['vat'], 2) . '</span></p>';
+    $html .= '<p style="display: flex; justify-content: space-between; font-weight: bold;"><span>Total:</span> <span>₱' . number_format($data['sales_total'], 2) . '</span></p>';
+    $html .= '<p style="display: flex; justify-content: space-between;"><span>Amount Paid:</span> <span>₱' . number_format($data['amount_paid'], 2) . '</span></p>';
+    $html .= '<p style="display: flex; justify-content: space-between;"><span>Change:</span> <span>₱' . number_format($data['change'], 2) . '</span></p>';
+    $html .= '</div>';
+    
+    $html .= '</body></html>';
+    
+    // Generate PDF
+    $dompdf->loadHtml($html);
+    $dompdf->setPaper('A4', 'portrait');
+    $dompdf->render();
+    
+    // Return the PDF content as a string
+    $pdfContent = $dompdf->output();
+    error_log('PDF Generated. Size: ' . strlen($pdfContent) . ' bytes');
+    return $pdfContent;
+    } catch (Exception $e) {
+        error_log('Failed to generate PDF: ' . $e->getMessage());
+        return '';
+    }
+}
 
 if (empty($_SESSION['user_id'])) {
     header('Location: login.php');
@@ -442,6 +523,110 @@ $orderStmt->execute($orderValues);
         }
 
         $pdo->commit();
+
+        error_log("Starting PDF generation for order: " . $orderId);
+
+        // Generate receipt data for PDF
+        $receiptData = [
+            'order_id' => $orderId,
+            'invoice_number' => $invoiceNumber,
+            'customer_name' => 'Walk-in',
+            'created_at' => date('Y-m-d H:i:s'),
+            'sales_total' => $salesTotal,
+            'vatable' => $vatable,
+            'vat' => $vat,
+            'amount_paid' => $amountPaid,
+            'change' => $change,
+            'cashier' => $_SESSION['username'] ?? 'Admin',
+            'items' => []
+        ];
+
+        // Add items with proper error handling
+        foreach ($cartItems as $item) {
+            try {
+                $stmt = $pdo->prepare('SELECT name FROM products WHERE id = ?');
+                $stmt->execute([$item['id']]);
+                $product = $stmt->fetch();
+                $receiptData['items'][] = [
+                    'name' => $product['name'] ?? 'Unknown Product',
+                    'quantity' => $item['qty'],
+                    'price' => $item['price'],
+                    'total' => $item['price'] * $item['qty']
+                ];
+            } catch (Exception $e) {
+                error_log("Error fetching product details: " . $e->getMessage());
+            }
+        }
+
+        try {
+            // First generate the PDF
+            $options = new Options();
+            $options->set('defaultFont', 'Arial');
+            $dompdf = new Dompdf($options);
+
+            // Create HTML for receipt
+            $html = '<h1>DGZ Motorshop Receipt</h1>';
+            $html .= '<p>Order #: ' . $orderId . '</p>';
+            $html .= '<p>Invoice #: ' . $invoiceNumber . '</p>';
+            $html .= '<p>Date: ' . date('Y-m-d H:i:s') . '</p>';
+            $html .= '<h2>Items</h2>';
+            $html .= '<table border="1" cellpadding="5">';
+            $html .= '<tr><th>Item</th><th>Quantity</th><th>Price</th><th>Total</th></tr>';
+            
+            foreach ($cartItems as $item) {
+                $stmt = $pdo->prepare('SELECT name FROM products WHERE id = ?');
+                $stmt->execute([$item['id']]);
+                $product = $stmt->fetch();
+                $total = $item['price'] * $item['qty'];
+                
+                $html .= '<tr>';
+                $html .= '<td>' . htmlspecialchars($product['name']) . '</td>';
+                $html .= '<td>' . $item['qty'] . '</td>';
+                $html .= '<td>₱' . number_format($item['price'], 2) . '</td>';
+                $html .= '<td>₱' . number_format($total, 2) . '</td>';
+                $html .= '</tr>';
+            }
+            
+            $html .= '</table>';
+            $html .= '<p><strong>Total Amount:</strong> ₱' . number_format($salesTotal, 2) . '</p>';
+            $html .= '<p><strong>Amount Paid:</strong> ₱' . number_format($amountPaid, 2) . '</p>';
+            $html .= '<p><strong>Change:</strong> ₱' . number_format($change, 2) . '</p>';
+
+            // Generate PDF
+            $dompdf->loadHtml($html);
+            $dompdf->setPaper('A4', 'portrait');
+            $dompdf->render();
+            $pdfContent = $dompdf->output();
+            
+            error_log("PDF Generated. Size: " . strlen($pdfContent) . " bytes");
+            
+            $emailSubject = "Receipt for Order #{$orderId}";
+            $emailBody = "
+                <h2>Thank you for your purchase!</h2>
+                <p>Your order details are attached to this email.</p>
+                <br>
+                <p><strong>Order Number:</strong> {$orderId}</p>
+                <p><strong>Invoice Number:</strong> {$invoiceNumber}</p>
+                <p><strong>Total Amount:</strong> ₱" . number_format($salesTotal, 2) . "</p>
+                <br>
+                <p>If you have any questions, please don't hesitate to contact us.</p>
+                <br>
+                <p>Best regards,<br>DGZ Motorshop</p>
+            ";
+            
+            // Send email with PDF attachment - using same method as test file
+            $recipientEmail = 'christopher4betito@gmail.com';
+            $result = sendEmail($recipientEmail, $emailSubject, $emailBody, $pdfContent, "receipt_{$orderId}.pdf");
+            
+            if (!$result) {
+                throw new Exception("Failed to send email with PDF");
+            }
+            
+            error_log("Email sent successfully with PDF attachment for order: " . $orderId);
+        } catch (Exception $e) {
+            error_log("Error in PDF/email process for order {$orderId}: " . $e->getMessage());
+            // Continue with the order process even if PDF/email fails
+        }
 
         $params = [
             'ok' => 1,

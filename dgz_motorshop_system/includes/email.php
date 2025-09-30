@@ -33,7 +33,14 @@ function sendEmail(string $to, string $subject, string $body, ?string $pdfConten
 
         // Attach PDF if content is provided
         if ($pdfContent !== null) {
-            $mail->addStringAttachment($pdfContent, $pdfFilename, 'base64', 'application/pdf');
+            error_log("Attaching PDF: " . $pdfFilename . ", Size: " . strlen($pdfContent) . " bytes");
+            try {
+                $mail->addStringAttachment($pdfContent, $pdfFilename, 'base64', 'application/pdf');
+                error_log("PDF attachment added successfully");
+            } catch (Exception $e) {
+                error_log("Failed to attach PDF: " . $e->getMessage());
+                throw $e; // Re-throw to be caught by outer try-catch
+            }
         }
         
         // Additional headers for better deliverability
