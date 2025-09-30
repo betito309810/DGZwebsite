@@ -181,7 +181,16 @@ foreach($products as $product) {
 
                         <!-- Add to Cart Button -->
                         <button class="add-cart-btn"
-                            onclick="addToCart(<?= $p['id'] ?>, '<?= htmlspecialchars(addslashes($p['name'])) ?>', <?= $p['price'] ?>, 1)"
+                            onclick="(function(button) {
+                                const qtyInput = button.parentElement.querySelector('.qty-input');
+                                const qty = qtyInput ? parseInt(qtyInput.value) || 1 : 1;
+                                const stock = <?= $p['quantity'] ?>;
+                                if (qtyInput && !qtyInput.checkValidity()) {
+                                    qtyInput.reportValidity();
+                                    return false;
+                                }
+                                addToCart(<?= $p['id'] ?>, '<?= htmlspecialchars(addslashes($p['name'])) ?>', <?= $p['price'] ?>, qty);
+                            })(this)"
                             <?= $p['quantity'] == 0 ? 'disabled' : '' ?>>
                             <i class="fas fa-cart-plus"></i> Add to Cart
                         </button>

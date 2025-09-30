@@ -106,7 +106,8 @@ if ($product_id > 0 && empty($cartItems)) {
             'id' => $p['id'],
             'name' => $p['name'],
             'price' => $p['price'],
-            'quantity' => $qty
+            'quantity' => $qty,
+            'stock' => $p['quantity'] ?? null,
         ]];
     }
 }
@@ -118,6 +119,15 @@ if (isset($_POST['cart'])) {
     if (json_last_error() !== JSON_ERROR_NONE) {
         $cartItems = [];
     }
+
+    // Fetch stock quantity for each cart item from database and add to cartItems
+    foreach ($cartItems as &$item) {
+        $stmt = $pdo->prepare('SELECT quantity FROM products WHERE id = ?');
+        $stmt->execute([$item['id']]);
+        $product = $stmt->fetch();
+        $item['stock'] = $product ? (int)$product['quantity'] : null;
+    }
+    unset($item);
 
     $cartItems = normaliseCartItems($cartItems);
 }
@@ -135,7 +145,6 @@ if (empty($cartItems) && !(isset($_GET['success']) && $_GET['success'] === '1'))
     exit;
 }
 
-// Process the order when form is submitted
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
     $customer_name = trim($_POST['customer_name']);
     $email = trim($_POST['email'] ?? '');
@@ -230,6 +239,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
     $total = 0;
     foreach ($cartItems as $item) {
         $total += $item['price'] * $item['quantity'];
+    }
+
+    // Validate stock quantity for each cart item
+    foreach ($cartItems as $item) {
+        $stmt = $pdo->prepare('SELECT quantity FROM products WHERE id = ?');
+        $stmt->execute([$item['id']]);
+        $product = $stmt->fetch();
+
+        if (!$product || $item['quantity'] > $product['quantity']) {
+            $available = $product ? (int)$product['quantity'] : 0;
+            $errors[] = "The quantity for product '{$item['name']}' exceeds available stock. Stock: {$available} left.";
+            $errors[] = "Stock: {$available} left.";
+        }
     }
 
     if (empty($errors)) {
@@ -400,9 +422,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                     </div>
                     
                     <div class="qr-code">
-                        <div style="width: 150px; height: 150px; background: #f0f0f0; border-radius: 12px; margin: 0 auto; display: flex; align-items: center; justify-content: center; border: 2px solid #e9ecef;">
-                            <i class="fas fa-qrcode" style="font-size: 48px; color: #636e72;"></i>
-                        </div>
+                        <img src="assets/QR.png" alt="qrcode">
                     </div>
 
                     <div class="form-group">
@@ -438,8 +458,9 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                         <div class="item-category">Product</div>
                     </div>
                     <div class="item-meta">
-                        <span class="quantity-badge">×<?= $item['quantity'] ?></span>
+                        <!-- Changed quantity badge to input field for quantity update -->
                         <div class="item-price">₱ <?= number_format($item['price'], 2) ?></div>
+                        <input type="number" class="quantity-input" min="1" value="<?= $item['quantity'] ?>" data-index="<?= $index ?>" style="width: 50px; margin-right: 10px;">
                         <button type="button" class="item-remove" data-index="<?= $index ?>">Remove</button>
                     </div>
                 </div>
@@ -602,9 +623,15 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             const meta = document.createElement('div');
             meta.className = 'item-meta';
 
-            const qty = document.createElement('span');
-            qty.className = 'quantity-badge';
-            qty.textContent = `×${item.quantity}`;
+            // Replace quantity badge with input field for quantity update
+            const qty = document.createElement('input');
+            qty.type = 'number';
+            qty.className = 'quantity-input';
+            qty.min = 1;
+            qty.value = item.quantity;
+            qty.dataset.index = String(index);
+            qty.style.width = '65px';
+            qty.style.marginBottom = '4px';
             meta.appendChild(qty);
 
             const price = document.createElement('div');
@@ -660,6 +687,41 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                 }, 150);
             }
+        });
+
+        // Add event listener for quantity input changes
+        orderItemsContainer?.addEventListener('input', (event) => {
+            const target = event.target;
+            if (!target.classList.contains('quantity-input')) {
+                return;
+            }
+
+            const index = Number(target.dataset.index);
+            if (!Number.isInteger(index) || index < 0 || index >= cartState.length) {
+                return;
+            }
+
+            let newQuantity = parseInt(target.value);
+            if (isNaN(newQuantity) || newQuantity < 1) {
+                newQuantity = 1;
+                target.value = newQuantity;
+            }
+
+            // Get the product stock quantity from cartState or fetch from server if needed
+            const productId = cartState[index].id;
+            // For simplicity, assume stock quantity is available in cartState as stock
+            const stockQuantity = cartState[index].stock ?? null;
+
+            if (stockQuantity !== null && newQuantity > stockQuantity) {
+                alert(`Only ${stockQuantity} pcs available.`);
+                newQuantity = stockQuantity;
+                target.value = newQuantity;
+            }
+
+            cartState[index].quantity = newQuantity;
+            updateSummary();
+            syncCartInput();
+            syncBrowserStorage();
         });
 
         renderOrderItems();
