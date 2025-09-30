@@ -109,6 +109,7 @@ if (!function_exists('staffAllowedAdminPages')) {
             'sales.php',
             'pos.php',
             'inventory.php',
+            'sales_report_pdf.php',
         ];
     }
 }

@@ -1,4 +1,5 @@
 <?php
+header('Content-Type: text/html; charset=utf-8');
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
@@ -123,7 +124,7 @@ $html = '
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="utf-8">
+    <meta charset="UTF-8">
     <title>' . htmlspecialchars($period_title) . '</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; }
@@ -166,7 +167,7 @@ $html = '
             </tr>
             <tr>
                 <th>Total Sales Amount</th>
-                <td>₱' . number_format($total_sales, 2) . '</td>
+<td>&#8369;' . number_format($total_sales, 2) . '</td>
             </tr>
         </table>
     </div>
@@ -217,10 +218,11 @@ foreach ($orders as $order) {
                     <td>' . htmlspecialchars($order['customer_name']) . '</td>
                     <td>' . htmlspecialchars($order['contact'] ?? 'N/A') . '</td>
                     <td>' . htmlspecialchars($order['payment_method']) . '</td>
-                    <td>₱' . number_format($order['total'], 2) . '</td>
+<td>' . number_format($order['total'], 2) . '</td>
                     <td>' . date('M d, Y g:i A', strtotime($order['created_at'])) . '</td>
                 </tr>';
 }
+
 
     $html .= '
                 </tbody>
@@ -237,7 +239,12 @@ foreach ($orders as $order) {
     $options = new Options();
     $options->set('isHtml5ParserEnabled', true);
     $options->set('isRemoteEnabled', false);
-    $options->set('defaultFont', 'Arial');
+    $options->set('defaultFont', 'DejaVu Sans'); // Changed to DejaVu Sans for better Unicode support including peso sign
+    $options->set('isFontSubsettingEnabled', true);
+    $options->set('isUnicodeEnabled', true); // Ensure Unicode support
+
+    // Replace peso sign encoding with actual character
+    $html = str_replace('&#8369;', '₱', $html);
 
     $dompdf = new Dompdf($options);
     $dompdf->loadHtml($html);

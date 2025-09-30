@@ -219,23 +219,57 @@ $end_record = min($offset + $records_per_page, $total_records);
                 Export to CSV
             </a>
 
-            <form action="sales_report_pdf.php" method="get" target="_blank" style="display: flex; gap: 10px; align-items: center;">
-                <select name="period" style="padding: 5px; border: 1px solid #ccc; border-radius: 3px;">
-                    <option value="daily">Daily</option>
-                    <option value="weekly">Weekly</option>
-                    <option value="monthly">Monthly</option>
-                    <option value="annually">Annually</option>
-                </select>
-                <select name="customer_type" style="padding: 5px; border: 1px solid #ccc; border-radius: 3px;">
-                    <option value="all">All Customers</option>
-                    <option value="walkin">Walk-in Customers</option>
-                    <option value="online">Online Customers</option>
-                </select>
-                <button type="submit" style="padding: 8px 15px; background-color: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer;">
-                    Generate PDF Report
-                </button>
-            </form>
+            <button onclick="openSalesReportModal()" class="btn btn-success">
+                Generate Sales Report
+            </button>
         </div>
+
+        <!-- Sales Report Modal -->
+        <div id="salesReportModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
+            <div class="modal-content" style="background: white; padding: 20px; border-radius: 8px; width: 90%; max-width: 500px; position: relative;">
+                <span class="close" onclick="closeSalesReportModal()" style="position: absolute; right: 20px; top: 10px; font-size: 24px; cursor: pointer;">&times;</span>
+                <h2 style="margin-bottom: 20px;">Generate Sales Report</h2>
+                <form id="salesReportForm" method="GET" action="sales_report_pdf.php" style="display: flex; flex-direction: column; gap: 15px;">
+                    <div>
+                        <label for="reportPeriod" style="display: block; margin-bottom: 5px; font-weight: 500;">Select Period:</label>
+                        <select id="reportPeriod" name="period" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                            <option value="daily">Daily</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="monthly">Monthly</option>
+                            <option value="annually">Annually</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="customerType" style="display: block; margin-bottom: 5px; font-weight: 500;">Select Customer Type:</label>
+                        <select id="customerType" name="customer_type" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                            <option value="all">All Customers</option>
+                            <option value="walkin">Walk-in Customers</option>
+                            <option value="online">Online Customers</option>
+                        </select>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" style="margin-top: 10px;">Generate Report</button>
+                </form>
+            </div>
+        </div>
+
+        <script>
+            function openSalesReportModal() {
+                document.getElementById('salesReportModal').style.display = 'flex';
+            }
+
+            function closeSalesReportModal() {
+                document.getElementById('salesReportModal').style.display = 'none';
+            }
+
+            // Close modal when clicking outside
+            document.getElementById('salesReportModal').addEventListener('click', function(event) {
+                if (event.target === this) {
+                    closeSalesReportModal();
+                }
+            });
+        </script>
 
 
         <!-- Table Container -->
@@ -525,6 +559,32 @@ $end_record = min($offset + $records_per_page, $total_records);
         </div>
     </div>
 
+    <!-- New Modal for Sales Report Options -->
+    <div id="salesReportModal" class="modal">
+        <div class="modal-content">
+            <span class="close" id="closeModal">&times;</span>
+            <h2>Generate Sales Report</h2>
+            <form id="salesReportForm" method="GET" action="sales_report_pdf.php">
+                <label for="reportPeriod">Select Period:</label>
+                <select id="reportPeriod" name="period">
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="annually">Annually</option>
+                </select>
+
+                <label for="customerType">Select Customer Type:</label>
+                <select id="customerType" name="customer_type">
+                    <option value="all">All Customers</option>
+                    <option value="walkin">Walk-in Customers</option>
+                    <option value="online">Online Customers</option>
+                </select>
+
+                <button type="submit" class="btn btn-primary">Generate Report</button>
+            </form>
+        </div>
+    </div>
+
     <script>
         function toggleDropdown() {
             const dropdown = document.getElementById('userDropdown');
@@ -606,8 +666,7 @@ $end_record = min($offset + $records_per_page, $total_records);
                         }
                     }
                 }
-            }
-        });
+            });
 
         // Render custom legend below the chart
         const legend = document.getElementById('chartLegend');
@@ -841,18 +900,18 @@ $end_record = min($offset + $records_per_page, $total_records);
         });
 
         // Transaction Modal Functionality
-        const modal = document.getElementById('transactionModal');
+        const transactionModal = document.getElementById('transactionModal');
         const closeBtn = document.querySelector('.modal .close');
 
         // Close modal when clicking the close button
         closeBtn.onclick = function() {
-            modal.style.display = "none";
+            transactionModal.style.display = "none";
         }
 
         // Close modal when clicking outside
         window.onclick = function(event) {
-            if (event.target == modal) {
-                modal.style.display = "none";
+            if (event.target == transactionModal) {
+                transactionModal.style.display = "none";
             }
         }
 
@@ -901,7 +960,7 @@ $end_record = min($offset + $records_per_page, $total_records);
                     document.getElementById('modal-total').textContent = `₱${parseFloat(data.order.total).toFixed(2)}`;
                     
                     // Show modal
-                    modal.style.display = "block";
+                    transactionModal.style.display = "block";
                 } catch (error) {
                     console.error('Error fetching transaction details:', error);
                     alert('Failed to load transaction details. Please try again.');
@@ -909,6 +968,28 @@ $end_record = min($offset + $records_per_page, $total_records);
             });
         });
 
+        // Ensure modal visibility
+        const salesReportModal = document.getElementById('salesReportModal');
+        const openModalButton = document.getElementById('generateReportButton');
+        const closeModalButton = document.getElementById('closeModal');
+
+        if (!salesReportModal || !openModalButton || !closeModalButton) {
+            console.error('Modal or button elements not found');
+            return;
+        }
+
+        openModalButton.addEventListener('click', () => {
+            salesReportModal.style.display = 'block';
+        });
+
+        closeModalButton.addEventListener('click', () => {
+            salesReportModal.style.display = 'none';
+        });
+
+        window.addEventListener('click', (event) => {
+            if (event.target === salesReportModal) {
+                salesReportModal.style.display = 'none';
+            }
         });
     </script>
     <script src="../assets/js/notifications.js"></script>
