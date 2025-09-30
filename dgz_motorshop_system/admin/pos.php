@@ -381,8 +381,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                                 . '<p style="margin:16px 0 0;">Thank you for shopping with <strong>DGZ Motorshop</strong>!</p>'
                                 . '</div>';
 
-                            // Fire and forget email
-                            try { sendEmail($customerEmail, $subject, $body); } catch (Throwable $e) { /* already logged in helper */ }
+                            // Generate PDF receipt for attachment
+                            $receiptData = [
+                                'order_id' => $orderId,
+                                'invoice_number' => $invoiceNumber,
+                                'customer_name' => $customerName,
+                                'created_at' => $createdAt,
+                                'sales_total' => $orderTotal,
+                                'vatable' => $orderTotal / 1.12,
+                                'vat' => $orderTotal - ($orderTotal / 1.12),
+                                'amount_paid' => $orderTotal, // For approved orders, assume full payment
+                                'change' => 0.0,
+                                'cashier' => $_SESSION['username'] ?? 'Admin',
+                                'items' => array_map(function($item) {
+                                    return [
+                                        'name' => $item['product_name'] ?? 'Item',
+                                        'quantity' => (int) ($item['qty'] ?? 0),
+                                        'price' => (float) ($item['price'] ?? 0),
+                                        'total' => ((int) ($item['qty'] ?? 0)) * ((float) ($item['price'] ?? 0))
+                                    ];
+                                }, $items)
+                            ];
+
+                            $pdfContent = generateReceiptPDF($receiptData);
+                            $pdfFilename = 'receipt_' . $orderId . '.pdf';
+
+                            // Fire and forget email with PDF attachment
+                            try { sendEmail($customerEmail, $subject, $body, $pdfContent, $pdfFilename); } catch (Throwable $e) { /* already logged in helper */ }
                         }
                     }
                 }
