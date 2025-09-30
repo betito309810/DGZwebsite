@@ -424,11 +424,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pos_checkout'])) {
             $orderValues[] = $invoiceNumber;
         }
 
-        $placeholders = implode(', ', array_fill(0, count($orderColumns), '?'));
-        $orderStmt = $pdo->prepare(
-            'INSERT INTO orders (' . implode(', ', $orderColumns) . ') VALUES (' . $placeholders . ')'
-        );
-        $orderStmt->execute($orderValues);
+       $placeholders = str_repeat('?, ', count($orderColumns) - 1) . '?';
+$orderStmt = $pdo->prepare(
+    'INSERT INTO orders (' . implode(', ', $orderColumns) . ') VALUES (' . $placeholders . ')'
+);
+$orderStmt->execute($orderValues);
+
 
         $orderId = (int) $pdo->lastInsertId();
 
