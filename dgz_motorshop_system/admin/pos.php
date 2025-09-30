@@ -17,66 +17,84 @@ function generateReceiptPDF(array $data): ?string {
         $options = new Options();
         $options->set('defaultFont', 'Arial');
         $dompdf = new Dompdf($options);
-    
-    // Create the HTML content
-    $html = '<html><body style="font-family: Arial, sans-serif;">';
-    
-    // Header with logo
-    $html .= '<div style="text-align: center; margin-bottom: 20px;">';
-    $html .= '<h1 style="color: #333;">DGZ Motorshop</h1>';
-    $html .= '<p style="font-size: 18px; font-weight: bold;">Official Receipt</p>';
-    $html .= '</div>';
-    
-    // Order Info
-    $html .= '<div style="margin-bottom: 20px;">';
-    $html .= '<p>Order #: ' . htmlspecialchars($data['order_id']) . '</p>';
-    if (!empty($data['invoice_number'])) {
-        $html .= '<p>Invoice #: ' . htmlspecialchars($data['invoice_number']) . '</p>';
-    }
-    $html .= '<p>Date: ' . htmlspecialchars($data['created_at']) . '</p>';
-    $html .= '<p>Cashier: ' . htmlspecialchars($data['cashier']) . '</p>';
-    $html .= '</div>';
-    
-    // Items
-    $html .= '<table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">';
-    $html .= '<tr style="background-color: #f0f0f0;">';
-    $html .= '<th style="border: 1px solid #ddd; padding: 8px;">Item</th>';
-    $html .= '<th style="border: 1px solid #ddd; padding: 8px;">Qty</th>';
-    $html .= '<th style="border: 1px solid #ddd; padding: 8px;">Price</th>';
-    $html .= '<th style="border: 1px solid #ddd; padding: 8px;">Total</th>';
-    $html .= '</tr>';
-    
-    foreach ($data['items'] as $item) {
-        $html .= '<tr>';
-        $html .= '<td style="border: 1px solid #ddd; padding: 8px;">' . htmlspecialchars($item['name']) . '</td>';
-        $html .= '<td style="border: 1px solid #ddd; padding: 8px; text-align: center;">' . htmlspecialchars($item['quantity']) . '</td>';
-        $html .= '<td style="border: 1px solid #ddd; padding: 8px; text-align: right;">₱' . number_format($item['price'], 2) . '</td>';
-        $html .= '<td style="border: 1px solid #ddd; padding: 8px; text-align: right;">₱' . number_format($item['total'], 2) . '</td>';
+
+        // Prepare logo image as base64 to embed in PDF
+        $logoPath = __DIR__ . '/../assets/logo.png';    
+        $logoBase64 = '';
+        if (file_exists($logoPath)) {
+            $logoData = file_get_contents($logoPath);
+            $logoBase64 = 'data:image/png;base64,' . base64_encode($logoData);
+        }
+
+        // Create the HTML content with logo and updated layout
+        $html = '<html><body style="font-family: Arial, sans-serif;">';
+
+        // Header with logo and title
+        $html .= '<div style="text-align: center; margin-bottom: 20px;">';
+        if ($logoBase64 !== '') {
+            $html .= '<img src="' . $logoBase64 . '" alt="DGZ Motorshop Logo" style="max-height: 80px; margin-bottom: 10px;">';
+        }
+        $html .= '<h1 style="color: #333; margin: 0;">DGZ Motorshop</h1>';
+        $html .= '<p style="font-size: 18px; font-weight: bold; margin: 0;">Official Receipt</p>';
+        $html .= '</div>';
+
+        // Order Info
+        $html .= '<div style="margin-bottom: 20px;">';
+        $html .= '<p>Order #: ' . htmlspecialchars($data['order_id']) . '</p>';
+        if (!empty($data['invoice_number'])) {
+            $html .= '<p>Invoice #: ' . htmlspecialchars($data['invoice_number']) . '</p>';
+        }
+        $html .= '<p>Date: ' . htmlspecialchars($data['created_at']) . '</p>';
+        $html .= '<p>Cashier: ' . htmlspecialchars($data['cashier']) . '</p>';
+        $html .= '</div>';
+
+        // Items
+        $html .= '<table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">';
+        $html .= '<tr style="background-color: #f0f0f0;">';
+        $html .= '<th style="border: 1px solid #ddd; padding: 8px;">Item</th>';
+        $html .= '<th style="border: 1px solid #ddd; padding: 8px;">Qty</th>';
+        $html .= '<th style="border: 1px solid #ddd; padding: 8px;">Price</th>';
+        $html .= '<th style="border: 1px solid #ddd; padding: 8px;">Total</th>';
         $html .= '</tr>';
-    }
-    
-    $html .= '</table>';
-    
-    // Totals
-    $html .= '<div style="width: 300px; margin-left: auto;">';
-    $html .= '<p style="display: flex; justify-content: space-between;"><span>Vatable:</span> <span>₱' . number_format($data['vatable'], 2) . '</span></p>';
-    $html .= '<p style="display: flex; justify-content: space-between;"><span>VAT:</span> <span>₱' . number_format($data['vat'], 2) . '</span></p>';
-    $html .= '<p style="display: flex; justify-content: space-between; font-weight: bold;"><span>Total:</span> <span>₱' . number_format($data['sales_total'], 2) . '</span></p>';
-    $html .= '<p style="display: flex; justify-content: space-between;"><span>Amount Paid:</span> <span>₱' . number_format($data['amount_paid'], 2) . '</span></p>';
-    $html .= '<p style="display: flex; justify-content: space-between;"><span>Change:</span> <span>₱' . number_format($data['change'], 2) . '</span></p>';
-    $html .= '</div>';
-    
-    $html .= '</body></html>';
-    
-    // Generate PDF
-    $dompdf->loadHtml($html);
-    $dompdf->setPaper('A4', 'portrait');
-    $dompdf->render();
-    
-    // Return the PDF content as a string
-    $pdfContent = $dompdf->output();
-    error_log('PDF Generated. Size: ' . strlen($pdfContent) . ' bytes');
-    return $pdfContent;
+
+        foreach ($data['items'] as $item) {
+            $html .= '<tr>';
+            $html .= '<td style="border: 1px solid #ddd; padding: 8px;">' . htmlspecialchars($item['name']) . '</td>';
+            $html .= '<td style="border: 1px solid #ddd; padding: 8px; text-align: center;">' . htmlspecialchars($item['quantity']) . '</td>';
+            $html .= '<td style="border: 1px solid #ddd; padding: 8px; text-align: right;">₱' . number_format($item['price'], 2) . '</td>';
+            $html .= '<td style="border: 1px solid #ddd; padding: 8px; text-align: right;">₱' . number_format($item['total'], 2) . '</td>';
+            $html .= '</tr>';
+        }
+
+        $html .= '</table>';
+
+        // Totals section with vatable on the left and other totals on the right
+        $html .= '<div style="display: flex; justify-content: space-between; width: 100%;">';
+
+        // Left side: Vatable and VAT
+        $html .= '<div style="width: 50%;">';
+        $html .= '<p style="margin: 4px 0;"><strong>Vatable:</strong> ₱' . number_format($data['vatable'], 2) . '</p>';
+        $html .= '<p style="margin: 4px 0;"><strong>VAT:</strong> ₱' . number_format($data['vat'], 2) . '</p>';
+        $html .= '<p style="margin: 4px 0; font-weight: bold;">Total: ₱' . number_format($data['sales_total'], 2) . '</p>';
+        $html .= '<p style="margin: 4px 0;">Amount Paid: ₱' . number_format($data['amount_paid'], 2) . '</p>';
+        $html .= '<p style="margin: 4px 0;">Change: ₱' . number_format($data['change'], 2) . '</p>';
+        $html .= '</div>';
+
+        
+
+        $html .= '</div>';
+
+        $html .= '</body></html>';
+
+        // Generate PDF
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper('A4', 'portrait');
+        $dompdf->render();
+
+        // Return the PDF content as a string
+        $pdfContent = $dompdf->output();
+        error_log('PDF Generated. Size: ' . strlen($pdfContent) . ' bytes');
+        return $pdfContent;
     } catch (Exception $e) {
         error_log('Failed to generate PDF: ' . $e->getMessage());
         return '';
@@ -675,8 +693,12 @@ $orderStmt->execute($orderValues);
     }
 }
 
-$productQuery = $pdo->query('SELECT id, name, price, quantity FROM products ORDER BY name');
+$productQuery = $pdo->query('SELECT id, name, price, quantity, brand, category FROM products ORDER BY name');
 $products = $productQuery->fetchAll();
+
+// Fetch unique brands and categories for filter dropdowns
+$brands = $pdo->query('SELECT DISTINCT brand FROM products WHERE brand IS NOT NULL AND brand != "" ORDER BY brand')->fetchAll(PDO::FETCH_COLUMN);
+$categories = $pdo->query('SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND category != "" ORDER BY category')->fetchAll(PDO::FETCH_COLUMN);
 
 $productCatalog = array_map(static function (array $product): array {
     return [
@@ -684,6 +706,8 @@ $productCatalog = array_map(static function (array $product): array {
         'name' => (string) $product['name'],
         'price' => (float) $product['price'],
         'quantity' => (int) $product['quantity'],
+        'brand' => $product['brand'] ?? '',
+        'category' => $product['category'] ?? '',
     ];
 }, $products);
 
@@ -763,6 +787,16 @@ $statusOptions = [
 $productCatalogJson = json_encode($productCatalog, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
 if ($productCatalogJson === false) {
     $productCatalogJson = '[]';
+}
+
+$brandsJson = json_encode($brands, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
+if ($brandsJson === false) {
+    $brandsJson = '[]';
+}
+
+$categoriesJson = json_encode($categories, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
+if ($categoriesJson === false) {
+    $categoriesJson = '[]';
 }
 
 $receiptData = null;
@@ -1242,6 +1276,20 @@ if ($receiptDataJson === false) {
             <button id="closeProductModal" type="button" class="modal-close">&times;</button>
             <h3>Search Product</h3>
             <input type="text" id="productSearchInput" placeholder="Type product name...">
+            <div class="filter-row" style="display: flex; gap: 10px; margin-bottom: 10px;">
+                <select id="categoryFilter" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    <option value="">Select Category</option>
+                    <?php foreach ($categories as $category): ?>
+                        <option value="<?= htmlspecialchars($category, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($category, ENT_QUOTES, 'UTF-8') ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <select id="brandFilter" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    <option value="">Select Brand</option>
+                    <?php foreach ($brands as $brand): ?>
+                        <option value="<?= htmlspecialchars($brand, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($brand, ENT_QUOTES, 'UTF-8') ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
             <div class="modal-table-wrapper">
                 <table id="productSearchTable">
                     <thead>
@@ -1748,10 +1796,19 @@ if ($receiptDataJson === false) {
                     return;
                 }
 
+                // Get selected category and brand filter values
+                const selectedCategory = document.getElementById('categoryFilter')?.value || '';
+                const selectedBrand = document.getElementById('brandFilter')?.value || '';
+
                 const normalisedFilter = filter.toLowerCase();
-                const filteredProducts = normalisedFilter
-                    ? productCatalog.filter((item) => item.name.toLowerCase().includes(normalisedFilter))
-                    : productCatalog;
+
+                // Filter products by name, category, and brand
+                const filteredProducts = productCatalog.filter((item) => {
+                    const matchesName = normalisedFilter === '' || item.name.toLowerCase().includes(normalisedFilter);
+                    const matchesCategory = selectedCategory === '' || (item.category && item.category === selectedCategory);
+                    const matchesBrand = selectedBrand === '' || (item.brand && item.brand === selectedBrand);
+                    return matchesName && matchesCategory && matchesBrand;
+                });
 
                 productSearchTableBody.innerHTML = '';
 
@@ -2067,6 +2124,18 @@ if ($receiptDataJson === false) {
             // Event bindings
             mobileToggle?.addEventListener('click', () => {
                 sidebar?.classList.toggle('mobile-open');
+            });
+
+            // Add event listeners for category and brand filters to re-render product table on change
+            const categoryFilterSelect = document.getElementById('categoryFilter');
+            const brandFilterSelect = document.getElementById('brandFilter');
+
+            categoryFilterSelect?.addEventListener('change', () => {
+                renderProductTable(productSearchInput.value.trim());
+            });
+
+            brandFilterSelect?.addEventListener('change', () => {
+                renderProductTable(productSearchInput.value.trim());
             });
 
             document.addEventListener('click', (event) => {
