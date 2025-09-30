@@ -394,6 +394,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pos_checkout'])) {
         $orderColumns = [
             'customer_name',
             'address',
+            'email',
+            'phone',
             'total',
             'payment_method',
             'status',
@@ -405,6 +407,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pos_checkout'])) {
 
         $orderValues = [
             'Walk-in',
+            'N/A',
             'N/A',
             'N/A',
             $salesTotal,
