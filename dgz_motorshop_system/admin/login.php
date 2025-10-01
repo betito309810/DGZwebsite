@@ -1,7 +1,7 @@
 <?php
 require __DIR__ . '/../config/config.php';
 $pdo = db();
-$msg='';
+$msg = $_GET['msg'] ?? '';
 if($_SERVER['REQUEST_METHOD']==='POST'){
     $email = $_POST['email']; $pass = $_POST['password'];
     $stmt = $pdo->prepare('SELECT * FROM users WHERE email=?');
@@ -61,6 +61,10 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
             
             <button type="submit">Login</button>
         </form>
+
+        <div class="forgot-password">
+            <a href="forgot_password.php">Forgot Password?</a>
+        </div>
     </div>
 </body>
 </html>

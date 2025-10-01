@@ -1023,49 +1023,87 @@ $end_record = min($offset + $records_per_page, $total_records);
          */
         async function loadTransactionDetails(orderId) {
             try {
-                const response = await fetch(`order_details.php?order_id=${orderId}`);
+                // Fetch transaction details from get_transaction_details.php
+                const response = await fetch(`get_transaction_details.php?order_id=${orderId}`);
                 if (!response.ok) {
                     throw new Error('Network response was not ok');
                 }
                 const data = await response.json();
 
-                // Populate order information
-                document.getElementById('modal-customer').textContent = data.order.customer_name;
-                document.getElementById('modal-invoice').textContent = data.order.invoice_number;
-                document.getElementById('modal-date').textContent = new Date(data.order.created_at).toLocaleString();
-                document.getElementById('modal-status').textContent = data.order.status;
-                document.getElementById('modal-payment').textContent = data.order.payment_method;
-                document.getElementById('modal-email').textContent = data.order.email;
-                document.getElementById('modal-phone').textContent = data.order.contact;
-
-                // Handle reference if available
-                const referenceWrapper = document.getElementById('modal-reference-wrapper');
-                const referenceSpan = document.getElementById('modal-reference');
-                if (data.order.reference) {
-                    referenceSpan.textContent = data.order.reference;
-                    referenceWrapper.style.display = 'block';
-                } else {
-                    referenceWrapper.style.display = 'none';
-                }
-
-                // Populate order items
-                const itemsTableBody = document.getElementById('modal-items');
-                itemsTableBody.innerHTML = '';
-                let total = 0;
-                data.items.forEach(item => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>${item.product_name}</td>
-                        <td>${item.quantity}</td>
-                        <td>₱${parseFloat(item.price).toFixed(2)}</td>
-                        <td>₱${parseFloat(item.subtotal).toFixed(2)}</td>
-                    `;
-                    itemsTableBody.appendChild(row);
-                    total += parseFloat(item.subtotal);
-                });
-
-                // Set total
-                document.getElementById('modal-total').textContent = `₱${total.toFixed(2)}`;
+                // Build modal content dynamically to match POS modal style
+                const modalBody = document.querySelector('#transactionModal .modal-body');
+                modalBody.innerHTML = `
+                    <div class="transaction-info">
+                        <h2>Transaction Details</h2>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <label>Customer:</label>
+                                <span>${data.order.customer_name || 'N/A'}</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Invoice #:</label>
+                                <span>${data.order.invoice_number || 'N/A'}</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Date:</label>
+                                <span>${new Date(data.order.created_at).toLocaleString() || 'N/A'}</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Status:</label>
+                                <span>${data.order.status || 'N/A'}</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Payment Method:</label>
+                                <span>${data.order.payment_method || 'N/A'}</span>
+                            </div>
+                            ${data.order.customer_name.toLowerCase() === 'walk-in' ? '' : `
+                            <div class="info-item">
+                                <label>Email:</label>
+                                <span>${data.order.email || 'N/A'}</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Phone:</label>
+                                <span>${data.order.contact || 'N/A'}</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Reference:</label>
+                                <span>${data.order.reference_number || 'N/A'}</span>
+                            </div>
+                            `}
+                        </div>
+                    </div>
+                    <div class="order-items">
+                        <h4>Order Items</h4>
+                        <div class="table-responsive">
+                            <table class="items-table">
+                                <thead>
+                                    <tr>
+                                        <th>Product</th>
+                                        <th>Quantity</th>
+                                        <th>Price</th>
+                                        <th>Subtotal</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${data.items.map(item => `
+                                        <tr>
+                                            <td>${item.name || item.product_name || 'N/A'}</td>
+                                            <td>${item.qty || item.quantity || 0}</td>
+                                            <td>₱${parseFloat(item.price).toFixed(2)}</td>
+                                            <td>₱${(parseFloat(item.price) * (item.qty || item.quantity || 0)).toFixed(2)}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                                <tfoot>
+                                    <tr>
+                                        <td colspan="3" style="text-align: right; font-weight: 600;">Total:</td>
+                                        <td id="modal-total">₱${parseFloat(data.order.total).toFixed(2)}</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                `;
 
                 // Show modal
                 transactionModal.style.display = 'block';

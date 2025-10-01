@@ -335,99 +335,102 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
 
                         $customerEmail = $orderInfo['email'] ?? '';
                         if ($customerEmail && filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
-                            // Load order items
-                            $itemsStmt = $pdo->prepare(
-                                'SELECT oi.qty, oi.price, p.name AS product_name
-                                 FROM order_items oi
-                                 LEFT JOIN products p ON p.id = oi.product_id
-                                 WHERE oi.order_id = ?'
-                            );
-                            $itemsStmt->execute([$orderId]);
-                            $items = $itemsStmt->fetchAll() ?: [];
-
-                            $itemsHtml = '';
-                            $itemsTotal = 0.0;
-                            foreach ($items as $it) {
-                                $name = htmlspecialchars($it['product_name'] ?? 'Item', ENT_QUOTES, 'UTF-8');
-                                $qty = (int) ($it['qty'] ?? 0);
-                                $price = (float) ($it['price'] ?? 0);
-                                $line = $qty * $price;
-                                $itemsTotal += $line;
-                                $itemsHtml .= sprintf(
-                                    '<tr><td style="padding:6px 8px; border-bottom:1px solid #eee;">%s</td><td style="padding:6px 8px; text-align:center; border-bottom:1px solid #eee;">%d</td><td style="padding:6px 8px; text-align:right; border-bottom:1px solid #eee;">₱%s</td><td style="padding:6px 8px; text-align:right; border-bottom:1px solid #eee;">₱%s</td></tr>',
-                                    $name,
-                                    $qty,
-                                    number_format($price, 2),
-                                    number_format($line, 2)
+                            // Only send email if customer is not "Walk-in"
+                            // This condition prevents sending approval emails to walk-in customers who don't have email addresses
+                            if (strtolower(trim($orderInfo['customer_name'] ?? '')) !== 'walk-in') {
+                                // Load order items
+                                $itemsStmt = $pdo->prepare(
+                                    'SELECT oi.qty, oi.price, p.name AS product_name
+                                     FROM order_items oi
+                                     LEFT JOIN products p ON p.id = oi.product_id
+                                     WHERE oi.order_id = ?'
                                 );
+                                $itemsStmt->execute([$orderId]);
+                                $items = $itemsStmt->fetchAll() ?: [];
+
+                                $itemsHtml = '';
+                                $itemsTotal = 0.0;
+                                foreach ($items as $it) {
+                                    $name = htmlspecialchars($it['product_name'] ?? 'Item', ENT_QUOTES, 'UTF-8');
+                                    $qty = (int) ($it['qty'] ?? 0);
+                                    $price = (float) ($it['price'] ?? 0);
+                                    $line = $qty * $price;
+                                    $itemsTotal += $line;
+                                    $itemsHtml .= sprintf(
+                                        '<tr><td style="padding:6px 8px; border-bottom:1px solid #eee;">%s</td><td style="padding:6px 8px; text-align:center; border-bottom:1px solid #eee;">%d</td><td style="padding:6px 8px; text-align:right; border-bottom:1px solid #eee;">₱%s</td><td style="padding:6px 8px; text-align:right; border-bottom:1px solid #eee;">₱%s</td></tr>',
+                                        $name,
+                                        $qty,
+                                        number_format($price, 2),
+                                        number_format($line, 2)
+                                    );
+                                }
+
+                                $customerName = trim((string) ($orderInfo['customer_name'] ?? 'Customer'));
+                                $invoiceNumber = trim((string) ($orderInfo['invoice_number'] ?? ''));
+                                $createdAt = (string) ($orderInfo['created_at'] ?? '');
+                                $orderTotal = (float) ($orderInfo['total'] ?? $itemsTotal);
+
+                                $prettyDate = $createdAt !== '' ? date('F j, Y g:i A', strtotime($createdAt)) : date('F j, Y g:i A');
+                                $displayInvoice = $invoiceNumber !== '' ? $invoiceNumber : 'INV-' . str_pad((string) $orderId, 6, '0', STR_PAD_LEFT);
+
+                                $subject = 'Order Approved - DGZ Motorshop Invoice ' . $displayInvoice;
+
+                                $body = '<div style="font-family: Arial, sans-serif; font-size:14px; color:#333;">'
+                                    . '<h2 style="color:#111; margin-bottom:8px;">Your Order is Approved</h2>'
+                                    . '<p style="margin:0 0 12px;">Hi ' . htmlspecialchars($customerName, ENT_QUOTES, 'UTF-8') . ',</p>'
+                                    . '<p style="margin:0 0 12px;">Good news! Your order #' . (int) $orderId . ' has been approved and is now being processed.</p>'
+                                    . '<p style="margin:0 0 12px;">Invoice Number: <strong>' . htmlspecialchars($displayInvoice, ENT_QUOTES, 'UTF-8') . '</strong><br>'
+                                    . 'Order Date: ' . htmlspecialchars($prettyDate, ENT_QUOTES, 'UTF-8') . '</p>'
+                                    . '<h3 style="margin:16px 0 8px;">Order Summary</h3>'
+                                    . '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; border:1px solid #eee;">'
+                                    . '<thead>'
+                                    . '<tr style="background:#f9f9f9;">'
+                                    . '<th style="text-align:left; padding:8px; border-bottom:1px solid #eee;">Item</th>'
+                                    . '<th style="text-align:center; padding:8px; border-bottom:1px solid #eee;">Qty</th>'
+                                    . '<th style="text-align:right; padding:8px; border-bottom:1px solid #eee;">Price</th>'
+                                    . '<th style="text-align:right; padding:8px; border-bottom:1px solid #eee;">Subtotal</th>'
+                                    . '</tr>'
+                                    . '</thead>'
+                                    . '<tbody>' . $itemsHtml . '</tbody>'
+                                    . '<tfoot>'
+                                    . '<tr>'
+                                    . '<td colspan="3" style="padding:8px; text-align:right;"><strong>Total:</strong></td>'
+                                    . '<td style="padding:8px; text-align:right;"><strong>₱' . number_format($orderTotal, 2) . '</strong></td>'
+                                    . '</tr>'
+                                    . '</tfoot>'
+                                    . '</table>'
+                                    . '<p style="margin:16px 0 0;">Thank you for shopping with <strong>DGZ Motorshop</strong>!</p>'
+                                    . '</div>';
+
+                                // Generate PDF receipt for attachment
+                                $receiptData = [
+                                    'order_id' => $orderId,
+                                    'invoice_number' => $invoiceNumber,
+                                    'customer_name' => $customerName,
+                                    'created_at' => $createdAt,
+                                    'sales_total' => $orderTotal,
+                                    'vatable' => $orderTotal / 1.12,
+                                    'vat' => $orderTotal - ($orderTotal / 1.12),
+                                    'amount_paid' => $orderTotal, // For approved orders, assume full payment
+                                    'change' => 0.0,
+                                    'cashier' => $_SESSION['username'] ?? 'Admin',
+                                    'items' => array_map(function($item) {
+                                        return [
+                                            'name' => $item['product_name'] ?? 'Item',
+                                            'quantity' => (int) ($item['qty'] ?? 0),
+                                            'price' => (float) ($item['price'] ?? 0),
+                                            'total' => ((int) ($item['qty'] ?? 0)) * ((float) ($item['price'] ?? 0))
+                                        ];
+                                    }, $items)
+                                ];
+
+                                $pdfContent = generateReceiptPDF($receiptData);
+                                $pdfFilename = 'receipt_' . $orderId . '.pdf';
+
+                                // Fire and forget email with PDF attachment
+                                try { sendEmail($customerEmail, $subject, $body, $pdfContent, $pdfFilename); } catch (Throwable $e) { /* already logged in helper */ }
                             }
-
-                            $customerName = trim((string) ($orderInfo['customer_name'] ?? 'Customer'));
-                            $invoiceNumber = trim((string) ($orderInfo['invoice_number'] ?? ''));
-                            $createdAt = (string) ($orderInfo['created_at'] ?? '');
-                            $orderTotal = (float) ($orderInfo['total'] ?? $itemsTotal);
-
-                            $prettyDate = $createdAt !== '' ? date('F j, Y g:i A', strtotime($createdAt)) : date('F j, Y g:i A');
-                            $displayInvoice = $invoiceNumber !== '' ? $invoiceNumber : 'INV-' . str_pad((string) $orderId, 6, '0', STR_PAD_LEFT);
-
-                            $subject = 'Order Approved - DGZ Motorshop Invoice ' . $displayInvoice;
-
-                            $body = '<div style="font-family: Arial, sans-serif; font-size:14px; color:#333;">'
-                                . '<h2 style="color:#111; margin-bottom:8px;">Your Order is Approved</h2>'
-                                . '<p style="margin:0 0 12px;">Hi ' . htmlspecialchars($customerName, ENT_QUOTES, 'UTF-8') . ',</p>'
-                                . '<p style="margin:0 0 12px;">Good news! Your order #' . (int) $orderId . ' has been approved and is now being processed.</p>'
-                                . '<p style="margin:0 0 12px;">Invoice Number: <strong>' . htmlspecialchars($displayInvoice, ENT_QUOTES, 'UTF-8') . '</strong><br>'
-                                . 'Order Date: ' . htmlspecialchars($prettyDate, ENT_QUOTES, 'UTF-8') . '</p>'
-                                . '<h3 style="margin:16px 0 8px;">Order Summary</h3>'
-                                . '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; border:1px solid #eee;">'
-                                . '<thead>'
-                                . '<tr style="background:#f9f9f9;">'
-                                . '<th style="text-align:left; padding:8px; border-bottom:1px solid #eee;">Item</th>'
-                                . '<th style="text-align:center; padding:8px; border-bottom:1px solid #eee;">Qty</th>'
-                                . '<th style="text-align:right; padding:8px; border-bottom:1px solid #eee;">Price</th>'
-                                . '<th style="text-align:right; padding:8px; border-bottom:1px solid #eee;">Subtotal</th>'
-                                . '</tr>'
-                                . '</thead>'
-                                . '<tbody>' . $itemsHtml . '</tbody>'
-                                . '<tfoot>'
-                                . '<tr>'
-                                . '<td colspan="3" style="padding:8px; text-align:right;"><strong>Total:</strong></td>'
-                                . '<td style="padding:8px; text-align:right;"><strong>₱' . number_format($orderTotal, 2) . '</strong></td>'
-                                . '</tr>'
-                                . '</tfoot>'
-                                . '</table>'
-                                . '<p style="margin:16px 0 0;">Thank you for shopping with <strong>DGZ Motorshop</strong>!</p>'
-                                . '</div>';
-
-                            // Generate PDF receipt for attachment
-                            $receiptData = [
-                                'order_id' => $orderId,
-                                'invoice_number' => $invoiceNumber,
-                                'customer_name' => $customerName,
-                                'created_at' => $createdAt,
-                                'sales_total' => $orderTotal,
-                                'vatable' => $orderTotal / 1.12,
-                                'vat' => $orderTotal - ($orderTotal / 1.12),
-                                'amount_paid' => $orderTotal, // For approved orders, assume full payment
-                                'change' => 0.0,
-                                'cashier' => $_SESSION['username'] ?? 'Admin',
-                                'items' => array_map(function($item) {
-                                    return [
-                                        'name' => $item['product_name'] ?? 'Item',
-                                        'quantity' => (int) ($item['qty'] ?? 0),
-                                        'price' => (float) ($item['price'] ?? 0),
-                                        'total' => ((int) ($item['qty'] ?? 0)) * ((float) ($item['price'] ?? 0))
-                                    ];
-                                }, $items)
-                            ];
-
-                            $pdfContent = generateReceiptPDF($receiptData);
-                            $pdfFilename = 'receipt_' . $orderId . '.pdf';
-
-                            // Fire and forget email with PDF attachment
-                            try { sendEmail($customerEmail, $subject, $body, $pdfContent, $pdfFilename); } catch (Throwable $e) { /* already logged in helper */ }
                         }
-                    }
                 }
             }
         }
@@ -2087,6 +2090,9 @@ if ($receiptDataJson === false) {
                         </head>
                         <body>${receiptContentElement.innerHTML}</body>
                     </html>
+                    <?php
+                    // Ensure no stray output or unclosed PHP tags at the end of file
+                    ?>
                 `);
                 w.document.close();
 
