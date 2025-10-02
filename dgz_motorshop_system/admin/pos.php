@@ -1574,7 +1574,10 @@ if ($receiptDataJson === false) {
 
                 const hasRows = posTableBody.querySelector('tr') !== null;
                 const amountReceived = parseFloat(amountReceivedInput?.value || '0');
-                const shouldEnable = hasRows && amountReceived > 0;
+                const salesTotal = getSalesTotal();
+                
+                // Only enable if there are items and payment is sufficient
+                const shouldEnable = hasRows && amountReceived >= salesTotal && salesTotal > 0;
 
                 settlePaymentButton.disabled = !shouldEnable;
             }
@@ -1592,17 +1595,28 @@ if ($receiptDataJson === false) {
                 totals.vatable.textContent = formatPeso(vatable);
                 totals.vat.textContent = formatPeso(vat);
                 totals.topTotal.textContent = formatPeso(salesTotal);
-                totals.change.textContent = formatPeso(change);
+                
+                // Only show positive change amount, show 0.00 for insufficient payment
+                totals.change.textContent = formatPeso(Math.max(0, change));
 
                 if (salesTotal > 0 && amountReceived < salesTotal) {
                     totals.change.style.color = '#e74c3c';
                     totals.change.title = 'Insufficient payment';
+                    if (settlePaymentButton) {
+                        settlePaymentButton.disabled = true;
+                    }
                 } else if (salesTotal > 0) {
                     totals.change.style.color = '#27ae60';
                     totals.change.title = '';
+                    if (settlePaymentButton) {
+                        settlePaymentButton.disabled = false;
+                    }
                 } else {
                     totals.change.style.color = '';
                     totals.change.title = '';
+                    if (settlePaymentButton) {
+                        settlePaymentButton.disabled = true;
+                    }
                 }
 
                 updateSettleButtonState();

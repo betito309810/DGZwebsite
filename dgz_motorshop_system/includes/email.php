@@ -15,12 +15,20 @@ require_once __DIR__ . '/../config/mailer.php';
 if (!function_exists('sendEmail')) {
 function sendEmail(string $to, string $subject, string $body, ?string $pdfContent = null, string $pdfFilename = 'document.pdf'): bool
 {
-    error_log("Attempting to send email to: $to with subject: $subject");
+    error_log("Starting email send process to: $to");
+    error_log("Subject: $subject");
     
-    $mail = getMailer();
-
     try {
-        // Recipients
+        $mail = getMailer();
+        
+        // Clear any previous recipients
+        $mail->clearAddresses();
+        $mail->clearAttachments();
+        
+        // Add recipient with validation
+        if (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
+            throw new Exception("Invalid email address: $to");
+        }
         $mail->addAddress($to);
 
         // Content

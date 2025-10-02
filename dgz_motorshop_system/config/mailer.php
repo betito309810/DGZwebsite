@@ -39,37 +39,44 @@ if (!function_exists('getMailer')) {
         $mail = new PHPMailer(true);
 
         try {
-            // Server settings from environment variables
+            // Server settings for Gmail
             $mail->isSMTP();
-            $mail->Host       = $_ENV['SMTP_HOST'] ?? 'smtp.gmail.com';
-            $mail->SMTPAuth   = true;
-            $mail->Username   = $_ENV['SMTP_USERNAME'] ?? 'dgzstoninocapstone@gmail.com';
-            $mail->Password   = $_ENV['SMTP_PASSWORD'] ?? 'rvub inew rtnw yvpb';
+            $mail->Host = 'smtp.gmail.com';
+            $mail->SMTPAuth = true;
+            
+            // Use direct credentials instead of env variables for testing
+            $mail->Username = 'dgzstoninocapstone@gmail.com';
+            $mail->Password = 'rvub inew rtnw yvpb'; // Your app password
+            
+            // Required for Gmail
             $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-            $mail->Port       = $_ENV['SMTP_PORT'] ?? 587;
+            $mail->Port = 587;
 
-            // Enable debugging (set to 0 to disable)
-            $mail->SMTPDebug = 0; // Disabled for production
+            // Enable debugging temporarily to diagnose issues
+            $mail->SMTPDebug = SMTP::DEBUG_SERVER; // Enable verbose debug output
             $mail->Debugoutput = function($str, $level) {
                 error_log("SMTP ($level): $str");
             };
 
-            // Additional settings for better Gmail delivery
+            // Proper SSL configuration for Gmail
             $mail->SMTPOptions = array(
                 'ssl' => array(
-                    'verify_peer' => false,
-                    'verify_peer_name' => false,
-                    'allow_self_signed' => true
+                    'verify_peer' => true,
+                    'verify_peer_name' => true,
+                    'allow_self_signed' => false
                 )
             );
 
-            // Recipients
-            $fromEmail = $_ENV['SMTP_FROM_EMAIL'] ?? $_ENV['SMTP_USERNAME'] ?? '';
-            $fromName = $_ENV['SMTP_FROM_NAME'] ?? 'DGZ Motorshop';
-            $mail->setFrom($fromEmail, $fromName);
+            // Set consistent from address
+            $mail->setFrom('dgzstoninocapstone@gmail.com', 'DGZ Motorshop');
+            
+            // Set some default settings
+            $mail->CharSet = 'UTF-8';
+            $mail->Encoding = 'base64';
+            $mail->isHTML(true);
 
             // Add reply-to
-            $mail->addReplyTo($fromEmail, $fromName);
+            $mail->addReplyTo('dgzstoninocapstone@gmail.com', 'DGZ Motorshop');
 
         } catch (Exception $e) {
             // Handle exception
