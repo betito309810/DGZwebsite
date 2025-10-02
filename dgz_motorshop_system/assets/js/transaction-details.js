@@ -47,16 +47,26 @@ async function loadTransactionDetails(orderId) {
         // Format the date
         const orderDate = new Date(order.created_at).toLocaleString();
         
-        // Build items HTML
-        const itemsHtml = items.map(item => `
+        // Debug: log items data to console
+        console.log('Transaction items:', items);
+
+        // Build items HTML with correct columns:
+        // Product name, Quantity, Price, Subtotal (quantity * price)
+        const itemsHtml = items.map(item => {
+            // Parse quantity and price as numbers safely
+            const qty = Number(item.qty) || 0;
+            const price = Number(item.price) || 0;
+            const subtotal = qty * price;
+
+            return `
             <tr>
-                <td>${item.code}</td>
-                <td>${item.name}</td>
-                <td>${item.quantity}</td>
-                <td>₱${parseFloat(item.price).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                <td>₱${(item.quantity * item.price).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                <td>${item.name || 'N/A'}</td> <!-- Show product name -->
+                <td>${qty}</td> <!-- Show quantity ordered -->
+                <td>₱${price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td> <!-- Show price formatted -->
+                <td>₱${subtotal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td> <!-- Show subtotal -->
             </tr>
-        `).join('');
+            `;
+        }).join('');
 
         // Update modal content with new design matching POS
         modalBody.innerHTML = `
@@ -92,7 +102,7 @@ async function loadTransactionDetails(orderId) {
                     
                     <div class="info-group">
                         <label>Phone:</label>
-                        <span>${order.contact}</span>
+                        <span>${order.contact || 'N/A'}</span>
                     </div>
                     <div class="info-group">
                         <label>Reference:</label>

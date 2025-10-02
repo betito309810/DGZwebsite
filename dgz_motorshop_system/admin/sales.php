@@ -215,12 +215,13 @@ $end_record = min($offset + $records_per_page, $total_records);
         </header>
 
         <!-- Export Button and PDF Report Generator -->
-        <div style="margin-bottom: 20px; display: flex; gap: 10px; align-items: center; justify-content: flex-end;">
-            <a href="?export=csv" style="padding: 8px 15px; background-color: #007bff; color: white; border-radius: 3px; text-decoration: none;">
+        <div class="action-buttons">
+            <a href="?export=csv" class="btn btn-export">
+                <i class="fas fa-file-export"></i>
                 Export to CSV
             </a>
-
-            <button onclick="openSalesReportModal()" class="btn btn-success">
+            <button onclick="openSalesReportModal()" class="btn btn-generate">
+                <i class="fas fa-chart-line"></i>
                 Generate Sales Report
             </button>
         </div>
@@ -994,125 +995,6 @@ $end_record = min($offset + $records_per_page, $total_records);
         // Transaction details modal logic
         const transactionModal = document.getElementById('transactionModal');
         const modalCloseBtn = transactionModal.querySelector('.close');
-
-        // Event listener for transaction row clicks
-        document.querySelectorAll('.transaction-row').forEach(row => {
-            row.addEventListener('click', function() {
-                const orderId = this.getAttribute('data-order-id');
-                if (orderId) {
-                    loadTransactionDetails(orderId);
-                }
-            });
-        });
-
-        // Close modal when clicking the close button
-        modalCloseBtn.addEventListener('click', () => {
-            transactionModal.style.display = 'none';
-        });
-
-        // Close modal when clicking outside
-        window.addEventListener('click', (event) => {
-            if (event.target === transactionModal) {
-                transactionModal.style.display = 'none';
-            }
-        });
-
-        /**
-         * Load and display transaction details in the modal.
-         * @param {string} orderId - The order ID to fetch details for.
-         */
-        async function loadTransactionDetails(orderId) {
-            try {
-                // Fetch transaction details from get_transaction_details.php
-                const response = await fetch(`get_transaction_details.php?order_id=${orderId}`);
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
-                const data = await response.json();
-
-                // Build modal content dynamically to match POS modal style
-                const modalBody = document.querySelector('#transactionModal .modal-body');
-                modalBody.innerHTML = `
-                    <div class="transaction-info">
-                        <h2>Transaction Details</h2>
-                        <div class="info-grid">
-                            <div class="info-item">
-                                <label>Customer:</label>
-                                <span>${data.order.customer_name || 'N/A'}</span>
-                            </div>
-                            <div class="info-item">
-                                <label>Invoice #:</label>
-                                <span>${data.order.invoice_number || 'N/A'}</span>
-                            </div>
-                            <div class="info-item">
-                                <label>Date:</label>
-                                <span>${new Date(data.order.created_at).toLocaleString() || 'N/A'}</span>
-                            </div>
-                            <div class="info-item">
-                                <label>Status:</label>
-                                <span>${data.order.status || 'N/A'}</span>
-                            </div>
-                            <div class="info-item">
-                                <label>Payment Method:</label>
-                                <span>${data.order.payment_method || 'N/A'}</span>
-                            </div>
-                            ${data.order.customer_name.toLowerCase() === 'walk-in' ? '' : `
-                            <div class="info-item">
-                                <label>Email:</label>
-                                <span>${data.order.email || 'N/A'}</span>
-                            </div>
-                            <div class="info-item">
-                                <label>Phone:</label>
-                                <span>${data.order.contact || 'N/A'}</span>
-                            </div>
-                            <div class="info-item">
-                                <label>Reference:</label>
-                                <span>${data.order.reference_number || 'N/A'}</span>
-                            </div>
-                            `}
-                        </div>
-                    </div>
-                    <div class="order-items">
-                        <h4>Order Items</h4>
-                        <div class="table-responsive">
-                            <table class="items-table">
-                                <thead>
-                                    <tr>
-                                        <th>Product</th>
-                                        <th>Quantity</th>
-                                        <th>Price</th>
-                                        <th>Subtotal</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${data.items.map(item => `
-                                        <tr>
-                                            <td>${item.name || item.product_name || 'N/A'}</td>
-                                            <td>${item.qty || item.quantity || 0}</td>
-                                            <td>₱${parseFloat(item.price).toFixed(2)}</td>
-                                            <td>₱${(parseFloat(item.price) * (item.qty || item.quantity || 0)).toFixed(2)}</td>
-                                        </tr>
-                                    `).join('')}
-                                </tbody>
-                                <tfoot>
-                                    <tr>
-                                        <td colspan="3" style="text-align: right; font-weight: 600;">Total:</td>
-                                        <td id="modal-total">₱${parseFloat(data.order.total).toFixed(2)}</td>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
-                    </div>
-                `;
-
-                // Show modal
-                transactionModal.style.display = 'block';
-
-            } catch (error) {
-                console.error('Error loading transaction details:', error);
-                alert('Failed to load transaction details. Please try again.');
-            }
-    </script>
     <script src="../assets/js/notifications.js"></script>
     <script src="../assets/js/transaction-details.js"></script>
 </body>

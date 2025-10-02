@@ -108,23 +108,58 @@ body {
 }
 
 
-/* Export CSV Button */
-a[href*="export=csv"] {
-    display: inline-block;
-    background: #3498db;
-    color: #fff;
-    text-decoration: none;
-    padding: 10px 18px;
-    border-radius: 6px;
-    font-size: 14px;
-    font-weight: 500;
-    margin: 18px 0 0 0;
-    margin-left: 91%;
-    transition: background 0.2s;
+/* Action Buttons Container */
+.action-buttons {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    justify-content: flex-end;
+    margin: 25px 0;
+    padding: 0 20px;
 }
 
-a[href*="export=csv"]:hover {
-    background: #2176bd;
+/* Common Button Styles */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.btn i {
+    font-size: 16px;
+}
+
+/* Export Button */
+.btn-export {
+    background: linear-gradient(135deg, #3498db, #2980b9);
+    color: white;
+}
+
+.btn-export:hover {
+    background: linear-gradient(135deg, #2980b9, #2573a7);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(52, 152, 219, 0.3);
+}
+
+/* Generate Report Button */
+.btn-generate {
+    background: linear-gradient(135deg, #27ae60, #219a52);
+    color: white;
+}
+
+.btn-generate:hover {
+    background: linear-gradient(135deg, #219a52, #1e8449);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(39, 174, 96, 0.3);
 }
 
 /* Table container */
