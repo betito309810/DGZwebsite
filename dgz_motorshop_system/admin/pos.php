@@ -257,7 +257,7 @@ function generateInvoiceNumber(PDO $pdo): string
     return $fallback;
 }
 //fixed approving status 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status'])) 
     $orderId = isset($_POST['order_id']) ? (int) $_POST['order_id'] : 0;
     $newStatus = isset($_POST['new_status']) ? strtolower(trim((string) $_POST['new_status'])) : '';
 
@@ -605,7 +605,7 @@ $orderStmt->execute($orderValues);
         }
 
         try {
-            // First generate the PDF
+            // First generate the PDF for printing (but don't send email for walk-in customers)
             $options = new Options();
             $options->set('defaultFont', 'Arial');
             $dompdf = new Dompdf($options);
@@ -644,31 +644,10 @@ $orderStmt->execute($orderValues);
             $dompdf->render();
             $pdfContent = $dompdf->output();
             
-            error_log("PDF Generated. Size: " . strlen($pdfContent) . " bytes");
+            error_log("PDF Generated for printing. Size: " . strlen($pdfContent) . " bytes");
             
-            $emailSubject = "Receipt for Order #{$orderId}";
-            $emailBody = "
-                <h2>Thank you for your purchase!</h2>
-                <p>Your order details are attached to this email.</p>
-                <br>
-                <p><strong>Order Number:</strong> {$orderId}</p>
-                <p><strong>Invoice Number:</strong> {$invoiceNumber}</p>
-                <p><strong>Total Amount:</strong> ₱" . number_format($salesTotal, 2) . "</p>
-                <br>
-                <p>If you have any questions, please don't hesitate to contact us.</p>
-                <br>
-                <p>Best regards,<br>DGZ Motorshop</p>
-            ";
-            
-            // Send email with PDF attachment - using same method as test file
-            $recipientEmail = 'christopher4betito@gmail.com';
-            $result = sendEmail($recipientEmail, $emailSubject, $emailBody, $pdfContent, "receipt_{$orderId}.pdf");
-            
-            if (!$result) {
-                throw new Exception("Failed to send email with PDF");
-            }
-            
-            error_log("Email sent successfully with PDF attachment for order: " . $orderId);
+            // Skip email sending for walk-in customers
+            // Walk-in customers get their receipt printed directly at the POS
         } catch (Exception $e) {
             error_log("Error in PDF/email process for order {$orderId}: " . $e->getMessage());
             // Continue with the order process even if PDF/email fails
@@ -2090,9 +2069,6 @@ if ($receiptDataJson === false) {
                         </head>
                         <body>${receiptContentElement.innerHTML}</body>
                     </html>
-                    <?php
-                    // Ensure no stray output or unclosed PHP tags at the end of file
-                    ?>
                 `);
                 w.document.close();
 
@@ -2427,5 +2403,4 @@ if ($receiptDataJson === false) {
     </script>
     <script src="../assets/js/notifications.js"></script>
 </body>
-
 </html>
