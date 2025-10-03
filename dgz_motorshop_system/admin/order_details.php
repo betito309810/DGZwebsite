@@ -56,7 +56,7 @@ try {
             'id' => $order['id'],
             'invoice_number' => $order['invoice_number'] ?? 'N/A',
             'customer_name' => $order['customer_name'],
-            'contact' => $order['contact'] ?? 'N/A',
+            'phone' => $order['phone'] ?? 'N/A',
             'address' => $order['address'] ?? 'N/A',
             'total' => $order['total'],
             'payment_method' => $order['payment_method'],
