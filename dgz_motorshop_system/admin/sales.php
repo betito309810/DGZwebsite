@@ -479,22 +479,33 @@ $end_record = min($offset + $records_per_page, $total_records);
             <span class="close" id="closeModal">&times;</span>
             <h2>Generate Sales Report</h2>
             <form id="salesReportForm" method="GET" action="sales_report_pdf.php">
-                <label for="reportPeriod">Select Period:</label>
-                <select id="reportPeriod" name="period">
-                    <option value="daily">Daily</option>
-                    <option value="weekly">Weekly</option>
-                    <option value="monthly">Monthly</option>
-                    <option value="annually">Annually</option>
-                </select>
-
-                <label for="customerType">Select Customer Type:</label>
-                <select id="customerType" name="customer_type">
-                    <option value="all">All Customers</option>
-                    <option value="walkin">Walk-in Customers</option>
-                    <option value="online">Online Customers</option>
-                </select>
-
-                <button type="submit" class="btn btn-primary">Generate Report</button>
+                <div class="modal-controls">
+                    <div class="control-group">
+                        <label for="reportPeriod" class="control-label" id="reportPeriodLabel">View</label>
+                        <select id="reportPeriod" name="period" class="period-dropdown">
+                            <option value="daily">Daily</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="monthly">Monthly</option>
+                            <option value="annually">Annually</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label for="reportPeriodValue" class="control-label" id="reportValueLabel">Select day</label>
+                        <input id="reportPeriodValue" name="value" class="period-input" type="date">
+                        <span class="control-hint" id="reportPeriodHint"></span>
+                    </div>
+                    <div class="control-group">
+                        <label for="customerType" class="control-label">Customer Type</label>
+                        <select id="customerType" name="customer_type" class="period-dropdown">
+                            <option value="all">All Customers</option>
+                            <option value="walkin">Walk-in Customers</option>
+                            <option value="online">Online Customers</option>
+                        </select>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Generate Report</button>
+                    </div>
+                </div>
             </form>
         </div>
     </div>

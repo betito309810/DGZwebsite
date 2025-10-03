@@ -400,6 +400,54 @@ table tr:last-child td {
     min-height: 16px;
 }
 
+.modal-controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr auto;
+    column-gap: 16px;
+    row-gap: 16px;
+    align-items: start;
+    margin-top: 20px;
+}
+
+.modal-controls .control-group {
+    align-self: stretch;
+}
+
+.modal-controls .period-dropdown,
+.modal-controls .period-input {
+    width: 100%;
+}
+
+.modal-controls .form-actions {
+    align-self: end;
+    justify-self: end;
+}
+
+.modal-controls .btn {
+    min-width: 160px;
+    height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 24px;
+}
+
+@media (max-width: 768px) {
+    .modal-controls {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .modal-controls .form-actions {
+        justify-self: stretch;
+    }
+
+    .modal-controls .btn {
+        width: 100%;
+    }
+}
+
 .chart-canvas-wrap {
     flex: 1;
     display: flex;
@@ -751,6 +799,18 @@ table tr:last-child td {
     max-width: 500px;
     border-radius: 12px;
     box-shadow: 0 5px 25px rgba(0,0,0,0.2);
+}
+
+#salesReportModal .modal-content {
+    padding: 28px;
+}
+
+#salesReportModal h2 {
+    margin: 0;
+}
+
+#salesReportForm {
+    margin-top: 20px;
 }
 
 .modal-header {

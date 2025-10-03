@@ -12,6 +12,7 @@ session_start();
  */
 
 require __DIR__ . '/../config/config.php';
+require __DIR__ . '/includes/sales_periods.php';
 require __DIR__ . '/../vendor/autoload.php'; // Load Dompdf and other dependencies
 
 use Dompdf\Dompdf;
@@ -28,6 +29,7 @@ enforceStaffAccess();
 
 // Get filter parameters
 $period = $_GET['period'] ?? 'daily';
+$value = $_GET['value'] ?? null;
 $customer_type = $_GET['customer_type'] ?? 'all'; // 'all', 'walkin', 'online'
 
 // Validate parameters
@@ -42,47 +44,29 @@ if (!in_array($customer_type, $valid_customer_types)) {
 }
 
 // Build SQL query based on filters
-$sql = "SELECT * FROM orders WHERE status IN ('approved','completed')";
 
-// Calculate start and end dates for the selected period
-$start_date = null;
-$end_date = null;
+$periodInfo = resolve_sales_period($period, $value);
+$period = $periodInfo['period'];
 
-switch ($period) {
-    case 'daily':
-        $sql .= " AND DATE(created_at) = CURDATE()";
-        $period_title = 'Daily Sales Report - ' . date('F j, Y');
-        $start_date = date('Y-m-d 00:00:00');
-        $end_date = date('Y-m-d 23:59:59');
-        break;
-    case 'weekly':
-        $sql .= " AND YEARWEEK(created_at, 1) = YEARWEEK(CURDATE(), 1)";
-        $period_title = 'Weekly Sales Report - Week ' . date('W, Y');
-        $start_date = date('Y-m-d 00:00:00', strtotime('monday this week'));
-        $end_date = date('Y-m-d 23:59:59', strtotime('sunday this week'));
-        break;
-    case 'monthly':
-        $sql .= " AND YEAR(created_at) = YEAR(CURDATE()) AND MONTH(created_at) = MONTH(CURDATE())";
-        $period_title = 'Monthly Sales Report - ' . date('F Y');
-        $start_date = date('Y-m-01 00:00:00');
-        $end_date = date('Y-m-t 23:59:59');
-        break;
-    case 'annually':
-        $sql .= " AND YEAR(created_at) = YEAR(CURDATE())";
-        $period_title = 'Annual Sales Report - ' . date('Y');
-        $start_date = date('Y-01-01 00:00:00');
-        $end_date = date('Y-12-31 23:59:59');
-        break;
-}
+$sql = "SELECT * FROM orders WHERE status IN ('approved','completed') AND created_at >= :start AND created_at < :end";
+$queryParams = [
+    ':start' => $periodInfo['start'],
+    ':end' => $periodInfo['end'],
+];
+
+$period_title = sprintf('%s Sales Report - %s', ucfirst($periodInfo['period']), $periodInfo['label']);
 
 // Add customer type filter
+$topItemsFilter = '';
 if ($customer_type === 'walkin') {
     // Assuming walk-in customers use 'cash' payment method
     $sql .= " AND payment_method = 'cash'";
+    $topItemsFilter = " AND o.payment_method = 'cash'";
     $period_title .= ' (Walk-in Customers)';
 } elseif ($customer_type === 'online') {
     // Assuming online customers use non-cash payment methods
     $sql .= " AND payment_method != 'cash'";
+    $topItemsFilter = " AND o.payment_method != 'cash'";
     $period_title .= ' (Online Customers)';
 } else {
     $period_title .= ' (All Customers)';
@@ -94,30 +78,33 @@ $top_items_sql = "
     INNER JOIN orders o ON o.id = oi.order_id
     INNER JOIN products p ON p.id = oi.product_id
     WHERE o.status IN ('approved','completed')
-    AND o.created_at BETWEEN :start_date AND :end_date
+    AND o.created_at >= :start AND o.created_at < :end
+    $topItemsFilter
     GROUP BY p.id, p.name
     ORDER BY total_qty DESC
     LIMIT 5
 ";
 
 $top_items_stmt = $pdo->prepare($top_items_sql);
-$top_items_stmt->bindValue(':start_date', $start_date);
-$top_items_stmt->bindValue(':end_date', $end_date);
-$top_items_stmt->execute();
+$top_items_stmt->execute($queryParams);
 $top_items = $top_items_stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $sql .= " ORDER BY created_at DESC";
 
 try {
     $stmt = $pdo->prepare($sql);
-    $stmt->execute();
+    $stmt->execute($queryParams);
     $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     // Calculate totals
     $total_orders = count($orders);
-    $total_sales = array_sum(array_column($orders, 'total'));
+    $total_sales = array_sum(array_map('floatval', array_column($orders, 'total')));
 
-$date_range_display = 'Date: ' . date('m/d/Y', strtotime($start_date)) . ' to ' . date('m/d/Y', strtotime($end_date));
+    $rangeStartDisplay = date('m/d/Y', strtotime($periodInfo['range_start']));
+    $rangeEndDisplay = date('m/d/Y', strtotime($periodInfo['range_end']));
+    $date_range_display = $rangeStartDisplay === $rangeEndDisplay
+        ? 'Date: ' . $rangeStartDisplay
+        : 'Date: ' . $rangeStartDisplay . ' to ' . $rangeEndDisplay;
 
 // Generate HTML for PDF
 $html = '

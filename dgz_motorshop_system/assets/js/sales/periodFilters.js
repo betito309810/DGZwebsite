@@ -73,6 +73,171 @@
         return !!pattern && pattern.test(value);
     }
 
+    function pad2(value) {
+        return String(value).padStart(2, '0');
+    }
+
+    function formatYMD(date) {
+        return [
+            date.getFullYear(),
+            pad2(date.getMonth() + 1),
+            pad2(date.getDate()),
+        ].join('-');
+    }
+
+    function formatDateTime(date) {
+        return `${formatYMD(date)} ${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`;
+    }
+
+    function isoWeekStart(year, week) {
+        const simple = new Date(Date.UTC(year, 0, 4));
+        const dayOfWeek = simple.getUTCDay() || 7;
+        const startUtc = new Date(simple);
+        startUtc.setUTCDate(simple.getUTCDate() - dayOfWeek + 1 + (week - 1) * 7);
+        return new Date(
+            startUtc.getUTCFullYear(),
+            startUtc.getUTCMonth(),
+            startUtc.getUTCDate()
+        );
+    }
+
+    function describePeriod(period, rawValue) {
+        const normalized = normalizePeriod(period);
+        let value = rawValue || '';
+
+        if (!isValid(normalized, value)) {
+            value = defaultValue(normalized);
+        }
+
+        let startDate;
+        let endDate;
+        let normalizedValue = value;
+        let label = '';
+
+        switch (normalized) {
+            case 'weekly': {
+                const match = value.match(/^(\d{4})-W(\d{2})$/);
+                let isoYear;
+                let isoWeek;
+
+                if (match) {
+                    isoYear = parseInt(match[1], 10);
+                    isoWeek = parseInt(match[2], 10);
+                } else {
+                    const fallback = defaultValue('weekly');
+                    const fallbackMatch = fallback.match(/^(\d{4})-W(\d{2})$/);
+                    isoYear = parseInt(fallbackMatch[1], 10);
+                    isoWeek = parseInt(fallbackMatch[2], 10);
+                    normalizedValue = fallback;
+                }
+
+                startDate = isoWeekStart(isoYear, isoWeek);
+                endDate = new Date(startDate);
+                endDate.setDate(startDate.getDate() + 7);
+
+                const endDisplay = new Date(endDate);
+                endDisplay.setDate(endDisplay.getDate() - 1);
+
+                label = `Week ${pad2(isoWeek)} (${startDate.toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                })} - ${endDisplay.toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                })})`;
+
+                normalizedValue = `${isoYear}-W${pad2(isoWeek)}`;
+                break;
+            }
+
+            case 'monthly': {
+                const match = value.match(/^(\d{4})-(\d{2})$/);
+                let year;
+                let month;
+
+                if (match) {
+                    year = parseInt(match[1], 10);
+                    month = parseInt(match[2], 10);
+                } else {
+                    const fallback = defaultValue('monthly');
+                    const fallbackMatch = fallback.match(/^(\d{4})-(\d{2})$/);
+                    year = parseInt(fallbackMatch[1], 10);
+                    month = parseInt(fallbackMatch[2], 10);
+                    normalizedValue = fallback;
+                }
+
+                startDate = new Date(year, month - 1, 1);
+                endDate = new Date(year, month, 1);
+                label = startDate.toLocaleDateString('en-US', {
+                    month: 'long',
+                    year: 'numeric',
+                });
+
+                normalizedValue = `${year}-${pad2(month)}`;
+                break;
+            }
+
+            case 'annually': {
+                let year = parseInt(value, 10);
+                if (Number.isNaN(year)) {
+                    year = new Date().getFullYear();
+                }
+
+                startDate = new Date(year, 0, 1);
+                endDate = new Date(year + 1, 0, 1);
+                label = `${year}`;
+                normalizedValue = `${year}`;
+                break;
+            }
+
+            case 'daily':
+            default: {
+                const parts = (value || '').split('-').map((part) => parseInt(part, 10));
+                let year = parts[0];
+                let month = parts[1];
+                let day = parts[2];
+
+                if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) {
+                    const fallback = defaultValue('daily');
+                    const fallbackParts = fallback.split('-').map((part) => parseInt(part, 10));
+                    year = fallbackParts[0];
+                    month = fallbackParts[1];
+                    day = fallbackParts[2];
+                    normalizedValue = fallback;
+                }
+
+                startDate = new Date(year, month - 1, day);
+                endDate = new Date(startDate);
+                endDate.setDate(startDate.getDate() + 1);
+
+                label = startDate.toLocaleDateString('en-US', {
+                    month: 'long',
+                    day: 'numeric',
+                    year: 'numeric',
+                });
+
+                normalizedValue = `${startDate.getFullYear()}-${pad2(startDate.getMonth() + 1)}-${pad2(startDate.getDate())}`;
+                break;
+            }
+        }
+
+        const rangeStart = formatYMD(startDate);
+        const inclusiveEnd = new Date(endDate);
+        inclusiveEnd.setDate(inclusiveEnd.getDate() - 1);
+        const rangeEnd = formatYMD(inclusiveEnd);
+
+        return {
+            period: normalized,
+            value: normalizedValue,
+            start: formatDateTime(startDate),
+            end: formatDateTime(endDate),
+            rangeStart,
+            rangeEnd,
+            label,
+        };
+    }
+
     function configureInputAttributes(input, period) {
         input.setAttribute('type', INPUT_TYPES[period]);
         if (period === 'annually') {
@@ -200,5 +365,6 @@
     window.SalesPeriodFilters = {
         create,
         formatRangeText,
+        describe: describePeriod,
     };
 })(window);
