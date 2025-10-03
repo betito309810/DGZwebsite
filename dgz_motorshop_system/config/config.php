@@ -97,6 +97,37 @@ if (!function_exists('parsePaymentProofValue')) {
     }
 }
 
+if (!function_exists('normalizePaymentProofPath')) {
+    function normalizePaymentProofPath(?string $path, string $defaultPrefix = '../'): string
+    {
+        if ($path === null) {
+            return '';
+        }
+
+        $trimmed = trim($path);
+        if ($trimmed === '') {
+            return '';
+        }
+
+        // Allow fully-qualified URLs or data URIs to pass through untouched.
+        if (preg_match('#^https?://#i', $trimmed) === 1 || strncmp($trimmed, 'data:', 5) === 0) {
+            return $trimmed;
+        }
+
+        // Preserve absolute paths as-is.
+        if ($trimmed[0] === '/') {
+            return $trimmed;
+        }
+
+        // Already relative to the admin root; leave unchanged.
+        if (strncmp($trimmed, '../', 3) === 0 || strncmp($trimmed, './', 2) === 0) {
+            return $trimmed;
+        }
+
+        return $defaultPrefix . ltrim($trimmed, '/');
+    }
+}
+
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }

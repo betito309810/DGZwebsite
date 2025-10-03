@@ -412,108 +412,11 @@ function getStatusClass(string $status): string
             </div>
         </div>
     </div>
+        <!-- User menu -->
+        <script src="../assets/js/dashboard/userMenu.js"></script>
 
-    <script>
-        function toggleDropdown() {
-            const dropdown = document.getElementById('userDropdown');
-            dropdown.classList.toggle('show');
-        }
-
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            sidebar.classList.toggle('mobile-open');
-        }
-
-        const profileButton = document.getElementById('profileTrigger');
-        const profileModal = document.getElementById('profileModal');
-        const profileModalClose = document.getElementById('profileModalClose');
-
-        function openProfileModal() {
-            if (!profileModal) {
-                return;
-            }
-
-            profileModal.classList.add('show');
-            profileModal.setAttribute('aria-hidden', 'false');
-            document.body.classList.add('modal-open');
-        }
-
-        function closeProfileModal() {
-            if (!profileModal) {
-                return;
-            }
-
-            profileModal.classList.remove('show');
-            profileModal.setAttribute('aria-hidden', 'true');
-            document.body.classList.remove('modal-open');
-        }
-
-        document.addEventListener('click', function (event) {
-            const userMenu = document.querySelector('.user-menu');
-            const dropdown = document.getElementById('userDropdown');
-            if (!userMenu.contains(event.target)) {
-                dropdown.classList.remove('show');
-            }
-        });
-
-        profileButton?.addEventListener('click', function(event) {
-            event.preventDefault();
-            const dropdown = document.getElementById('userDropdown');
-            dropdown?.classList.remove('show');
-            openProfileModal();
-        });
-
-        profileModalClose?.addEventListener('click', function() {
-            closeProfileModal();
-        });
-
-        profileModal?.addEventListener('click', function(event) {
-            if (event.target === profileModal) {
-                closeProfileModal();
-            }
-        });
-
-        document.addEventListener('keydown', function(event) {
-            if (event.key === 'Escape' && profileModal?.classList.contains('show')) {
-                closeProfileModal();
-            }
-        });
-
-        document.addEventListener('click', function (event) {
-            const sidebar = document.getElementById('sidebar');
-            const toggle = document.querySelector('.mobile-toggle');
-            if (window.innerWidth <= 768 &&
-                !sidebar.contains(event.target) &&
-                !toggle.contains(event.target)) {
-                sidebar.classList.remove('mobile-open');
-            }
-        });
-
-        document.addEventListener('DOMContentLoaded', function () {
-            const alerts = document.querySelectorAll('.alert');
-            alerts.forEach(alert => {
-                setTimeout(() => {
-                    alert.style.transition = 'opacity 0.5s';
-                    alert.style.opacity = '0';
-                    setTimeout(() => alert.remove(), 500);
-                }, 4000);
-            });
-
-            const tabButtons = document.querySelectorAll('.tab-btn');
-            const tabPanels = document.querySelectorAll('.tab-panel');
-
-            tabButtons.forEach(button => {
-                button.addEventListener('click', () => {
-                    const targetId = button.getAttribute('data-target');
-
-                    tabButtons.forEach(btn => btn.classList.toggle('active', btn === button));
-                    tabPanels.forEach(panel => {
-                        panel.classList.toggle('active', panel.id === targetId);
-                    });
-                });
-            });
-        });
-    </script>
+    <!-- Tab controls -->
+    <script src="../assets/js/inventory/stockRequest.js"></script>
     <script src="../assets/js/notifications.js"></script>
 </body>
 </html>

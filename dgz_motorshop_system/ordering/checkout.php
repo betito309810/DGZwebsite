@@ -1,5 +1,5 @@
 <?php
-require __DIR__ . '/config/config.php';
+require __DIR__ . '/../config/config.php';
 $pdo = db();
 $errors = [];
 $referenceInput = '';
@@ -189,9 +189,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
             if (!$mime || !isset($allowed[$mime])) {
                 $errors[] = 'Please upload a valid image (JPG, PNG, GIF, or WEBP).';
             } else {
-                $uploadsRoot = __DIR__ . '/uploads';
+                $uploadsRoot = dirname(__DIR__) . '/uploads';
                 $uploadDir = $uploadsRoot . '/payment-proofs';
-                $publicUploadDir = 'uploads/payment-proofs';
+                $publicUploadDir = '../uploads/payment-proofs';
 
                 $setupOk = true;
                 if (!is_dir($uploadsRoot) && !mkdir($uploadsRoot, 0777, true) && !is_dir($uploadsRoot)) {
@@ -327,13 +327,13 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Checkout - DGZ Motorshop</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="assets/css/checkout.css">
+    <link rel="stylesheet" href="../assets/css/checkout.css">
 </head>
 <body>
     <header class="header">
         <div class="header-content">
             <div class="logo">
-                <img src="assets/logo.png" alt="Company Logo">
+                <img src="../assets/logo.png" alt="Company Logo">
             </div>
             <a href="index.php" class="continue-shopping-btn">
             <i class="fas fa-arrow-left"></i> Continue Shopping
@@ -422,7 +422,6 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                     </div>
                     
                     <div class="qr-code">
-                        <img src="assets/QR.png" alt="qrcode">
                     </div>
 
                     <div class="form-group">
