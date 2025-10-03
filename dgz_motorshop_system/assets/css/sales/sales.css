@@ -353,60 +353,55 @@ table tr:last-child td {
     gap: 12px;
 }
 
-.period-selector {
-    position: relative;
-}
-.pieperiod-selector{
-    position:relative;
-}
-
-.period-dropdown {
-    appearance: none;
-    background: linear-gradient(135deg, #3498db, #2980b9);
-    color: white;
-    border: none;
-    border-radius: 8px;
-    padding: 10px 40px 10px 16px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    outline: none;
-}
-
-.pieperiod-dropdown {
-    appearance: none;
+.widget-controls {
     display: flex;
-    background: linear-gradient(135deg, #3498db, #2980b9);
-    color: white;
-    border: none;
-    border-radius: 8px;
-    padding: 10px 40px 10px 16px;
-    font-size: 14px;
+    align-items: flex-end;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.control-label {
+    font-size: 12px;
     font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s ease;
+    color: #64748b;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.control-hint {
+    font-size: 12px;
+    color: #94a3b8;
+}
+
+.period-dropdown,
+.period-input {
+    min-width: 160px;
+    border-radius: 8px;
+    border: 1px solid #d1d5db;
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    background: #ffffff;
+    color: #1f2937;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.period-dropdown:focus,
+.period-input:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
     outline: none;
-    width: 100%;
-    margin-left: 165%;
 }
 
-
-.period-dropdown:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
-}
-
-.period-selector::after {
-    content: '\f078';
-    font-family: 'Font Awesome 6 Free';
-    font-weight: 900;
-    position: absolute;
-    right: 12px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: white;
-    pointer-events: none;
+.period-dropdown:hover,
+.period-input:hover {
+    border-color: #94a3b8;
 }
 
 .chart-container {
@@ -418,14 +413,6 @@ table tr:last-child td {
     background: #fff;
     box-shadow: 0px 4px 12px rgba(0,0,0,0.1);
     text-align: center;
-}
-
-#timeFilter {
-    padding: 6px 12px;
-    margin-bottom: 15px;
-    border-radius: 6px;
-    border: 1px solid #ccc;
-    font-size: 14px;
 }
 
 #salesPieChart {
@@ -629,6 +616,20 @@ table tr:last-child td {
         flex-direction: column;
         align-items: stretch;
         text-align: center;
+    }
+
+    .widget-controls {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .control-group {
+        width: 100%;
+    }
+
+    .period-dropdown,
+    .period-input {
+        width: 100%;
     }
 
     .stats-container {

@@ -1,27 +1,32 @@
-// Begin Sales report modal toggles
-    // Sales Report Modal functions
-    function openSalesReportModal() {
-        document.getElementById('salesReportModal').style.display = 'flex';
+document.addEventListener('DOMContentLoaded', () => {
+    const modal = document.getElementById('salesReportModal');
+    if (!modal) {
+        return;
     }
 
-    function closeSalesReportModal() {
-        document.getElementById('salesReportModal').style.display = 'none';
-    }
-    // End Sales report modal toggles
+    const openTrigger = document.getElementById('openSalesReport');
+    const closeTrigger = document.getElementById('closeModal');
 
-     // Begin Sales report modal quick handlers
-            function openSalesReportModal() {
-                document.getElementById('salesReportModal').style.display = 'flex';
-            }
+    const openModal = () => {
+        modal.style.display = 'flex';
+    };
 
-            function closeSalesReportModal() {
-                document.getElementById('salesReportModal').style.display = 'none';
-            }
+    const closeModal = () => {
+        modal.style.display = 'none';
+    };
 
-            // Close modal when clicking outside
-            document.getElementById('salesReportModal').addEventListener('click', function(event) {
-                if (event.target === this) {
-                    closeSalesReportModal();
-                }
-            });
-            // End Sales report modal quick handlers
+    openTrigger?.addEventListener('click', openModal);
+    closeTrigger?.addEventListener('click', closeModal);
+
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal) {
+            closeModal();
+        }
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && modal.style.display === 'flex') {
+            closeModal();
+        }
+    });
+});

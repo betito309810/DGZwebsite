@@ -220,42 +220,11 @@ $end_record = min($offset + $records_per_page, $total_records);
                 <i class="fas fa-file-export"></i>
                 Export to CSV
             </a>
-            <button onclick="openSalesReportModal()" class="btn btn-generate">
+            <button type="button" id="openSalesReport" class="btn btn-generate">
                 <i class="fas fa-chart-line"></i>
                 Generate Sales Report
             </button>
         </div>
-
-        <!-- Sales Report Modal -->
-        <div id="salesReportModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
-            <div class="modal-content" style="background: white; padding: 20px; border-radius: 8px; width: 90%; max-width: 500px; position: relative;">
-                <span class="close" onclick="closeSalesReportModal()" style="position: absolute; right: 20px; top: 10px; font-size: 24px; cursor: pointer;">&times;</span>
-                <h2 style="margin-bottom: 20px;">Generate Sales Report</h2>
-                <form id="salesReportForm" method="GET" action="sales_report_pdf.php" style="display: flex; flex-direction: column; gap: 15px;">
-                    <div>
-                        <label for="reportPeriod" style="display: block; margin-bottom: 5px; font-weight: 500;">Select Period:</label>
-                        <select id="reportPeriod" name="period" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                            <option value="daily">Daily</option>
-                            <option value="weekly">Weekly</option>
-                            <option value="monthly">Monthly</option>
-                            <option value="annually">Annually</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label for="customerType" style="display: block; margin-bottom: 5px; font-weight: 500;">Select Customer Type:</label>
-                        <select id="customerType" name="customer_type" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                            <option value="all">All Customers</option>
-                            <option value="walkin">Walk-in Customers</option>
-                            <option value="online">Online Customers</option>
-                        </select>
-                    </div>
-
-                    <button type="submit" class="btn btn-primary" style="margin-top: 10px;">Generate Report</button>
-                </form>
-            </div>
-        </div>
-
 
         <!-- Table Container -->
         <div class="table-container">
@@ -397,13 +366,21 @@ $end_record = min($offset + $records_per_page, $total_records);
                         <i class="fas fa-chart-line"></i>
                         Sales Analytics
                     </h2>
-                    <div class="period-selector">
-                        <select class="period-dropdown" id="periodSelector">
-                            <option value="daily">Daily</option>
-                            <option value="weekly">Weekly</option>
-                            <option value="monthly">Monthly</option>
-                            <option value="annually">Annually</option>
-                        </select>
+                    <div class="widget-controls" id="analyticsFilters">
+                        <div class="control-group">
+                            <label for="analyticsPeriod" class="control-label">View</label>
+                            <select class="period-dropdown" id="analyticsPeriod" data-period-select>
+                                <option value="daily">Daily</option>
+                                <option value="weekly">Weekly</option>
+                                <option value="monthly">Monthly</option>
+                                <option value="annually">Annually</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label for="analyticsPicker" class="control-label" id="analyticsPickerLabel">Select day</label>
+                            <input id="analyticsPicker" class="period-input" type="date" data-period-input>
+                            <span class="control-hint" id="analyticsRangeHint"></span>
+                        </div>
                     </div>
                 </div>
 
@@ -431,15 +408,24 @@ $end_record = min($offset + $records_per_page, $total_records);
             <!-- piecharat widget -->
             <div class="chart-card">
                 <div class="chart-header">
-                    
                     <h2><i class="fa-solid fa-chart-pie"></i>
                         Sales Trend</h2>
-                    <select id="timeFilter" aria-label="Select time period">
-                        <option value="daily">Daily</option>
-                        <option value="weekly">Weekly</option>
-                        <option value="monthly">Monthly</option>
-                        <option value="annually">Annually</option>
-                    </select>
+                    <div class="widget-controls" id="trendFilters">
+                        <div class="control-group">
+                            <label for="trendPeriod" class="control-label">View</label>
+                            <select id="trendPeriod" class="period-dropdown" data-period-select>
+                                <option value="daily">Daily</option>
+                                <option value="weekly">Weekly</option>
+                                <option value="monthly">Monthly</option>
+                                <option value="annually">Annually</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label for="trendPicker" class="control-label" id="trendPickerLabel">Select day</label>
+                            <input id="trendPicker" class="period-input" type="date" data-period-input>
+                            <span class="control-hint" id="trendRangeHint"></span>
+                        </div>
+                    </div>
                 </div>
                 <div class="chart-canvas-wrap">
                     
@@ -512,6 +498,8 @@ $end_record = min($offset + $records_per_page, $total_records);
             </form>
         </div>
     </div>
+    <!-- Sales period helpers -->
+    <script src="../assets/js/sales/periodFilters.js"></script>
     <!-- Sales report modal -->
     <script src="../assets/js/sales/salesReportModal.js"></script>
     <!-- Sales analytics widget -->
