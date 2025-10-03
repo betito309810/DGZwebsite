@@ -235,7 +235,6 @@ $end_record = min($offset + $records_per_page, $total_records);
                             <th>ID</th>
                             <th>Invoice</th>
                             <th>Customer Name</th>
-                            <th>Contact</th>
                             <th>Address</th>
                             <th>Total</th>
                             <th>Payment Method</th>
@@ -260,7 +259,6 @@ $end_record = min($offset + $records_per_page, $total_records);
                             <td><?=$o['id']?></td>
                             <td><?=$o['invoice_number'] ? htmlspecialchars($o['invoice_number']) : 'N/A'?></td>
                             <td><?=htmlspecialchars($o['customer_name'])?></td>
-                            <td><?=htmlspecialchars($o['contact'] ?? 'N/A')?></td>
                             <td><?=htmlspecialchars($o['address'] ?? 'N/A')?></td>
                             <td>₱<?=number_format($o['total'],2)?></td>
                             <td><?=htmlspecialchars($o['payment_method'])?></td>

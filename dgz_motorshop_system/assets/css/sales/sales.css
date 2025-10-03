@@ -175,7 +175,7 @@ body {
 }
 
 .table-wrapper {
-    height: 400px; /* height for the container */
+    height: 550px; /* height for the container */
     overflow-y: auto;
     overflow-x: auto;
 }

@@ -102,7 +102,7 @@ async function loadTransactionDetails(orderId) {
                     
                     <div class="info-group">
                         <label>Phone:</label>
-                        <span>${order.contact || 'N/A'}</span>
+                        <span>${order.phone || 'N/A'}</span>
                     </div>
                     <div class="info-group">
                         <label>Reference:</label>

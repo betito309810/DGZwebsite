@@ -39,6 +39,7 @@ try {
     $details = parsePaymentProofValue($order['payment_proof'] ?? null, $order['reference_no'] ?? null);
 
     $order['reference_number'] = $details['reference'];
+    $order['phone'] = $order['phone'] ?? null;
 
     echo json_encode([
         'order' => $order,
