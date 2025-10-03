@@ -406,7 +406,7 @@ $end_record = min($offset + $records_per_page, $total_records);
             </div>
 
             <!-- piecharat widget -->
-            <div class="chart-card">
+            <div class="chart-widget">
                 <div class="chart-header">
                     <h2><i class="fa-solid fa-chart-pie"></i>
                         Sales Trend</h2>
