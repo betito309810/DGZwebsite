@@ -263,5 +263,62 @@
                     });
                 });
             }
+
+            const inventoryFilterForm = document.getElementById('inventoryFilterForm');
+            if (inventoryFilterForm) {
+                const pageField = inventoryFilterForm.querySelector('input[name="page"]');
+                const filterSelects = inventoryFilterForm.querySelectorAll('select');
+                const searchInput = inventoryFilterForm.querySelector('input[name="search"]');
+                const clearButton = inventoryFilterForm.querySelector('[data-filter-clear]');
+
+                const resetPage = () => {
+                    if (pageField) {
+                        pageField.value = '1';
+                    }
+                };
+
+                inventoryFilterForm.addEventListener('submit', () => {
+                    resetPage();
+                });
+
+                filterSelects.forEach((select) => {
+                    select.addEventListener('change', resetPage);
+                });
+
+                const updateClearVisibility = () => {
+                    if (!searchInput || !clearButton) {
+                        return;
+                    }
+                    if (searchInput.value.trim() !== '') {
+                        clearButton.classList.add('is-visible');
+                    } else {
+                        clearButton.classList.remove('is-visible');
+                    }
+                };
+
+                if (searchInput) {
+                    searchInput.addEventListener('input', () => {
+                        resetPage();
+                        updateClearVisibility();
+                    });
+                    updateClearVisibility();
+                }
+
+                clearButton?.addEventListener('click', () => {
+                    if (!searchInput) {
+                        return;
+                    }
+
+                    searchInput.value = '';
+                    updateClearVisibility();
+                    resetPage();
+                    if (typeof inventoryFilterForm.requestSubmit === 'function') {
+                        inventoryFilterForm.requestSubmit();
+                    } else {
+                        inventoryFilterForm.submit();
+                    }
+                    searchInput.focus();
+                });
+            }
             // file 2 end
         });

@@ -1,136 +1,174 @@
 <?php
 require __DIR__ . '/../config/config.php';
-if(empty($_SESSION['user_id'])){ header('Location: login.php'); exit; }
+if (empty($_SESSION['user_id'])) {
+    header('Location: login.php');
+    exit;
+}
+
 $pdo = db();
 $role = $_SESSION['role'] ?? '';
 enforceStaffAccess();
 $notificationManageLink = 'inventory.php';
 
 require_once __DIR__ . '/includes/inventory_notifications.php';
+require_once __DIR__ . '/includes/stock_receipt_helpers.php';
 $inventoryNotificationData = loadInventoryNotifications($pdo);
 $inventoryNotifications = $inventoryNotificationData['notifications'];
 $inventoryNotificationCount = $inventoryNotificationData['active_count'];
 
-// Fetch the authenticated user's information for the profile modal
-$current_user = null;
-try {
-    $stmt = $pdo->prepare('SELECT name, role, created_at FROM users WHERE id = ?');
-    $stmt->execute([$_SESSION['user_id']]);
-    $current_user = $stmt->fetch();
-} catch (Exception $e) {
-    error_log('User lookup failed: ' . $e->getMessage());
-}
+$currentUser = loadCurrentUser($pdo, (int)$_SESSION['user_id']);
+$profile_name = $currentUser['name'] ?? 'N/A';
+$profile_role = !empty($currentUser['role']) ? ucfirst($currentUser['role']) : 'N/A';
+$profile_created = format_profile_date($currentUser['created_at'] ?? null);
 
-function format_profile_date(?string $datetime): string
-{
-    if (!$datetime) {
-        return 'N/A';
+$moduleReady = ensureStockReceiptTablesExist($pdo);
+$errors = [];
+$infoMessage = '';
+$successMessage = '';
+$activeReceipt = null;
+$editingReceiptId = null;
+$formMode = 'create';
+
+$requestedReceiptId = isset($_GET['receipt']) ? (int)$_GET['receipt'] : 0;
+$requestedReceiptCode = isset($_GET['code']) ? trim((string)($_GET['code'] ?? '')) : '';
+
+if ($moduleReady) {
+    if ($requestedReceiptId > 0) {
+        $activeReceipt = loadStockReceiptWithItems($pdo, $requestedReceiptId);
+    } elseif ($requestedReceiptCode !== '') {
+        $activeReceipt = loadStockReceiptByCode($pdo, $requestedReceiptCode);
     }
 
-    $timestamp = strtotime($datetime);
-    if ($timestamp === false) {
-        return 'N/A';
-    }
-
-    return date('F j, Y g:i A', $timestamp);
-}
-
-$profile_name = $current_user['name'] ?? 'N/A';
-$profile_role = !empty($current_user['role']) ? ucfirst($current_user['role']) : 'N/A';
-$profile_created = format_profile_date($current_user['created_at'] ?? null);
-
-// Handle stock entry submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_stock'])) {
-    $product_id = $_POST['product_id'] ?? '';
-    $quantity = (int)($_POST['quantity'] ?? 0);
-    $supplier = $_POST['supplier'] ?? '';
-    $notes = $_POST['notes'] ?? '';
-    $purchase_price = isset($_POST['purchase_price']) ? floatval($_POST['purchase_price']) : 0;
-    
-    if ($product_id && $quantity > 0) {
-        try {
-            // Start transaction
-            $pdo->beginTransaction();
-            // Update product quantity
-            $stmt = $pdo->prepare("UPDATE products SET quantity = quantity + ? WHERE id = ?");
-            $stmt->execute([$quantity, $product_id]);
-            // Record stock entry with the current user and purchase price
-            $stmt = $pdo->prepare("INSERT INTO stock_entries (product_id, quantity_added, purchase_price, supplier, notes, stock_in_by, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())");
-            $stmt->execute([$product_id, $quantity, $purchase_price, $supplier, $notes, $_SESSION['user_id']]);
-            $pdo->commit();
-            $success_message = "Stock updated successfully!";
-        } catch (Exception $e) {
-            $pdo->rollBack();
-            $error_message = "Error updating stock: " . $e->getMessage();
+    if ($activeReceipt) {
+        $editingReceiptId = (int)($activeReceipt['header']['id'] ?? 0);
+        $formMode = 'edit';
+        if (in_array($activeReceipt['header']['status'], ['posted', 'with_discrepancy'], true) && ($_GET['mode'] ?? '') !== 'edit') {
+            header('Location: stockReceiptView.php?receipt=' . $editingReceiptId);
+            exit;
         }
-    } else {
-        $error_message = "Please select a product and enter a valid quantity.";
+    } elseif (($requestedReceiptId > 0 || $requestedReceiptCode !== '') && !$activeReceipt) {
+        $errors[] = 'Requested stock-in document was not found.';
     }
 }
 
-/**
- * Fetch all products for the product selection dropdown.
- * This will be used to populate the product options in the form.
- */
-$products = $pdo->query("SELECT * FROM products ORDER BY name")->fetchAll();
+if ($moduleReady && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $result = handleStockReceiptSubmission($pdo, $currentUser, $_POST, $_FILES);
+    $errors = $result['errors'];
+    $successMessage = $result['success_message'];
+    if (!empty($result['redirect'])) {
+        header('Location: ' . $result['redirect']);
+        exit;
+    }
+}
 
-/**
- * Fetch distinct categories from products table to populate the category filter dropdown.
- * Only non-empty categories are included.
- */
-$categories = $pdo->query("SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND category != '' ORDER BY category")->fetchAll(PDO::FETCH_COLUMN);
+if (!$moduleReady) {
+    $infoMessage = 'Stock-in tables are missing. Please run the provided database migrations before using this page.';
+}
 
-/**
- * Fetch distinct brands from products table to populate the brand filter dropdown.
- * Only non-empty brands are included.
- */
-$brands = $pdo->query("SELECT DISTINCT brand FROM products WHERE brand IS NOT NULL AND brand != '' ORDER BY brand")->fetchAll(PDO::FETCH_COLUMN);
+if (isset($_GET['created']) && $_GET['created'] === '1') {
+    $successMessage = 'Stock-in document saved successfully.';
+}
 
-/**
- * Fetch distinct suppliers from products table to populate the supplier dropdown.
- * Only non-empty suppliers are included.
- */
-$suppliers = $pdo->query("SELECT DISTINCT supplier FROM products WHERE supplier IS NOT NULL AND supplier != '' ORDER BY supplier")->fetchAll(PDO::FETCH_COLUMN);
+if (isset($_GET['posted']) && $_GET['posted'] === '1') {
+    $successMessage = 'Stock-in document posted and inventory updated.';
+}
 
-// Get recent stock entries with user information
-$recent_entries = $pdo->query("
-    SELECT se.*, p.name as product_name, u.name as user_name 
-    FROM stock_entries se 
-    JOIN products p ON p.id = se.product_id 
-    LEFT JOIN users u ON u.id = se.stock_in_by 
-    ORDER BY se.created_at DESC 
-    LIMIT 10
-")->fetchAll();
+$products = fetchProductCatalog($pdo);
+$suppliers = fetchSuppliersList($pdo);
+$recentReceipts = $moduleReady ? fetchRecentReceipts($pdo) : [];
+
+$formSupplier = $activeReceipt['header']['supplier_name'] ?? '';
+$formDocumentNumber = $activeReceipt['header']['document_number'] ?? '';
+$formDateReceived = $activeReceipt['header']['date_received'] ?? date('Y-m-d');
+$formNotes = $activeReceipt['header']['notes'] ?? '';
+$formRelatedReference = $activeReceipt['header']['related_reference'] ?? '';
+$formDiscrepancyNote = $activeReceipt['header']['discrepancy_note'] ?? '';
+
+if (!empty($_POST)) {
+    $formSupplier = $_POST['supplier_name'] ?? $formSupplier;
+    $formDocumentNumber = $_POST['document_number'] ?? $formDocumentNumber;
+    $formDateReceived = $_POST['date_received'] ?? $formDateReceived;
+    $formNotes = $_POST['notes'] ?? $formNotes;
+    $formRelatedReference = $_POST['related_reference'] ?? $formRelatedReference;
+    $formDiscrepancyNote = $_POST['discrepancy_note'] ?? $formDiscrepancyNote;
+}
+
+$existingItems = [];
+if ($activeReceipt) {
+    foreach ($activeReceipt['items'] as $item) {
+        $existingItems[] = [
+            'product_id' => (int)$item['product_id'],
+            'qty_expected' => $item['qty_expected'],
+            'qty_received' => $item['qty_received'],
+            'unit_cost' => $item['unit_cost'],
+            'expiry_date' => $item['expiry_date'],
+            'expiry_value' => $item['expiry_date'],
+            'lot_number' => $item['lot_number'],
+            'has_discrepancy' => $item['qty_expected'] !== null && (int)$item['qty_expected'] !== (int)$item['qty_received'],
+            'invalid_expiry' => false,
+        ];
+    }
+}
+
+if (!empty($_POST)) {
+    $postItems = normalizeLineItemsPreserveBlank($_POST);
+    if (!empty($postItems)) {
+        $existingItems = $postItems;
+    }
+}
+
+if (empty($existingItems)) {
+    $existingItems[] = [
+        'product_id' => null,
+        'qty_expected' => null,
+        'qty_received' => null,
+        'unit_cost' => null,
+        'expiry_date' => null,
+        'expiry_value' => null,
+        'lot_number' => null,
+        'has_discrepancy' => false,
+        'invalid_expiry' => false,
+    ];
+}
+
+$existingAttachments = $activeReceipt['attachments'] ?? [];
+$formLocked = !$moduleReady || ($activeReceipt && $activeReceipt['header']['status'] !== 'draft');
+$hasPresetDiscrepancy = false;
+foreach ($existingItems as $item) {
+    if (!empty($item['has_discrepancy'])) {
+        $hasPresetDiscrepancy = true;
+        break;
+    }
+}
+if (trim((string)$formDiscrepancyNote) !== '') {
+    $hasPresetDiscrepancy = true;
+}
+$discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
+
 ?>
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stock Entry - DGZ</title>
+    <title>Create Stock-In - DGZ</title>
     <link rel="stylesheet" href="../assets/css/style.css">
-    <link rel="stylesheet" href="../assets/css/inventory/stockEntry.css">
     <link rel="stylesheet" href="../assets/css/dashboard/dashboard.css">
-    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="../assets/css/inventory/stockEntry.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    
 </head>
 <body>
-    <!-- Sidebar -->
     <?php
         $activePage = 'inventory.php';
         include __DIR__ . '/includes/sidebar.php';
     ?>
-
-    <!-- Main Content -->
     <main class="main-content">
-        <!-- Header -->
         <header class="header">
             <div class="header-left">
                 <button class="mobile-toggle" onclick="toggleSidebar()">
                     <i class="fas fa-bars"></i>
                 </button>
-                <h2>Stock Entry</h2>
+                <h2>Create Stock-In</h2>
             </div>
             <div class="header-right">
                 <?php include __DIR__ . '/partials/notification_menu.php'; ?>
@@ -162,133 +200,247 @@ $recent_entries = $pdo->query("
             <a href="inventory.php" class="btn-action back-btn">Back to Inventory</a>
         </div>
 
-        <!-- Stock Entry Content -->
         <div class="dashboard-content">
-            <?php if (isset($success_message)): ?>
-                <div class="alert alert-success"><?php echo $success_message; ?></div>
-            <?php endif; ?>
-            
-            <?php if (isset($error_message)): ?>
-                <div class="alert alert-error"><?php echo $error_message; ?></div>
+            <?php if (!empty($infoMessage)): ?>
+                <div class="alert alert-info"><?= htmlspecialchars($infoMessage) ?></div>
             <?php endif; ?>
 
-            <!-- Stock Entry Form -->
-            <div class="stock-entry-form">
-                <h3 style="margin-bottom: 20px;">Add New Stock</h3>
-                <form method="POST" action="">
-                    <div class="form-grid">
-                    <div class="form-group">
-                        <label for="product_search">Search Product</label>
-                        <input type="text" id="product_search" placeholder="Search products..." autocomplete="off">
-                        <div id="autocomplete-list" class="autocomplete-items"></div>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="product_id">Product</label>
-                        <select name="product_id" id="product_id" required>
-                            <option value="">Select Product</option>
-                            <?php
-                            // Populate product dropdown with products from database
-                            foreach ($products as $product) {
-                                echo '<option value="' . htmlspecialchars($product['id']) . '">' . htmlspecialchars($product['name']) . '</option>';
-                            }
-                            ?>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="category_filter">Filter by Category</label>
-                        <select id="category_filter" name="category_filter">
-                            <option value="">All Categories</option>
-                            <?php
-                            // Populate category filter dropdown with distinct categories from products
-                            foreach ($categories as $category) {
-                                echo '<option value="' . htmlspecialchars($category) . '">' . htmlspecialchars($category) . '</option>';
-                            }
-                            ?>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="brand_filter">Filter by Brand</label>
-                        <select id="brand_filter" name="brand_filter">
-                            <option value="">All Brands</option>
-                            <?php
-                            // Populate brand filter dropdown with distinct brands from products
-                            foreach ($brands as $brand) {
-                                echo '<option value="' . htmlspecialchars($brand) . '">' . htmlspecialchars($brand) . '</option>';
-                            }
-                            ?>
-                        </select>
-                    </div>
-
-                    <!-- Removed duplicate search product input on the right as per user request -->
-
-                    <div class="form-group">
-                        <label for="quantity">Quantity to Add</label>
-                        <input type="number" name="quantity" id="quantity" min="1" required>
-                    </div>
-                    <!-- Removed Purchased Price per Unit input as per user request -->
-                    
-                    <div class="form-group">
-                        <label for="supplier">Supplier</label>
-                        <select name="supplier" id="supplier" required>
-                            <option value="">Select Supplier</option>
-                            <?php
-                            // Populate supplier dropdown with distinct suppliers from products
-                            foreach ($suppliers as $supplier) {
-                                echo '<option value="' . htmlspecialchars($supplier) . '">' . htmlspecialchars($supplier) . '</option>';
-                            }
-                            ?>
-                        </select>
-                    </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="notes">Notes</label>
-                        <textarea name="notes" id="notes" placeholder="Enter any additional notes..."></textarea>
-                    </div>
-                    
-                    <button type="submit" name="add_stock" class="submit-btn">
-                        <i class="fas fa-plus"></i> Add Stock
-                    </button>
-                </form>
-            </div>
-
-            <!-- Recent Stock Entries -->
-            <div class="recent-entries">
-                <h3 style="margin-bottom: 20px;">Recent Stock Entries</h3>
-                <table class="entries-table">
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Product</th>
-                            <th>Quantity Added</th>
-                            <!-- Removed Cost (per unit) column as per user request -->
-                            <th>Supplier</th>
-                            <th>Stock in by</th>
-                            <th>Notes</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($recent_entries as $entry): ?>
-                            <tr>
-                                <td><?php echo date('M d, Y H:i', strtotime($entry['created_at'])); ?></td>
-                                <td><?php echo htmlspecialchars($entry['product_name']); ?></td>
-                                <td><?php echo $entry['quantity_added']; ?></td>
-                                <td><?php echo htmlspecialchars($entry['supplier']); ?></td>
-                                <td><?php echo htmlspecialchars($entry['user_name'] ?? 'Unknown'); ?></td>
-                                <td><?php echo htmlspecialchars($entry['notes']); ?></td>
-                            </tr>
+            <?php if (!empty($errors)): ?>
+                <div class="alert alert-error">
+                    <ul>
+                        <?php foreach ($errors as $error): ?>
+                            <li><?= htmlspecialchars($error) ?></li>
                         <?php endforeach; ?>
-                        <?php if (empty($recent_entries)): ?>
-                            <tr>
-                                <td colspan="5" style="text-align: center;">No recent stock entries</td>
-                            </tr>
+                    </ul>
+                </div>
+            <?php endif; ?>
+
+            <?php if (!empty($successMessage)): ?>
+                <div class="alert alert-success"><?= htmlspecialchars($successMessage) ?></div>
+            <?php endif; ?>
+
+            <section class="panel" aria-labelledby="stockInFormTitle">
+                <div class="panel-header">
+                    <div>
+                        <h3 id="stockInFormTitle"><?= $formMode === 'edit' ? 'Edit Stock-In' : 'New Stock-In' ?></h3>
+                        <p class="panel-subtitle">
+                            <?= $formMode === 'edit'
+                                ? 'Update the draft receipt before posting to inventory.'
+                                : 'Capture supplier deliveries, attach proofs, and post directly to inventory.'
+                            ?>
+                            <?php if ($activeReceipt): ?>
+                                <span class="panel-subtext">Reference: <?= htmlspecialchars($activeReceipt['header']['receipt_code'] ?? '') ?> · Status: <?= htmlspecialchars(formatStockReceiptStatus($activeReceipt['header']['status'] ?? 'draft')) ?></span>
+                            <?php endif; ?>
+                        </p>
+                    </div>
+                    <div class="panel-actions">
+                        <?php if (!$formLocked): ?>
+                        <button type="button" class="btn-secondary" id="addLineItemBtn">
+                            <i class="fas fa-plus"></i> Add Line Item
+                        </button>
                         <?php endif; ?>
-                    </tbody>
-                </table>
-            </div>
+                    </div>
+                </div>
+                <form id="stockInForm" method="POST" enctype="multipart/form-data" <?= $formLocked ? 'aria-disabled="true"' : '' ?>>
+                    <?php if ($editingReceiptId): ?>
+                        <input type="hidden" name="receipt_id" value="<?= (int)$editingReceiptId ?>">
+                    <?php endif; ?>
+                    <fieldset class="form-section" aria-labelledby="headerInfoTitle" <?= $formLocked ? 'disabled' : '' ?>>
+                        <legend id="headerInfoTitle">Header</legend>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="supplier_name">Supplier <span class="required">*</span></label>
+                                <input type="text" id="supplier_name" name="supplier_name" list="supplierOptions" placeholder="Enter supplier name" value="<?= htmlspecialchars($formSupplier) ?>" required>
+                                <datalist id="supplierOptions">
+                                    <?php foreach ($suppliers as $supplier): ?>
+                                        <option value="<?= htmlspecialchars($supplier) ?>"></option>
+                                    <?php endforeach; ?>
+                                </datalist>
+                            </div>
+                            <div class="form-group">
+                                <label for="document_number">DR / Invoice No. <span class="required">*</span></label>
+                                <input type="text" id="document_number" name="document_number" placeholder="Delivery receipt or invoice number" value="<?= htmlspecialchars($formDocumentNumber) ?>" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="date_received">Date Received</label>
+                                <input type="date" id="date_received" name="date_received" value="<?= htmlspecialchars($formDateReceived) ?>">
+                            </div>
+                            <div class="form-group">
+                                <label for="received_by_name">Received By</label>
+                                <input type="text" id="received_by_name" value="<?= htmlspecialchars($currentUser['name'] ?? 'N/A') ?>" readonly>
+                            </div>
+                            <div class="form-group">
+                                <label for="related_reference">Related To</label>
+                                <input type="text" id="related_reference" name="related_reference" placeholder="Reference another stock-in if partial" value="<?= htmlspecialchars($formRelatedReference) ?>">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="notes">Notes</label>
+                            <textarea id="notes" name="notes" rows="3" placeholder="Any additional details"><?= htmlspecialchars($formNotes) ?></textarea>
+                        </div>
+                        <div class="form-group" id="discrepancyNoteGroup" <?= $discrepancyGroupHiddenAttr ?> >
+                            <label for="discrepancy_note">Discrepancy Note <span class="required">*</span></label>
+                            <textarea id="discrepancy_note" name="discrepancy_note" rows="3" placeholder="Explain missing, damaged, or excess items"><?= htmlspecialchars($formDiscrepancyNote) ?></textarea>
+                        </div>
+                    </fieldset>
+
+                    <fieldset class="form-section line-items-section" aria-labelledby="lineItemsTitle" <?= $formLocked ? 'disabled' : '' ?>>
+                        <legend id="lineItemsTitle">Line Items</legend>
+                        <p class="table-hint table-hint-inline">Tip: Use Qty Expected to highlight discrepancies before posting.</p>
+                        <div class="table-wrapper">
+                            <table class="line-items-table">
+                                <thead>
+                                    <tr>
+                                        <th>Product <span class="required">*</span></th>
+                                        <th>Qty Expected</th>
+                                        <th>Qty Received <span class="required">*</span></th>
+                                        <th>Unit Cost</th>
+                                        <th>Expiry</th>
+                                        <th>Lot / Batch</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="lineItemsBody">
+                                    <?php foreach ($existingItems as $index => $item): ?>
+                                        <?php
+                                            $productId = $item['product_id'];
+                                            $qtyExpected = $item['qty_expected'];
+                                            $qtyReceived = $item['qty_received'];
+                                            $unitCost = $item['unit_cost'];
+                                            $expiryDate = $item['expiry_date'];
+                                            $lotNumber = $item['lot_number'];
+                                            $rowHasDiscrepancy = !empty($item['has_discrepancy']);
+                                            $rowInvalidExpiry = !empty($item['invalid_expiry']);
+                                        ?>
+                                        <tr class="line-item-row<?= $rowHasDiscrepancy ? ' has-discrepancy' : '' ?>" data-selected-product="<?= $productId ? (int)$productId : '' ?>">
+                                            <td>
+                                                <div class="product-selector">
+                                                    <input type="text" class="product-search" placeholder="Search name or code" value="">
+                                                    <div class="product-suggestions"></div>
+                                                    <select name="product_id[]" class="product-select" required>
+                                                        <option value="">Select product</option>
+                                                        <?php foreach ($products as $product): ?>
+                                                            <option value="<?= (int)$product['id'] ?>" <?= $productId == (int)$product['id'] ? 'selected' : '' ?>>
+                                                                <?= htmlspecialchars($product['name']) ?>
+                                                            </option>
+                                                        <?php endforeach; ?>
+                                                    </select>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <input type="number" name="qty_expected[]" min="0" step="1" placeholder="0" value="<?= $qtyExpected !== null ? htmlspecialchars((string)$qtyExpected) : '' ?>">
+                                            </td>
+                                            <td>
+                                                <input type="number" name="qty_received[]" min="0" step="1" placeholder="0" value="<?= $qtyReceived !== null ? htmlspecialchars((string)$qtyReceived) : '' ?>" <?= $formLocked ? 'readonly' : 'required' ?>>
+                                            </td>
+                                            <td>
+                                                <input type="number" name="unit_cost[]" min="0" step="0.01" placeholder="0.00" value="<?= $unitCost !== null ? htmlspecialchars(number_format((float)$unitCost, 2, '.', '')) : '' ?>">
+                                            </td>
+                                            <td>
+                                                <input type="date" name="expiry_date[]" value="<?= $expiryDate ? htmlspecialchars($expiryDate) : '' ?>">
+                                                <?php if ($rowInvalidExpiry): ?>
+                                                    <small class="input-error">Use YYYY-MM-DD (e.g., <?= date('Y-m-d') ?>).</small>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <input type="text" name="lot_number[]" placeholder="Lot or batch" value="<?= $lotNumber ? htmlspecialchars($lotNumber) : '' ?>">
+                                            </td>
+                                            <td class="actions">
+                                                <button type="button" class="icon-btn remove-line-item" aria-label="Remove line item" <?= ($index === 0 || $formLocked) ? 'disabled' : '' ?>>
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </fieldset>
+
+                    <fieldset class="form-section" aria-labelledby="attachmentsTitle" <?= $formLocked ? 'disabled' : '' ?>>
+                        <legend id="attachmentsTitle">Attachments</legend>
+                        <div class="form-group">
+                            <label for="attachments">Upload Proof (PDF/JPG/PNG)</label>
+                            <input type="file" id="attachments" name="attachments[]" accept=".pdf,.jpg,.jpeg,.png" multiple <?= $formLocked ? 'disabled' : '' ?>>
+                            <small>Include delivery receipt or invoice images. Multiple files allowed.</small>
+                        </div>
+                        <ul id="attachmentList" class="attachment-list"></ul>
+                        <?php if (!empty($existingAttachments)): ?>
+                            <div class="existing-attachments">
+                                <h4>Existing Attachments</h4>
+                                <ul>
+                                    <?php foreach ($existingAttachments as $attachment): ?>
+                                        <li>
+                                            <a href="../<?= htmlspecialchars($attachment['file_path']) ?>" target="_blank" rel="noopener">
+                                                <i class="fas fa-paperclip"></i> <?= htmlspecialchars($attachment['original_name']) ?>
+                                            </a>
+                                            <span class="attachment-meta">Uploaded <?= htmlspecialchars(formatStockReceiptDateTime($attachment['created_at'])) ?></span>
+                                        </li>
+                                    <?php endforeach; ?>
+                                </ul>
+                            </div>
+                        <?php endif; ?>
+                    </fieldset>
+
+                    <div class="form-footer">
+                        <input type="hidden" name="form_action" id="formAction" value="">
+                        <button type="button" class="btn-secondary" id="saveDraftBtn" <?= $formLocked ? 'disabled' : '' ?>>Save as Draft</button>
+                        <button type="button" class="btn-primary" id="postReceiptBtn" <?= $formLocked ? 'disabled' : '' ?>>Post &amp; Receive</button>
+                        <?php if ($formLocked && $activeReceipt): ?>
+                            <a class="btn-secondary" href="stockReceiptView.php?receipt=<?= (int)$activeReceipt['header']['id'] ?>">View Details</a>
+                        <?php endif; ?>
+                    </div>
+                </form>
+            </section>
+
+            <section class="panel" aria-labelledby="recentReceiptsTitle">
+                <div class="panel-header">
+                    <div>
+                        <h3 id="recentReceiptsTitle">Recent Stock-In Activity</h3>
+                        <p class="panel-subtitle">Latest receipts with status and totals.</p>
+                    </div>
+                </div>
+                <?php if (!empty($recentReceipts)): ?>
+                    <div class="table-wrapper">
+                        <table class="line-items-table">
+                            <thead>
+                                <tr>
+                                    <th>Posted</th>
+                                    <th>Reference</th>
+                                    <th>Supplier</th>
+                                    <th>Received By</th>
+                                    <th>Status</th>
+                                    <th>Items</th>
+                                    <th>Total Qty</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($recentReceipts as $receipt): ?>
+                                    <tr>
+                                        <td><?= htmlspecialchars($receipt['posted_at_formatted'] ?? $receipt['created_at_formatted']) ?></td>
+                                        <td><?= htmlspecialchars($receipt['receipt_code']) ?></td>
+                                        <td><?= htmlspecialchars($receipt['supplier_name']) ?></td>
+                                        <td><?= htmlspecialchars($receipt['received_by_name'] ?? 'Pending') ?></td>
+                                        <td><span class="status-badge status-<?= htmlspecialchars($receipt['status']) ?>"><?= htmlspecialchars(formatStatusLabel($receipt['status'])) ?></span></td>
+                                        <td><?= (int)$receipt['item_count'] ?></td>
+                                        <td><?= (int)$receipt['total_received_qty'] ?></td>
+                                        <td class="table-actions">
+                                            <?php if ($receipt['status'] === 'draft'): ?>
+                                                <a href="stockEntry.php?receipt=<?= (int)$receipt['id'] ?>&mode=edit" class="table-link">Edit Draft</a>
+                                            <?php else: ?>
+                                                <a href="stockReceiptView.php?receipt=<?= (int)$receipt['id'] ?>" class="table-link">View</a>
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php else: ?>
+                    <p class="empty-state">No stock-in documents recorded yet.</p>
+                <?php endif; ?>
+            </section>
         </div>
     </main>
 
@@ -314,45 +466,593 @@ $recent_entries = $pdo->query("
             </div>
         </div>
     </div>
-    <script>
-        window.dgzStockEntryData = {
-            products: <?= json_encode($products) ?>,
-            categories: <?= json_encode($categories) ?>,
-        };
+
+    <script type="application/json" id="stockReceiptBootstrap">
+        <?= json_encode([
+            'products' => $products,
+            'currentUserId' => (int)($_SESSION['user_id'] ?? 0),
+            'suppliers' => $suppliers,
+            'formLocked' => $formLocked,
+        ], JSON_PRETTY_PRINT) ?>
     </script>
     <script src="../assets/js/inventory/stockEntry.js"></script>
     <script src="../assets/js/notifications.js"></script>
-    <style>
-        /* Styles for autocomplete items */
-        .autocomplete-items {
-            position: absolute;
-            border: 1px solid #d4d4d4;
-            border-bottom: none;
-            border-top: none;
-            z-index: 9999;
-            /* position the autocomplete items to be the same width as the container: */
-            top: 100%;
-            left: 0;
-            right: 0;
-            max-height: 200px;
-            overflow-y: auto;
-            background-color: white;
-        }
-        /* Ensure the parent container of autocomplete is positioned relative for correct absolute positioning */
-        .form-group {
-            position: relative;
-        }
-
-        .autocomplete-items div {
-            padding: 10px;
-            cursor: pointer;
-            border-bottom: 1px solid #d4d4d4;
-        }
-
-        .autocomplete-items div:hover {
-            background-color: #e9e9e9;
-        }
-    </style>
-    <!-- Stock Entry JS already loaded above -->
 </body>
 </html>
+<?php
+
+/**
+ * Helper: retrieve current user info for profile and audit references.
+ */
+function loadCurrentUser(PDO $pdo, int $userId): ?array
+{
+    try {
+        $stmt = $pdo->prepare('SELECT id, name, role, created_at FROM users WHERE id = ?');
+        $stmt->execute([$userId]);
+        return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    } catch (Throwable $e) {
+        error_log('User lookup failed: ' . $e->getMessage());
+        return null;
+    }
+}
+
+/**
+ * Format dates for profile modal display.
+ */
+function format_profile_date(?string $datetime): string
+{
+    if (!$datetime) {
+        return 'N/A';
+    }
+
+    $timestamp = strtotime($datetime);
+    if ($timestamp === false) {
+        return 'N/A';
+    }
+
+    return date('F j, Y g:i A', $timestamp);
+}
+
+/**
+ * Quickly check that the new stock-in tables exist before rendering the form.
+ */
+function ensureStockReceiptTablesExist(PDO $pdo): bool
+{
+    try {
+        $pdo->query('SELECT 1 FROM stock_receipts LIMIT 1');
+        $pdo->query('SELECT 1 FROM stock_receipt_items LIMIT 1');
+        $pdo->query('SELECT 1 FROM stock_receipt_files LIMIT 1');
+        $pdo->query('SELECT 1 FROM stock_receipt_audit_log LIMIT 1');
+        $pdo->query('SELECT 1 FROM inventory_ledger LIMIT 1');
+        return true;
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
+/**
+ * Load product catalog data needed to populate line item selectors.
+ */
+function fetchProductCatalog(PDO $pdo): array
+{
+    $stmt = $pdo->query('SELECT id, name, code, brand, category FROM products ORDER BY name');
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/**
+ * Build a deduplicated list of supplier names from either the products table or the receipts table.
+ */
+function fetchSuppliersList(PDO $pdo): array
+{
+    $suppliers = [];
+    try {
+        $result = $pdo->query("SELECT DISTINCT supplier_name FROM stock_receipts WHERE supplier_name IS NOT NULL AND supplier_name != ''");
+        $suppliers = $result->fetchAll(PDO::FETCH_COLUMN);
+    } catch (Throwable $e) {
+        // ignore if table missing or empty
+    }
+
+    $productSuppliers = [];
+    try {
+        $result = $pdo->query("SELECT DISTINCT supplier FROM products WHERE supplier IS NOT NULL AND supplier != ''");
+        $productSuppliers = $result->fetchAll(PDO::FETCH_COLUMN);
+    } catch (Throwable $e) {
+        // ignore missing column/table
+    }
+
+    return array_values(array_unique(array_merge($suppliers, $productSuppliers)));
+}
+
+/**
+ * Handle insert/update of a new stock receipt with items, attachments, and audit trail.
+ */
+function handleStockReceiptSubmission(PDO $pdo, ?array $currentUser, array $post, array $files): array
+{
+    $response = [
+        'errors' => [],
+        'success_message' => '',
+        'redirect' => null,
+    ];
+
+    $action = $post['form_action'] ?? '';
+    if (!in_array($action, ['save_draft', 'post_receipt'], true)) {
+        $response['errors'][] = 'Unknown action. Please use the form buttons provided.';
+        return $response;
+    }
+
+    $receiptId = isset($post['receipt_id']) ? (int)$post['receipt_id'] : 0;
+    $existingReceipt = null;
+    if ($receiptId > 0) {
+        $existingReceipt = loadStockReceiptWithItems($pdo, $receiptId);
+        if (!$existingReceipt) {
+            $response['errors'][] = 'Receipt not found. It may have been removed.';
+            return $response;
+        }
+
+        if (!in_array($existingReceipt['header']['status'], ['draft'], true)) {
+            $response['errors'][] = 'Only draft receipts can be edited. Please create a new stock-in document.';
+            return $response;
+        }
+    }
+
+    $supplierName = trim((string)($post['supplier_name'] ?? ''));
+    $documentNumber = trim((string)($post['document_number'] ?? ''));
+    $relatedReference = trim((string)($post['related_reference'] ?? ''));
+    $notes = trim((string)($post['notes'] ?? ''));
+    $discrepancyNote = trim((string)($post['discrepancy_note'] ?? ''));
+    $dateReceivedRaw = $post['date_received'] ?? date('Y-m-d');
+
+    $dateReceived = validateDateValue($dateReceivedRaw);
+    if ($dateReceived === null) {
+        $response['errors'][] = 'Invalid Date Received value.';
+    }
+
+    if ($supplierName === '') {
+        $response['errors'][] = 'Supplier is required.';
+    }
+
+    if ($documentNumber === '') {
+        $response['errors'][] = 'Delivery receipt or invoice number is required.';
+    }
+
+    $items = normalizeLineItems($post);
+    if (empty($items)) {
+        $response['errors'][] = 'Please add at least one valid product line.';
+    }
+
+    $hasDiscrepancy = false;
+    foreach ($items as $item) {
+        if (!empty($item['invalid_expiry'])) {
+            $response['errors'][] = 'One or more expiry dates are invalid. Please use the YYYY-MM-DD format.';
+            break;
+        }
+        if ($item['qty_received'] <= 0) {
+            $response['errors'][] = 'Quantity received must be greater than zero for all items.';
+            break;
+        }
+        if ($item['qty_expected'] !== null && $item['qty_expected'] !== $item['qty_received']) {
+            $hasDiscrepancy = true;
+        }
+    }
+
+    if ($action === 'post_receipt' && $hasDiscrepancy && $discrepancyNote === '') {
+        $response['errors'][] = 'Please provide a discrepancy note to explain quantity differences.';
+    }
+
+    if (!empty($response['errors'])) {
+        return $response;
+    }
+
+    $status = $action === 'save_draft' ? 'draft' : ($hasDiscrepancy ? 'with_discrepancy' : 'posted');
+    $userId = (int)($_SESSION['user_id'] ?? 0);
+
+    try {
+        $pdo->beginTransaction();
+
+        $receiptCode = $existingReceipt['header']['receipt_code'] ?? generateReceiptCode($pdo);
+        $receivedByUserId = $status === 'draft' ? null : $userId;
+        $postedAt = $status === 'draft' ? null : (new DateTimeImmutable())->format('Y-m-d H:i:s');
+        $postedByUserId = $status === 'draft' ? null : $userId;
+
+        if ($receiptId === 0) {
+            $insertReceipt = $pdo->prepare('
+                INSERT INTO stock_receipts
+                    (receipt_code, supplier_name, document_number, related_reference, date_received, notes, discrepancy_note,
+                     status, created_by_user_id, updated_by_user_id, received_by_user_id, posted_at, posted_by_user_id,
+                     created_at, updated_at)
+                VALUES
+                    (:receipt_code, :supplier_name, :document_number, :related_reference, :date_received, :notes, :discrepancy_note,
+                     :status, :created_by, :updated_by, :received_by, :posted_at, :posted_by, NOW(), NOW())
+            ');
+            $insertReceipt->execute([
+                ':receipt_code' => $receiptCode,
+                ':supplier_name' => $supplierName,
+                ':document_number' => $documentNumber,
+                ':related_reference' => $relatedReference !== '' ? $relatedReference : null,
+                ':date_received' => $dateReceived,
+                ':notes' => $notes !== '' ? $notes : null,
+                ':discrepancy_note' => $discrepancyNote !== '' ? $discrepancyNote : null,
+                ':status' => $status,
+                ':created_by' => $userId,
+                ':updated_by' => $userId,
+                ':received_by' => $receivedByUserId,
+                ':posted_at' => $postedAt,
+                ':posted_by' => $postedByUserId,
+            ]);
+
+            $receiptId = (int)$pdo->lastInsertId();
+        } else {
+            $updateReceipt = $pdo->prepare('
+                UPDATE stock_receipts
+                SET
+                    supplier_name = :supplier_name,
+                    document_number = :document_number,
+                    related_reference = :related_reference,
+                    date_received = :date_received,
+                    notes = :notes,
+                    discrepancy_note = :discrepancy_note,
+                    status = :status,
+                    updated_by_user_id = :updated_by,
+                    received_by_user_id = :received_by,
+                    posted_at = :posted_at,
+                    posted_by_user_id = :posted_by,
+                    updated_at = NOW()
+                WHERE id = :receipt_id
+            ');
+            $updateReceipt->execute([
+                ':supplier_name' => $supplierName,
+                ':document_number' => $documentNumber,
+                ':related_reference' => $relatedReference !== '' ? $relatedReference : null,
+                ':date_received' => $dateReceived,
+                ':notes' => $notes !== '' ? $notes : null,
+                ':discrepancy_note' => $discrepancyNote !== '' ? $discrepancyNote : null,
+                ':status' => $status,
+                ':updated_by' => $userId,
+                ':received_by' => $receivedByUserId,
+                ':posted_at' => $postedAt,
+                ':posted_by' => $postedByUserId,
+                ':receipt_id' => $receiptId,
+            ]);
+
+            $pdo->prepare('DELETE FROM stock_receipt_items WHERE receipt_id = :receipt_id')
+                ->execute([':receipt_id' => $receiptId]);
+        }
+
+        $insertItem = $pdo->prepare('
+            INSERT INTO stock_receipt_items
+                (receipt_id, product_id, qty_expected, qty_received, unit_cost, expiry_date, lot_number)
+            VALUES
+                (:receipt_id, :product_id, :qty_expected, :qty_received, :unit_cost, :expiry_date, :lot_number)
+        ');
+
+        $totalQty = 0;
+        foreach ($items as $item) {
+            $insertItem->execute([
+                ':receipt_id' => $receiptId,
+                ':product_id' => $item['product_id'],
+                ':qty_expected' => $item['qty_expected'],
+                ':qty_received' => $item['qty_received'],
+                ':unit_cost' => $item['unit_cost'],
+                ':expiry_date' => $item['expiry_date'],
+                ':lot_number' => $item['lot_number'],
+            ]);
+            $totalQty += $item['qty_received'];
+        }
+
+        if ($status !== 'draft') {
+            applyInventoryMovements($pdo, $receiptId, $items, $userId, $receiptCode);
+        }
+
+        $storedFiles = storeReceiptAttachments($pdo, $receiptId, $files['attachments'] ?? null, $userId);
+
+        $auditAction = $existingReceipt ? 'updated' : 'created';
+        logReceiptAudit($pdo, $receiptId, $auditAction, $userId, sprintf('Status: %s; Items: %d; Qty: %d', $status, count($items), $totalQty));
+        if ($status !== 'draft') {
+            logReceiptAudit($pdo, $receiptId, 'posted', $userId, 'Inventory quantities updated.');
+        }
+
+        $pdo->commit();
+
+        if ($status === 'draft') {
+            $queryParams = [
+                $existingReceipt ? 'updated' : 'created' => '1',
+                'receipt' => $receiptId,
+            ];
+            $response['redirect'] = 'stockEntry.php?' . http_build_query($queryParams);
+        } else {
+            $response['redirect'] = 'stockReceiptView.php?' . http_build_query([
+                'receipt' => $receiptId,
+                'posted' => '1',
+            ]);
+        }
+        return $response;
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        error_log('Stock receipt submission failed: ' . $e->getMessage());
+        $response['errors'][] = 'Unable to save stock-in document. Please try again or contact the administrator.';
+        return $response;
+    }
+}
+
+/**
+ * Convert posted arrays into clean line item records.
+ */
+function normalizeLineItems(array $post): array
+{
+    $productIds = $post['product_id'] ?? [];
+    $qtyExpected = $post['qty_expected'] ?? [];
+    $qtyReceived = $post['qty_received'] ?? [];
+    $unitCost = $post['unit_cost'] ?? [];
+    $expiryDate = $post['expiry_date'] ?? [];
+    $lotNumbers = $post['lot_number'] ?? [];
+
+    $items = [];
+    foreach ($productIds as $index => $productIdRaw) {
+        $productId = (int)$productIdRaw;
+        if ($productId <= 0) {
+            continue;
+        }
+
+        $itemQtyReceived = isset($qtyReceived[$index]) ? (int)$qtyReceived[$index] : 0;
+        if ($itemQtyReceived <= 0) {
+            continue;
+        }
+
+        $expected = isset($qtyExpected[$index]) && $qtyExpected[$index] !== '' ? (int)$qtyExpected[$index] : null;
+        $unit = isset($unitCost[$index]) && $unitCost[$index] !== '' ? round((float)$unitCost[$index], 2) : null;
+        $rawExpiry = isset($expiryDate[$index]) ? trim((string)$expiryDate[$index]) : '';
+        $expiry = $rawExpiry !== '' ? validateDateValue($rawExpiry) : null;
+        $lot = isset($lotNumbers[$index]) ? trim((string)$lotNumbers[$index]) : null;
+
+        $items[] = [
+            'product_id' => $productId,
+            'qty_expected' => $expected,
+            'qty_received' => $itemQtyReceived,
+            'unit_cost' => $unit,
+            'expiry_date' => $expiry,
+            'invalid_expiry' => $rawExpiry !== '' && $expiry === null,
+            'lot_number' => $lot !== '' ? $lot : null,
+        ];
+    }
+
+    return $items;
+}
+
+/**
+ * Prepare raw line item values for redisplay, preserving incomplete rows after validation errors.
+ */
+function normalizeLineItemsPreserveBlank(array $post): array
+{
+    $productIds = $post['product_id'] ?? [];
+    $qtyExpected = $post['qty_expected'] ?? [];
+    $qtyReceived = $post['qty_received'] ?? [];
+    $unitCost = $post['unit_cost'] ?? [];
+    $expiryDate = $post['expiry_date'] ?? [];
+    $lotNumbers = $post['lot_number'] ?? [];
+
+    $rowCount = max(
+        count($productIds),
+        count($qtyExpected),
+        count($qtyReceived),
+        count($unitCost),
+        count($expiryDate),
+        count($lotNumbers)
+    );
+
+    $items = [];
+    for ($index = 0; $index < $rowCount; $index++) {
+        $productId = isset($productIds[$index]) && $productIds[$index] !== '' ? (int)$productIds[$index] : null;
+        $expectedRaw = $qtyExpected[$index] ?? '';
+        $receivedRaw = $qtyReceived[$index] ?? '';
+        $unitRaw = $unitCost[$index] ?? '';
+        $expiryRaw = isset($expiryDate[$index]) ? trim((string)$expiryDate[$index]) : '';
+        $lotRaw = isset($lotNumbers[$index]) ? trim((string)$lotNumbers[$index]) : '';
+
+        $expected = $expectedRaw === '' ? null : (int)$expectedRaw;
+        $received = $receivedRaw === '' ? null : (int)$receivedRaw;
+        $unit = $unitRaw === '' ? null : round((float)$unitRaw, 2);
+        $expiry = $expiryRaw !== '' ? validateDateValue($expiryRaw) : null;
+        $invalidExpiry = $expiryRaw !== '' && $expiry === null;
+
+        $items[] = [
+            'product_id' => $productId,
+            'qty_expected' => $expected,
+            'qty_received' => $received,
+            'unit_cost' => $unit,
+            'expiry_date' => $invalidExpiry ? null : $expiry,
+            'expiry_value' => $invalidExpiry ? $expiryRaw : $expiry,
+            'lot_number' => $lotRaw !== '' ? $lotRaw : null,
+            'has_discrepancy' => $expected !== null && $received !== null && $expected !== $received,
+            'invalid_expiry' => $invalidExpiry,
+        ];
+    }
+
+    return $items;
+}
+
+/**
+ * Ensure supplied date is valid and returns Y-m-d.
+ */
+function validateDateValue(?string $value): ?string
+{
+    if (empty($value)) {
+        return date('Y-m-d');
+    }
+
+    $date = DateTime::createFromFormat('Y-m-d', $value);
+    return $date ? $date->format('Y-m-d') : null;
+}
+
+/**
+ * Generate a human friendly yet unique receipt code.
+ */
+function generateReceiptCode(PDO $pdo): string
+{
+    do {
+        $code = 'SR-' . date('Ymd') . '-' . strtoupper(bin2hex(random_bytes(2)));
+        $stmt = $pdo->prepare('SELECT COUNT(*) FROM stock_receipts WHERE receipt_code = ?');
+        $stmt->execute([$code]);
+        $exists = (int)$stmt->fetchColumn() > 0;
+    } while ($exists);
+
+    return $code;
+}
+
+/**
+ * Update product quantities and log each movement for the posted receipt.
+ */
+function applyInventoryMovements(PDO $pdo, int $receiptId, array $items, int $userId, string $receiptCode): void
+{
+    $updateProduct = $pdo->prepare('UPDATE products SET quantity = quantity + :qty WHERE id = :product_id');
+    $insertLedger = $pdo->prepare('
+        INSERT INTO inventory_ledger
+            (product_id, change_type, quantity_change, reference_type, reference_id, reference_code, created_by_user_id, created_at)
+        VALUES
+            (:product_id, :change_type, :quantity_change, :reference_type, :reference_id, :reference_code, :created_by, NOW())
+    ');
+
+    foreach ($items as $item) {
+        $updateProduct->execute([
+            ':qty' => $item['qty_received'],
+            ':product_id' => $item['product_id'],
+        ]);
+
+        $insertLedger->execute([
+            ':product_id' => $item['product_id'],
+            ':change_type' => 'in',
+            ':quantity_change' => $item['qty_received'],
+            ':reference_type' => 'stock_receipt',
+            ':reference_id' => $receiptId,
+            ':reference_code' => $receiptCode,
+            ':created_by' => $userId,
+        ]);
+    }
+}
+
+/**
+ * Persist uploaded delivery proof files under uploads/stock_receipts and register them.
+ */
+function storeReceiptAttachments(PDO $pdo, int $receiptId, ?array $files, int $userId): array
+{
+    if ($files === null || empty($files['name'])) {
+        return [];
+    }
+
+    $stored = [];
+    $baseDir = dirname(__DIR__, 2) . '/uploads/stock_receipts';
+    if (!is_dir($baseDir)) {
+        mkdir($baseDir, 0775, true);
+    }
+
+    $receiptDir = $baseDir . '/' . $receiptId;
+    if (!is_dir($receiptDir)) {
+        mkdir($receiptDir, 0775, true);
+    }
+
+    $insertFile = $pdo->prepare('
+        INSERT INTO stock_receipt_files
+            (receipt_id, file_path, original_name, mime_type, uploaded_by_user_id, created_at)
+        VALUES
+            (:receipt_id, :file_path, :original_name, :mime_type, :uploaded_by, NOW())
+    ');
+
+    $allowedMime = ['application/pdf', 'image/jpeg', 'image/png'];
+
+    $fileCount = is_array($files['name']) ? count($files['name']) : 0;
+    for ($i = 0; $i < $fileCount; $i++) {
+        if (($files['error'][$i] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+            continue;
+        }
+
+        $tmpName = $files['tmp_name'][$i] ?? null;
+        $originalName = $files['name'][$i] ?? '';
+        $mimeType = mime_content_type($tmpName);
+        if (!in_array($mimeType, $allowedMime, true)) {
+            continue;
+        }
+
+        $extension = pathinfo($originalName, PATHINFO_EXTENSION);
+        $targetName = uniqid('receipt_', true) . ($extension ? '.' . strtolower($extension) : '');
+        $targetPath = $receiptDir . '/' . $targetName;
+
+        if (!move_uploaded_file($tmpName, $targetPath)) {
+            continue;
+        }
+
+        $relativePath = 'uploads/stock_receipts/' . $receiptId . '/' . $targetName;
+        $insertFile->execute([
+            ':receipt_id' => $receiptId,
+            ':file_path' => $relativePath,
+            ':original_name' => $originalName,
+            ':mime_type' => $mimeType,
+            ':uploaded_by' => $userId,
+        ]);
+
+        $stored[] = $relativePath;
+    }
+
+    return $stored;
+}
+
+/**
+ * Record audit trail events for transparency.
+ */
+function logReceiptAudit(PDO $pdo, int $receiptId, string $action, int $userId, ?string $details = null): void
+{
+    $stmt = $pdo->prepare('
+        INSERT INTO stock_receipt_audit_log
+            (receipt_id, action, details, action_by_user_id, action_at)
+        VALUES
+            (:receipt_id, :action, :details, :action_by, NOW())
+    ');
+    $stmt->execute([
+        ':receipt_id' => $receiptId,
+        ':action' => $action,
+        ':details' => $details,
+        ':action_by' => $userId,
+    ]);
+}
+
+/**
+ * Fetch latest stock receipts with aggregate info for dashboard table.
+ */
+function fetchRecentReceipts(PDO $pdo): array
+{
+    $sql = '
+        SELECT
+            sr.id,
+            sr.receipt_code,
+            sr.supplier_name,
+            sr.status,
+            sr.created_at,
+            sr.posted_at,
+            u.name AS received_by_name,
+            COUNT(items.id) AS item_count,
+            COALESCE(SUM(items.qty_received), 0) AS total_received_qty
+        FROM stock_receipts sr
+        LEFT JOIN stock_receipt_items items ON items.receipt_id = sr.id
+        LEFT JOIN users u ON u.id = sr.received_by_user_id
+        GROUP BY sr.id, sr.receipt_code, sr.supplier_name, sr.status, sr.created_at, sr.posted_at, u.name
+        ORDER BY sr.created_at DESC
+        LIMIT 10
+    ';
+    $stmt = $pdo->query($sql);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($rows as &$row) {
+        $row['created_at_formatted'] = $row['created_at'] ? date('M d, Y H:i', strtotime($row['created_at'])) : '';
+        $row['posted_at_formatted'] = $row['posted_at'] ? date('M d, Y H:i', strtotime($row['posted_at'])) : '';
+    }
+
+    return $rows;
+}
+
+/**
+ * Convert status codes to human friendly labels for the UI.
+ */
+function formatStatusLabel(string $status): string
+{
+    return formatStockReceiptStatus($status);
+}

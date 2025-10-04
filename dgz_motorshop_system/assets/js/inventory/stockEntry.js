@@ -1,222 +1,305 @@
-// file 2 start – stock entry page filters/autocomplete (safe to extract)
-// Pass inventory data via window bootstrap (populated in stockEntry.php)
-const { products: allProducts = [], categories: allCategories = [] } = window.dgzStockEntryData || {};
+// Handles the interactive Stock-In creation form: line items, product lookup, discrepancy prompts, and submission flow.
+document.addEventListener('DOMContentLoaded', () => {
+    const bootstrapNode = document.getElementById('stockReceiptBootstrap');
+    const bootstrapData = bootstrapNode ? JSON.parse(bootstrapNode.textContent || '{}') : {};
 
-// Get references to filter dropdowns, product dropdown, search input, and autocomplete list container
-const categoryFilter = document.getElementById('category_filter');
-const brandFilter = document.getElementById('brand_filter');
-const supplierFilter = document.getElementById('supplier');
-const productDropdown = document.getElementById('product_id');
-const productSearch = document.getElementById('product_search');
-const autocompleteList = document.getElementById('autocomplete-list');
+    const form = document.getElementById('stockInForm');
+    const formActionField = document.getElementById('formAction');
+    const addLineItemBtn = document.getElementById('addLineItemBtn');
+    const saveDraftBtn = document.getElementById('saveDraftBtn');
+    const postReceiptBtn = document.getElementById('postReceiptBtn');
+    const lineItemsBody = document.getElementById('lineItemsBody');
+    const discrepancyNoteGroup = document.getElementById('discrepancyNoteGroup');
+    const discrepancyNoteField = document.getElementById('discrepancy_note');
+    const attachmentInput = document.getElementById('attachments');
+    const attachmentList = document.getElementById('attachmentList');
 
-// Function to filter products based on selected filters
-function filterProducts() {
-            const selectedCategory = categoryFilter.value;
-            const selectedBrand = brandFilter.value;
-            const selectedSupplier = supplierFilter.value;
+    if (!form || !lineItemsBody) {
+        return;
+    }
 
-            // Filter products based on selected filters
-            return allProducts.filter(product => {
-                const matchesCategory = selectedCategory === '' || product.category === selectedCategory;
-                const matchesBrand = selectedBrand === '' || product.brand === selectedBrand;
-                const matchesSupplier = selectedSupplier === '' || product.supplier === selectedSupplier;
-                return matchesCategory && matchesBrand && matchesSupplier;
-            });
-}
+    const allProducts = Array.isArray(bootstrapData.products) ? bootstrapData.products : [];
+    const productMap = new Map();
+    const productSearchIndex = allProducts.map((product) => {
+        productMap.set(String(product.id), product);
+        const tokens = [product.name, product.code, product.brand, product.category]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+        return {
+            id: product.id,
+            label: buildProductLabel(product),
+            tokens,
+        };
+    });
 
-// Function to show autocomplete suggestions based on search input and filters
-function showAutocomplete() {
-            const searchText = productSearch.value.trim().toLowerCase();
-            autocompleteList.innerHTML = '';
+    const lineTemplates = {
+        row: lineItemsBody.querySelector('.line-item-row'),
+    };
 
-            if (!searchText) {
+    if (!lineTemplates.row) {
+        return;
+    }
+
+    // Bind base row listeners immediately.
+    bindRow(lineTemplates.row);
+    updateRemoveButtons();
+    updateDiscrepancyState();
+
+    addLineItemBtn?.addEventListener('click', () => {
+        const newRow = cloneRow();
+        lineItemsBody.appendChild(newRow);
+        bindRow(newRow);
+        updateRemoveButtons();
+    });
+
+    saveDraftBtn?.addEventListener('click', () => {
+        if (!form) return;
+        formActionField.value = 'save_draft';
+        if (form.reportValidity()) {
+            form.submit();
+        }
+    });
+
+    postReceiptBtn?.addEventListener('click', () => {
+        if (!form) return;
+        formActionField.value = 'post_receipt';
+        if (form.reportValidity()) {
+            form.submit();
+        }
+    });
+
+    attachmentInput?.addEventListener('change', () => {
+        attachmentList.innerHTML = '';
+        const files = Array.from(attachmentInput.files || []);
+        files.forEach((file) => {
+            const item = document.createElement('li');
+            item.className = 'attachment-list-item';
+            item.innerHTML = `<i class="fas fa-paperclip"></i> <span>${file.name}</span>`;
+            attachmentList.appendChild(item);
+        });
+    });
+
+    function cloneRow() {
+        const clone = lineTemplates.row.cloneNode(true);
+        clone.classList.remove('has-discrepancy');
+        clone.dataset.selectedProduct = '';
+        clone.querySelectorAll('input').forEach((input) => {
+            input.value = '';
+        });
+        const select = clone.querySelector('select[name="product_id[]"]');
+        if (select) {
+            select.value = '';
+        }
+        const suggestions = clone.querySelector('.product-suggestions');
+        if (suggestions) {
+            suggestions.innerHTML = '';
+        }
+        const removeBtn = clone.querySelector('.remove-line-item');
+        if (removeBtn) {
+            removeBtn.disabled = false;
+        }
+        return clone;
+    }
+
+    function bindRow(row) {
+        const expectedInput = row.querySelector('input[name="qty_expected[]"]');
+        const receivedInput = row.querySelector('input[name="qty_received[]"]');
+        const removeBtn = row.querySelector('.remove-line-item');
+        const productSelect = row.querySelector('select[name="product_id[]"]');
+        const productSearch = row.querySelector('.product-search');
+        const suggestions = row.querySelector('.product-suggestions');
+
+        expectedInput?.addEventListener('input', () => {
+            evaluateRowDiscrepancy(row);
+        });
+        receivedInput?.addEventListener('input', () => {
+            evaluateRowDiscrepancy(row);
+        });
+        removeBtn?.addEventListener('click', () => {
+            if (lineItemsBody.children.length <= 1) {
                 return;
             }
-
-            const filteredProducts = filterProducts().filter(product =>
-                product.name.toLowerCase().includes(searchText)
-            );
-
-            filteredProducts.forEach(product => {
-                const item = document.createElement('div');
-                item.textContent = product.name;
-                item.addEventListener('click', () => {
-                    productSearch.value = product.name;
-                    autocompleteList.innerHTML = '';
-                    // Set the product dropdown to the selected product
-                    productDropdown.value = product.id;
-                });
-                autocompleteList.appendChild(item);
-            });
-}
-
-// Event listeners for filters to clear search and autocomplete and update product dropdown
-categoryFilter.addEventListener('change', () => {
-    productSearch.value = '';
-    autocompleteList.innerHTML = '';
-    updateProductDropdown();
-    updateBrandAndSupplierDropdowns();
-});
-// Flag to prevent infinite loop when updating dropdowns
-let isUpdatingDropdowns = false;
-
-brandFilter.addEventListener('change', () => {
-    if (isUpdatingDropdowns) return;
-    productSearch.value = '';
-    autocompleteList.innerHTML = '';
-
-    // Preserve selected product if it matches the selected brand and supplier
-    const selectedProductId = productDropdown.value;
-    const selectedBrand = brandFilter.value;
-    const selectedSupplier = supplierFilter.value;
-    const selectedProduct = allProducts.find(p => p.id == selectedProductId);
-
-    isUpdatingDropdowns = true;
-    if (selectedProduct && 
-        (selectedBrand === '' || selectedProduct.brand === selectedBrand) &&
-        (selectedSupplier === '' || selectedProduct.supplier === selectedSupplier)) {
-        // Keep the selected product
-        updateProductDropdown(true);
-    } else {
-        // Reset product selection
-        productDropdown.value = '';
-        updateProductDropdown(false);
-    }
-    updateBrandAndSupplierDropdowns();
-    isUpdatingDropdowns = false;
-});
-
-supplierFilter.addEventListener('change', () => {
-    if (isUpdatingDropdowns) return;
-    productSearch.value = '';
-    autocompleteList.innerHTML = '';
-
-    // Preserve selected product if it matches the selected brand and supplier
-    const selectedProductId = productDropdown.value;
-    const selectedBrand = brandFilter.value;
-    const selectedSupplier = supplierFilter.value;
-    const selectedProduct = allProducts.find(p => p.id == selectedProductId);
-
-    isUpdatingDropdowns = true;
-    if (selectedProduct && 
-        (selectedBrand === '' || selectedProduct.brand === selectedBrand) &&
-        (selectedSupplier === '' || selectedProduct.supplier === selectedSupplier)) {
-        // Keep the selected product
-        updateProductDropdown(true);
-    } else {
-        // Reset product selection
-        productDropdown.value = '';
-        updateProductDropdown(false);
-    }
-    updateBrandAndSupplierDropdowns();
-    isUpdatingDropdowns = false;
-});
-
-// Event listener for product dropdown change to update category, brand, and supplier
-productDropdown.addEventListener('change', () => {
-            const selectedProductId = productDropdown.value;
-            const selectedProduct = allProducts.find(p => p.id == selectedProductId);
-
-            if (selectedProduct) {
-                // Automatically fill category with only the selected product's category
-                categoryFilter.innerHTML = '';
-                if (selectedProduct.category) {
-                    const option = document.createElement('option');
-                    option.value = selectedProduct.category;
-                    option.textContent = selectedProduct.category;
-                    option.selected = true;
-                    categoryFilter.appendChild(option);
-                }
-
-                // Filter brand and supplier dropdowns based on selected product
-                updateBrandAndSupplierDropdowns(selectedProduct);
-            } else {
-        // Reset category dropdown to show all categories
-        categoryFilter.innerHTML = '<option value="">All Categories</option>';
-        allCategories.forEach(category => {
-            const option = document.createElement('option');
-            option.value = category;
-            option.textContent = category;
-            categoryFilter.appendChild(option);
+            row.remove();
+            updateRemoveButtons();
+            updateDiscrepancyState();
         });
 
-        updateBrandAndSupplierDropdowns();
-    }
-});
+        if (productSearch && suggestions && productSelect) {
+            if (!productSearch.dataset.defaultPlaceholder) {
+                productSearch.dataset.defaultPlaceholder = productSearch.placeholder;
+            }
+            productSearch.addEventListener('input', () => {
+                renderProductSuggestions(row, productSearch.value);
+            });
+            productSearch.addEventListener('focus', () => {
+                renderProductSuggestions(row, productSearch.value, { showDefault: true });
+            });
+            productSearch.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    const firstSuggestion = suggestions.querySelector('button');
+                    if (firstSuggestion) {
+                        event.preventDefault();
+                        applyProductSelection(row, firstSuggestion.dataset.productId);
+                    }
+                }
+            });
 
-        // Event listener for search input to show autocomplete suggestions
-        productSearch.addEventListener('input', showAutocomplete);
+            productSelect.addEventListener('change', () => {
+                const productId = productSelect.value;
+                applyProductSelection(row, productId, { skipFocus: true });
+            });
 
-// Function to update product dropdown based on filters (without search)
-// If keepSelected is true, preserve the current selected product if it exists in the filtered list
-function updateProductDropdown(keepSelected = false) {
-    const filteredProducts = filterProducts();
-    const currentSelected = productDropdown.value;
-    productDropdown.innerHTML = '<option value="">Select Product</option>';
-    filteredProducts.forEach(product => {
-        const option = document.createElement('option');
-        option.value = product.id;
-        option.textContent = product.name;
-        productDropdown.appendChild(option);
-    });
-    if (keepSelected && currentSelected) {
-        const exists = filteredProducts.some(p => p.id == currentSelected);
-        if (exists) {
-            productDropdown.value = currentSelected;
+            const presetId = row.dataset.selectedProduct;
+            if (presetId) {
+                applyProductSelection(row, presetId, { skipFocus: true, renderSuggestions: false, prefillSearch: false });
+            } else if (productSelect.value) {
+                applyProductSelection(row, productSelect.value, { skipFocus: true, renderSuggestions: false, prefillSearch: false });
+            }
         }
     }
-}
 
-// Function to update brand and supplier dropdowns based on selected product or filters
-function updateBrandAndSupplierDropdowns(selectedProduct = null) {
-            let brandsToShow = [];
-            let suppliersToShow = [];
+    function evaluateRowDiscrepancy(row) {
+        const expectedValue = row.querySelector('input[name="qty_expected[]"]')?.value;
+        const receivedValue = row.querySelector('input[name="qty_received[]"]')?.value;
+        const expected = expectedValue === '' ? null : Number(expectedValue);
+        const received = receivedValue === '' ? null : Number(receivedValue);
 
-            if (selectedProduct) {
-                // Show only the brand and supplier of the selected product
-                brandsToShow = [selectedProduct.brand].filter(Boolean);
-                suppliersToShow = [selectedProduct.supplier].filter(Boolean);
-            } else {
-                // Show all brands and suppliers based on current filters
-                const filteredProducts = filterProducts();
-                brandsToShow = [...new Set(filteredProducts.map(p => p.brand).filter(Boolean))];
-                suppliersToShow = [...new Set(filteredProducts.map(p => p.supplier).filter(Boolean))];
-            }
-
-            // Update brand dropdown options
-            const currentBrandValue = brandFilter.value;
-            brandFilter.innerHTML = '<option value="">All Brands</option>';
-            brandsToShow.forEach(brand => {
-                const option = document.createElement('option');
-                option.value = brand;
-                option.textContent = brand;
-                if (brand === currentBrandValue) {
-                    option.selected = true;
-                }
-                brandFilter.appendChild(option);
-            });
-
-            // Update supplier dropdown options
-            const currentSupplierValue = supplierFilter.value;
-            supplierFilter.innerHTML = '<option value="">Select Supplier</option>';
-            suppliersToShow.forEach(supplier => {
-                const option = document.createElement('option');
-                option.value = supplier;
-                option.textContent = supplier;
-                if (supplier === currentSupplierValue) {
-                    option.selected = true;
-                }
-                supplierFilter.appendChild(option);
-            });
-}
-
-// Initial population of product dropdown
-updateProductDropdown();
-
-// Close autocomplete list when clicking outside
-document.addEventListener('click', function (e) {
-    if (e.target !== productSearch) {
-        autocompleteList.innerHTML = '';
+        const hasDiscrepancy = expected !== null && received !== null && expected !== received;
+        row.classList.toggle('has-discrepancy', hasDiscrepancy);
+        updateDiscrepancyState();
     }
+
+    function updateDiscrepancyState() {
+        const hasAny = !!lineItemsBody.querySelector('.has-discrepancy');
+        if (hasAny) {
+            discrepancyNoteGroup.hidden = false;
+            discrepancyNoteField?.setAttribute('required', 'required');
+        } else {
+            discrepancyNoteGroup.hidden = true;
+            discrepancyNoteField?.removeAttribute('required');
+            if (discrepancyNoteField) {
+                discrepancyNoteField.value = '';
+            }
+        }
+    }
+
+    function updateRemoveButtons() {
+        const rows = Array.from(lineItemsBody.querySelectorAll('.line-item-row'));
+        rows.forEach((row, index) => {
+            const removeBtn = row.querySelector('.remove-line-item');
+            if (!removeBtn) {
+                return;
+            }
+            removeBtn.disabled = rows.length === 1;
+            if (index > 0) {
+                removeBtn.disabled = false;
+            }
+        });
+    }
+
+    function renderProductSuggestions(row, term, options = {}) {
+        const suggestions = row.querySelector('.product-suggestions');
+        if (!suggestions) {
+            return;
+        }
+
+        const showDefault = options.showDefault ?? false;
+        const query = term.trim().toLowerCase();
+        suggestions.innerHTML = '';
+
+        let results;
+        if (!query) {
+            results = showDefault ? productSearchIndex.slice(0, 15) : [];
+        } else {
+            results = productSearchIndex
+                .filter((entry) => entry.tokens.includes(query) || entry.label.toLowerCase().includes(query))
+                .slice(0, 15);
+        }
+
+        if (!results.length) {
+            if (query) {
+                const emptyState = document.createElement('div');
+                emptyState.className = 'product-suggestion-empty';
+                emptyState.textContent = 'No matches found';
+                suggestions.appendChild(emptyState);
+            }
+            return;
+        }
+
+        results.forEach((entry) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'product-suggestion-item';
+            button.dataset.productId = entry.id;
+            button.textContent = entry.label;
+            button.addEventListener('click', () => {
+                applyProductSelection(row, entry.id);
+            });
+            suggestions.appendChild(button);
+        });
+    }
+
+    function applyProductSelection(row, productId, options = {}) {
+        const select = row.querySelector('select[name="product_id[]"]');
+        const searchInput = row.querySelector('.product-search');
+        const suggestions = row.querySelector('.product-suggestions');
+        if (!select || !searchInput) {
+            return;
+        }
+
+        const product = productMap.get(String(productId));
+        if (!product) {
+            select.value = '';
+            searchInput.value = '';
+            if (searchInput.dataset.defaultPlaceholder) {
+                searchInput.placeholder = searchInput.dataset.defaultPlaceholder;
+            }
+            row.dataset.selectedProduct = '';
+            if (suggestions && !options.keepSuggestions) {
+                suggestions.innerHTML = '';
+            }
+            return;
+        }
+
+        const prefillSearch = options.prefillSearch !== false;
+        const label = buildProductLabel(product);
+
+        select.value = String(product.id);
+        if (prefillSearch) {
+            searchInput.value = label;
+            searchInput.placeholder = searchInput.dataset.defaultPlaceholder || searchInput.placeholder;
+        } else {
+            searchInput.value = '';
+            if (label) {
+                searchInput.placeholder = label;
+            }
+        }
+        row.dataset.selectedProduct = String(product.id);
+        if (suggestions && !options.keepSuggestions) {
+            suggestions.innerHTML = '';
+        }
+        if (!options.skipFocus) {
+            searchInput.blur();
+        }
+    }
+
+    function buildProductLabel(product) {
+        const parts = [product.name];
+        if (product.code) {
+            parts.push(`#${product.code}`);
+        }
+        if (product.brand) {
+            parts.push(`(${product.brand})`);
+        }
+        return parts.filter(Boolean).join(' ');
+    }
+
+    document.addEventListener('click', (event) => {
+        if (!event.target.closest('.product-selector')) {
+            lineItemsBody.querySelectorAll('.product-suggestions').forEach((node) => {
+                node.innerHTML = '';
+            });
+        }
+    });
 });

@@ -208,13 +208,60 @@ $recent_entries = $pdo->query("
     LIMIT 10
 ")->fetchAll();
 
-// Get all products for the main inventory table
-$products = $pdo->query('SELECT * FROM products ORDER BY created_at DESC')->fetchAll();
+// Get all products for auxiliary lookups (restock form, exports, etc.)
+$allProducts = $pdo->query('SELECT * FROM products ORDER BY created_at DESC')->fetchAll();
 
 // Lookups for restock request form selects
 $categoryOptions = $pdo->query('SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND category != "" ORDER BY category ASC')->fetchAll(PDO::FETCH_COLUMN);
 $brandOptions = $pdo->query('SELECT DISTINCT brand FROM products WHERE brand IS NOT NULL AND brand != "" ORDER BY brand ASC')->fetchAll(PDO::FETCH_COLUMN);
 $supplierOptions = $pdo->query('SELECT DISTINCT supplier FROM products WHERE supplier IS NOT NULL AND supplier != "" ORDER BY supplier ASC')->fetchAll(PDO::FETCH_COLUMN);
+
+// Handle search/filter/pagination for the inventory listing
+$search = trim($_GET['search'] ?? '');
+$brandFilter = trim($_GET['brand'] ?? '');
+$categoryFilter = trim($_GET['category'] ?? '');
+$page = isset($_GET['page']) ? (int) $_GET['page'] : 1;
+$page = max(1, $page);
+$limit = 15;
+$offset = ($page - 1) * $limit;
+
+$whereSql = 'WHERE 1=1';
+$filterParams = [];
+
+if ($search !== '') {
+    $whereSql .= ' AND (name LIKE :search_name OR code LIKE :search_code)';
+    $filterParams[':search_name'] = "%$search%";
+    $filterParams[':search_code'] = "%$search%";
+}
+
+if ($brandFilter !== '') {
+    $whereSql .= ' AND brand = :brand_filter';
+    $filterParams[':brand_filter'] = $brandFilter;
+}
+
+if ($categoryFilter !== '') {
+    $whereSql .= ' AND category = :category_filter';
+    $filterParams[':category_filter'] = $categoryFilter;
+}
+
+$countSql = 'SELECT COUNT(*) FROM products ' . $whereSql;
+$countStmt = $pdo->prepare($countSql);
+$countStmt->execute($filterParams);
+$totalInventoryProducts = (int) $countStmt->fetchColumn();
+$totalPages = (int) ceil($totalInventoryProducts / $limit);
+
+$inventorySql = 'SELECT * FROM products ' . $whereSql . ' ORDER BY created_at DESC LIMIT :limit OFFSET :offset';
+$inventoryStmt = $pdo->prepare($inventorySql);
+foreach ($filterParams as $placeholder => $value) {
+    $inventoryStmt->bindValue($placeholder, $value);
+}
+$inventoryStmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+$inventoryStmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+$inventoryStmt->execute();
+$inventoryProducts = $inventoryStmt->fetchAll();
+
+$startRecord = $totalInventoryProducts > 0 ? $offset + 1 : 0;
+$endRecord = min($offset + $limit, $totalInventoryProducts);
 
 // Restock requests overview data
 $restockRequests = $pdo->query('
@@ -299,7 +346,7 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
     header('Content-Disposition: attachment; filename="inventory.csv"');
     $out = fopen('php://output', 'w');
     fputcsv($out, ['Product Code','Name','Quantity','Low Stock Threshold','Date Added']);
-    foreach($products as $p) {
+    foreach($allProducts as $p) {
         fputcsv($out, [$p['code'],$p['name'],$p['quantity'],$p['low_stock_threshold'],$p['created_at']]);
     }
     fclose($out);
@@ -749,7 +796,7 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                         <label for="restock_product">Product</label>
                         <select id="restock_product" name="restock_product" required>
                             <option value="">Select Product</option>
-                            <?php foreach ($products as $product): ?>
+                            <?php foreach ($allProducts as $product): ?>
                                 <option 
                                     value="<?php echo $product['id']; ?>"
                                     data-category="<?php echo htmlspecialchars($product['category'] ?? ''); ?>"
@@ -997,40 +1044,148 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
             <a href="inventory.php?export=csv" class="btn-action export-btn">Export CSV</a>
         </div>
 
+        <div id="inventoryTable" class="table-container">
+            <form method="get" class="inventory-filter-form" id="inventoryFilterForm">
+                <input type="hidden" name="page" value="1">
+                <div class="filter-row">
+                    <div class="filter-search-group">
+                        <input type="text" name="search" aria-label="Search inventory" placeholder="Search product by name or code..." value="<?= htmlspecialchars($search) ?>" class="filter-search-input">
+                        <button type="button" class="filter-clear" aria-label="Clear search" data-filter-clear>&times;</button>
+                    </div>
+                </div>
+                <div class="filter-row filter-row--selects">
+                    <select name="brand" aria-label="Filter by brand" class="filter-select">
+                        <option value="">All Brands</option>
+                        <?php foreach ($brandOptions as $brandOption): ?>
+                        <option value="<?= htmlspecialchars($brandOption) ?>" <?= ($brandFilter === $brandOption) ? 'selected' : '' ?>><?= htmlspecialchars($brandOption) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <select name="category" aria-label="Filter by category" class="filter-select">
+                        <option value="">All Categories</option>
+                        <?php foreach ($categoryOptions as $categoryOption): ?>
+                        <option value="<?= htmlspecialchars($categoryOption) ?>" <?= ($categoryFilter === $categoryOption) ? 'selected' : '' ?>><?= htmlspecialchars($categoryOption) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <button type="submit" class="filter-submit" data-filter-submit>Filter</button>
+                </div>
+            </form>
 
-        <table border="1" cellpadding="5">
-            <tr>
-                <th>Code</th>
-                <th>Name</th>
-                <th>Quantity</th>
-                <th>Low Stock Threshold</th>
-                <th>Date Added</th>
+            <div class="table-wrapper">
+                <table class="inventory-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Code</th>
+                            <th scope="col">Name</th>
+                            <th scope="col">Qty</th>
+                            <th scope="col">Low Stock Threshold</th>
+                            <th scope="col">Date Added</th>
+                            <?php if ($role === 'admin'): ?>
+                            <th scope="col">Update Stock</th>
+                            <?php endif; ?>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($inventoryProducts)): ?>
+                        <tr>
+                            <td colspan="<?= $role === 'admin' ? 6 : 5 ?>" class="empty-state">
+                                <i class="fas fa-inbox"></i>
+                                No inventory items found matching the criteria.
+                            </td>
+                        </tr>
+                        <?php else: ?>
+                        <?php foreach ($inventoryProducts as $p):
+                            $low = $p['quantity'] <= $p['low_stock_threshold'];
+                            $createdAtRaw = $p['created_at'] ?? null;
+                            $createdAtDisplay = '—';
+                            if ($createdAtRaw) {
+                                $timestamp = strtotime($createdAtRaw);
+                                $createdAtDisplay = $timestamp !== false ? date('M d, Y', $timestamp) : $createdAtRaw;
+                            }
+                        ?>
+                        <tr<?= $low ? ' class="low-stock"' : '' ?> data-product-id="<?= (int) $p['id'] ?>">
+                            <td><?= htmlspecialchars($p['code']) ?></td>
+                            <td><?= htmlspecialchars($p['name']) ?></td>
+                            <td><?= intval($p['quantity']) ?></td>
+                            <td><?= intval($p['low_stock_threshold']) ?></td>
+                            <td><?= htmlspecialchars($createdAtDisplay) ?></td>
+                            <?php if ($role === 'admin'): ?>
+                            <td>
+                                <form method="post">
+                                    <input type="hidden" name="id" value="<?= (int) $p['id'] ?>">
+                                    <input type="number" name="change" value="0" step="1">
+                                    <button type="submit" name="update_stock">Apply</button>
+                                </form>
+                            </td>
+                            <?php endif; ?>
+                        </tr>
+                        <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
 
-                <?php if ($role === 'admin') echo '<th>Update Stock</th>'; ?>
-            </tr>
-            <?php foreach($products as $p):
-                $low = $p['quantity'] <= $p['low_stock_threshold'];
-            ?>
-            <tr style="<?php if($low) echo 'background-color:#fdd'; ?>">
-                <td><?=htmlspecialchars($p['code'])?></td>
-                <td><?=htmlspecialchars($p['name'])?></td>
-                <td><?=intval($p['quantity'])?></td>
-                <td><?=intval($p['low_stock_threshold'])?></td>
-                <td><?=$p['created_at']?></td>
+            <?php if ($totalInventoryProducts > 0): ?>
+            <div class="pagination-container">
+                <div class="pagination-info">
+                    Showing <?= $startRecord ?> to <?= $endRecord ?> of <?= $totalInventoryProducts ?> entries
+                </div>
+                <div class="pagination">
+                    <?php
+                    $currentParams = $_GET;
+                    unset($currentParams['page']);
+                    $queryPrefix = http_build_query($currentParams);
+                    $queryPrefix = $queryPrefix ? $queryPrefix . '&' : '';
+                    ?>
 
-                <?php if ($role === 'admin'): ?>
-                <td>
-                    <form method="post">
-                        <input type="hidden" name="id" value="<?=$p['id']?>">
-                        <input type="number" name="change" value="0" step="1">
-                        <button type="submit" name="update_stock">Apply</button>
-                    </form>
-                </td>
-                <?php endif; ?>
+                    <?php if ($page > 1): ?>
+                    <a href="?<?= $queryPrefix ?>page=<?= ($page - 1) ?>" class="prev">
+                        <i class="fas fa-chevron-left"></i> Prev
+                    </a>
+                    <?php else: ?>
+                    <span class="prev disabled">
+                        <i class="fas fa-chevron-left"></i> Prev
+                    </span>
+                    <?php endif; ?>
 
-            </tr>
-            <?php endforeach; ?>
-        </table>
+                    <?php
+                    $start_page = max(1, $page - 2);
+                    $end_page = min($totalPages, $page + 2);
+
+                    if ($start_page > 1): ?>
+                    <a href="?<?= $queryPrefix ?>page=1">1</a>
+                    <?php if ($start_page > 2): ?>
+                    <span>...</span>
+                    <?php endif; ?>
+                    <?php endif; ?>
+
+                    <?php for ($i = $start_page; $i <= $end_page; $i++): ?>
+                    <?php if ($i === $page): ?>
+                    <span class="current"><?= $i ?></span>
+                    <?php else: ?>
+                    <a href="?<?= $queryPrefix ?>page=<?= $i ?>"><?= $i ?></a>
+                    <?php endif; ?>
+                    <?php endfor; ?>
+
+                    <?php if ($end_page < $totalPages): ?>
+                    <?php if ($end_page < $totalPages - 1): ?>
+                    <span>...</span>
+                    <?php endif; ?>
+                    <a href="?<?= $queryPrefix ?>page=<?= $totalPages ?>"><?= $totalPages ?></a>
+                    <?php endif; ?>
+
+                    <?php if ($page < $totalPages): ?>
+                    <a href="?<?= $queryPrefix ?>page=<?= ($page + 1) ?>" class="next">
+                        Next <i class="fas fa-chevron-right"></i>
+                    </a>
+                    <?php else: ?>
+                    <span class="next disabled">
+                        Next <i class="fas fa-chevron-right"></i>
+                    </span>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <?php endif; ?>
+        </div>
 
         <!-- Recent Stock Entries Section -->
         <div class="recent-entries">
