@@ -422,27 +422,27 @@ $offset = ($page - 1) * $limit;
 
 // Build the base WHERE clause (shared for COUNT and SELECT)
 $where_sql = 'WHERE 1=1';
-$filter_params = []; // Params for filters only
-if ($search) {
+$filter_params = []; // Named parameters for filters only
+if ($search !== '') {
     // Search in product name or code
-    $where_sql .= ' AND (name LIKE ? OR code LIKE ?)';
-    $filter_params[] = "%$search%";
-    $filter_params[] = "%$search%";
+    $where_sql .= ' AND (name LIKE :search_name OR code LIKE :search_code)';
+    $filter_params[':search_name'] = "%$search%";
+    $filter_params[':search_code'] = "%$search%";
 }
-if ($brand_filter) {
+if ($brand_filter !== '') {
     // Filter by specific brand
-    $where_sql .= ' AND brand = ?';
-    $filter_params[] = $brand_filter;
+    $where_sql .= ' AND brand = :brand_filter';
+    $filter_params[':brand_filter'] = $brand_filter;
 }
-if ($category_filter) {
+if ($category_filter !== '') {
     // Filter by specific category
-    $where_sql .= ' AND category = ?';
-    $filter_params[] = $category_filter;
+    $where_sql .= ' AND category = :category_filter';
+    $filter_params[':category_filter'] = $category_filter;
 }
-if ($supplier_filter) {
+if ($supplier_filter !== '') {
     // Filter by specific supplier
-    $where_sql .= ' AND supplier = ?';
-    $filter_params[] = $supplier_filter;
+    $where_sql .= ' AND supplier = :supplier_filter';
+    $filter_params[':supplier_filter'] = $supplier_filter;
 }
 
 // First, get total count for pagination (using filter params)
@@ -455,8 +455,8 @@ $total_pages = ceil($total_products / $limit);
 // Main query with LIMIT and OFFSET (using named params like sales.php)
 $sql = 'SELECT * FROM products ' . $where_sql . ' ORDER BY id DESC LIMIT :limit OFFSET :offset';
 $stmt = $pdo->prepare($sql);
-foreach ($filter_params as $param) {
-    $stmt->bindValue($stmt->paramCount + 1, $param); // Bind filter params positionally first
+foreach ($filter_params as $placeholder => $value) {
+    $stmt->bindValue($placeholder, $value);
 }
 $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
 $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
@@ -523,46 +523,15 @@ $end_record = min($offset + $limit, $total_products);
                 </div>
             </div>
         </header>
-        <!-- Header row aligning "All Products" title with action buttons to save space -->
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-            <h3>All Products</h3>
-            <div style="display: flex; gap: 12px;">
-                <button id="openAddModal" class="add-btn" type="button">
-                    <i class="fas fa-plus"></i> Add Product
-                </button>
-                <button id="openHistoryModal" class="history-btn" type="button">
-                    <i class="fas fa-history"></i> History
-                </button>
-            </div>
+        <!-- Action buttons aligned to the right -->
+        <div class="products-action-bar">
+            <button id="openAddModal" class="add-btn" type="button">
+                <i class="fas fa-plus"></i> Add Product
+            </button>
+            <button id="openHistoryModal" class="history-btn" type="button">
+                <i class="fas fa-history"></i> History
+            </button>
         </div>
-
-        <!-- Filter and search form for products by category, brand, supplier, and search term -->
-        <form method="GET" style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; align-items: end;">
-            <input type="text" name="search" placeholder="Search product by name or code..." value="<?= htmlspecialchars($search ?? '') ?>" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; min-width: 200px;">
-            
-            <select name="brand" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                <option value="">All Brands</option>
-                <?php foreach ($brands as $b): ?>
-                <option value="<?= htmlspecialchars($b) ?>" <?= ($brand_filter ?? '') === $b ? 'selected' : '' ?>><?= htmlspecialchars($b) ?></option>
-                <?php endforeach; ?>
-            </select>
-            
-            <select name="category" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                <option value="">All Categories</option>
-                <?php foreach ($categories as $c): ?>
-                <option value="<?= htmlspecialchars($c) ?>" <?= ($category_filter ?? '') === $c ? 'selected' : '' ?>><?= htmlspecialchars($c) ?></option>
-                <?php endforeach; ?>
-            </select>
-            
-            <select name="supplier" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                <option value="">All Suppliers</option>
-                <?php foreach ($suppliers as $s): ?>
-                <option value="<?= htmlspecialchars($s) ?>" <?= ($supplier_filter ?? '') === $s ? 'selected' : '' ?>><?= htmlspecialchars($s) ?></option>
-                <?php endforeach; ?>
-            </select>
-            
-            <button type="submit" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Filter</button>
-        </form>
 
         <!-- Product Add History Modal (like stockEntry.php) -->
         <div id="historyModal"
@@ -658,116 +627,157 @@ $end_record = min($offset + $limit, $total_products);
         </div>
         <!-- Fallback Synchroniser -->
        <script src="../assets/js/products/fbSynchroniser.js"></script>
+       <script src="../assets/js/products/tableFilters.js"></script>
 
         <!-- Products table displaying filtered/search results -->
-        <div id="productsTable">
-            <table>
-                <tr>
-                    <th>Code</th>
-                    <th>Name</th>
-                    <th>Qty</th>
-                    <th>Price</th>
-                    <th>Action</th>
-                </tr>
-            <?php if (empty($products)): ?>
-            <tr>
-                <td colspan="5" style="text-align: center; padding: 20px;">No products found matching the criteria.</td>
-            </tr>
-            <?php else: ?>
-            <?php foreach($products as $p): ?>
-            <tr>
-                <td><?=htmlspecialchars($p['code'])?></td>
-                <td><?=htmlspecialchars($p['name'])?></td>
-                <td><?=intval($p['quantity'])?></td>
-                <td>₱<?=number_format($p['price'],2)?></td>
-                <td> <a href="#" class="edit-btn action-btn" data-id="<?=$p['id']?>"
-                        data-code="<?=htmlspecialchars($p['code'])?>" data-name="<?=htmlspecialchars($p['name'])?>"
-                        data-description="<?=htmlspecialchars($p['description'])?>"
-                        data-price="<?=htmlspecialchars($p['price'])?>"
-                        data-quantity="<?=htmlspecialchars($p['quantity'])?>"
-                        data-low="<?=htmlspecialchars($p['low_stock_threshold'])?>"
-                        data-brand="<?=htmlspecialchars($p['brand'] ?? '')?>"
-                        data-category="<?=htmlspecialchars($p['category'] ?? '')?>"
-                        data-supplier="<?=htmlspecialchars($p['supplier'] ?? '')?>"><i
-                            class="fas fa-edit"></i>Edit</a>
-                <a href="products.php?delete=<?=$p['id']?>" class="delete-btn action-btn"
-                    onclick="return confirm('Delete?')"> <i class="fas fa-trash"></i>Delete</a>
-                </td>
-            </tr>
-            <?php endforeach; ?>
+        <div id="productsTable" class="table-container">
+            <form method="get" class="products-filter-form" id="productsFilterForm">
+                <input type="hidden" name="page" value="1">
+                <div class="filter-row">
+                    <div class="filter-search-group">
+                        <input type="text" name="search" aria-label="Search products" placeholder="Search product by name or code..."
+                            value="<?= htmlspecialchars($search ?? '') ?>" class="filter-search-input">
+                        <button type="button" class="filter-clear" aria-label="Clear search" data-filter-clear>&times;</button>
+                    </div>
+                </div>
+                <div class="filter-row filter-row--selects">
+                    <select name="brand" aria-label="Filter by brand" class="filter-select">
+                        <option value="">All Brands</option>
+                        <?php foreach ($brands as $b): ?>
+                        <option value="<?= htmlspecialchars($b) ?>" <?= ($brand_filter ?? '') === $b ? 'selected' : '' ?>><?= htmlspecialchars($b) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <select name="category" aria-label="Filter by category" class="filter-select">
+                        <option value="">All Categories</option>
+                        <?php foreach ($categories as $c): ?>
+                        <option value="<?= htmlspecialchars($c) ?>" <?= ($category_filter ?? '') === $c ? 'selected' : '' ?>><?= htmlspecialchars($c) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <select name="supplier" aria-label="Filter by supplier" class="filter-select">
+                        <option value="">All Suppliers</option>
+                        <?php foreach ($suppliers as $s): ?>
+                        <option value="<?= htmlspecialchars($s) ?>" <?= ($supplier_filter ?? '') === $s ? 'selected' : '' ?>><?= htmlspecialchars($s) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <button type="submit" class="filter-submit" data-filter-submit>Filter</button>
+                </div>
+            </form>
+            <div class="table-wrapper">
+                <table class="products-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Code</th>
+                            <th scope="col">Name</th>
+                            <th scope="col">Qty</th>
+                            <th scope="col">Price</th>
+                            <th scope="col">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <?php if (empty($products)): ?>
+                        <tr>
+                            <td colspan="5" style="text-align: center; padding: 40px; color: #6b7280;">
+                                <i class="fas fa-inbox" style="font-size: 36px; margin-bottom: 8px; display: block;"></i>
+                                No products found matching the criteria.
+                            </td>
+                        </tr>
+                    <?php else: ?>
+                    <?php foreach($products as $p): ?>
+                        <tr>
+                            <td><?=htmlspecialchars($p['code'])?></td>
+                            <td><?=htmlspecialchars($p['name'])?></td>
+                            <td><?=intval($p['quantity'])?></td>
+                            <td>₱<?=number_format($p['price'],2)?></td>
+                            <td>
+                                <a href="#" class="edit-btn action-btn" data-id="<?=$p['id']?>"
+                                    data-code="<?=htmlspecialchars($p['code'])?>" data-name="<?=htmlspecialchars($p['name'])?>"
+                                    data-description="<?=htmlspecialchars($p['description'])?>"
+                                    data-price="<?=htmlspecialchars($p['price'])?>"
+                                    data-quantity="<?=htmlspecialchars($p['quantity'])?>"
+                                    data-low="<?=htmlspecialchars($p['low_stock_threshold'])?>"
+                                    data-brand="<?=htmlspecialchars($p['brand'] ?? '')?>"
+                                    data-category="<?=htmlspecialchars($p['category'] ?? '')?>"
+                                    data-supplier="<?=htmlspecialchars($p['supplier'] ?? '')?>"><i class="fas fa-edit"></i>Edit</a>
+                                <a href="products.php?delete=<?=$p['id']?>" class="delete-btn action-btn"
+                                    onclick="return confirm('Delete?')"> <i class="fas fa-trash"></i>Delete</a>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+
+            <?php if ($total_products > 0): ?>
+            <!-- Pagination container (styled after sales.php: info + links, preserving filter parameters) -->
+            <div class="pagination-container">
+                <div class="pagination-info">
+                    Showing <?=$start_record?> to <?=$end_record?> of <?=$total_products?> entries
+                </div>
+                <div class="pagination">
+                    <?php
+                    // Prepare current parameters without 'page' for base links (to preserve filters)
+                    $current_params = $_GET;
+                    unset($current_params['page']);
+                    $base_query = http_build_query($current_params);
+                    $separator = $base_query ? '&' : '?';
+                    ?>
+
+                    <!-- Previous button -->
+                    <?php if ($page > 1): ?>
+                    <a href="?<?= $base_query . $separator ?>page=<?= ($page - 1) ?>" class="prev">
+                        <i class="fas fa-chevron-left"></i> Prev
+                    </a>
+                    <?php else: ?>
+                    <span class="prev disabled">
+                        <i class="fas fa-chevron-left"></i> Prev
+                    </span>
+                    <?php endif; ?>
+
+                    <!-- Page numbers -->
+                    <?php
+                    $start_page = max(1, $page - 2);
+                    $end_page = min($total_pages, $page + 2);
+                    
+                    // Show first page if not in range
+                    if ($start_page > 1): ?>
+                    <a href="?<?= $base_query . $separator ?>page=1">1</a>
+                    <?php if ($start_page > 2): ?>
+                    <span>...</span>
+                    <?php endif; ?>
+                    <?php endif; ?>
+                    
+                    <!-- Show page numbers in range -->
+                    <?php for ($i = $start_page; $i <= $end_page; $i++): ?>
+                    <?php if ($i == $page): ?>
+                    <span class="current"><?= $i ?></span>
+                    <?php else: ?>
+                    <a href="?<?= $base_query . $separator ?>page=<?= $i ?>"><?= $i ?></a>
+                    <?php endif; ?>
+                    <?php endfor; ?>
+                    
+                    <!-- Show last page if not in range -->
+                    <?php if ($end_page < $total_pages): ?>
+                    <?php if ($end_page < $total_pages - 1): ?>
+                    <span>...</span>
+                    <?php endif; ?>
+                    <a href="?<?= $base_query . $separator ?>page=<?= $total_pages ?>"><?= $total_pages ?></a>
+                    <?php endif; ?>
+
+                    <!-- Next button -->
+                    <?php if ($page < $total_pages): ?>
+                    <a href="?<?= $base_query . $separator ?>page=<?= ($page + 1) ?>" class="next">
+                        Next <i class="fas fa-chevron-right"></i>
+                    </a>
+                    <?php else: ?>
+                    <span class="next disabled">
+                        Next <i class="fas fa-chevron-right"></i>
+                    </span>
+                    <?php endif; ?>
+                </div>
+            </div>
             <?php endif; ?>
-        </table>
-
-        <?php if ($total_products > 0): ?>
-        <!-- Pagination container (styled after sales.php: info + links, preserving filter parameters) -->
-        <div class="pagination-container">
-            <div class="pagination-info">
-                Showing <?=$start_record?> to <?=$end_record?> of <?=$total_products?> entries
-            </div>
-            <div class="pagination">
-                <?php
-                // Prepare current parameters without 'page' for base links (to preserve filters)
-                $current_params = $_GET;
-                unset($current_params['page']);
-                $base_query = http_build_query($current_params);
-                $separator = $base_query ? '&' : '?';
-                ?>
-
-                <!-- Previous button -->
-                <?php if ($page > 1): ?>
-                <a href="?<?= $base_query . $separator ?>page=<?= ($page - 1) ?>" class="prev">
-                    <i class="fas fa-chevron-left"></i> Prev
-                </a>
-                <?php else: ?>
-                <span class="prev disabled">
-                    <i class="fas fa-chevron-left"></i> Prev
-                </span>
-                <?php endif; ?>
-
-                <!-- Page numbers -->
-                <?php
-                $start_page = max(1, $page - 2);
-                $end_page = min($total_pages, $page + 2);
-                
-                // Show first page if not in range
-                if ($start_page > 1): ?>
-                <a href="?<?= $base_query . $separator ?>page=1">1</a>
-                <?php if ($start_page > 2): ?>
-                <span>...</span>
-                <?php endif; ?>
-                <?php endif; ?>
-                
-                <!-- Show page numbers in range -->
-                <?php for ($i = $start_page; $i <= $end_page; $i++): ?>
-                <?php if ($i == $page): ?>
-                <span class="current"><?= $i ?></span>
-                <?php else: ?>
-                <a href="?<?= $base_query . $separator ?>page=<?= $i ?>"><?= $i ?></a>
-                <?php endif; ?>
-                <?php endfor; ?>
-                
-                <!-- Show last page if not in range -->
-                <?php if ($end_page < $total_pages): ?>
-                <?php if ($end_page < $total_pages - 1): ?>
-                <span>...</span>
-                <?php endif; ?>
-                <a href="?<?= $base_query . $separator ?>page=<?= $total_pages ?>"><?= $total_pages ?></a>
-                <?php endif; ?>
-
-                <!-- Next button -->
-                <?php if ($page < $total_pages): ?>
-                <a href="?<?= $base_query . $separator ?>page=<?= ($page + 1) ?>" class="next">
-                    Next <i class="fas fa-chevron-right"></i>
-                </a>
-                <?php else: ?>
-                <span class="next disabled">
-                    Next <i class="fas fa-chevron-right"></i>
-                </span>
-                <?php endif; ?>
-            </div>
         </div>
-        <?php endif; ?>
-    </div>
         <!-- Edit Product Modal -->
         <div id="editModal"
             style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.3); z-index:9999; align-items:center; justify-content:center;">
