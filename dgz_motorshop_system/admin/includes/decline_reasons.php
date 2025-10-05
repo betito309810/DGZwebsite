@@ -65,7 +65,7 @@ if (!function_exists('fetchOrderDeclineReasons')) {
 
         try {
             $stmt = $pdo->query(
-                'SELECT id, label, is_active FROM order_decline_reasons ORDER BY label ASC'
+                'SELECT id, label FROM order_decline_reasons ORDER BY label ASC'
             );
 
             return $stmt->fetchAll() ?: [];
@@ -92,7 +92,7 @@ if (!function_exists('createOrderDeclineReason')) {
 
         try {
             $insert = $pdo->prepare(
-                'INSERT INTO order_decline_reasons (label, is_active) VALUES (?, 1)'
+                'INSERT INTO order_decline_reasons (label) VALUES (?)'
             );
             $insert->execute([$trimmed]);
 
@@ -101,7 +101,6 @@ if (!function_exists('createOrderDeclineReason')) {
             return [
                 'id' => $id,
                 'label' => $trimmed,
-                'is_active' => 1,
             ];
         } catch (Throwable $e) {
             error_log('Unable to create decline reason: ' . $e->getMessage());
@@ -138,32 +137,6 @@ if (!function_exists('updateOrderDeclineReason')) {
     }
 }
 
-if (!function_exists('setOrderDeclineReasonActive')) {
-    /**
-     * Soft delete/restore a decline reason while keeping historical references.
-     */
-    function setOrderDeclineReasonActive(PDO $pdo, int $reasonId, bool $active): bool
-    {
-        ensureOrderDeclineSchema($pdo);
-
-        if ($reasonId <= 0) {
-            return false;
-        }
-
-        try {
-            $stmt = $pdo->prepare(
-                'UPDATE order_decline_reasons SET is_active = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-            );
-
-            return $stmt->execute([$active ? 1 : 0, $reasonId]);
-        } catch (Throwable $e) {
-            error_log('Unable to toggle decline reason state: ' . $e->getMessage());
-
-            return false;
-        }
-    }
-}
-
 if (!function_exists('findOrderDeclineReason')) {
     /**
      * Retrieve a single decline reason by id.
@@ -189,6 +162,40 @@ if (!function_exists('findOrderDeclineReason')) {
             error_log('Unable to find decline reason: ' . $e->getMessage());
 
             return null;
+        }
+    }
+}
+
+if (!function_exists('deleteOrderDeclineReason')) {
+    /**
+     * Permanently delete a decline reason and clear references from orders.
+     */
+    function deleteOrderDeclineReason(PDO $pdo, int $reasonId): bool
+    {
+        ensureOrderDeclineSchema($pdo);
+
+        if ($reasonId <= 0) {
+            return false;
+        }
+
+        try {
+            $pdo->beginTransaction();
+
+            $clearStmt = $pdo->prepare('UPDATE orders SET decline_reason_id = NULL WHERE decline_reason_id = ?');
+            $clearStmt->execute([$reasonId]);
+
+            $deleteStmt = $pdo->prepare('DELETE FROM order_decline_reasons WHERE id = ?');
+            $deleteStmt->execute([$reasonId]);
+
+            $pdo->commit();
+            return true;
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            error_log('Unable to delete decline reason: ' . $e->getMessage());
+
+            return false;
         }
     }
 }

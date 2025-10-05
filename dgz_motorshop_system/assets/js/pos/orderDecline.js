@@ -38,11 +38,6 @@
 
     function sortReasons(reasons) {
         return reasons.slice().sort((a, b) => {
-            const activeDiff = (Number(b.is_active ?? 1) - Number(a.is_active ?? 1));
-            if (activeDiff !== 0) {
-                return activeDiff;
-            }
-
             const labelA = (a.label || '').toLowerCase();
             const labelB = (b.label || '').toLowerCase();
             if (labelA < labelB) { return -1; }
@@ -52,7 +47,7 @@
     }
 
     function getActiveReasons() {
-        return state.reasons.filter((reason) => Number(reason.is_active ?? 1) !== 0);
+        return state.reasons.slice();
     }
 
     function setReasons(reasons) {
@@ -111,31 +106,25 @@
             const wrapper = document.createElement('div');
             wrapper.className = 'decline-reason-item';
             wrapper.dataset.reasonId = String(reason.id);
-            const isActive = Number(reason.is_active ?? 1) !== 0;
-            if (!isActive) {
-                wrapper.classList.add('inactive');
-            }
 
             const input = document.createElement('input');
             input.type = 'text';
             input.value = reason.label;
             input.maxLength = 255;
             input.dataset.originalValue = reason.label;
-            input.disabled = !isActive;
             wrapper.appendChild(input);
 
             const saveBtn = document.createElement('button');
             saveBtn.type = 'button';
             saveBtn.textContent = 'Save';
             saveBtn.className = 'decline-reason-save';
-            saveBtn.disabled = !isActive;
             wrapper.appendChild(saveBtn);
 
-            const toggleBtn = document.createElement('button');
-            toggleBtn.type = 'button';
-            toggleBtn.className = 'decline-reason-toggle ' + (isActive ? 'remove' : 'restore');
-            toggleBtn.textContent = isActive ? 'Remove' : 'Restore';
-            wrapper.appendChild(toggleBtn);
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'decline-reason-remove';
+            removeBtn.textContent = 'Remove';
+            wrapper.appendChild(removeBtn);
 
             manageList.appendChild(wrapper);
         });
@@ -389,18 +378,15 @@
             return;
         }
 
-        if (target.classList.contains('decline-reason-toggle')) {
-            const shouldActivate = target.classList.contains('restore');
-            if (!shouldActivate) {
-                const confirmed = window.confirm('Remove this reason from the selectable list? Existing orders keep their label.');
-                if (!confirmed) {
-                    return;
-                }
+        if (target.classList.contains('decline-reason-remove')) {
+            const confirmed = window.confirm('Delete this reason? Existing orders will no longer display it.');
+            if (!confirmed) {
+                return;
             }
 
             try {
                 resetManageError();
-                await postJson({ action: 'toggle', id: reasonId, active: shouldActivate });
+                await postJson({ action: 'delete', id: reasonId });
             } catch (err) {
                 if (manageError) {
                     manageError.textContent = err.message;

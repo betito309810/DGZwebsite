@@ -94,25 +94,22 @@ try {
             ]);
             break;
 
-        case 'toggle':
+        case 'delete':
             $reasonId = isset($payload['id']) ? (int) $payload['id'] : 0;
-            $active = isset($payload['active']) ? (bool) $payload['active'] : false;
 
             if ($reasonId <= 0) {
                 throw new RuntimeException('Invalid decline reason id.');
             }
 
-            $toggled = setOrderDeclineReasonActive($pdo, $reasonId, $active);
-            if (!$toggled) {
-                throw new RuntimeException('Failed to update decline reason state.');
+            $deleted = deleteOrderDeclineReason($pdo, $reasonId);
+            if (!$deleted) {
+                throw new RuntimeException('Failed to delete decline reason.');
             }
 
             $reasons = fetchOrderDeclineReasons($pdo);
-            $updatedReason = findOrderDeclineReason($pdo, $reasonId);
 
             echo json_encode([
                 'success' => true,
-                'reason' => $updatedReason,
                 'reasons' => $reasons,
             ]);
             break;

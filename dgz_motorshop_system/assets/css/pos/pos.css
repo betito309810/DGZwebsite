@@ -1359,7 +1359,7 @@ body {
 }
 
 .decline-reason-item .decline-reason-save,
-.decline-reason-item .decline-reason-toggle {
+.decline-reason-item .decline-reason-remove {
     border: none;
     color: #fff;
     padding: 6px 12px;
@@ -1367,13 +1367,6 @@ body {
     font-weight: 600;
     cursor: pointer;
     transition: background 0.2s ease;
-}
-
-.decline-reason-item .decline-reason-save:disabled,
-.decline-reason-item .decline-reason-toggle:disabled {
-    background: #cbd5e1;
-    color: #64748b;
-    cursor: not-allowed;
 }
 
 .decline-reason-item .decline-reason-save {
@@ -1384,29 +1377,12 @@ body {
     background: #16a085;
 }
 
-.decline-reason-item .decline-reason-toggle.remove {
+.decline-reason-item .decline-reason-remove {
     background: #ef4444;
 }
 
-.decline-reason-item .decline-reason-toggle.remove:hover {
+.decline-reason-item .decline-reason-remove:hover {
     background: #dc2626;
-}
-
-.decline-reason-item .decline-reason-toggle.restore {
-    background: #2563eb;
-}
-
-.decline-reason-item .decline-reason-toggle.restore:hover {
-    background: #1d4ed8;
-}
-
-.decline-reason-item.inactive input {
-    text-decoration: line-through;
-    opacity: 0.6;
-}
-
-.decline-reason-item.inactive {
-    opacity: 0.75;
 }
 
 .decline-reason-add {
