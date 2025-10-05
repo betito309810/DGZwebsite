@@ -300,6 +300,16 @@ body {
     color: #1d4ed8;
 }
 
+.status-badge.status-disapproved {
+    background: rgba(248, 113, 113, 0.18);
+    color: #b91c1c;
+}
+
+.status-badge.status-payment_verification {
+    background: rgba(250, 204, 21, 0.2);
+    color: #b45309;
+}
+
 .status-form {
     margin-top: 8px;
     display: flex;
@@ -1224,6 +1234,196 @@ body {
 
 .modal-overlay .transaction-modal .items-table tfoot td:last-child {
     text-align: right;
+}
+
+.decline-reason-display {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #475569;
+    line-height: 1.4;
+}
+
+.decline-reason-display .decline-reason-note {
+    display: inline-block;
+    margin-top: 4px;
+    color: #64748b;
+}
+
+.modal-content.decline-modal,
+.modal-content.decline-manage-modal {
+    max-width: 420px;
+}
+
+.decline-modal-intro {
+    font-size: 13px;
+    color: #475569;
+    margin-bottom: 12px;
+}
+
+.decline-label {
+    display: block;
+    font-weight: 600;
+    font-size: 13px;
+    color: #1f2937;
+    margin: 12px 0 6px;
+}
+
+#declineReasonSelect,
+#declineReasonNote,
+#newDeclineReasonInput {
+    width: 100%;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 14px;
+    background: #fff;
+}
+
+#declineReasonNote {
+    min-height: 90px;
+    resize: vertical;
+}
+
+.manage-reasons-button {
+    margin-top: 10px;
+    border: 1px dashed #94a3b8;
+    background: rgba(148, 163, 184, 0.08);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #1d4ed8;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.manage-reasons-button:hover {
+    background: rgba(29, 78, 216, 0.12);
+}
+
+.decline-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 18px;
+}
+
+.secondary-button {
+    border: 1px solid #d1d5db;
+    background: #fff;
+    color: #1f2937;
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.secondary-button:hover {
+    background: #f1f5f9;
+}
+
+.decline-modal-error {
+    margin-top: 10px;
+    min-height: 18px;
+    font-size: 12px;
+    color: #b91c1c;
+}
+
+.decline-reasons-list {
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    max-height: 240px;
+    overflow-y: auto;
+    padding: 12px;
+    background: #f8fafc;
+}
+
+.decline-reason-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.decline-reason-item:last-child {
+    margin-bottom: 0;
+}
+
+.decline-reason-item input {
+    flex: 1;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 13px;
+}
+
+.decline-reason-item .decline-reason-save,
+.decline-reason-item .decline-reason-toggle {
+    border: none;
+    color: #fff;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.decline-reason-item .decline-reason-save:disabled,
+.decline-reason-item .decline-reason-toggle:disabled {
+    background: #cbd5e1;
+    color: #64748b;
+    cursor: not-allowed;
+}
+
+.decline-reason-item .decline-reason-save {
+    background: #1abc9c;
+}
+
+.decline-reason-item .decline-reason-save:hover {
+    background: #16a085;
+}
+
+.decline-reason-item .decline-reason-toggle.remove {
+    background: #ef4444;
+}
+
+.decline-reason-item .decline-reason-toggle.remove:hover {
+    background: #dc2626;
+}
+
+.decline-reason-item .decline-reason-toggle.restore {
+    background: #2563eb;
+}
+
+.decline-reason-item .decline-reason-toggle.restore:hover {
+    background: #1d4ed8;
+}
+
+.decline-reason-item.inactive input {
+    text-decoration: line-through;
+    opacity: 0.6;
+}
+
+.decline-reason-item.inactive {
+    opacity: 0.75;
+}
+
+.decline-reason-add {
+    margin-top: 16px;
+}
+
+.decline-reason-add-row {
+    display: flex;
+    gap: 10px;
+}
+
+.decline-reason-add-row input {
+    flex: 1;
+}
+
+.decline-reason-add-row button {
+    white-space: nowrap;
 }
 
 @media (max-width: 768px) {

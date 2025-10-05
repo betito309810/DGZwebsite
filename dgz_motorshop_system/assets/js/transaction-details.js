@@ -1,3 +1,12 @@
+function escapeHtml(value = '') {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     // Transaction details modal logic
     const transactionModal = document.getElementById('transactionModal');
@@ -50,6 +59,30 @@ async function loadTransactionDetails(orderId) {
         // Debug: log items data to console
         console.log('Transaction items:', items);
 
+        const statusKey = (order.status || '').toLowerCase();
+        const reasonLabel = escapeHtml(order.decline_reason_label || '');
+        const reasonNote = escapeHtml(order.decline_reason_note || '');
+
+        const statusLabels = {
+            pending: 'Pending',
+            payment_verification: 'Payment Verification',
+            approved: 'Approved',
+            completed: 'Completed',
+            disapproved: 'Disapproved',
+        };
+
+        const disapprovalHtml = statusKey === 'disapproved'
+            ? `
+                <div class="disapproval-section">
+                    <h3>Disapproval Details</h3>
+                    <p><strong>Reason:</strong> ${reasonLabel || 'Not provided'}</p>
+                    ${reasonNote ? `<p><strong>Additional details:</strong> ${reasonNote.replace(/\n/g, '<br>')}</p>` : ''}
+                </div>
+            `
+            : '';
+
+        const statusLabel = statusLabels[statusKey] || statusKey.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase());
+
         // Build items HTML with correct columns:
         // Product name, Quantity, Price, Subtotal (quantity * price)
         const itemsHtml = items.map(item => {
@@ -89,7 +122,7 @@ async function loadTransactionDetails(orderId) {
                     
                     <div class="info-group">
                         <label>Status:</label>
-                        <span class="status-${order.status.toLowerCase()}">${order.status}</span>
+                        <span class="status-${statusKey}">${statusLabel}</span>
                     </div>
                     <div class="info-group">
                         <label>Payment Method:</label>
@@ -109,6 +142,8 @@ async function loadTransactionDetails(orderId) {
                         <span>${order.reference_number || 'N/A'}</span>
                     </div>
                 </div>
+
+                ${disapprovalHtml}
 
                 <div class="order-items-section">
                     <h3>Order Items</h3>

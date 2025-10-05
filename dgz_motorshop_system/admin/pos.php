@@ -2,6 +2,7 @@
 require __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../includes/email.php';
 require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/includes/decline_reasons.php'; // Decline reason helpers
 
 use Dompdf\Dompdf;
 use Dompdf\Options;
@@ -107,6 +108,12 @@ if (empty($_SESSION['user_id'])) {
 }
 
 $pdo = db();
+ensureOrderDeclineSchema($pdo); // Ensure orders table can store decline reasons
+$declineReasons = fetchOrderDeclineReasons($pdo); // Preload decline reasons for UI/bootstrap
+$declineReasonLookup = []; // Map reason id to label for quick lookups
+foreach ($declineReasons as $declineReason) {
+    $declineReasonLookup[(int) ($declineReason['id'] ?? 0)] = (string) ($declineReason['label'] ?? '');
+}
 $role = $_SESSION['role'] ?? '';
 enforceStaffAccess();
 $notificationManageLink = 'inventory.php';
@@ -144,7 +151,7 @@ $profile_name = $current_user['name'] ?? 'N/A';
 $profile_role = !empty($current_user['role']) ? ucfirst($current_user['role']) : 'N/A';
 $profile_created = format_profile_date($current_user['created_at'] ?? null);
 
-$allowedStatuses = ['pending', 'approved', 'completed'];
+$allowedStatuses = ['pending', 'payment_verification', 'approved', 'completed', 'disapproved'];
 
 function ordersSupportsInvoiceNumbers(PDO $pdo): bool
 {
@@ -256,17 +263,97 @@ function generateInvoiceNumber(PDO $pdo): string
 
     return $fallback;
 }
-//fixed approving status 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status'])) 
+
+/**
+ * Prepare order items for email summaries and PDF receipts.
+ */
+function prepareOrderItemsData(PDO $pdo, int $orderId): array
+{
+    $itemsStmt = $pdo->prepare(
+        'SELECT oi.product_id, oi.qty, oi.price, p.name AS product_name
+         FROM order_items oi
+         LEFT JOIN products p ON p.id = oi.product_id
+         WHERE oi.order_id = ?'
+    );
+    $itemsStmt->execute([$orderId]);
+    $rawItems = $itemsStmt->fetchAll() ?: [];
+
+    $emailRows = '';
+    $itemsTotal = 0.0;
+    $itemsForReceipt = [];
+
+    foreach ($rawItems as $row) {
+        $name = trim((string) ($row['product_name'] ?? ''));
+        if ($name === '') {
+            $name = 'Item #' . (int) ($row['product_id'] ?? 0);
+        }
+
+        $qty = (int) ($row['qty'] ?? 0);
+        $price = (float) ($row['price'] ?? 0);
+        $line = $qty * $price;
+        $itemsTotal += $line;
+
+        $itemsForReceipt[] = [
+            'name' => $name,
+            'quantity' => $qty,
+            'price' => $price,
+            'total' => $line,
+        ];
+
+        $emailRows .= sprintf(
+            '<tr>'
+            . '<td style="padding:8px 12px; border-bottom:1px solid #f1f5f9;">%s</td>'
+            . '<td style="padding:8px 12px; border-bottom:1px solid #f1f5f9; text-align:center;">%d</td>'
+            . '<td style="padding:8px 12px; border-bottom:1px solid #f1f5f9; text-align:right;">₱%s</td>'
+            . '<td style="padding:8px 12px; border-bottom:1px solid #f1f5f9; text-align:right;">₱%s</td>'
+            . '</tr>',
+            htmlspecialchars($name, ENT_QUOTES, 'UTF-8'),
+            $qty,
+            number_format($price, 2),
+            number_format($line, 2)
+        );
+    }
+
+    $summaryTable = '<h3 style="margin:20px 0 10px; font-size:16px; color:#111;">Order Summary</h3>'
+        . '<table cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse; border:1px solid #e2e8f0; font-size:14px;">'
+        . '<thead>'
+        . '<tr style="background:#f8fafc;">'
+        . '<th style="text-align:left; padding:8px 12px; border-bottom:1px solid #e2e8f0;">Item</th>'
+        . '<th style="text-align:center; padding:8px 12px; border-bottom:1px solid #e2e8f0;">Qty</th>'
+        . '<th style="text-align:right; padding:8px 12px; border-bottom:1px solid #e2e8f0;">Price</th>'
+        . '<th style="text-align:right; padding:8px 12px; border-bottom:1px solid #e2e8f0;">Subtotal</th>'
+        . '</tr>'
+        . '</thead>'
+        . '<tbody>' . ($emailRows !== '' ? $emailRows : '<tr><td colspan="4" style="padding:12px; text-align:center; color:#64748b;">No items found.</td></tr>') . '</tbody>'
+        . '<tfoot>'
+        . '<tr>'
+        . '<td colspan="3" style="padding:10px 12px; text-align:right; font-weight:600; border-top:2px solid #e2e8f0;">Total:</td>'
+        . '<td style="padding:10px 12px; text-align:right; font-weight:600; border-top:2px solid #e2e8f0;">₱' . number_format($itemsTotal, 2) . '</td>'
+        . '</tr>'
+        . '</tfoot>'
+        . '</table>';
+
+    return [
+        'items' => $itemsForReceipt,
+        'items_total' => $itemsTotal,
+        'table_html' => $summaryTable,
+    ];
+}
+
+//fixed approving status and extended decline handling
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status'])) {
     $orderId = isset($_POST['order_id']) ? (int) $_POST['order_id'] : 0;
     $newStatus = isset($_POST['new_status']) ? strtolower(trim((string) $_POST['new_status'])) : '';
+    $declineReasonId = isset($_POST['decline_reason_id']) ? (int) $_POST['decline_reason_id'] : 0;
+    $declineReasonNote = isset($_POST['decline_reason_note']) ? trim((string) $_POST['decline_reason_note']) : '';
 
     $_SESSION['pos_active_tab'] = 'online';
 
     $statusParam = '0';
+    $statusError = '';
     $supportsInvoiceNumbers = ordersSupportsInvoiceNumbers($pdo);
 
-    if ($orderId > 0 && in_array($newStatus, ['approved', 'completed'], true)) {
+    if ($orderId > 0 && in_array($newStatus, ['payment_verification', 'approved', 'completed', 'disapproved'], true)) {
         $selectSql = $supportsInvoiceNumbers
             ? 'SELECT status, invoice_number FROM orders WHERE id = ?'
             : 'SELECT status FROM orders WHERE id = ?';
@@ -279,10 +366,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
             if ($currentStatus === '') {
                 $currentStatus = 'pending';
             }
+
             $transitions = [
-                'pending' => ['approved', 'completed'],
+                'pending' => ['payment_verification', 'approved', 'disapproved', 'completed'],
+                'payment_verification' => ['approved', 'disapproved'],
                 'approved' => ['completed'],
                 'completed' => [],
+                'disapproved' => [],
             ];
 
             if (!array_key_exists($currentStatus, $transitions)) {
@@ -292,33 +382,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
             $allowedNext = $transitions[$currentStatus] ?? [];
 
             if ($newStatus === $currentStatus || in_array($newStatus, $allowedNext, true)) {
-                $fields = [];
-                $params = [];
-
-                if ($newStatus !== $currentStatus) {
-                    $fields[] = 'status = ?';
-                    $params[] = $newStatus;
-                }
-
-                $existingInvoice = $supportsInvoiceNumbers
-                    ? (string) ($currentOrder['invoice_number'] ?? '')
-                    : '';
-                $needsInvoice = $supportsInvoiceNumbers
-                    && in_array($newStatus, ['approved', 'completed'], true)
-                    && $existingInvoice === '';
-
-                if ($needsInvoice) {
-                    $generatedInvoice = generateInvoiceNumber($pdo);
-                    if ($generatedInvoice !== '') {
-                        $fields[] = 'invoice_number = ?';
-                        $params[] = $generatedInvoice;
+                $selectedReason = null;
+                if ($newStatus === 'disapproved') {
+                    $selectedReason = findOrderDeclineReason($pdo, $declineReasonId);
+                    if ($selectedReason === null) {
+                        $statusError = 'missing_reason';
                     }
                 }
 
-                if (empty($fields)) {
-                    // No state change required but treat as success.
-                    $statusParam = '1';
-                } else {
+                if ($statusError === '') {
+                    $fields = [];
+                    $params = [];
+
+                    if ($newStatus !== $currentStatus) {
+                        $fields[] = 'status = ?';
+                        $params[] = $newStatus;
+                    }
+
+                    $existingInvoice = $supportsInvoiceNumbers
+                        ? (string) ($currentOrder['invoice_number'] ?? '')
+                        : '';
+                    $needsInvoice = $supportsInvoiceNumbers
+                        && in_array($newStatus, ['approved', 'completed'], true)
+                        && $existingInvoice === '';
+
+                    if ($needsInvoice) {
+                        $generatedInvoice = generateInvoiceNumber($pdo);
+                        if ($generatedInvoice !== '') {
+                            $fields[] = 'invoice_number = ?';
+                            $params[] = $generatedInvoice;
+                        }
+                    }
+
+                    $fields[] = 'decline_reason_id = ?';
+                    $params[] = $newStatus === 'disapproved' && $selectedReason !== null ? (int) $selectedReason['id'] : null;
+
+                    $fields[] = 'decline_reason_note = ?';
+                    $params[] = $newStatus === 'disapproved' && $declineReasonNote !== '' ? $declineReasonNote : null;
+
                     $params[] = $orderId;
                     $updateSql = 'UPDATE orders SET ' . implode(', ', $fields) . ' WHERE id = ?';
                     $stmt = $pdo->prepare($updateSql);
@@ -336,34 +437,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                         $customerEmail = $orderInfo['email'] ?? '';
                         if ($customerEmail && filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
                             // Only send email if customer is not "Walk-in"
-                            // This condition prevents sending approval emails to walk-in customers who don't have email addresses
                             if (strtolower(trim($orderInfo['customer_name'] ?? '')) !== 'walk-in') {
-                                // Load order items
-                                $itemsStmt = $pdo->prepare(
-                                    'SELECT oi.qty, oi.price, p.name AS product_name
-                                     FROM order_items oi
-                                     LEFT JOIN products p ON p.id = oi.product_id
-                                     WHERE oi.order_id = ?'
-                                );
-                                $itemsStmt->execute([$orderId]);
-                                $items = $itemsStmt->fetchAll() ?: [];
-
-                                $itemsHtml = '';
-                                $itemsTotal = 0.0;
-                                foreach ($items as $it) {
-                                    $name = htmlspecialchars($it['product_name'] ?? 'Item', ENT_QUOTES, 'UTF-8');
-                                    $qty = (int) ($it['qty'] ?? 0);
-                                    $price = (float) ($it['price'] ?? 0);
-                                    $line = $qty * $price;
-                                    $itemsTotal += $line;
-                                    $itemsHtml .= sprintf(
-                                        '<tr><td style="padding:6px 8px; border-bottom:1px solid #eee;">%s</td><td style="padding:6px 8px; text-align:center; border-bottom:1px solid #eee;">%d</td><td style="padding:6px 8px; text-align:right; border-bottom:1px solid #eee;">₱%s</td><td style="padding:6px 8px; text-align:right; border-bottom:1px solid #eee;">₱%s</td></tr>',
-                                        $name,
-                                        $qty,
-                                        number_format($price, 2),
-                                        number_format($line, 2)
-                                    );
-                                }
+                                $itemData = prepareOrderItemsData($pdo, $orderId);
+                                $itemsTotal = (float) ($itemData['items_total'] ?? 0.0);
+                                $summaryTableHtml = (string) ($itemData['table_html'] ?? '');
 
                                 $customerName = trim((string) ($orderInfo['customer_name'] ?? 'Customer'));
                                 $invoiceNumber = trim((string) ($orderInfo['invoice_number'] ?? ''));
@@ -381,24 +458,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                                     . '<p style="margin:0 0 12px;">Good news! Your order #' . (int) $orderId . ' has been approved and is now being processed.</p>'
                                     . '<p style="margin:0 0 12px;">Invoice Number: <strong>' . htmlspecialchars($displayInvoice, ENT_QUOTES, 'UTF-8') . '</strong><br>'
                                     . 'Order Date: ' . htmlspecialchars($prettyDate, ENT_QUOTES, 'UTF-8') . '</p>'
-                                    . '<h3 style="margin:16px 0 8px;">Order Summary</h3>'
-                                    . '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; border:1px solid #eee;">'
-                                    . '<thead>'
-                                    . '<tr style="background:#f9f9f9;">'
-                                    . '<th style="text-align:left; padding:8px; border-bottom:1px solid #eee;">Item</th>'
-                                    . '<th style="text-align:center; padding:8px; border-bottom:1px solid #eee;">Qty</th>'
-                                    . '<th style="text-align:right; padding:8px; border-bottom:1px solid #eee;">Price</th>'
-                                    . '<th style="text-align:right; padding:8px; border-bottom:1px solid #eee;">Subtotal</th>'
-                                    . '</tr>'
-                                    . '</thead>'
-                                    . '<tbody>' . $itemsHtml . '</tbody>'
-                                    . '<tfoot>'
-                                    . '<tr>'
-                                    . '<td colspan="3" style="padding:8px; text-align:right;"><strong>Total:</strong></td>'
-                                    . '<td style="padding:8px; text-align:right;"><strong>₱' . number_format($orderTotal, 2) . '</strong></td>'
-                                    . '</tr>'
-                                    . '</tfoot>'
-                                    . '</table>'
+                                    . $summaryTableHtml
                                     . '<p style="margin:16px 0 0;">Thank you for shopping with <strong>DGZ Motorshop</strong>!</p>'
                                     . '</div>';
 
@@ -411,26 +471,107 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                                     'sales_total' => $orderTotal,
                                     'vatable' => $orderTotal / 1.12,
                                     'vat' => $orderTotal - ($orderTotal / 1.12),
-                                    'amount_paid' => $orderTotal, // For approved orders, assume full payment
+                                    'amount_paid' => $orderTotal,
                                     'change' => 0.0,
                                     'cashier' => $_SESSION['username'] ?? 'Admin',
-                                    'items' => array_map(function($item) {
+                                    'items' => array_map(static function (array $item): array {
                                         return [
-                                            'name' => $item['product_name'] ?? 'Item',
-                                            'quantity' => (int) ($item['qty'] ?? 0),
+                                            'name' => $item['name'] ?? 'Item',
+                                            'quantity' => (int) ($item['quantity'] ?? 0),
                                             'price' => (float) ($item['price'] ?? 0),
-                                            'total' => ((int) ($item['qty'] ?? 0)) * ((float) ($item['price'] ?? 0))
+                                            'total' => (float) ($item['total'] ?? 0),
                                         ];
-                                    }, $items)
+                                    }, $itemData['items'] ?? [])
                                 ];
 
                                 $pdfContent = generateReceiptPDF($receiptData);
                                 $pdfFilename = 'receipt_' . $orderId . '.pdf';
 
-                                // Fire and forget email with PDF attachment
                                 try { sendEmail($customerEmail, $subject, $body, $pdfContent, $pdfFilename); } catch (Throwable $e) { /* already logged in helper */ }
                             }
                         }
+                    }
+
+                    if ($success && $newStatus === 'disapproved' && $selectedReason !== null) {
+                        $orderInfoStmt = $pdo->prepare(
+                            'SELECT customer_name, email, phone, total, created_at FROM orders WHERE id = ? LIMIT 1'
+                        );
+                        $orderInfoStmt->execute([$orderId]);
+                        $orderInfo = $orderInfoStmt->fetch();
+
+                        $customerEmail = $orderInfo['email'] ?? '';
+                        if ($customerEmail && filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
+                            if (strtolower(trim($orderInfo['customer_name'] ?? '')) !== 'walk-in') {
+                                $itemData = prepareOrderItemsData($pdo, $orderId);
+                                $summaryTableHtml = (string) ($itemData['table_html'] ?? '');
+                                $customerName = trim((string) ($orderInfo['customer_name'] ?? 'Customer'));
+                                $createdAt = (string) ($orderInfo['created_at'] ?? '');
+                                $prettyDate = $createdAt !== '' ? date('F j, Y g:i A', strtotime($createdAt)) : date('F j, Y g:i A');
+                                $orderTotal = (float) ($orderInfo['total'] ?? 0);
+
+                                $reasonLine = htmlspecialchars($selectedReason['label'] ?? 'No reason provided', ENT_QUOTES, 'UTF-8');
+                                $extraDetails = $declineReasonNote !== ''
+                                    ? '<p style="margin:0 0 12px;">Additional Details: ' . nl2br(htmlspecialchars($declineReasonNote, ENT_QUOTES, 'UTF-8')) . '</p>'
+                                    : '';
+
+                                $subject = 'Order Disapproved - DGZ Motorshop';
+                                $body = '<div style="font-family: Arial, sans-serif; font-size:14px; color:#333;">'
+                                    . '<h2 style="color:#c0392b; margin-bottom:8px;">Order Disapproved</h2>'
+                                    . '<p style="margin:0 0 12px;">Hi ' . htmlspecialchars($customerName, ENT_QUOTES, 'UTF-8') . ',</p>'
+                                    . '<p style="margin:0 0 12px;">We reviewed your order #' . (int) $orderId . ' placed on '
+                                    . htmlspecialchars($prettyDate, ENT_QUOTES, 'UTF-8') . '.</p>'
+                                    . '<p style="margin:0 0 12px;">Reason: <strong>' . $reasonLine . '</strong></p>'
+                                    . $extraDetails
+                                    . $summaryTableHtml
+                                    . '<p style="margin:0;">If you have questions or would like to update your order, please reach out to us.</p>'
+                                    . '<p style="margin:12px 0 0;">Order Total: ₱' . number_format($orderTotal, 2) . '</p>'
+                                    . '<p style="margin:12px 0 0;">Thank you,<br>DGZ Motorshop Team</p>'
+                                    . '</div>';
+
+                                try { sendEmail($customerEmail, $subject, $body); } catch (Throwable $e) { /* already logged in helper */ }
+                            }
+                        }
+                    }
+
+                    if ($success && $newStatus === 'payment_verification') {
+                        $orderInfoStmt = $pdo->prepare(
+                            'SELECT customer_name, email, phone, total, created_at FROM orders WHERE id = ? LIMIT 1'
+                        );
+                        $orderInfoStmt->execute([$orderId]);
+                        $orderInfo = $orderInfoStmt->fetch();
+
+                        $customerEmail = $orderInfo['email'] ?? '';
+                        if ($customerEmail && filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
+                            if (strtolower(trim($orderInfo['customer_name'] ?? '')) !== 'walk-in') {
+                                $itemData = prepareOrderItemsData($pdo, $orderId);
+                                $summaryTableHtml = (string) ($itemData['table_html'] ?? '');
+
+                                $customerName = trim((string) ($orderInfo['customer_name'] ?? 'Customer'));
+                                $createdAt = (string) ($orderInfo['created_at'] ?? '');
+                                $prettyDate = $createdAt !== '' ? date('F j, Y g:i A', strtotime($createdAt)) : date('F j, Y g:i A');
+                                $orderTotal = (float) ($orderInfo['total'] ?? 0);
+
+                                $supportEmail = 'dgzstoninocapstone@gmail.com';
+                                $supportPhone = '(123) 456-7890';
+
+                                $subject = 'Payment Verification Needed - DGZ Motorshop Order #' . (int) $orderId;
+                                $body = '<div style="font-family: Arial, sans-serif; font-size:14px; color:#333;">'
+                                    . '<h2 style="color:#b45309; margin-bottom:8px;">Action Needed: Payment Verification</h2>'
+                                    . '<p style="margin:0 0 12px;">Hi ' . htmlspecialchars($customerName, ENT_QUOTES, 'UTF-8') . ',</p>'
+                                    . '<p style="margin:0 0 12px;">We reviewed your order #' . (int) $orderId . ' placed on '
+                                    . htmlspecialchars($prettyDate, ENT_QUOTES, 'UTF-8') . ', but we could not match any payment on our records.</p>'
+                                    . '<p style="margin:0 0 12px;">Please reach us within <strong>5 working days</strong> via '
+                                    . '<a href="mailto:' . htmlspecialchars($supportEmail, ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($supportEmail, ENT_QUOTES, 'UTF-8') . '</a>'
+                                    . ' or call ' . htmlspecialchars($supportPhone, ENT_QUOTES, 'UTF-8') . ' so we can assist you further. If we do not hear from you, the order will be void.</p>'
+                                    . $summaryTableHtml
+                                    . '<p style="margin:16px 0 0;">We appreciate your prompt attention to this matter.</p>'
+                                    . '<p style="margin:12px 0 0;">Thank you,<br>DGZ Motorshop Team</p>'
+                                    . '</div>';
+
+                                try { sendEmail($customerEmail, $subject, $body); } catch (Throwable $e) { /* already logged in helper */ }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -439,6 +580,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
     header('Location: pos.php?' . http_build_query([
         'tab' => 'online',
         'status_updated' => $statusParam,
+        'status_error' => $statusError,
     ]));
     exit;
 }
@@ -711,7 +853,7 @@ $offset = ($page - 1) * $perPage;
 $statusFilter = '';
 if (isset($_GET['status_filter'])) {
     $tmp = strtolower(trim((string) $_GET['status_filter']));
-    if (in_array($tmp, ['pending', 'approved', 'completed'], true)) {
+    if (in_array($tmp, ['pending', 'payment_verification', 'approved', 'completed', 'disapproved'], true)) {
         $statusFilter = $tmp;
     }
 }
@@ -720,7 +862,7 @@ if (isset($_GET['status_filter'])) {
 $whereConditions = [
     "(payment_method IS NOT NULL AND payment_method <> '' AND LOWER(payment_method) = 'gcash')",
     "(payment_proof IS NOT NULL AND payment_proof <> '')",
-    "status IN ('pending','approved')"
+    "status IN ('pending','payment_verification','approved','disapproved')"
 ];
 $whereClause = "(" . implode(" OR ", $whereConditions) . ")";
 
@@ -758,11 +900,18 @@ foreach ($onlineOrders as &$order) {
     $order['reference_number'] = $details['reference'];
     $order['proof_image'] = $details['image'];
     $order['status'] = strtolower((string) ($order['status'] ?? 'pending'));
+    $reasonId = (int) ($order['decline_reason_id'] ?? 0);
+    $order['decline_reason_label'] = $reasonId > 0 && isset($declineReasonLookup[$reasonId])
+        ? $declineReasonLookup[$reasonId]
+        : '';
+    $order['decline_reason_note'] = (string) ($order['decline_reason_note'] ?? '');
 }
 unset($order);
 
 $statusOptions = [
+    'payment_verification' => 'Payment Verification',
     'approved' => 'Approved',
+    'disapproved' => 'Disapproved',
     'completed' => 'Completed',
 ];
 
@@ -779,6 +928,11 @@ if ($brandsJson === false) {
 $categoriesJson = json_encode($categories, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
 if ($categoriesJson === false) {
     $categoriesJson = '[]';
+}
+
+$declineReasonsJson = json_encode($declineReasons, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
+if ($declineReasonsJson === false) {
+    $declineReasonsJson = '[]';
 }
 
 $receiptData = null;
@@ -972,10 +1126,17 @@ if ($receiptDataJson === false) {
 
         <div id="onlineTab" class="tab-panel<?= $activeTab === 'online' ? ' active' : '' ?>">
             <?php if (isset($_GET['status_updated'])): ?>
-                <?php $success = $_GET['status_updated'] === '1'; ?>
+                <?php
+                    $success = $_GET['status_updated'] === '1';
+                    $statusErrorCode = $_GET['status_error'] ?? '';
+                    $statusMessage = $success ? 'Order status updated.' : 'Unable to update order status.';
+                    if (!$success && $statusErrorCode === 'missing_reason') {
+                        $statusMessage = 'Please choose a disapproval reason before disapproving an order.';
+                    }
+                ?>
                 <div class="status-alert <?= $success ? 'success' : 'error' ?>">
                     <i class="fas <?= $success ? 'fa-check-circle' : 'fa-exclamation-circle' ?>"></i>
-                    <?= $success ? 'Order status updated.' : 'Unable to update order status.' ?>
+                    <?= htmlspecialchars($statusMessage, ENT_QUOTES, 'UTF-8') ?>
                 </div>
             <?php endif; ?>
 
@@ -985,8 +1146,10 @@ if ($receiptDataJson === false) {
                     <select id="statusFilter" name="status_filter">
                         <option value="">All Orders</option>
                         <option value="pending" <?= $statusFilter === 'pending' ? 'selected' : '' ?>>Pending</option>
+                        <option value="payment_verification" <?= $statusFilter === 'payment_verification' ? 'selected' : '' ?>>Payment Verification</option>
                         <option value="approved" <?= $statusFilter === 'approved' ? 'selected' : '' ?>>Approved</option>
                         <option value="completed" <?= $statusFilter === 'completed' ? 'selected' : '' ?>>Completed</option>
+                        <option value="disapproved" <?= $statusFilter === 'disapproved' ? 'selected' : '' ?>>Disapproved</option>
                     </select>
                 </div>
               
@@ -1021,13 +1184,18 @@ if ($receiptDataJson === false) {
                                 $statusValue = $order['status'] !== '' ? $order['status'] : 'pending';
                                 $createdAt = !empty($order['created_at']) ? date('M d, Y g:i A', strtotime($order['created_at'])) : 'N/A';
                                 $statusTransitions = [
-                                    'pending' => ['approved', 'completed'],
+                                    'pending' => ['payment_verification', 'approved', 'disapproved', 'completed'],
+                                    'payment_verification' => ['approved', 'disapproved'],
                                     'approved' => ['completed'],
                                     'completed' => [],
+                                    'disapproved' => [],
                                 ];
                                 $availableStatusChanges = $statusTransitions[$statusValue] ?? [];
                                 ?>
-                                <tr class="online-order-row" data-order-id="<?= (int) $order['id'] ?>">
+                                <tr class="online-order-row" data-order-id="<?= (int) $order['id'] ?>"
+                                    data-decline-reason-id="<?= (int) ($order['decline_reason_id'] ?? 0) ?>"
+                                    data-decline-reason-label="<?= htmlspecialchars($order['decline_reason_label'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+                                    data-decline-reason-note="<?= htmlspecialchars($order['decline_reason_note'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
                                     <td>#<?= (int) $order['id'] ?></td>
                                     <td><?= htmlspecialchars($order['customer_name'] ?? 'Customer', ENT_QUOTES, 'UTF-8') ?></td>
                                     <td><?php 
@@ -1053,15 +1221,19 @@ if ($receiptDataJson === false) {
                                         </button>
                                     </td>
                                     <td>
+                                        <?php $statusLabel = $statusOptions[$statusValue] ?? ucfirst($statusValue); ?>
                                         <span class="status-badge status-<?= htmlspecialchars($statusValue, ENT_QUOTES, 'UTF-8') ?>">
-                                            <?= htmlspecialchars(ucfirst($statusValue), ENT_QUOTES, 'UTF-8') ?>
+                                            <?= htmlspecialchars($statusLabel, ENT_QUOTES, 'UTF-8') ?>
                                         </span>
                                         <form method="post" class="status-form">
                                             <input type="hidden" name="order_id" value="<?= (int) $order['id'] ?>">
                                             <input type="hidden" name="update_order_status" value="1">
+                                            <input type="hidden" name="decline_reason_id" value="">
+                                            <input type="hidden" name="decline_reason_note" value="">
                                             <select name="new_status" <?= empty($availableStatusChanges) ? 'disabled' : '' ?>>
                                                 <?php if (empty($availableStatusChanges)): ?>
-                                                    <option value="">Completed</option>
+                                                    <?php $currentLabel = $statusOptions[$statusValue] ?? ucfirst($statusValue); ?>
+                                                    <option value=""><?= htmlspecialchars($currentLabel, ENT_QUOTES, 'UTF-8') ?></option>
                                                 <?php else: ?>
                                                     <?php foreach ($availableStatusChanges as $value): ?>
                                                         <option value="<?= $value ?>"><?= $statusOptions[$value] ?></option>
@@ -1070,6 +1242,14 @@ if ($receiptDataJson === false) {
                                             </select>
                                             <button type="submit" class="status-save" <?= empty($availableStatusChanges) ? 'disabled' : '' ?>>Update</button>
                                         </form>
+                                        <?php if ($statusValue === 'disapproved' && !empty($order['decline_reason_label'])): ?>
+                                            <div class="decline-reason-display">
+                                                Reason: <?= htmlspecialchars($order['decline_reason_label'], ENT_QUOTES, 'UTF-8') ?>
+                                                <?php if (!empty($order['decline_reason_note'])): ?>
+                                                    <br><span class="decline-reason-note">Details: <?= nl2br(htmlspecialchars($order['decline_reason_note'], ENT_QUOTES, 'UTF-8')) ?></span>
+                                                <?php endif; ?>
+                                            </div>
+                                        <?php endif; ?>
                                     </td>
                                     <td><?= htmlspecialchars($createdAt, ENT_QUOTES, 'UTF-8') ?></td>
                                 </tr>
@@ -1322,16 +1502,55 @@ if ($receiptDataJson === false) {
             </div>
         </div>
     </div>
+
+    <!-- Disapprove order modal: enforce reason selection before submitting disapproval -->
+    <div id="declineOrderModal" class="modal-overlay" style="display:none;">
+        <div class="modal-content decline-modal">
+            <button type="button" class="modal-close" id="closeDeclineOrderModal">&times;</button>
+            <h3>Disapprove Order</h3>
+            <p class="decline-modal-intro">Select a reason to disapprove this order. The customer will receive the reason in their email.</p>
+            <label for="declineReasonSelect" class="decline-label">Disapproval Reason</label>
+            <select id="declineReasonSelect"></select>
+            <button type="button" id="openManageDeclineReasons" class="manage-reasons-button">Manage reasons</button>
+            <label for="declineReasonNote" class="decline-label">Additional Details (optional)</label>
+            <textarea id="declineReasonNote" rows="3" placeholder="Add context that will appear in the email."></textarea>
+            <div id="declineModalError" class="decline-modal-error" aria-live="polite"></div>
+            <div class="decline-modal-actions">
+                <button type="button" id="cancelDeclineOrder" class="secondary-button">Cancel</button>
+                <button type="button" id="confirmDeclineOrder" class="danger-button">Disapprove Order</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manage disapproval reasons modal: maintain reusable catalogue -->
+    <div id="manageDeclineReasonsModal" class="modal-overlay" style="display:none;">
+        <div class="modal-content decline-manage-modal">
+            <button type="button" class="modal-close" id="closeManageDeclineReasons">&times;</button>
+            <h3>Manage Disapproval Reasons</h3>
+            <p class="decline-modal-intro">Update reusable disapproval reasons so your team stays consistent.</p>
+            <div id="declineReasonsList" class="decline-reasons-list"></div>
+            <form id="addDeclineReasonForm" class="decline-reason-add">
+                <label for="newDeclineReasonInput" class="decline-label">Add a new disapproval reason</label>
+                <div class="decline-reason-add-row">
+                    <input type="text" id="newDeclineReasonInput" maxlength="255" placeholder="Enter reason label" required>
+                    <button type="submit" class="primary-button">Add</button>
+                </div>
+            </form>
+            <div id="manageDeclineError" class="decline-modal-error" aria-live="polite"></div>
+        </div>
+    </div>
     <!-- POS data bootstrap for external script -->
     <script>
         window.dgzPosData = {
             productCatalog: <?= $productCatalogJson ?>,
             initialActiveTab: <?= json_encode($activeTab) ?>,
-            checkoutReceipt: <?= $receiptDataJson ?>
+            checkoutReceipt: <?= $receiptDataJson ?>,
+            declineReasons: <?= $declineReasonsJson ?>
         };
     </script>
     <!--POS main script-->
     <script src="../assets/js/pos/posMain.js"></script>
+    <script src="../assets/js/pos/orderDecline.js"></script>
     <script src="../assets/js/notifications.js"></script>
 </body>
 </html>

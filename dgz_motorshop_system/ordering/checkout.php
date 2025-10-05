@@ -327,7 +327,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Checkout - DGZ Motorshop</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="../assets/css/checkout.css">
+    <link rel="stylesheet" href="../assets/css/public/checkout.css">
 </head>
 <body>
     <header class="header">

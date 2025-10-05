@@ -140,6 +140,35 @@
     font-weight: 600;
 }
 
+.status-disapproved {
+    color: #b91c1c;
+    font-weight: 600;
+}
+
+.status-payment_verification {
+    color: #b45309;
+    font-weight: 600;
+}
+
+.disapproval-section {
+    margin-top: 16px;
+    padding: 12px;
+    border-radius: 10px;
+    background: rgba(248, 113, 113, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    color: #7f1d1d;
+}
+
+.disapproval-section h3 {
+    font-size: 15px;
+    margin-bottom: 6px;
+}
+
+.disapproval-section p {
+    margin: 4px 0;
+    line-height: 1.4;
+}
+
 @media (max-width: 768px) {
     .order-info-grid {
         grid-template-columns: repeat(2, 1fr);

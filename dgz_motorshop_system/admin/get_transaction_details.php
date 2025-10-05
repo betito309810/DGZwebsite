@@ -15,7 +15,12 @@ $order_id = (int)$_GET['order_id'];
 
 try {
     // Get order details
-    $stmt = $pdo->prepare("SELECT * FROM orders WHERE id = ?");
+    $stmt = $pdo->prepare(
+        "SELECT o.*, r.label AS decline_reason_label
+         FROM orders o
+         LEFT JOIN order_decline_reasons r ON r.id = o.decline_reason_id
+         WHERE o.id = ?"
+    );
     $stmt->execute([$order_id]);
     $order = $stmt->fetch(PDO::FETCH_ASSOC);
 

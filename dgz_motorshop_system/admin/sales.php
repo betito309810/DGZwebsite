@@ -141,12 +141,17 @@ $current_page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
 $offset = ($current_page - 1) * $records_per_page;
 
 // Count total records
-$count_sql = "SELECT COUNT(*) FROM orders WHERE status IN ('approved','completed')";
+$count_sql = "SELECT COUNT(*) FROM orders WHERE status IN ('approved','completed','disapproved')";
 $total_records = $pdo->query($count_sql)->fetchColumn();
 $total_pages = ceil($total_records / $records_per_page);
 
 // Get orders with pagination
-$sql = "SELECT * FROM orders WHERE status IN ('approved','completed') ORDER BY created_at DESC LIMIT :limit OFFSET :offset";
+$sql = "SELECT o.*, r.label AS decline_reason_label
+        FROM orders o
+        LEFT JOIN order_decline_reasons r ON r.id = o.decline_reason_id
+        WHERE o.status IN ('approved','completed','disapproved')
+        ORDER BY o.created_at DESC
+        LIMIT :limit OFFSET :offset";
 $stmt = $pdo->prepare($sql);
 $stmt->bindValue(':limit', $records_per_page, PDO::PARAM_INT);
 $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
@@ -254,7 +259,22 @@ $end_record = min($offset + $records_per_page, $total_records);
                             </td>
                         </tr>
                         <?php else: ?>
+                        <?php
+                        $statusLabels = [
+                            'approved' => 'Approved',
+                            'completed' => 'Completed',
+                            'disapproved' => 'Disapproved',
+                            'payment_verification' => 'Payment Verification',
+                        ];
+                        ?>
                         <?php foreach($orders as $o): ?>
+                        <?php
+                            $statusKey = strtolower((string) ($o['status'] ?? ''));
+                            $statusLabel = $statusLabels[$statusKey] ?? ucfirst($statusKey);
+                            $statusClass = 'status-pill ' . 'status-' . preg_replace('/[^a-z0-9_-]/i', '-', $statusKey);
+                            $disapprovalReason = $statusKey === 'disapproved' ? trim((string) ($o['decline_reason_label'] ?? '')) : '';
+                            $disapprovalNote = $statusKey === 'disapproved' ? trim((string) ($o['decline_reason_note'] ?? '')) : '';
+                        ?>
                         <tr class="transaction-row" data-order-id="<?=$o['id']?>" style="cursor: pointer;">
                             <td><?=$o['id']?></td>
                             <td><?=$o['invoice_number'] ? htmlspecialchars($o['invoice_number']) : 'N/A'?></td>
@@ -283,7 +303,17 @@ $end_record = min($offset + $records_per_page, $total_records);
                                     <span style="color:#94a3b8;">No image</span>
                                 <?php endif; ?>
                             </td>
-                            <td><?=htmlspecialchars($o['status'])?></td>
+                            <td>
+                                <span class="<?=htmlspecialchars($statusClass, ENT_QUOTES, 'UTF-8')?>"><?=htmlspecialchars($statusLabel)?></span>
+                                <?php if($statusKey === 'disapproved' && $disapprovalReason !== ''): ?>
+                                    <div class="status-detail">
+                                        <strong>Reason:</strong> <?=htmlspecialchars($disapprovalReason)?>
+                                        <?php if($disapprovalNote !== ''): ?>
+                                            <br><span class="status-detail-note">Details: <?=nl2br(htmlspecialchars($disapprovalNote))?></span>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endif; ?>
+                            </td>
                             <td><?=date('M d, Y g:i A', strtotime($o['created_at']))?></td>
                         </tr>
                         <?php endforeach; ?>

@@ -119,6 +119,14 @@ document.addEventListener('DOMContentLoaded', () => {
             // End POS online order modal closer
 
             // Begin POS online order modal populator
+            const statusLabels = {
+                pending: 'Pending',
+                payment_verification: 'Payment Verification',
+                approved: 'Approved',
+                completed: 'Completed',
+                disapproved: 'Disapproved',
+            };
+
             const populateOnlineOrderModal = (order, items) => {
                 if (!onlineOrderModal) {
                     return;
@@ -142,8 +150,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     onlineOrderDate.textContent = 'N/A';
                 }
 
-                const capitalisedStatus = safeStatus.charAt(0).toUpperCase() + safeStatus.slice(1);
-                onlineOrderStatus.textContent = capitalisedStatus;
+                const statusLabel = statusLabels[safeStatus] || safeStatus.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase());
+                onlineOrderStatus.textContent = statusLabel;
                 onlineOrderPayment.textContent = safePayment !== '' ? safePayment : 'N/A';
                 onlineOrderEmail.textContent = (order.email || '').toString();
                 onlineOrderPhone.textContent = (order.phone || '').toString();
