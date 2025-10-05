@@ -3,30 +3,19 @@ require __DIR__ . '/../config/config.php';
 $pdo = db();
 $products = $pdo->query('SELECT * FROM products ORDER BY name')->fetchAll();
 
-// Group products by category if you have a category field, otherwise we'll use sample categories
-$categories = [
-    'EXHAUST' => [],
-    'FUEL MANAGEMENT' => [],
-    'AIR CLEANERS' => [],
-    'HANDLEBARS & CONTROLS' => [],
-    'WINDSHIELDS & WINDSCREENS' => [],
-    'BATTERIES & ELECTRICAL' => [],
-    'DRIVE & TRANSMISSION' => [],
-    'BRAKES' => [],
-    'AUDIO & SPEAKERS' => [],
-    'WHEEL & AXLE' => [],
-    'BUMPERS & PROTECTION' => [],
-    'CAB & INTERIOR' => [],
-    'MIRRORS' => [],
-    'SUSPENSION' => [],
-    'TIRES' => [],
-    'OTHER' => []
-];
-
-// Distribute products into categories (you can modify this based on your actual category field)
-foreach($products as $product) {
-    $categories['OTHER'][] = $product;
+$categories = [];
+foreach ($products as $product) {
+    $category = trim($product['category'] ?? '');
+    if ($category === '') {
+        $category = 'Other';
+    }
+    $normalized = strtolower($category);
+    if (!isset($categories[$normalized])) {
+        $categories[$normalized] = $category;
+    }
 }
+
+natcasesort($categories);
 ?>
 <!doctype html>
 <html lang="en">
@@ -58,7 +47,7 @@ foreach($products as $product) {
                 
             </div>
 
-            <a href="#" class="cart-btn" id="cartButton" onclick="handleCartClick(event)">
+            <a href="#" class="cart-btn" id="cartButton">
                 <i class="fas fa-shopping-cart"></i>
                 <span>Cart</span>
                 <div class="cart-count" id="cartCount">0</div>
@@ -80,21 +69,15 @@ foreach($products as $product) {
         <aside class="sidebar">
             <h3 class="sidebar-title">Shop by Category</h3>
             <ul class="category-list">
-                <li class="category-item"><a href="#air-cleaner" class="category-link">Air Cleaner</a></li>
-                <li class="category-item"><a href="#batteries" class="category-link">Batteries & Electrical</a></li>
-                <li class="category-item"><a href="#brakes" class="category-link">Brakes</a></li>
-                <li class="category-item"><a href="#chains" class="category-link">Chains</a></li>
-                <li class="category-item"><a href="#clutch" class="category-link">Clutch</a></li>
-                <li class="category-item"><a href="#decals" class="category-link">Decals</a></li>
-                <li class="category-item"><a href="#engine" class="category-link">Engine Parts</a></li>
-                <li class="category-item"><a href="#exhaust" class="category-link">Exhaust</a></li>
-                <li class="category-item"><a href="#filters" class="category-link">Filters</a></li>
-                <li class="category-item"><a href="#fuel" class="category-link">Fuel System</a></li>
-                <li class="category-item"><a href="#lighting" class="category-link">Lighting</a></li>
-                <li class="category-item"><a href="#lubricant" class="category-link">Lubricant & Fluids</a></li>
-                <li class="category-item"><a href="#mirrors" class="category-link">Mirrors</a></li>
-                <li class="category-item"><a href="#suspension" class="category-link">Suspension</a></li>
-                <li class="category-item"><a href="#tires" class="category-link">Tires</a></li>
+                <li class="category-item"><a href="#" class="category-link active" data-category="all">All Products</a></li>
+                <?php foreach ($categories as $slug => $categoryLabel):
+                ?>
+                <li class="category-item">
+                    <a href="#" class="category-link" data-category="<?= htmlspecialchars($slug) ?>">
+                        <?= htmlspecialchars($categoryLabel) ?>
+                    </a>
+                </li>
+                <?php endforeach; ?>
             </ul>
         </aside>
 
@@ -104,14 +87,17 @@ foreach($products as $product) {
 
             <!-- All Products -->
             <div id="all-products">
-                <h2 style="margin: 10px 0 30px 0; font-size: 28px; color: #2d3436; text-align: center;">All Products
+                <h2 id="productSectionTitle" style="margin: 10px 0 30px 0; font-size: 28px; color: #2d3436; text-align: center;">All Products
                 </h2>
                 <div class="products-grid">
                     <?php foreach($products as $p):
                         $category = isset($p['category']) ? $p['category'] : '';
                         $brand = isset($p['brand']) ? $p['brand'] : '';
                     ?>
-                    <div class="product-card" data-category="<?= htmlspecialchars(strtolower($category)) ?>" data-brand="<?= htmlspecialchars(strtolower($brand)) ?>">
+                    <?php
+                        $categorySlug = strtolower(trim($category ?: 'Other'));
+                    ?>
+                    <div class="product-card" data-category="<?= htmlspecialchars($categorySlug) ?>" data-brand="<?= htmlspecialchars(strtolower($brand)) ?>">
                         <div class="product-header">
                             <div class="product-avatar">
                                 <i class="fas fa-motorcycle"></i>
@@ -170,15 +156,24 @@ foreach($products as $product) {
     <!-- Search functionality -->
      <script src="../assets/js/public/search.js"></script>
     </div>
-    <footer class="footer">
-        <div class="footer-content">
+   <footer class="footer">
+    <div class="footer-content">
+        <!-- Contact info on the far left -->
+        <div class="footer-column contact-info">
+            <p><strong>Visit Us:</strong> Lot 2 Blk 3 Dolores Road, Brgy. Sto. Niño, Antipolo City</p>
+            <p><strong>Call:</strong> <a href="tel:+639123456789">+63 912 345 6789</a></p>
+            <p><strong>Email:</strong> <a href="mailto:orders@dgzmotorshop.com">orders@dgzmotorshop.com</a></p>
+        </div>
+        
+        <!-- Social and copyright on the right -->
+        <div class="footer-column footer-meta">
             <div class="social-links">
                 <a href="https://www.facebook.com/dgzstonino"><i class="fab fa-facebook-f"></i></a>
             </div>
-            <p>DGZ Motorshop - Sto. Niño Branch</p>
-            <p>© 2022-2025 DGZ Motorshop. All rights reserved.</p>
-
-    </footer>
+            <p>© 2022-2025 DGZ Motorshop - Sto. Niño Branch. All rights reserved.</p>
+        </div>
+    </div>
+</footer>
 </body>
 
 </html>

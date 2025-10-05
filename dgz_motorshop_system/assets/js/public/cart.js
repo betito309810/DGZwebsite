@@ -4,6 +4,13 @@
         let cartCount = 0;
         let cartItems = [];
 
+        function updateCartBadge() {
+            const badge = document.getElementById('cartCount');
+            if (badge) {
+                badge.textContent = cartCount;
+            }
+        }
+
         // Start saveCart: persist the in-memory cart to localStorage so the cart survives reloads
         function saveCart() {
             localStorage.setItem('cartItems', JSON.stringify(cartItems));
@@ -25,9 +32,11 @@
                 }
             }
             if (savedCount) {
-                cartCount = parseInt(savedCount);
-                document.getElementById('cartCount').textContent = cartCount;
+                const parsedCount = parseInt(savedCount, 10);
+                cartCount = Number.isNaN(parsedCount) ? 0 : parsedCount;
             }
+
+            updateCartBadge();
         }
         // End loadCart
 
@@ -64,7 +73,7 @@
             }
 
             cartCount += quantity;
-            document.getElementById('cartCount').textContent = cartCount;
+            updateCartBadge();
 
             // Save to localStorage
             saveCart();
@@ -127,6 +136,11 @@
         // Load cart on page load
         document.addEventListener('DOMContentLoaded', function () {
             loadCart();
+
+            const cartButton = document.getElementById('cartButton');
+            if (cartButton) {
+                cartButton.addEventListener('click', handleCartClick);
+            }
         });
 
         // ===== End File 1: cartStateAndInteractions.js =====

@@ -1,54 +1,88 @@
  // ===== Start File 2: searchAndPageEnhancements.js (search, filters, navigation helpers) =====
 
-        // Search functionality - robust and clean
+        let currentCategory = 'all';
+        let currentSearchTerm = '';
+
+        // Search functionality and category filter wiring
         document.addEventListener('DOMContentLoaded', function () {
             loadCart();
+
             const searchBar = document.querySelector('.search-bar');
             const searchBtn = document.querySelector('.search-btn');
-            if (!searchBar || !searchBtn) return;
+            const categoryLinks = document.querySelectorAll('.category-link');
+            const sectionTitle = document.getElementById('productSectionTitle');
 
-            // Search on Enter key
-            searchBar.addEventListener('keyup', function (e) {
-                if (e.key === 'Enter') {
+            if (searchBar && searchBtn) {
+                // Search on Enter key
+                searchBar.addEventListener('keyup', function (e) {
+                    if (e.key === 'Enter') {
+                        filterProducts(this.value);
+                    }
+                });
+                // Search on button click
+                searchBtn.addEventListener('click', function () {
+                    filterProducts(searchBar.value);
+                });
+                // Live search as user types
+                searchBar.addEventListener('input', function () {
                     filterProducts(this.value);
-                }
-            });
-            // Search on button click
-            searchBtn.addEventListener('click', function () {
-                filterProducts(searchBar.value);
-            });
-            // Live search as user types
-            searchBar.addEventListener('input', function () {
-                filterProducts(this.value);
-            });
+                });
+            }
+
+            if (categoryLinks.length) {
+                categoryLinks.forEach(link => {
+                    link.addEventListener('click', function (e) {
+                        e.preventDefault();
+
+                        const selectedCategory = (this.dataset.category || 'all').toLowerCase();
+                        currentCategory = selectedCategory;
+
+                        categoryLinks.forEach(item => item.classList.remove('active'));
+                        this.classList.add('active');
+
+                        if (sectionTitle) {
+                            const label = selectedCategory === 'all' ? 'All Products' : this.textContent.trim();
+                            sectionTitle.textContent = label;
+                        }
+
+                        applyFilters();
+                    });
+                });
+            }
+
+            applyFilters();
         });
 
-        // Start filterProducts: evaluate product cards against the search term and toggle visibility
+        // Start filterProducts: record search term then apply combined filters
         function filterProducts(searchTerm) {
-            const term = (searchTerm || '').toLowerCase().trim();
+            currentSearchTerm = (searchTerm || '').toLowerCase().trim();
+            applyFilters();
+        }
+        // End filterProducts
+
+        function applyFilters() {
             const products = document.querySelectorAll('.product-card');
+            const term = currentSearchTerm;
+            const selectedCategory = currentCategory;
+
             products.forEach(product => {
                 const name = product.querySelector('h3')?.textContent.toLowerCase() || '';
                 const desc = product.querySelector('.product-description')?.textContent.toLowerCase() || '';
                 const category = (product.getAttribute('data-category') || '').toLowerCase();
                 const brand = (product.getAttribute('data-brand') || '').toLowerCase();
-                if (
-                    !term ||
-                    name.includes(term) ||
-                    desc.includes(term) ||
-                    category.includes(term) ||
-                    brand.includes(term)
-                ) {
-                    product.style.display = 'block';
-                } else {
-                    product.style.display = 'none';
-                }
+
+                const categoryMatches = selectedCategory === 'all' || category === selectedCategory;
+                const searchMatches = !term || name.includes(term) || desc.includes(term) || category.includes(term) || brand.includes(term);
+
+                product.style.display = categoryMatches && searchMatches ? 'block' : 'none';
             });
         }
-        // End filterProducts
 
-        // Smooth scrolling for anchor links
+        // Smooth scrolling for anchor links (skip category links handled above)
         document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            if (anchor.classList.contains('category-link')) {
+                return;
+            }
             // Start anchor click handler: override default to perform smooth scrolling to sections
             anchor.addEventListener('click', function (e) {
                 e.preventDefault();

@@ -16,6 +16,12 @@
             <div class="logo">
                 <img src="../assets/logo.png" alt="DGZ Motorshop Logo">
             </div>
+            <div class="search-container">
+                <input type="text" class="search-bar" placeholder="Search by Category, Part, Brand...">
+                <button class="search-btn">
+                    <i class="fas fa-search"></i>
+                </button>
+            </div>
             <a href="#" class="cart-btn" id="cartButton">
                 <i class="fas fa-shopping-cart"></i>
                 <span>Cart</span>
@@ -41,10 +47,6 @@
             <div class="map-container">
                 <iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3861.267286646947!2d121.1789203795543!3d14.5838395941613!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3397bf77cbabe495%3A0x3856d006fdaa046d!2sDGZ%20Antipolo%20Sto.%20Ni%C3%B1o!5e0!3m2!1sen!2sph!4v1758678676525!5m2!1sen!2sph" width="600" height="450" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
             </div>
-        </div>
-        <div class="about-hero">
-            <h1>REVOLUTIONIZING MOTORCYCLE CULTURE</h1>
-            <p>DGZ Motorshop - Your trusted partner for premium motorcycle parts, accessories, and expert repair services since 2022.</p>
         </div>
 
         <div class="about-content">
@@ -76,41 +78,6 @@
                 </div>
             </div>
         </section>
-
-        <div class="features-grid">
-            <div class="feature-card">
-                <div class="feature-icon">
-                    <i class="fas fa-box-open"></i>
-                </div>
-                <h3>Premium Parts</h3>
-                <p>We carry only the highest quality motorcycle parts from trusted brands worldwide, ensuring performance and reliability.</p>
-            </div>
-
-            <div class="feature-card">
-                <div class="feature-icon">
-                    <i class="fas fa-tools"></i>
-                </div>
-                <h3>Expert Repair</h3>
-                <p>Our certified technicians provide professional repair and maintenance services to keep your motorcycle in perfect condition.</p>
-            </div>
-
-            <div class="feature-card">
-                <div class="feature-icon">
-                    <i class="fas fa-magic"></i>
-                </div>
-                <h3>Custom Modifications</h3>
-                <p>Transform your motorcycle with our custom modification services, from performance upgrades to aesthetic enhancements.</p>
-            </div>
-
-            <div class="feature-card">
-                <div class="feature-icon">
-                    <i class="fas fa-tshirt"></i>
-                </div>
-                <h3>Rider Gear</h3>
-                <p>Complete your riding experience with our selection of premium helmets, jackets, gloves, and other safety gear.</p>
-            </div>
-        </div>
-
        
 
        
@@ -119,15 +86,23 @@
 
     <!-- Footer -->
     <footer class="footer">
-        <div class="footer-content">
+    <div class="footer-content">
+        <!-- Contact info on the far left -->
+        <div class="footer-column contact-info">
+            <p><strong>Visit Us:</strong> Lot 2 Blk 3 Dolores Road, Brgy. Sto. Niño, Antipolo City</p>
+            <p><strong>Call:</strong> <a href="tel:+639123456789">+63 912 345 6789</a></p>
+            <p><strong>Email:</strong> <a href="mailto:orders@dgzmotorshop.com">orders@dgzmotorshop.com</a></p>
+        </div>
+        
+        <!-- Social and copyright on the right -->
+        <div class="footer-column footer-meta">
             <div class="social-links">
                 <a href="https://www.facebook.com/dgzstonino"><i class="fab fa-facebook-f"></i></a>
-                
             </div>
-            <p>DGZ Motorshop - Sto. Niño Branch</p>
-            <p>© 2022-2025 DGZ Motorshop. All rights reserved.</p>
+            <p>© 2022-2025 DGZ Motorshop - Sto. Niño Branch. All rights reserved.</p>
         </div>
-    </footer>
+    </div>
+</footer>
     <!-- Cart functionality -->
         <script src="../assets/js/public/cart.js"></script>
 </body>
