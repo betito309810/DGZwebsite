@@ -119,15 +119,23 @@ natcasesort($categories);
                             </div>
                         </div>
 
-                        <!-- Buy Now Form -->
-                        <form method="get" action="checkout.php" class="buy-form">
-                            <input type="hidden" name="product_id" value="<?= $p['id']?>">
+                        <!-- Buy Now area now feeds into the shared cart flow -->
+                        <div class="buy-form">
                             <input type="number" name="qty" value="1" min="1" max="<?=max(1,$p['quantity'])?>"
                                 class="qty-input" <?= $p['quantity'] == 0 ? 'disabled' : '' ?>>
-                            <button type="submit" class="buy-btn" <?= $p['quantity'] == 0 ? 'disabled' : '' ?>>
+                            <button type="button" class="buy-btn" <?= $p['quantity'] == 0 ? 'disabled' : '' ?>
+                                onclick="(function(button) {
+                                    const qtyInput = button.parentElement.querySelector('.qty-input');
+                                    if (qtyInput && !qtyInput.checkValidity()) {
+                                        qtyInput.reportValidity();
+                                        return;
+                                    }
+                                    const qty = qtyInput ? parseInt(qtyInput.value) || 1 : 1;
+                                    buyNow(<?= $p['id'] ?>, '<?= htmlspecialchars(addslashes($p['name'])) ?>', <?= $p['price'] ?>, qty);
+                                })(this)">
                                 <?= $p['quantity'] == 0 ? 'Out of Stock' : 'Buy Now' ?>
                             </button>
-                        </form>
+                        </div>
 
                         <!-- Add to Cart Button -->
                         <button class="add-cart-btn"

@@ -83,6 +83,15 @@
         }
         // End addToCart
 
+        // Start buyNow: reuse cart merging then jump straight to checkout with the composed cart contents
+        function buyNow(productId, productName, price, quantity = 1) {
+            addToCart(productId, productName, price, quantity);
+
+            const cartData = encodeURIComponent(JSON.stringify(cartItems));
+            window.location.href = 'checkout.php?cart=' + cartData;
+        }
+        // End buyNow
+
         // Start showToast: render a temporary toast message for user feedback
         function showToast(message) {
             // Remove existing toast if any
