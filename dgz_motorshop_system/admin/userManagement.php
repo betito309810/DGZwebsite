@@ -165,6 +165,11 @@ $users = $pdo->query('SELECT id, name, email, contact_number, role, created_at F
                         <a href="settings.php" class="dropdown-item">
                             <i class="fas fa-cog"></i> Settings
                         </a>
+                        <?php if ($role === 'admin'): ?>
+                        <a href="userManagement.php" class="dropdown-item">
+                            <i class="fas fa-users-cog"></i> User Management
+                        </a>
+                        <?php endif; ?>
                         <a href="login.php?logout=1" class="dropdown-item logout">
                             <i class="fas fa-sign-out-alt"></i> Logout
                         </a>
@@ -309,106 +314,8 @@ $users = $pdo->query('SELECT id, name, email, contact_number, role, created_at F
         </div>
     </div>
 
-    <script>
-        function toggleDropdown() {
-            const dropdown = document.getElementById('userDropdown');
-            dropdown.classList.toggle('show');
-        }
-
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            sidebar.classList.toggle('mobile-open');
-        }
-
-        const profileButton = document.getElementById('profileTrigger');
-        const profileModal = document.getElementById('profileModal');
-        const profileModalClose = document.getElementById('profileModalClose');
-
-        function openProfileModal() {
-            if (!profileModal) {
-                return;
-            }
-
-            profileModal.classList.add('show');
-            profileModal.setAttribute('aria-hidden', 'false');
-            document.body.classList.add('modal-open');
-        }
-
-        function closeProfileModal() {
-            if (!profileModal) {
-                return;
-            }
-
-            profileModal.classList.remove('show');
-            profileModal.setAttribute('aria-hidden', 'true');
-            document.body.classList.remove('modal-open');
-        }
-
-        document.addEventListener('click', function (event) {
-            const userMenu = document.querySelector('.user-menu');
-            const dropdown = document.getElementById('userDropdown');
-            if (userMenu && dropdown && !userMenu.contains(event.target)) {
-                dropdown.classList.remove('show');
-            }
-        });
-
-        profileButton?.addEventListener('click', function(event) {
-            event.preventDefault();
-            const dropdown = document.getElementById('userDropdown');
-            dropdown?.classList.remove('show');
-            openProfileModal();
-        });
-
-        profileModalClose?.addEventListener('click', function() {
-            closeProfileModal();
-        });
-
-        profileModal?.addEventListener('click', function(event) {
-            if (event.target === profileModal) {
-                closeProfileModal();
-            }
-        });
-
-        document.addEventListener('keydown', function(event) {
-            if (event.key === 'Escape' && profileModal?.classList.contains('show')) {
-                closeProfileModal();
-            }
-        });
-
-        document.addEventListener('click', function (event) {
-            const sidebar = document.getElementById('sidebar');
-            const toggle = document.querySelector('.mobile-toggle');
-            if (window.innerWidth <= 768 && sidebar && toggle &&
-                !sidebar.contains(event.target) && !toggle.contains(event.target)) {
-                sidebar.classList.remove('mobile-open');
-            }
-        });
-
-        document.addEventListener('DOMContentLoaded', function () {
-            const toggleBtn = document.getElementById('toggleAddUser');
-            const cancelBtn = document.getElementById('cancelAddUser');
-            const section = document.getElementById('addUserSection');
-            const backButton = document.getElementById('backButton');
-
-            function toggleSection() {
-                section.classList.toggle('hidden');
-            }
-
-            if (toggleBtn) {
-                toggleBtn.addEventListener('click', toggleSection);
-            }
-
-            if (cancelBtn) {
-                cancelBtn.addEventListener('click', toggleSection);
-            }
-
-            if (backButton) {
-                backButton.addEventListener('click', function () {
-                    window.history.back();
-                });
-            }
-        });
-    </script>
+    <script src="../assets/js/dashboard/userMenu.js"></script>
+    <script src="../assets/js/users/userManagement.js"></script>
     <script src="../assets/js/notifications.js"></script>
 </body>
 

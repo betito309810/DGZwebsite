@@ -38,6 +38,9 @@ try {
     error_log('User lookup failed: ' . $e->getMessage());
 }
 
+// Cache the current user's name for activity logs that survive account removal.
+$currentUserName = $current_user['name'] ?? null;
+
 function format_profile_date(?string $datetime): string
 {
     if (!$datetime) {
@@ -132,10 +135,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_restock_reques
 
         if (!isset($error_message)) {
             try {
-                $stmt = $pdo->prepare('INSERT INTO restock_requests (product_id, requested_by, quantity_requested, priority_level, needed_by, notes, category, brand, supplier) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                $stmt = $pdo->prepare('INSERT INTO restock_requests (product_id, requested_by, requested_by_name, quantity_requested, priority_level, needed_by, notes, category, brand, supplier) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
                 $stmt->execute([
                     $productId,
                     $userId,
+                    $currentUserName,
                     $requestedQuantity,
                     $priority,
                     $neededBy,
@@ -146,8 +150,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_restock_reques
                 ]);
                 $requestId = (int) $pdo->lastInsertId();
 
-                $logStmt = $pdo->prepare('INSERT INTO restock_request_history (request_id, status, noted_by) VALUES (?, ?, ?)');
-                $logStmt->execute([$requestId, 'pending', $userId ?: null]);
+                $logStmt = $pdo->prepare('INSERT INTO restock_request_history (request_id, status, noted_by, noted_by_name) VALUES (?, ?, ?, ?)');
+                $logStmt->execute([
+                    $requestId,
+                    'pending',
+                    $userId ?: null,
+                    $currentUserName
+                ]);
                 $success_message = 'Restock request submitted successfully!';
                 $restockFormData = $restockFormDefaults;
             } catch (Exception $e) {
@@ -184,8 +193,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_stock'])) {
             $pdo->beginTransaction();
             $stmt = $pdo->prepare("UPDATE products SET quantity = quantity + ? WHERE id = ?");
             $stmt->execute([$quantity, $product_id]);
-            $stmt = $pdo->prepare("INSERT INTO stock_entries (product_id, quantity_added, purchase_price, supplier, notes, stock_in_by, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())");
-            $stmt->execute([$product_id, $quantity, $purchase_price, $supplier, $notes, $_SESSION['user_id']]);
+            $stmt = $pdo->prepare("INSERT INTO stock_entries (product_id, quantity_added, purchase_price, supplier, notes, stock_in_by, stock_in_by_name, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())");
+            $stmt->execute([
+                $product_id,
+                $quantity,
+                $purchase_price,
+                $supplier,
+                $notes,
+                $_SESSION['user_id'],
+                $currentUserName
+            ]);
             $pdo->commit();
             $success_message = "Stock updated successfully!";
         } catch (Exception $e) {
@@ -200,7 +217,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_stock'])) {
 
 // Get recent stock entries with user information
 $recent_entries = $pdo->query("
-    SELECT se.*, p.name as product_name, u.name as user_name 
+    SELECT se.*, p.name as product_name, COALESCE(u.name, se.stock_in_by_name) as user_name 
     FROM stock_entries se 
     JOIN products p ON p.id = se.product_id 
     LEFT JOIN users u ON u.id = se.stock_in_by 
@@ -266,7 +283,8 @@ $endRecord = min($offset + $limit, $totalInventoryProducts);
 // Restock requests overview data
 $restockRequests = $pdo->query('
     SELECT rr.*, p.name AS product_name, p.code AS product_code,
-           requester.name AS requester_name, reviewer.name AS reviewer_name
+           COALESCE(requester.name, rr.requested_by_name) AS requester_name,
+           COALESCE(reviewer.name, rr.reviewed_by_name) AS reviewer_name
     FROM restock_requests rr
     LEFT JOIN products p ON p.id = rr.product_id
     LEFT JOIN users requester ON requester.id = rr.requested_by
@@ -297,9 +315,9 @@ $restockHistory = $pdo->query('
            rr.brand AS request_brand,
            rr.supplier AS request_supplier,
            p.name AS product_name, p.code AS product_code,
-           requester.name AS requester_name,
-           reviewer.name AS reviewer_name,
-           status_user.name AS status_user_name
+           COALESCE(requester.name, rr.requested_by_name) AS requester_name,
+           COALESCE(reviewer.name, rr.reviewed_by_name) AS reviewer_name,
+           COALESCE(status_user.name, h.noted_by_name) AS status_user_name
     FROM restock_request_history h
     JOIN restock_requests rr ON rr.id = h.request_id
     LEFT JOIN products p ON p.id = rr.product_id

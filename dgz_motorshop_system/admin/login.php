@@ -2,29 +2,24 @@
 require __DIR__ . '/../config/config.php';
 $pdo = db();
 $msg = $_GET['msg'] ?? '';
+$status = $_GET['status'] ?? '';
 if($_SERVER['REQUEST_METHOD']==='POST'){
     $email = $_POST['email']; $pass = $_POST['password'];
     $stmt = $pdo->prepare('SELECT * FROM users WHERE email=?');
     $stmt->execute([$email]);
     $u = $stmt->fetch();
     if ($u) {
-        $storedHash = (string) $u['password'];
-        $isPasswordHash = password_get_info($storedHash)['algo'] !== 0;
-        if ($isPasswordHash) {
-            $isValid = password_verify($pass, $storedHash);
-        } else {
-            $sha256 = hash('sha256', $pass);
-            $isValid = hash_equals(strtolower($storedHash), strtolower($sha256));
-        }
-
-        if($isValid){
+        if (password_verify($pass, (string) $u['password'])) {
             $_SESSION['user_id']=$u['id'];
             $_SESSION['role']=$u['role'];
             header('Location: dashboard.php'); exit;
         }
     }
     $msg='Invalid credentials';
+    $status = 'error';
 }
+$hasMessage = $msg !== '';
+$alertClass = ($status === 'success') ? 'success-msg' : 'error-msg';
 ?>
 <!doctype html>
 <html>
@@ -44,8 +39,8 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     <div class="login-container">
         <h2>Admin / Staff Login</h2>
         
-        <?php if($msg): ?>
-            <div class="error-msg"><?= htmlspecialchars($msg) ?></div>
+        <?php if($hasMessage): ?>
+            <div class="<?= $alertClass ?>"><?= htmlspecialchars($msg) ?></div>
         <?php endif; ?>
         
         <form method="post">

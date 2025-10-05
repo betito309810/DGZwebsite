@@ -9,19 +9,61 @@ $pdo = db();
 $msg = '';
 $validToken = false;
 $userId = null;
+$currentHash = null;
+
+/**
+ * Guarantee the reset token table exists before we start querying it.
+ */
+if (!function_exists('ensurePasswordResetTable')) {
+    function ensurePasswordResetTable(PDO $pdo): void
+    {
+        static $checked = false;
+
+        if ($checked) {
+            return;
+        }
+
+        $sql = <<<SQL
+CREATE TABLE IF NOT EXISTS password_resets (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id INT UNSIGNED NOT NULL,
+    token VARCHAR(128) NOT NULL,
+    expires_at DATETIME NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_token (token),
+    INDEX idx_user (user_id)
+)
+SQL;
+
+        $pdo->exec($sql);
+        $checked = true;
+    }
+}
+
+ensurePasswordResetTable($pdo);
+
+// Prune expired records so stale links don't pile up
+$pdo->exec('DELETE FROM password_resets WHERE expires_at <= NOW()');
 
 $token = $_GET['token'] ?? '';
 
 if (!empty($token)) {
-    // Verify token
+    // Verify token against the password_resets table
     try {
-        $stmt = $pdo->prepare('SELECT id FROM users WHERE reset_token = ? AND reset_expires > NOW()');
+        $stmt = $pdo->prepare('
+            SELECT pr.user_id, u.password
+            FROM password_resets pr
+            INNER JOIN users u ON u.id = pr.user_id
+            WHERE pr.token = ? AND pr.expires_at > NOW()
+            LIMIT 1
+        ');
         $stmt->execute([$token]);
-        $user = $stmt->fetch();
+        $passwordReset = $stmt->fetch();
 
-        if ($user) {
+        if ($passwordReset) {
             $validToken = true;
-            $userId = $user['id'];
+            $userId = (int) $passwordReset['user_id'];
+            $currentHash = $passwordReset['password'] ?? null;
         } else {
             $msg = 'Invalid or expired reset token.';
         }
@@ -42,19 +84,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $validToken) {
         $msg = 'Password must be at least 6 characters long.';
     } elseif ($password !== $confirmPassword) {
         $msg = 'Passwords do not match.';
+    } elseif ($currentHash !== null && password_verify($password, (string) $currentHash)) {
+        // Guard against reusing the existing password to encourage better hygiene
+        $msg = 'Please choose a password you have not used previously.';
     } else {
         // Hash password
         $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
 
         // Update password and clear token
         try {
-            $stmt = $pdo->prepare('UPDATE users SET password = ?, reset_token = NULL, reset_expires = NULL WHERE id = ?');
+            $pdo->beginTransaction();
+
+            // Store the new password and remove any outstanding reset links for this user
+            $stmt = $pdo->prepare('UPDATE users SET password = ? WHERE id = ?');
             $stmt->execute([$hashedPassword, $userId]);
 
+            $stmt = $pdo->prepare('DELETE FROM password_resets WHERE user_id = ?');
+            $stmt->execute([$userId]);
+
+            $pdo->commit();
+
             // Redirect to login with success
-            header('Location: login.php?msg=' . urlencode('Password reset successfully. Please log in.'));
+            $query = http_build_query([
+                'msg' => 'Password reset successfully. Please log in.',
+                'status' => 'success',
+            ]);
+            header('Location: login.php?' . $query);
             exit;
         } catch (PDOException $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             $msg = 'Database error: ' . $e->getMessage();
         }
     }
@@ -85,12 +145,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $validToken) {
             <form method="post">
                 <label>
                     New Password:
-                    <input name="password" type="password" required>
+                    <div class="password-field">
+                        <input id="password" name="password" class="password-input" type="password" required>
+                        <button type="button" class="toggle-password" data-toggle-target="password">Show</button>
+                    </div>
                 </label>
 
                 <label>
                     Confirm New Password:
-                    <input name="confirm_password" type="password" required>
+                    <div class="password-field">
+                        <input id="confirm_password" name="confirm_password" class="password-input" type="password" required>
+                        <button type="button" class="toggle-password" data-toggle-target="confirm_password">Show</button>
+                    </div>
                 </label>
 
                 <button type="submit">Reset Password</button>
@@ -104,5 +170,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $validToken) {
             <a href="login.php">Back to Login</a>
         </div>
     </div>
+    <script src="../assets/js/login/reset-password.js"></script>
 </body>
 </html>

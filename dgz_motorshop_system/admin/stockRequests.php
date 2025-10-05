@@ -26,6 +26,9 @@ try {
     error_log('User lookup failed: ' . $e->getMessage());
 }
 
+// Cache the current user's name for audit history rows that remain after deletion.
+$currentUserName = $current_user['name'] ?? null;
+
 function format_profile_date(?string $datetime): string
 {
     if (!$datetime) {
@@ -75,11 +78,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_action'], $_P
         }
 
         $newStatus = $action === 'approve' ? 'approved' : 'declined';
-        $update = $pdo->prepare('UPDATE restock_requests SET status = ?, reviewed_by = ?, reviewed_at = NOW() WHERE id = ?');
-        $update->execute([$newStatus, $userId, $requestId]);
+        $update = $pdo->prepare('UPDATE restock_requests SET status = ?, reviewed_by = ?, reviewed_by_name = ?, reviewed_at = NOW() WHERE id = ?');
+        $update->execute([$newStatus, $userId, $currentUserName, $requestId]);
 
-        $logStmt = $pdo->prepare('INSERT INTO restock_request_history (request_id, status, noted_by) VALUES (?, ?, ?)');
-        $logStmt->execute([$requestId, $newStatus, $userId]);
+        $logStmt = $pdo->prepare('INSERT INTO restock_request_history (request_id, status, noted_by, noted_by_name) VALUES (?, ?, ?, ?)');
+        $logStmt->execute([$requestId, $newStatus, $userId, $currentUserName]);
 
         $pdo->commit();
 
@@ -98,8 +101,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_action'], $_P
 // Fetch restock requests with product and user details
 $stmt = $pdo->query('
     SELECT rr.*, p.name AS product_name, p.code AS product_code,
-           requester.name AS requester_name,
-           reviewer.name AS reviewer_name
+           COALESCE(requester.name, rr.requested_by_name) AS requester_name,
+           COALESCE(reviewer.name, rr.reviewed_by_name) AS reviewer_name
     FROM restock_requests rr
     LEFT JOIN products p ON p.id = rr.product_id
     LEFT JOIN users requester ON requester.id = rr.requested_by
@@ -122,9 +125,9 @@ $historyEntries = $pdo->query('
            rr.brand AS request_brand,
            rr.supplier AS request_supplier,
            p.name AS product_name, p.code AS product_code,
-           requester.name AS requester_name,
-           status_user.name AS status_user_name,
-           reviewer.name AS reviewer_name
+           COALESCE(requester.name, rr.requested_by_name) AS requester_name,
+           COALESCE(status_user.name, h.noted_by_name) AS status_user_name,
+           COALESCE(reviewer.name, rr.reviewed_by_name) AS reviewer_name
     FROM restock_request_history h
     JOIN restock_requests rr ON rr.id = h.request_id
     LEFT JOIN products p ON p.id = rr.product_id

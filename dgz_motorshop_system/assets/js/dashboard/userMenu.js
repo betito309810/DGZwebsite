@@ -23,7 +23,7 @@ function toggleSidebar() {
 // Begin Dashboard DOMContentLoaded wiring
 // Sets up dropdown closing, profile modal, and responsive sidebar behaviors
 // across admin pages that include the dashboard layout script.
-document.addEventListener('DOMContentLoaded', function() {
+function initializeDashboardUserMenu() {
     const userMenu = document.querySelector('.user-menu');
     const dropdown = document.getElementById('userDropdown');
     const profileButton = document.getElementById('profileTrigger');
@@ -87,5 +87,11 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-});
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeDashboardUserMenu);
+} else {
+    initializeDashboardUserMenu();
+}
 // End Dashboard DOMContentLoaded wiring

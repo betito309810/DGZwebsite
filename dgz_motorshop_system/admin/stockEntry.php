@@ -659,6 +659,7 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
             'formLocked' => $formLocked,
         ], JSON_PRETTY_PRINT) ?>
     </script>
+    <script src="../assets/js/dashboard/userMenu.js"></script>
     <script src="../assets/js/inventory/stockEntry.js"></script>
     <script src="../assets/js/notifications.js"></script>
 </body>
