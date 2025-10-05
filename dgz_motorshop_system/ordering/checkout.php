@@ -364,7 +364,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                         Contact
                     </h2>
                     <div class="form-group">
-                        <label>Email</label>
+                        <label>Email <span class="required-indicator">*</span></label>
                         <input type="email" name="email" placeholder="you@example.com" value="<?= htmlspecialchars($_POST['email'] ?? '') ?>" required>
                     </div>
                     <div class="form-group">
@@ -390,7 +390,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                         </div>
                     </div>
                     <div class="form-group">
-                        <label>Address</label>
+                        <label>Address <span class="required-indicator">*</span></label>
                         <textarea name="address" placeholder="Street address, apartment, suite, etc." required><?= htmlspecialchars($_POST['address'] ?? '') ?></textarea>
                     </div>
                     <div class="form-row">
@@ -425,7 +425,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                     </div>
 
                     <div class="form-group">
-                        <label for="reference_number">Reference Number</label>
+                        <label for="reference_number">Reference Number <span class="required-indicator">*</span></label>
                         <input type="text" name="reference_number" id="reference_number" maxlength="50" value="<?= htmlspecialchars($referenceInput) ?>" placeholder="e.g. GCASH123456" required>
                     </div>
 
@@ -446,6 +446,8 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
 
         <!-- Right Column - Order Summary -->
         <div class="order-summary">
+            <!-- Clear cart button keeps summary synchronized with local storage -->
+            <button type="button" id="clearCartButton" class="clear-cart-btn" style="<?= empty($cartItems) ? 'display:none;' : '' ?>">Clear Cart</button>
             <div id="orderItemsContainer" class="order-items">
                 <?php foreach ($cartItems as $index => $item): ?>
                 <div class="order-item" data-index="<?= $index ?>">
@@ -453,12 +455,14 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                         <i class="fas fa-box"></i>
                     </div>
                     <div class="item-details">
-                        <div class="item-name"><?= htmlspecialchars($item['name']) ?></div>
+                        <div class="item-header">
+                            <span class="item-name"><?= htmlspecialchars($item['name']) ?></span>
+                            <span class="item-price">₱ <?= number_format($item['price'], 2) ?></span>
+                        </div>
                         <div class="item-category">Product</div>
                     </div>
                     <div class="item-meta">
-                        <!-- Changed quantity badge to input field for quantity update -->
-                        <div class="item-price">₱ <?= number_format($item['price'], 2) ?></div>
+                        <!-- Quantity input remains editable so buyers can adjust before checkout -->
                         <input type="number" class="quantity-input" min="1" value="<?= $item['quantity'] ?>" data-index="<?= $index ?>" style="width: 50px; margin-right: 10px;">
                         <button type="button" class="item-remove" data-index="<?= $index ?>">Remove</button>
                     </div>
@@ -470,13 +474,6 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                 <i class="fas fa-shopping-basket"></i>
                 <p>Your cart is empty.</p>
                 <a href="index.php" class="order-empty-link">Continue shopping</a>
-            </div>
-
-            <div class="discount-section">
-                <div class="discount-input">
-                    <input type="text" placeholder="DISCOUNT CODE" style="margin-bottom: 0;">
-                    <button type="button" class="apply-btn">Apply</button>
-                </div>
             </div>
 
             <?php
@@ -491,12 +488,6 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                 <span id="summarySubtotalLabel">Subtotal, <?= count($cartItems) ?> item<?= count($cartItems) > 1 ? 's' : '' ?></span>
                 <span id="summarySubtotalValue">₱ <?= number_format($subtotal, 2) ?></span>
             </div>
-
-            <div class="summary-row discount-row" style="display: none;">
-                <span>Order discount<br><small>DGZ1 - 10% OFF</small></span>
-                <span>-₱ 0.00</span>
-            </div>
-
             <div class="summary-row total">
                 <span>Total</span>
                 <span id="summaryTotalValue">₱ <?= number_format($total, 2) ?></span>
@@ -534,6 +525,8 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
         const subtotalValue = document.getElementById('summarySubtotalValue');
         const totalValue = document.getElementById('summaryTotalValue');
         const submitButton = document.querySelector('.submit-btn');
+        const clearCartButton = document.getElementById('clearCartButton');
+        const checkoutForm = document.querySelector('.checkout-form form');
 
         let cartState = [];
         try {
@@ -541,6 +534,31 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
         } catch (error) {
             cartState = [];
         }
+
+        // Guard submission so blank required fields cannot slip through trimming
+        checkoutForm?.addEventListener('submit', (event) => {
+            const emailField = checkoutForm.querySelector('input[name="email"]');
+            const addressField = checkoutForm.querySelector('textarea[name="address"]');
+            const referenceField = checkoutForm.querySelector('#reference_number');
+            const requiredFields = [emailField, addressField, referenceField];
+
+            let invalidField = null;
+            requiredFields.forEach((field) => {
+                if (!field) {
+                    return;
+                }
+                field.value = field.value.trim();
+                field.setCustomValidity('');
+                if (!invalidField && field.value === '') {
+                    invalidField = field;
+                }
+            });
+
+            if (invalidField) {
+                event.preventDefault();
+                invalidField.reportValidity();
+            }
+        });
 
         function normaliseItem(rawItem = {}) {
             const price = Number(rawItem.price);
@@ -592,6 +610,10 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             const hasItems = cartState.length > 0;
             submitButton.disabled = !hasItems;
             emptyState.style.display = hasItems ? 'none' : 'block';
+            if (clearCartButton) {
+                clearCartButton.style.display = hasItems ? 'block' : 'none';
+                clearCartButton.disabled = !hasItems;
+            }
         }
 
         function createOrderItemRow(item, index) {
@@ -607,10 +629,20 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             const details = document.createElement('div');
             details.className = 'item-details';
 
-            const name = document.createElement('div');
+            const header = document.createElement('div');
+            header.className = 'item-header';
+
+            const name = document.createElement('span');
             name.className = 'item-name';
             name.textContent = item && item.name ? String(item.name) : 'Product';
-            details.appendChild(name);
+            header.appendChild(name);
+
+            const price = document.createElement('span');
+            price.className = 'item-price';
+            price.textContent = formatPeso(item.price);
+            header.appendChild(price);
+
+            details.appendChild(header);
 
             const category = document.createElement('div');
             category.className = 'item-category';
@@ -622,7 +654,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             const meta = document.createElement('div');
             meta.className = 'item-meta';
 
-            // Replace quantity badge with input field for quantity update
+            // Quantity input remains editable so buyers can adjust before checkout
             const qty = document.createElement('input');
             qty.type = 'number';
             qty.className = 'quantity-input';
@@ -632,11 +664,6 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             qty.style.width = '65px';
             qty.style.marginBottom = '4px';
             meta.appendChild(qty);
-
-            const price = document.createElement('div');
-            price.className = 'item-price';
-            price.textContent = formatPeso(item.price);
-            meta.appendChild(price);
 
             const remove = document.createElement('button');
             remove.type = 'button';
@@ -721,6 +748,13 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             updateSummary();
             syncCartInput();
             syncBrowserStorage();
+        });
+
+        // Clearing the cart wipes local storage and refreshes the summary instantly
+        clearCartButton?.addEventListener('click', () => {
+            cartState = [];
+            renderOrderItems();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         });
 
         renderOrderItems();

@@ -59,14 +59,14 @@ body {
     color: white;
 }
 .container {
-    max-width: 1200px;
+    max-width: 1240px;
     margin: 0 auto;
     margin-top: 15px;
     display: grid;
-    grid-template-columns: 1fr 400px;
+    grid-template-columns: minmax(0, 1fr) 440px;
     gap: 40px;
     align-items: start;
-    padding:0 20px;
+    padding: 0 20px;
 }
 
 .checkout-form {
@@ -101,20 +101,28 @@ body {
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
     position: sticky;
     top: 20px;
+    width: 100%;
+    max-width: 440px;
 }
 
-/* Added styles for quantity input to improve visibility and usability */
-.quantity-input {
-    order: 2;
-    margin-top: 8px;
-    width: 90px;
-    font-size: 16px;
-    padding: 6px 8px;
-    border-radius: 8px;
-    text-align: center;
+/* Keep the clear cart action subtle but visible */
+.clear-cart-btn {
+    width: 100%;
+    margin-bottom: 15px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    border: 1px solid #f5c6cb;
+    background: #fff5f5;
+    color: #c0392b;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease;
 }
 
-
+.clear-cart-btn:hover {
+    background: #ffe0e0;
+    border-color: #f1aeb5;
+}
 
 h2 {
     color: #2d3436;
@@ -153,6 +161,13 @@ label {
     color: #636e72;
     font-weight: 500;
     margin-bottom: 8px;
+}
+
+/* Highlight required indicator next to critical labels */
+.required-indicator {
+    color: #e74c3c;
+    font-weight: 700;
+    margin-left: 4px;
 }
 
 input,
@@ -295,11 +310,7 @@ textarea {
     gap: 10px;
 }
 
-.order-item {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    padding: 15px 0;
+.order-items .order-item {
     border-bottom: 1px solid #e9ecef;
 }
 
@@ -323,10 +334,19 @@ textarea {
     flex: 1;
 }
 
+.item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    column-gap: 16px;
+    row-gap: 4px;
+}
+
 .item-name {
     font-weight: 600;
     color: #2d3436;
-    margin-bottom: 4px;
+    flex: 1 1 auto;
 }
 
 .item-category {
@@ -334,37 +354,22 @@ textarea {
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    margin-top: 4px;
 }
 
 .item-price {
     font-weight: 700;
     color: #2d3436;
     font-size: 16px;
-}
-
-.quantity-badge {
-    background: #3498db;
-    color: white;
-    border-radius: 20px;
-    padding: 4px 12px;
-    font-size: 12px;
-    font-weight: 600;
-    margin-left: 0;
-}
-
-.item-meta {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 10px;
-    margin-left: auto;
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 /* Align price with product name */
 .order-item {
     display: grid;
     grid-template-columns: 60px 1fr auto;
-    align-items: center;
+    align-items: flex-start;
     gap: 15px;
 }
 
@@ -377,29 +382,19 @@ textarea {
 .item-meta {
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
+    align-items: flex-end;
+    gap: 6px;
     margin-left: auto;
+    justify-content: flex-start;
 }
 
-/* Adjust order of quantity input, price, and remove button */
+/* Adjust order of quantity input and remove button */
 .quantity-input {
-    order: 2;
-    
     width: 70px;
     font-size: 16px;
     padding: 6px 8px;
     border-radius: 8px;
     text-align: center;
-}
-
-.item-price {
-    order: 1;
-}
-
-.item-remove {
-    order: 3;
-    margin-top: 3px;
 }
 
 .item-remove {
@@ -456,33 +451,6 @@ textarea {
     background: #2c80bc;
 }
 
-.discount-section {
-    margin: 20px 0;
-    padding: 20px;
-    background: #f8f9fa;
-    border-radius: 12px;
-}
-
-.discount-input {
-    display: flex;
-    gap: 10px;
-}
-
-.discount-input input {
-    flex: 1;
-    margin-bottom: 0;
-}
-
-.apply-btn {
-    background: #3498db;
-    color: white;
-    border: none;
-    padding: 15px 25px;
-    border-radius: 8px;
-    font-weight: 600;
-    cursor: pointer;
-}
-
 .summary-row {
     display: flex;
     justify-content: space-between;
@@ -498,10 +466,6 @@ textarea {
     font-size: 20px;
     font-weight: 700;
     color: #2d3436;
-}
-
-.discount-row {
-    color: #e74c3c;
 }
 
 @media (max-width: 768px) {
