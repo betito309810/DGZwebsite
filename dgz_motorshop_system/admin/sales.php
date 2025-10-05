@@ -135,32 +135,78 @@ $profile_name = $current_user['name'] ?? 'N/A';
 $profile_role = !empty($current_user['role']) ? ucfirst($current_user['role']) : 'N/A';
 $profile_created = format_profile_date($current_user['created_at'] ?? null);
 
+$invoiceSearch = isset($_GET['invoice']) ? trim((string) $_GET['invoice']) : '';
+$hasInvoiceSearch = $invoiceSearch !== '';
+$queryParams = [];
+if ($hasInvoiceSearch) {
+    $queryParams['invoice'] = $invoiceSearch;
+}
+
 // Pagination variables
 $records_per_page = 20;
-$current_page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
-$offset = ($current_page - 1) * $records_per_page;
+$current_page = isset($_GET['page']) ? (int) $_GET['page'] : 1;
+if ($current_page < 1) {
+    $current_page = 1;
+}
+
+$baseConditions = ["o.status IN ('approved','completed','disapproved')"];
+$sqlParams = [];
+
+if ($hasInvoiceSearch) {
+    $baseConditions[] = 'o.invoice_number LIKE :invoice_search';
+    $sqlParams[':invoice_search'] = '%' . $invoiceSearch . '%';
+}
+
+$whereClause = implode(' AND ', $baseConditions);
 
 // Count total records
-$count_sql = "SELECT COUNT(*) FROM orders WHERE status IN ('approved','completed','disapproved')";
-$total_records = $pdo->query($count_sql)->fetchColumn();
-$total_pages = ceil($total_records / $records_per_page);
+$count_sql = "SELECT COUNT(*) FROM orders o WHERE $whereClause";
+$count_stmt = $pdo->prepare($count_sql);
+foreach ($sqlParams as $param => $value) {
+    $count_stmt->bindValue($param, $value, PDO::PARAM_STR);
+}
+$count_stmt->execute();
+$total_records = (int) $count_stmt->fetchColumn();
+$total_pages = $total_records > 0 ? (int) ceil($total_records / $records_per_page) : 0;
+
+if ($total_pages > 0 && $current_page > $total_pages) {
+    $current_page = $total_pages;
+} elseif ($total_pages === 0) {
+    $current_page = 1;
+}
+
+$offset = ($current_page - 1) * $records_per_page;
 
 // Get orders with pagination
 $sql = "SELECT o.*, r.label AS decline_reason_label
         FROM orders o
         LEFT JOIN order_decline_reasons r ON r.id = o.decline_reason_id
-        WHERE o.status IN ('approved','completed','disapproved')
+        WHERE $whereClause
         ORDER BY o.created_at DESC
         LIMIT :limit OFFSET :offset";
 $stmt = $pdo->prepare($sql);
+foreach ($sqlParams as $param => $value) {
+    $stmt->bindValue($param, $value, PDO::PARAM_STR);
+}
 $stmt->bindValue(':limit', $records_per_page, PDO::PARAM_INT);
 $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
 $stmt->execute();
 $orders = $stmt->fetchAll();
 
 // Calculate showing info
-$start_record = $offset + 1;
-$end_record = min($offset + $records_per_page, $total_records);
+if ($total_records === 0) {
+    $start_record = 0;
+    $end_record = 0;
+} else {
+    $start_record = $offset + 1;
+    $end_record = min($offset + $records_per_page, $total_records);
+}
+
+$buildPageUrl = static function (int $page) use ($queryParams): string {
+    $params = $queryParams;
+    $params['page'] = $page;
+    return '?' . http_build_query($params);
+};
 ?>
 <!doctype html>
 <html>
@@ -231,6 +277,28 @@ $end_record = min($offset + $records_per_page, $total_records);
             </button>
         </div>
 
+        <form method="get" class="sales-search-form" id="salesSearchForm">
+            <div class="sales-search-group">
+                <input
+                    type="text"
+                    id="salesInvoiceSearch"
+                    name="invoice"
+                    placeholder="Search by invoice number"
+                    value="<?=htmlspecialchars($invoiceSearch, ENT_QUOTES, 'UTF-8')?>"
+                    class="sales-search-input"
+                    data-sales-search-input
+                    autocomplete="off"
+                    aria-label="Search by invoice number"
+                >
+                <button
+                    type="button"
+                    class="sales-search-clear<?php if($hasInvoiceSearch) echo ' is-visible'; ?>"
+                    aria-label="Clear invoice search"
+                    data-sales-search-clear
+                >&times;</button>
+            </div>
+        </form>
+
         <!-- Table Container -->
         <div class="table-container">
             <div class="table-wrapper">
@@ -255,7 +323,13 @@ $end_record = min($offset + $records_per_page, $total_records);
                             <td colspan="11" style="text-align: center; padding: 40px; color: #6b7280;">
                                 <i class="fas fa-inbox"
                                     style="font-size: 48px; margin-bottom: 10px; display: block;"></i>
-                                No sales records found.
+                                <?php if($hasInvoiceSearch): ?>
+                                    No sales records matched "<?=htmlspecialchars($invoiceSearch, ENT_QUOTES, 'UTF-8')?>".
+                                    <br>
+                                    <a href="sales.php" style="color:#0ea5e9; font-weight:600;">Clear the search</a> to view all sales.
+                                <?php else: ?>
+                                    No sales records found.
+                                <?php endif; ?>
                             </td>
                         </tr>
                         <?php else: ?>
@@ -331,7 +405,7 @@ $end_record = min($offset + $records_per_page, $total_records);
                 <div class="pagination">
                     <!-- Previous button -->
                     <?php if($current_page > 1): ?>
-                    <a href="?page=<?=($current_page-1)?>" class="prev">
+                    <a href="<?=$buildPageUrl($current_page - 1)?>" class="prev">
                         <i class="fas fa-chevron-left"></i> Prev
                     </a>
                     <?php else: ?>
@@ -347,7 +421,7 @@ $end_record = min($offset + $records_per_page, $total_records);
                     
                     // Show first page if not in range
                     if($start_page > 1): ?>
-                    <a href="?page=1">1</a>
+                    <a href="<?=$buildPageUrl(1)?>">1</a>
                     <?php if($start_page > 2): ?>
                     <span>...</span>
                     <?php endif;
@@ -358,7 +432,7 @@ $end_record = min($offset + $records_per_page, $total_records);
                         if($i == $current_page): ?>
                     <span class="current"><?=$i?></span>
                     <?php else: ?>
-                    <a href="?page=<?=$i?>"><?=$i?></a>
+                    <a href="<?=$buildPageUrl($i)?>"><?=$i?></a>
                     <?php endif;
                     endfor;
                     
@@ -367,12 +441,12 @@ $end_record = min($offset + $records_per_page, $total_records);
                         if($end_page < $total_pages - 1): ?>
                     <span>...</span>
                     <?php endif; ?>
-                    <a href="?page=<?=$total_pages?>"><?=$total_pages?></a>
+                    <a href="<?=$buildPageUrl($total_pages)?>"><?=$total_pages?></a>
                     <?php endif; ?>
 
                     <!-- Next button -->
                     <?php if($current_page < $total_pages): ?>
-                    <a href="?page=<?=($current_page+1)?>" class="next">
+                    <a href="<?=$buildPageUrl($current_page + 1)?>" class="next">
                         Next <i class="fas fa-chevron-right"></i>
                     </a>
                     <?php else: ?>
@@ -545,6 +619,8 @@ $end_record = min($offset + $records_per_page, $total_records);
     <script src="../assets/js/sales/salesAnalytics.js"></script>
     <!-- Pie chart widget -->
     <script src="../assets/js/sales/pieChart.js"></script>
+    <!-- Sales search helpers -->
+    <script src="../assets/js/sales/salesSearch.js"></script>
     
         
     <!--Transaction modal-->
