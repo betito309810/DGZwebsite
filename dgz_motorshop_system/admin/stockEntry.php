@@ -100,7 +100,7 @@ $currentInventorySnapshot = [];
 if ($moduleReady) {
     if (!empty($_GET['stock_in_export'])) {
         $exportFormat = strtolower((string)$_GET['stock_in_export']);
-        if (in_array($exportFormat, ['csv', 'xlsx', 'pdf'], true)) {
+        if (in_array($exportFormat, ['csv', 'pdf'], true)) {
             $exportRows = fetchStockInReport($pdo, $reportFilters, null);
             handleStockInReportExport($exportFormat, $exportRows, $reportFilters);
         }
@@ -494,7 +494,6 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                         <button type="submit" class="btn-primary">Apply Filters</button>
                         <a class="btn-secondary" href="stockEntry.php#stock-in-report">Reset</a>
                         <button type="submit" class="btn-secondary" name="stock_in_export" value="csv">Export CSV</button>
-                        <button type="submit" class="btn-secondary" name="stock_in_export" value="xlsx">Export XLSX</button>
                         <button type="submit" class="btn-secondary" name="stock_in_export" value="pdf">Export PDF</button>
                     </div>
                 </form>
@@ -521,10 +520,10 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                                         <td><?= htmlspecialchars($reportRow['receipt_code']) ?></td>
                                         <td><?= htmlspecialchars($reportRow['supplier_name']) ?></td>
                                         <td><?= htmlspecialchars($reportRow['document_number']) ?></td>
-                                        <td><?= htmlspecialchars($reportRow['product_name']) ?></td>
-                                        <td><?= htmlspecialchars($reportRow['qty_received_display']) ?></td>
-                                        <td><?= htmlspecialchars($reportRow['unit_cost_display']) ?></td>
-                                        <td><?= htmlspecialchars($reportRow['receiver_name']) ?></td>
+                                        <td><?= htmlspecialchars($reportRow['product_name'] ?? 'Unknown Product') ?></td>
+                                        <td><?= htmlspecialchars($reportRow['qty_received_display'] ?? '0') ?></td>
+                                        <td><?= htmlspecialchars($reportRow['unit_cost_display'] ?? '0.00') ?></td>
+                                        <td><?= htmlspecialchars($reportRow['receiver_name'] ?? 'Pending') ?></td>
                                         <td><span class="status-badge status-<?= htmlspecialchars($reportRow['status']) ?>"><?= htmlspecialchars($reportRow['status_label']) ?></span></td>
                                     </tr>
                                 <?php endforeach; ?>
@@ -1126,7 +1125,7 @@ function storeReceiptAttachments(PDO $pdo, int $receiptId, ?array $files, int $u
     }
 
     $stored = [];
-    $baseDir = dirname(__DIR__, 2) . '/uploads/stock_receipts';
+    $baseDir = dirname(__DIR__) . '/uploads/stock-receipts';
     if (!is_dir($baseDir)) {
         mkdir($baseDir, 0775, true);
     }
@@ -1166,7 +1165,7 @@ function storeReceiptAttachments(PDO $pdo, int $receiptId, ?array $files, int $u
             continue;
         }
 
-        $relativePath = 'uploads/stock_receipts/' . $receiptId . '/' . $targetName;
+        $relativePath = 'uploads/stock-receipts/' . $receiptId . '/' . $targetName;
         $insertFile->execute([
             ':receipt_id' => $receiptId,
             ':file_path' => $relativePath,
@@ -1413,33 +1412,59 @@ function fetchStockInReport(PDO $pdo, array $filters, ?int $limit = 50): array
  */
 function fetchCurrentInventorySnapshot(PDO $pdo, int $limit = 12): array
 {
-    $sql = '
+    $productsSql = '
         SELECT
             p.id,
             p.name,
             p.quantity,
-            p.low_stock_threshold,
-            MAX(CASE WHEN sr.status IN (\'posted\', \'with_discrepancy\') THEN sr.date_received ELSE NULL END) AS last_received_date
+            p.low_stock_threshold
         FROM products p
-        LEFT JOIN stock_receipt_items sri ON sri.product_id = p.id
-        LEFT JOIN stock_receipts sr ON sr.id = sri.receipt_id
-        GROUP BY p.id, p.name, p.quantity, p.low_stock_threshold
         ORDER BY p.name ASC
-        LIMIT ' . (int)$limit . '
+        LIMIT :limit
     ';
 
-    $stmt = $pdo->query($sql);
-    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $stmt = $pdo->prepare($productsSql);
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
+    $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    foreach ($rows as &$row) {
+    if (empty($products)) {
+        return [];
+    }
+
+    $productIds = array_map(static fn($row) => (int)$row['id'], $products);
+
+    $placeholders = implode(',', array_fill(0, count($productIds), '?'));
+    $lastReceivedSql = '
+        SELECT
+            sri.product_id,
+            MAX(sr.date_received) AS last_received_date
+        FROM stock_receipt_items sri
+        JOIN stock_receipts sr ON sr.id = sri.receipt_id
+        WHERE sri.product_id IN (' . $placeholders . ')
+            AND sr.status IN (\'posted\', \'with_discrepancy\')
+        GROUP BY sri.product_id
+    ';
+    $lastStmt = $pdo->prepare($lastReceivedSql);
+    $lastStmt->execute($productIds);
+    $lastReceivedMap = [];
+    foreach ($lastStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $lastReceivedMap[(int)$row['product_id']] = $row['last_received_date'];
+    }
+
+    foreach ($products as &$row) {
+        $productId = (int)$row['id'];
         $quantity = (float)($row['quantity'] ?? 0);
         $threshold = isset($row['low_stock_threshold']) ? (float)$row['low_stock_threshold'] : 0;
+        $lastReceivedRaw = $lastReceivedMap[$productId] ?? null;
+
+        $row['product_name'] = $row['name'] ?? ('Product #' . $productId);
         $row['on_hand_display'] = number_format($quantity, 0);
-        $row['last_received_display'] = !empty($row['last_received_date']) ? date('M d, Y', strtotime($row['last_received_date'])) : '—';
+        $row['last_received_display'] = $lastReceivedRaw ? date('M d, Y', strtotime($lastReceivedRaw)) : '—';
         $row['is_low_stock'] = $threshold > 0 ? $quantity <= $threshold : $quantity <= 0;
     }
 
-    return $rows;
+    return $products;
 }
 
 /**
@@ -1453,9 +1478,6 @@ function handleStockInReportExport(string $format, array $rows, array $filters):
     switch ($format) {
         case 'csv':
             exportStockInReportCsv($filenameBase, $headers, $rows);
-            break;
-        case 'xlsx':
-            exportStockInReportXlsx($filenameBase, $headers, $rows);
             break;
         case 'pdf':
             exportStockInReportPdf($filenameBase, $headers, $rows, $filters);
@@ -1491,112 +1513,6 @@ function exportStockInReportCsv(string $filenameBase, array $headers, array $row
     }
 
     fclose($handle);
-    exit;
-}
-
-/**
- * Emit report data as an XLSX workbook using basic SpreadsheetML parts.
- */
-function exportStockInReportXlsx(string $filenameBase, array $headers, array $rows): void
-{
-    if (!class_exists('ZipArchive')) {
-        exportStockInReportCsv($filenameBase, $headers, $rows);
-        return;
-    }
-
-    $sheetRows = [];
-    $sheetRows[] = buildSpreadsheetRow(1, $headers, true);
-
-    $rowIndex = 2;
-    foreach ($rows as $row) {
-        $sheetRows[] = buildSpreadsheetRow($rowIndex, [
-            $row['date_display'] ?? '',
-            $row['receipt_code'] ?? '',
-            $row['supplier_name'] ?? '',
-            $row['document_number'] ?? '',
-            $row['product_name'] ?? '',
-            (float)($row['qty_received'] ?? 0),
-            (float)($row['unit_cost'] ?? 0),
-            $row['receiver_name'] ?? '',
-            $row['status_label'] ?? '',
-        ]);
-        $rowIndex++;
-    }
-
-    $sheetXml = '<?xml version="1.0" encoding="UTF-8"?>'
-        . '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-        . '<sheetData>' . implode('', $sheetRows) . '</sheetData>'
-        . '</worksheet>';
-
-    $workbookXml = '<?xml version="1.0" encoding="UTF-8"?>'
-        . '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
-        . ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
-        . '<sheets><sheet name="StockIn" sheetId="1" r:id="rId1"/></sheets>'
-        . '</workbook>';
-
-    $docPropsCoreXml = '<?xml version="1.0" encoding="UTF-8"?>'
-        . '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"'
-        . ' xmlns:dc="http://purl.org/dc/elements/1.1/"'
-        . ' xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/"'
-        . ' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">'
-        . '<dc:title>Stock-In Report</dc:title>'
-        . '<dc:creator>DGZ MotorShop</dc:creator>'
-        . '<cp:lastModifiedBy>DGZ MotorShop</cp:lastModifiedBy>'
-        . '<dcterms:created xsi:type="dcterms:W3CDTF">' . date('c') . '</dcterms:created>'
-        . '<dcterms:modified xsi:type="dcterms:W3CDTF">' . date('c') . '</dcterms:modified>'
-        . '</cp:coreProperties>';
-
-    $docPropsAppXml = '<?xml version="1.0" encoding="UTF-8"?>'
-        . '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"'
-        . ' xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">'
-        . '<Application>DGZ MotorShop</Application>'
-        . '</Properties>';
-
-    $rootRelsXml = '<?xml version="1.0" encoding="UTF-8"?>'
-        . '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-        . '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
-        . '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>'
-        . '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>'
-        . '</Relationships>';
-
-    $workbookRelsXml = '<?xml version="1.0" encoding="UTF-8"?>'
-        . '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-        . '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
-        . '</Relationships>';
-
-    $contentTypesXml = '<?xml version="1.0" encoding="UTF-8"?>'
-        . '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
-        . '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
-        . '<Default Extension="xml" ContentType="application/xml"/>'
-        . '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
-        . '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
-        . '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>'
-        . '<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>'
-        . '</Types>';
-
-    $tmpFile = tempnam(sys_get_temp_dir(), 'xlsx');
-    $zip = new ZipArchive();
-    $opened = $zip->open($tmpFile, ZipArchive::CREATE | ZipArchive::OVERWRITE);
-    if ($opened !== true) {
-        @unlink($tmpFile);
-        exportStockInReportCsv($filenameBase, $headers, $rows);
-        return;
-    }
-    $zip->addFromString('[Content_Types].xml', $contentTypesXml);
-    $zip->addFromString('_rels/.rels', $rootRelsXml);
-    $zip->addFromString('docProps/core.xml', $docPropsCoreXml);
-    $zip->addFromString('docProps/app.xml', $docPropsAppXml);
-    $zip->addFromString('xl/workbook.xml', $workbookXml);
-    $zip->addFromString('xl/_rels/workbook.xml.rels', $workbookRelsXml);
-    $zip->addFromString('xl/worksheets/sheet1.xml', $sheetXml);
-    $zip->close();
-
-    header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    header('Content-Disposition: attachment; filename="' . $filenameBase . '.xlsx"');
-    header('Pragma: no-cache');
-    header('Expires: 0');
-    readfile($tmpFile);
-    @unlink($tmpFile);
     exit;
 }
 
@@ -1666,40 +1582,9 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
     header('Content-Disposition: attachment; filename="' . $filenameBase . '.pdf"');
     header('Pragma: no-cache');
     header('Expires: 0');
+    header('Content-Length: ' . strlen($pdfContent));
     echo $pdfContent;
     exit;
-}
-
-/**
- * Helper: build an XLSX worksheet row from raw values.
- */
-function buildSpreadsheetRow(int $rowNumber, array $values, bool $isHeader = false): string
-{
-    $cells = [];
-    foreach ($values as $index => $value) {
-        $column = columnLetterFromIndex($index) . $rowNumber;
-        if ($isHeader || !is_numeric($value)) {
-            $escaped = htmlspecialchars((string)$value, ENT_QUOTES | ENT_XML1);
-            $cells[] = '<c r="' . $column . '" t="inlineStr"><is><t>' . $escaped . '</t></is></c>';
-        } else {
-            $cells[] = '<c r="' . $column . '" t="n"><v>' . $value . '</v></c>';
-        }
-    }
-
-    return '<row r="' . $rowNumber . '">' . implode('', $cells) . '</row>';
-}
-
-/**
- * Helper: turn a zero-based column index into Excel style letters.
- */
-function columnLetterFromIndex(int $index): string
-{
-    $letters = '';
-    while ($index >= 0) {
-        $letters = chr(($index % 26) + 65) . $letters;
-        $index = intdiv($index, 26) - 1;
-    }
-    return $letters;
 }
 
 /**
@@ -1707,6 +1592,10 @@ function columnLetterFromIndex(int $index): string
  */
 function buildSimplePdfDocument(array $lines): string
 {
+    if (empty($lines)) {
+        $lines[] = 'No data available.';
+    }
+
     $pageHeight = 792; // 11in @ 72dpi
     $leftMargin = 40;
     $topStart = 760;
@@ -1730,7 +1619,8 @@ function buildSimplePdfDocument(array $lines): string
         $contentObject = $objectNumber++;
         $pageObject = $objectNumber++;
 
-        $objects[$contentObject] = $contentObject . ' 0 obj << /Length ' . strlen($contentStream) . ' >> stream\n' . $contentStream . '\nendstream\nendobj';
+        $objects[$contentObject] = $contentObject . " 0 obj << /Length " . strlen($contentStream) . " >> stream\n"
+            . $contentStream . "\nendstream\nendobj";
 
         $objects[$pageObject] = $pageObject . ' 0 obj << /Type /Page /Parent ' . $pagesObject . ' 0 R /MediaBox [0 0 612 ' . $pageHeight . '] /Resources << /Font << /F1 ' . $fontObject . ' 0 R >> >> /Contents ' . $contentObject . ' 0 R >> endobj';
 
@@ -1751,14 +1641,14 @@ function buildSimplePdfDocument(array $lines): string
 
     $xrefPosition = strlen($pdf);
     $maxObject = max(array_keys($objects));
-    $pdf .= 'xref\n0 ' . ($maxObject + 1) . "\n";
+    $pdf .= "xref\n0 " . ($maxObject + 1) . "\n";
     $pdf .= "0000000000 65535 f \n";
     for ($i = 1; $i <= $maxObject; $i++) {
         $offset = $offsets[$i] ?? 0;
-        $pdf .= sprintf('%010d 00000 n ', $offset) . "\n";
+        $pdf .= sprintf("%010d 00000 n ", $offset) . "\n";
     }
-    $pdf .= 'trailer << /Size ' . ($maxObject + 1) . ' /Root ' . $catalogObject . ' 0 R >>\n';
-    $pdf .= 'startxref\n' . $xrefPosition . "\n%%EOF";
+    $pdf .= "trailer << /Size " . ($maxObject + 1) . ' /Root ' . $catalogObject . " 0 R >>\n";
+    $pdf .= "startxref\n" . $xrefPosition . "\n%%EOF";
 
     return $pdf;
 }
@@ -1772,7 +1662,7 @@ function buildPdfContentStream(array $lines, int $leftMargin, int $topStart, int
     $currentY = $topStart;
     foreach ($lines as $line) {
         $escaped = str_replace(['\\', '(', ')'], ['\\\\', '\\(', '\\)'], $line);
-        $content .= sprintf('1 0 0 1 %d %d Tm (%s) Tj\n', $leftMargin, $currentY, $escaped);
+        $content .= sprintf("1 0 0 1 %d %d Tm (%s) Tj\n", $leftMargin, $currentY, $escaped);
         $currentY -= $lineHeight;
     }
     $content .= "ET";
