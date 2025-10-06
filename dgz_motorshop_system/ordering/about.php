@@ -6,8 +6,7 @@
     <title>About DGZ Motorshop</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="../assets/css/public/about.css">
-    
-
+    <link rel="stylesheet" href="../assets/css/public/faq.css">
 </head>
 <body>
     <!-- Header -->
@@ -15,12 +14,6 @@
         <div class="header-content">
             <div class="logo">
                 <img src="../assets/logo.png" alt="DGZ Motorshop Logo">
-            </div>
-            <div class="search-container">
-                <input type="text" class="search-bar" placeholder="Search by Category, Part, Brand...">
-                <button class="search-btn">
-                    <i class="fas fa-search"></i>
-                </button>
             </div>
             <a href="#" class="cart-btn" id="cartButton">
                 <i class="fas fa-shopping-cart"></i>
@@ -41,7 +34,7 @@
 
     <!-- About Content -->
     <div class="about-container">
-         <div class="location-section">
+        <div class="location-section">
             <h2>Visit Our Sto. Niño Branch</h2>
             <p>Drop by our Antipolo location for premium motorcycle parts, expert advice, and dependable service tailored to your ride.</p>
             <div class="map-container">
@@ -49,39 +42,34 @@
             </div>
         </div>
 
-        <div class="about-content">
-            <div class="about-card">
-                <h2><i class="fas fa-history"></i> Our Story</h2>
-                <p>Established in 2022, DGZ Motorshop Sto. Niño Branch began with a simple vision: to provide motorcycle enthusiasts with top-quality parts and exceptional service. What started as a small retail store has grown into a comprehensive motorcycle hub serving riders across the region.</p>
-                <p>Our founder, a passionate rider himself, noticed a gap in the market for a one-stop shop that offered both premium products and expert repair services. Today, we pride ourselves on being that destination for riders who demand the best for their machines.</p>
-            </div>
-        </div>
+        <section class="faq-section">
+            <!-- FAQ Section: update questions and answers below -->
+            <h2>Frequently Asked Questions</h2>
 
-        <section class="info-section">
-            <div class="info-card">
-                <div class="info-image" aria-label="Vision image placeholder"> 
-                    <img src="assets/DGZstore.jpg" alt="Store">
-                </div>
-                <div class="info-content">
-                    <h2><i class="fas fa-eye"></i> Our Vision</h2>
-                    <p>To be the leading motorcycle parts and service center in the region, known for our unparalleled product quality, technical expertise, and commitment to rider safety and satisfaction.</p>
-                </div>
-            </div>
+            <article class="faq-item">
+                <!-- FAQ Item 1: edit the question and answer text -->
+                <h3 class="faq-question">Do you offer installation services?</h3>
+                <p class="faq-answer">Yes, our Sto. Niño branch has certified mechanics ready to install any parts you purchase from us.</p>
+            </article>
 
-            <div class="info-card reverse">
-                <div class="info-image" aria-label="Mission image placeholder">
-                    <img src="assets/DGZstore2.jpg" alt="Store">
-                </div>
-                <div class="info-content">
-                    <h2><i class="fas fa-bullseye"></i> Our Mission</h2>
-                    <p>To provide motorcycle enthusiasts with access to premium parts, professional repair services, and expert advice that enhances their riding experience and keeps them safely on the road.</p>
-                </div>
-            </div>
+            <article class="faq-item">
+                <!-- FAQ Item 2: edit the question and answer text -->
+                <h3 class="faq-question">What brands of motorcycle parts do you carry?</h3>
+                <p class="faq-answer">We stock a wide range of trusted local and international brands to make sure riders find the perfect parts for their bikes.</p>
+            </article>
+
+            <article class="faq-item">
+                <!-- FAQ Item 3: edit the question and answer text -->
+                <h3 class="faq-question">Can I order parts online for store pickup?</h3>
+                <p class="faq-answer">Absolutely. Place your order through our online catalog and choose in-store pickup so everything is ready when you arrive.</p>
+            </article>
+
+            <article class="faq-item">
+                <!-- FAQ Item 4: edit the question and answer text -->
+                <h3 class="faq-question">What are your store hours?</h3>
+                <p class="faq-answer">We are open Monday to Saturday from 9:00 AM to 6:00 PM, with extended hours during peak riding season.</p>
+            </article>
         </section>
-       
-
-       
-
     </div>
 
     <!-- Footer -->
