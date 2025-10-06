@@ -166,6 +166,36 @@ if (!function_exists('findOrderDeclineReason')) {
     }
 }
 
+if (!function_exists('findOrderDeclineReasonByLabel')) {
+    /**
+     * Locate a decline reason using its label (case-insensitive).
+     */
+    function findOrderDeclineReasonByLabel(PDO $pdo, string $label): ?array
+    {
+        ensureOrderDeclineSchema($pdo);
+
+        $trimmed = trim($label);
+        if ($trimmed === '') {
+            return null;
+        }
+
+        try {
+            $stmt = $pdo->prepare(
+                'SELECT id, label, is_active FROM order_decline_reasons WHERE LOWER(label) = LOWER(?) LIMIT 1'
+            );
+            $stmt->execute([$trimmed]);
+
+            $row = $stmt->fetch();
+
+            return $row ?: null;
+        } catch (Throwable $e) {
+            error_log('Unable to find decline reason by label: ' . $e->getMessage());
+
+            return null;
+        }
+    }
+}
+
 if (!function_exists('deleteOrderDeclineReason')) {
     /**
      * Permanently delete a decline reason and clear references from orders.

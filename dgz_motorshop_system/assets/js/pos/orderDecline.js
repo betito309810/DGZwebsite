@@ -1,337 +1,341 @@
 /**
- * Disapprove order workflow: forces staff to pick a reusable disapproval reason and
- * keeps the reason catalogue in sync without reloading the page.
+ * POS online order disapproval workflow.
+ * Rewritten to submit directly to the new disapproval endpoint and enforce
+ * reason selection with clear error handling. // Fix: new fully rewritten flow.
  */
 (function () {
     if (typeof window === 'undefined') {
         return;
     }
 
-    const data = window.dgzPosData || {};
-    const declineModal = document.getElementById('declineOrderModal');
-    const manageModal = document.getElementById('manageDeclineReasonsModal');
-
-    if (!declineModal || !manageModal) {
-        return;
-    }
-
-    const reasonSelect = document.getElementById('declineReasonSelect');
-    const reasonNoteField = document.getElementById('declineReasonNote');
-    const declineError = document.getElementById('declineModalError');
-    const manageError = document.getElementById('manageDeclineError');
-    const manageList = document.getElementById('declineReasonsList');
-    const addReasonForm = document.getElementById('addDeclineReasonForm');
-    const newReasonInput = document.getElementById('newDeclineReasonInput');
-    const confirmDeclineBtn = document.getElementById('confirmDeclineOrder');
-    const cancelDeclineBtn = document.getElementById('cancelDeclineOrder');
-    const closeDeclineBtn = document.getElementById('closeDeclineOrderModal');
-    const openManageBtn = document.getElementById('openManageDeclineReasons');
-    const closeManageBtn = document.getElementById('closeManageDeclineReasons');
+    const api = {
+        disapprove: 'orderDisapprove.php',
+        reasons: 'declineReasonsApi.php',
+    };
 
     const state = {
-        reasons: Array.isArray(data.declineReasons) ? data.declineReasons.slice() : [],
+        reasons: Array.isArray(window.dgzPosData?.declineReasons)
+            ? window.dgzPosData.declineReasons.slice()
+            : [],
         currentForm: null,
         currentRow: null,
     };
 
-    const apiUrl = 'declineReasonsApi.php';
+    const elements = {};
 
-    function sortReasons(reasons) {
-        return reasons.slice().sort((a, b) => {
-            const labelA = (a.label || '').toLowerCase();
-            const labelB = (b.label || '').toLowerCase();
-            if (labelA < labelB) { return -1; }
-            if (labelA > labelB) { return 1; }
-            return 0;
-        });
-    }
-
-    function getActiveReasons() {
-        return state.reasons.slice();
-    }
-
-    function setReasons(reasons) {
-        state.reasons = sortReasons(reasons);
+    document.addEventListener('DOMContentLoaded', () => {
+        cacheDom();
         renderReasonSelect();
-        renderManageReasonsList();
+        renderReasonsManager();
+        wireStatusForms();
+        wireModalButtons();
+    });
+
+    function cacheDom() {
+        elements.declineModal = document.getElementById('declineOrderModal');
+        elements.reasonSelect = document.getElementById('declineReasonSelect');
+        elements.noteField = document.getElementById('declineReasonNote');
+        elements.errorBox = document.getElementById('declineModalError');
+        elements.confirmButton = document.getElementById('confirmDeclineOrder');
+        elements.cancelButton = document.getElementById('cancelDeclineOrder');
+        elements.closeButton = document.getElementById('closeDeclineOrderModal');
+        elements.manageButton = document.getElementById('openManageDeclineReasons');
+
+        elements.manageModal = document.getElementById('manageDeclineReasonsModal');
+        elements.manageClose = document.getElementById('closeManageDeclineReasons');
+        elements.manageList = document.getElementById('declineReasonsList');
+        elements.manageError = document.getElementById('manageDeclineError');
+        elements.manageForm = document.getElementById('addDeclineReasonForm');
+        elements.manageInput = document.getElementById('newDeclineReasonInput');
     }
 
     function renderReasonSelect() {
-        if (!reasonSelect) {
+        const select = elements.reasonSelect;
+        if (!select) {
             return;
         }
 
-        const activeReasons = getActiveReasons();
-        reasonSelect.innerHTML = '';
+        select.innerHTML = '';
 
         const placeholder = document.createElement('option');
         placeholder.value = '';
         placeholder.disabled = true;
         placeholder.selected = true;
-        placeholder.textContent = activeReasons.length
+        placeholder.textContent = state.reasons.length
             ? 'Select a disapproval reason'
-            : 'No reasons available yet';
-        reasonSelect.appendChild(placeholder);
+            : 'No disapproval reasons yet';
+        select.appendChild(placeholder);
 
-        activeReasons.forEach((reason) => {
-            const option = document.createElement('option');
-            option.value = String(reason.id);
-            option.textContent = reason.label;
-            reasonSelect.appendChild(option);
-        });
+        state.reasons
+            .slice()
+            .sort((a, b) => (a.label || '').localeCompare(b.label || ''))
+            .forEach((reason) => {
+                const option = document.createElement('option');
+                option.value = String(reason.id);
+                option.textContent = reason.label;
+                select.appendChild(option);
+            });
 
-        const disabled = activeReasons.length === 0;
-        reasonSelect.disabled = disabled;
-        if (confirmDeclineBtn) {
-            confirmDeclineBtn.disabled = disabled;
+        const disabled = state.reasons.length === 0;
+        select.disabled = disabled;
+        if (elements.confirmButton) {
+            elements.confirmButton.disabled = disabled;
         }
     }
 
-    function renderManageReasonsList() {
-        if (!manageList) {
+    function renderReasonsManager() {
+        const list = elements.manageList;
+        if (!list) {
             return;
         }
 
-        manageList.innerHTML = '';
+        list.innerHTML = '';
 
         if (state.reasons.length === 0) {
             const empty = document.createElement('p');
             empty.className = 'muted';
-            empty.textContent = 'No disapproval reasons yet. Add your first reason below.';
-            manageList.appendChild(empty);
+            empty.textContent = 'No disapproval reasons yet. Add one below to get started.';
+            list.appendChild(empty);
             return;
         }
 
-        state.reasons.forEach((reason) => {
-            const wrapper = document.createElement('div');
-            wrapper.className = 'decline-reason-item';
-            wrapper.dataset.reasonId = String(reason.id);
+        state.reasons
+            .slice()
+            .sort((a, b) => (a.label || '').localeCompare(b.label || ''))
+            .forEach((reason) => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'decline-reason-item';
+                wrapper.dataset.reasonId = String(reason.id);
 
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.value = reason.label;
-            input.maxLength = 255;
-            input.dataset.originalValue = reason.label;
-            wrapper.appendChild(input);
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.value = reason.label;
+                input.maxLength = 255;
+                wrapper.appendChild(input);
 
-            const saveBtn = document.createElement('button');
-            saveBtn.type = 'button';
-            saveBtn.textContent = 'Save';
-            saveBtn.className = 'decline-reason-save';
-            wrapper.appendChild(saveBtn);
+                const saveBtn = document.createElement('button');
+                saveBtn.type = 'button';
+                saveBtn.className = 'decline-reason-save';
+                saveBtn.textContent = 'Save';
+                wrapper.appendChild(saveBtn);
 
-            const removeBtn = document.createElement('button');
-            removeBtn.type = 'button';
-            removeBtn.className = 'decline-reason-remove';
-            removeBtn.textContent = 'Remove';
-            wrapper.appendChild(removeBtn);
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = 'decline-reason-remove';
+                removeBtn.textContent = 'Remove';
+                wrapper.appendChild(removeBtn);
 
-            manageList.appendChild(wrapper);
+                list.appendChild(wrapper);
+            });
+    }
+
+    function wireStatusForms() {
+        document.querySelectorAll('.status-form').forEach((form) => {
+            form.addEventListener('submit', (event) => {
+                const select = form.querySelector('select[name="new_status"]');
+                const nextStatus = select ? select.value : '';
+                if (nextStatus === 'disapproved') {
+                    event.preventDefault();
+                    openDeclineModal(form);
+                }
+            });
         });
     }
 
-    function setModalVisible(modal, visible) {
-        modal.style.display = visible ? 'flex' : 'none';
+    function wireModalButtons() {
+        elements.cancelButton?.addEventListener('click', closeDeclineModal);
+        elements.closeButton?.addEventListener('click', closeDeclineModal);
+        elements.confirmButton?.addEventListener('click', submitDisapproval);
+        elements.manageButton?.addEventListener('click', openManageModal);
+        elements.manageClose?.addEventListener('click', closeManageModal);
+        elements.manageForm?.addEventListener('submit', handleAddReason);
+        elements.manageList?.addEventListener('click', handleManageListClick);
     }
 
-    function resetDeclineModalErrors() {
-        if (declineError) {
-            declineError.textContent = '';
-        }
-    }
-
-    function resetManageError() {
-        if (manageError) {
-            manageError.textContent = '';
-        }
-    }
-
-    function openDeclineModal(form, row) {
+    function openDeclineModal(form) {
         state.currentForm = form;
-        state.currentRow = row;
+        state.currentRow = form.closest('.online-order-row') || null;
 
-        resetDeclineModalErrors();
-        renderReasonSelect();
-
-        const activeReasons = getActiveReasons();
-
-        if (activeReasons.length === 0) {
-            if (declineError) {
-                declineError.textContent = 'Add at least one disapproval reason before disapproving an order.';
-            }
-            openManageModal();
-            setModalVisible(declineModal, true);
-            return;
+        if (elements.errorBox) {
+            elements.errorBox.textContent = '';
+        }
+        if (elements.noteField) {
+            elements.noteField.value = state.currentRow?.dataset.declineReasonNote || '';
         }
 
-        const existingReasonId = row ? Number(row.dataset.declineReasonId || 0) : 0;
-        const existingNote = row ? (row.dataset.declineReasonNote || '') : '';
-
-        if (reasonSelect) {
-            reasonSelect.value = existingReasonId ? String(existingReasonId) : '';
+        const currentReasonId = state.currentRow?.dataset.declineReasonId || '';
+        if (elements.reasonSelect) {
+            renderReasonSelect();
+            elements.reasonSelect.value = currentReasonId && currentReasonId !== '0'
+                ? currentReasonId
+                : '';
         }
 
-        if (reasonNoteField) {
-            reasonNoteField.value = existingNote;
-        }
-
-        setModalVisible(declineModal, true);
-        if (reasonSelect && !reasonSelect.disabled) {
-            reasonSelect.focus();
+        if (elements.declineModal) {
+            elements.declineModal.style.display = 'flex';
         }
     }
 
     function closeDeclineModal() {
-        setModalVisible(declineModal, false);
+        if (elements.declineModal) {
+            elements.declineModal.style.display = 'none';
+        }
+        if (elements.errorBox) {
+            elements.errorBox.textContent = '';
+        }
+        if (elements.reasonSelect) {
+            elements.reasonSelect.selectedIndex = 0;
+        }
+        if (elements.noteField) {
+            elements.noteField.value = '';
+        }
         state.currentForm = null;
         state.currentRow = null;
-        if (reasonSelect) {
-            reasonSelect.selectedIndex = 0;
-        }
-        if (reasonNoteField) {
-            reasonNoteField.value = '';
-        }
-        resetDeclineModalErrors();
     }
 
     function openManageModal() {
-        resetManageError();
-        renderManageReasonsList();
-        setModalVisible(manageModal, true);
-        if (newReasonInput) {
-            newReasonInput.value = '';
-            newReasonInput.focus();
+        if (elements.manageError) {
+            elements.manageError.textContent = '';
+        }
+        renderReasonsManager();
+        if (elements.manageModal) {
+            elements.manageModal.style.display = 'flex';
+        }
+        if (elements.manageInput) {
+            elements.manageInput.value = '';
+            elements.manageInput.focus();
         }
     }
 
     function closeManageModal() {
-        setModalVisible(manageModal, false);
-        resetManageError();
-    }
-
-    function clearReasonHiddenFields(form) {
-        const reasonIdInput = form.querySelector('input[name="decline_reason_id"]');
-        const reasonNoteInput = form.querySelector('input[name="decline_reason_note"]');
-        if (reasonIdInput) {
-            reasonIdInput.value = '';
+        if (elements.manageModal) {
+            elements.manageModal.style.display = 'none';
         }
-        if (reasonNoteInput) {
-            reasonNoteInput.value = '';
+        if (elements.manageError) {
+            elements.manageError.textContent = '';
         }
     }
 
-    function handleStatusFormSubmit(event) {
-        const form = event.target;
-        const statusSelect = form.querySelector('select[name="new_status"]');
-        const nextStatus = statusSelect ? statusSelect.value : '';
-
-        if (nextStatus === 'disapproved') {
-            event.preventDefault();
-            const row = form.closest('.online-order-row');
-            openDeclineModal(form, row);
-        } else {
-            clearReasonHiddenFields(form);
-        }
+    function setReasons(reasons) {
+        state.reasons = Array.isArray(reasons) ? reasons.slice() : [];
+        renderReasonSelect();
+        renderReasonsManager();
     }
 
-    function syncRowDataset(reasonId, reasonLabel, note) {
-        if (!state.currentRow) {
-            return;
-        }
-        state.currentRow.dataset.declineReasonId = reasonId ? String(reasonId) : '0';
-        state.currentRow.dataset.declineReasonLabel = reasonLabel || '';
-        state.currentRow.dataset.declineReasonNote = note || '';
-    }
-
-    function handleConfirmDecline() {
-        if (!state.currentForm || !reasonSelect) {
+    async function submitDisapproval() {
+        if (!state.currentForm || !elements.reasonSelect) {
             return;
         }
 
-        const chosenReasonId = Number(reasonSelect.value || 0);
-        if (!chosenReasonId) {
-            if (declineError) {
-                declineError.textContent = 'Select a disapproval reason to continue.';
+        const orderId = Number(state.currentForm.querySelector('input[name="order_id"]').value || 0);
+        const selectedReasonId = Number(elements.reasonSelect.value || 0);
+        const selectedOption = elements.reasonSelect.options[elements.reasonSelect.selectedIndex];
+        const selectedLabel = selectedOption ? selectedOption.textContent.trim() : '';
+        const note = elements.noteField ? elements.noteField.value.trim() : '';
+
+        if (!selectedReasonId) {
+            if (elements.errorBox) {
+                elements.errorBox.textContent = 'Please choose a disapproval reason before submitting.';
+            }
+            elements.reasonSelect.focus();
+            return;
+        }
+
+        if (!orderId) {
+            if (elements.errorBox) {
+                elements.errorBox.textContent = 'Invalid order. Please refresh and try again.';
             }
             return;
         }
 
-        const selectedReason = state.reasons.find((reason) => Number(reason.id) === chosenReasonId);
-        const noteValue = reasonNoteField ? reasonNoteField.value.trim() : '';
-
-        const reasonIdInput = state.currentForm.querySelector('input[name="decline_reason_id"]');
-        const reasonNoteInput = state.currentForm.querySelector('input[name="decline_reason_note"]');
-
-        if (reasonIdInput) {
-            reasonIdInput.value = String(chosenReasonId);
+        if (elements.errorBox) {
+            elements.errorBox.textContent = '';
         }
 
-        if (reasonNoteInput) {
-            reasonNoteInput.value = noteValue;
+        if (elements.confirmButton) {
+            elements.confirmButton.disabled = true;
+            elements.confirmButton.textContent = 'Disapproving...';
         }
 
-        syncRowDataset(chosenReasonId, selectedReason ? selectedReason.label : '', noteValue);
-        const formToSubmit = state.currentForm;
-        closeDeclineModal();
-        if (formToSubmit) {
-            formToSubmit.submit();
+        try {
+            const response = await fetch(api.disapprove, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    orderId,
+                    reasonId: selectedReasonId,
+                    reasonLabel: selectedLabel,
+                    note,
+                }),
+            });
+
+            const result = await response.json();
+            if (!response.ok || !result?.success) {
+                throw new Error(result?.message || 'Unable to disapprove order.');
+            }
+
+            closeDeclineModal();
+            redirectWithMessage('disapproved_success', '1');
+        } catch (error) {
+            if (elements.errorBox) {
+                elements.errorBox.textContent = error.message || 'Unable to disapprove order.';
+            }
+        } finally {
+            if (elements.confirmButton) {
+                elements.confirmButton.disabled = false;
+                elements.confirmButton.textContent = 'Disapprove Order';
+            }
         }
     }
 
-    async function postJson(payload) {
-        const response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest',
-            },
-            credentials: 'same-origin',
-            body: JSON.stringify(payload),
-        });
-
-        if (!response.ok) {
-            throw new Error('Unable to reach disapproval reason service.');
-        }
-
-        const result = await response.json();
-        if (!result || !result.success) {
-            const message = result && result.message ? result.message : 'Action failed.';
-            throw new Error(message);
-        }
-
-        if (Array.isArray(result.reasons)) {
-            setReasons(result.reasons);
-        }
-
-        return result;
+    function redirectWithMessage(param, value) {
+        const url = new URL(window.location.href);
+        url.searchParams.set('tab', 'online');
+        url.searchParams.set(param, value);
+        window.location.href = url.toString();
     }
 
     async function handleAddReason(event) {
         event.preventDefault();
-        if (!newReasonInput) {
+        if (!elements.manageInput) {
             return;
         }
 
-        const label = newReasonInput.value.trim();
+        const label = elements.manageInput.value.trim();
         if (label === '') {
-            if (manageError) {
-                manageError.textContent = 'Reason label cannot be empty.';
+            if (elements.manageError) {
+                elements.manageError.textContent = 'Reason label cannot be empty.';
             }
             return;
         }
 
         try {
-            resetManageError();
-            const response = await postJson({ action: 'create', label });
-            newReasonInput.value = '';
-            newReasonInput.focus();
-
-            if (response && response.reason && reasonSelect) {
-                reasonSelect.value = String(response.reason.id);
+            if (elements.manageError) {
+                elements.manageError.textContent = '';
             }
-        } catch (err) {
-            if (manageError) {
-                manageError.textContent = err.message;
+            const response = await fetch(api.reasons, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({ action: 'create', label }),
+            });
+            const result = await response.json();
+            if (!response.ok || !result?.success) {
+                throw new Error(result?.message || 'Failed to add reason.');
+            }
+            setReasons(result.reasons || []);
+            elements.manageInput.value = '';
+            elements.manageInput.focus();
+        } catch (error) {
+            if (elements.manageError) {
+                elements.manageError.textContent = error.message || 'Failed to add reason.';
             }
         }
     }
@@ -349,30 +353,39 @@
 
         const reasonId = Number(wrapper.dataset.reasonId || 0);
         const input = wrapper.querySelector('input');
-
         if (!reasonId || !(input instanceof HTMLInputElement)) {
             return;
         }
 
         if (target.classList.contains('decline-reason-save')) {
-            const newValue = input.value.trim();
-            if (newValue === '') {
-                if (manageError) {
-                    manageError.textContent = 'Reason label cannot be empty.';
+            const newLabel = input.value.trim();
+            if (newLabel === '') {
+                if (elements.manageError) {
+                    elements.manageError.textContent = 'Reason label cannot be empty.';
                 }
                 return;
             }
-
-            if (newValue === input.dataset.originalValue) {
-                return;
-            }
-
             try {
-                resetManageError();
-                await postJson({ action: 'update', id: reasonId, label: newValue });
-            } catch (err) {
-                if (manageError) {
-                    manageError.textContent = err.message;
+                if (elements.manageError) {
+                    elements.manageError.textContent = '';
+                }
+                const response = await fetch(api.reasons, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ action: 'update', id: reasonId, label: newLabel }),
+                });
+                const result = await response.json();
+                if (!response.ok || !result?.success) {
+                    throw new Error(result?.message || 'Failed to update reason.');
+                }
+                setReasons(result.reasons || []);
+            } catch (error) {
+                if (elements.manageError) {
+                    elements.manageError.textContent = error.message || 'Failed to update reason.';
                 }
             }
             return;
@@ -383,51 +396,29 @@
             if (!confirmed) {
                 return;
             }
-
             try {
-                resetManageError();
-                await postJson({ action: 'delete', id: reasonId });
-            } catch (err) {
-                if (manageError) {
-                    manageError.textContent = err.message;
+                if (elements.manageError) {
+                    elements.manageError.textContent = '';
+                }
+                const response = await fetch(api.reasons, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ action: 'delete', id: reasonId }),
+                });
+                const result = await response.json();
+                if (!response.ok || !result?.success) {
+                    throw new Error(result?.message || 'Failed to delete reason.');
+                }
+                setReasons(result.reasons || []);
+            } catch (error) {
+                if (elements.manageError) {
+                    elements.manageError.textContent = error.message || 'Failed to delete reason.';
                 }
             }
         }
     }
-
-    function wireUpStatusForms() {
-        const forms = document.querySelectorAll('.status-form');
-        forms.forEach((form) => {
-            form.addEventListener('submit', handleStatusFormSubmit);
-        });
-    }
-
-    function registerModalEvents() {
-        if (cancelDeclineBtn) {
-            cancelDeclineBtn.addEventListener('click', closeDeclineModal);
-        }
-        if (closeDeclineBtn) {
-            closeDeclineBtn.addEventListener('click', closeDeclineModal);
-        }
-        if (confirmDeclineBtn) {
-            confirmDeclineBtn.addEventListener('click', handleConfirmDecline);
-        }
-        if (openManageBtn) {
-            openManageBtn.addEventListener('click', openManageModal);
-        }
-        if (closeManageBtn) {
-            closeManageBtn.addEventListener('click', closeManageModal);
-        }
-        if (addReasonForm) {
-            addReasonForm.addEventListener('submit', handleAddReason);
-        }
-        if (manageList) {
-            manageList.addEventListener('click', handleManageListClick);
-        }
-    }
-
-    renderReasonSelect();
-    renderManageReasonsList();
-    wireUpStatusForms();
-    registerModalEvents();
 })();

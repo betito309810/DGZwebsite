@@ -422,6 +422,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                     </div>
                     
                     <div class="qr-code">
+                        <img src="../assets/qr-code.png" alt="">
                     </div>
 
                     <div class="form-group">

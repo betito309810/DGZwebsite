@@ -340,12 +340,10 @@ function prepareOrderItemsData(PDO $pdo, int $orderId): array
     ];
 }
 
-//fixed approving status and extended decline handling
+// rewritten status handler (disapproval now handled through orderDisapprove.php)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status'])) {
     $orderId = isset($_POST['order_id']) ? (int) $_POST['order_id'] : 0;
     $newStatus = isset($_POST['new_status']) ? strtolower(trim((string) $_POST['new_status'])) : '';
-    $declineReasonId = isset($_POST['decline_reason_id']) ? (int) $_POST['decline_reason_id'] : 0;
-    $declineReasonNote = isset($_POST['decline_reason_note']) ? trim((string) $_POST['decline_reason_note']) : '';
 
     $_SESSION['pos_active_tab'] = 'online';
 
@@ -353,44 +351,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
     $statusError = '';
     $supportsInvoiceNumbers = ordersSupportsInvoiceNumbers($pdo);
 
-    if ($orderId > 0 && in_array($newStatus, ['payment_verification', 'approved', 'completed', 'disapproved'], true)) {
-        $selectSql = $supportsInvoiceNumbers
-            ? 'SELECT status, invoice_number FROM orders WHERE id = ?'
-            : 'SELECT status FROM orders WHERE id = ?';
-        $orderStmt = $pdo->prepare($selectSql);
-        $orderStmt->execute([$orderId]);
-        $currentOrder = $orderStmt->fetch();
+    if ($orderId > 0 && $newStatus !== '') {
+        if ($newStatus === 'disapproved') {
+            $statusError = 'missing_reason';
+        } elseif (in_array($newStatus, ['payment_verification', 'approved', 'completed'], true)) {
+            $selectSql = $supportsInvoiceNumbers
+                ? 'SELECT status, invoice_number FROM orders WHERE id = ?'
+                : 'SELECT status FROM orders WHERE id = ?';
+            $orderStmt = $pdo->prepare($selectSql);
+            $orderStmt->execute([$orderId]);
+            $currentOrder = $orderStmt->fetch();
 
-        if ($currentOrder) {
-            $currentStatus = strtolower((string) ($currentOrder['status'] ?? ''));
-            if ($currentStatus === '') {
-                $currentStatus = 'pending';
-            }
-
-            $transitions = [
-                'pending' => ['payment_verification', 'approved', 'disapproved', 'completed'],
-                'payment_verification' => ['approved', 'disapproved'],
-                'approved' => ['completed'],
-                'completed' => [],
-                'disapproved' => [],
-            ];
-
-            if (!array_key_exists($currentStatus, $transitions)) {
-                $currentStatus = 'pending';
-            }
-
-            $allowedNext = $transitions[$currentStatus] ?? [];
-
-            if ($newStatus === $currentStatus || in_array($newStatus, $allowedNext, true)) {
-                $selectedReason = null;
-                if ($newStatus === 'disapproved') {
-                    $selectedReason = findOrderDeclineReason($pdo, $declineReasonId);
-                    if ($selectedReason === null) {
-                        $statusError = 'missing_reason';
-                    }
+            if ($currentOrder) {
+                $currentStatus = strtolower((string) ($currentOrder['status'] ?? ''));
+                if ($currentStatus === '') {
+                    $currentStatus = 'pending';
                 }
 
-                if ($statusError === '') {
+                $transitions = [
+                    'pending' => ['payment_verification', 'approved', 'disapproved', 'completed'],
+                    'payment_verification' => ['approved', 'disapproved'],
+                    'approved' => ['completed'],
+                    'completed' => [],
+                    'disapproved' => [],
+                ];
+
+                if (!array_key_exists($currentStatus, $transitions)) {
+                    $currentStatus = 'pending';
+                }
+
+                $allowedNext = $transitions[$currentStatus] ?? [];
+
+                if ($newStatus === $currentStatus || in_array($newStatus, $allowedNext, true)) {
                     $fields = [];
                     $params = [];
 
@@ -415,10 +407,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                     }
 
                     $fields[] = 'decline_reason_id = ?';
-                    $params[] = $newStatus === 'disapproved' && $selectedReason !== null ? (int) $selectedReason['id'] : null;
-
+                    $params[] = null;
                     $fields[] = 'decline_reason_note = ?';
-                    $params[] = $newStatus === 'disapproved' && $declineReasonNote !== '' ? $declineReasonNote : null;
+                    $params[] = null;
 
                     $params[] = $orderId;
                     $updateSql = 'UPDATE orders SET ' . implode(', ', $fields) . ' WHERE id = ?';
@@ -427,7 +418,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                     $statusParam = $success ? '1' : '0';
 
                     if ($success && $newStatus === 'approved') {
-                        // Send email to customer with detailed order summary
                         $orderInfoStmt = $pdo->prepare(
                             'SELECT customer_name, email, phone, invoice_number, total, created_at FROM orders WHERE id = ? LIMIT 1'
                         );
@@ -436,7 +426,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
 
                         $customerEmail = $orderInfo['email'] ?? '';
                         if ($customerEmail && filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
-                            // Only send email if customer is not "Walk-in"
                             if (strtolower(trim($orderInfo['customer_name'] ?? '')) !== 'walk-in') {
                                 $itemData = prepareOrderItemsData($pdo, $orderId);
                                 $itemsTotal = (float) ($itemData['items_total'] ?? 0.0);
@@ -462,7 +451,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                                     . '<p style="margin:16px 0 0;">Thank you for shopping with <strong>DGZ Motorshop</strong>!</p>'
                                     . '</div>';
 
-                                // Generate PDF receipt for attachment
                                 $receiptData = [
                                     'order_id' => $orderId,
                                     'invoice_number' => $invoiceNumber,
@@ -487,48 +475,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                                 $pdfContent = generateReceiptPDF($receiptData);
                                 $pdfFilename = 'receipt_' . $orderId . '.pdf';
 
-                                try { sendEmail($customerEmail, $subject, $body, $pdfContent, $pdfFilename); } catch (Throwable $e) { /* already logged in helper */ }
-                            }
-                        }
-                    }
-
-                    if ($success && $newStatus === 'disapproved' && $selectedReason !== null) {
-                        $orderInfoStmt = $pdo->prepare(
-                            'SELECT customer_name, email, phone, total, created_at FROM orders WHERE id = ? LIMIT 1'
-                        );
-                        $orderInfoStmt->execute([$orderId]);
-                        $orderInfo = $orderInfoStmt->fetch();
-
-                        $customerEmail = $orderInfo['email'] ?? '';
-                        if ($customerEmail && filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
-                            if (strtolower(trim($orderInfo['customer_name'] ?? '')) !== 'walk-in') {
-                                $itemData = prepareOrderItemsData($pdo, $orderId);
-                                $summaryTableHtml = (string) ($itemData['table_html'] ?? '');
-                                $customerName = trim((string) ($orderInfo['customer_name'] ?? 'Customer'));
-                                $createdAt = (string) ($orderInfo['created_at'] ?? '');
-                                $prettyDate = $createdAt !== '' ? date('F j, Y g:i A', strtotime($createdAt)) : date('F j, Y g:i A');
-                                $orderTotal = (float) ($orderInfo['total'] ?? 0);
-
-                                $reasonLine = htmlspecialchars($selectedReason['label'] ?? 'No reason provided', ENT_QUOTES, 'UTF-8');
-                                $extraDetails = $declineReasonNote !== ''
-                                    ? '<p style="margin:0 0 12px;">Additional Details: ' . nl2br(htmlspecialchars($declineReasonNote, ENT_QUOTES, 'UTF-8')) . '</p>'
-                                    : '';
-
-                                $subject = 'Order Disapproved - DGZ Motorshop';
-                                $body = '<div style="font-family: Arial, sans-serif; font-size:14px; color:#333;">'
-                                    . '<h2 style="color:#c0392b; margin-bottom:8px;">Order Disapproved</h2>'
-                                    . '<p style="margin:0 0 12px;">Hi ' . htmlspecialchars($customerName, ENT_QUOTES, 'UTF-8') . ',</p>'
-                                    . '<p style="margin:0 0 12px;">We reviewed your order #' . (int) $orderId . ' placed on '
-                                    . htmlspecialchars($prettyDate, ENT_QUOTES, 'UTF-8') . '.</p>'
-                                    . '<p style="margin:0 0 12px;">Reason: <strong>' . $reasonLine . '</strong></p>'
-                                    . $extraDetails
-                                    . $summaryTableHtml
-                                    . '<p style="margin:0;">If you have questions or would like to update your order, please reach out to us.</p>'
-                                    . '<p style="margin:12px 0 0;">Order Total: ₱' . number_format($orderTotal, 2) . '</p>'
-                                    . '<p style="margin:12px 0 0;">Thank you,<br>DGZ Motorshop Team</p>'
-                                    . '</div>';
-
-                                try { sendEmail($customerEmail, $subject, $body); } catch (Throwable $e) { /* already logged in helper */ }
+                                try { sendEmail($customerEmail, $subject, $body, $pdfContent, $pdfFilename); } catch (Throwable $e) { /* logged */ }
                             }
                         }
                     }
@@ -562,14 +509,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                                     . htmlspecialchars($prettyDate, ENT_QUOTES, 'UTF-8') . ', but we could not match any payment on our records.</p>'
                                     . '<p style="margin:0 0 12px;">Please reach us within <strong>5 working days</strong> via '
                                     . '<a href="mailto:' . htmlspecialchars($supportEmail, ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($supportEmail, ENT_QUOTES, 'UTF-8') . '</a>'
-                                    . ' or call ' . htmlspecialchars($supportPhone, ENT_QUOTES, 'UTF-8') . ' so we can assist you further. If we do not hear from you, the order will be void.</p>'
+                                    . ' or call us at ' . htmlspecialchars($supportPhone, ENT_QUOTES, 'UTF-8') . '.</p>'
                                     . $summaryTableHtml
-                                    . '<p style="margin:16px 0 0;">We appreciate your prompt attention to this matter.</p>'
+                                    . '<p style="margin:0;">If we don\'t hear back within 5 working days, the order will be automatically cancelled.</p>'
                                     . '<p style="margin:12px 0 0;">Thank you,<br>DGZ Motorshop Team</p>'
                                     . '</div>';
 
-                                try { sendEmail($customerEmail, $subject, $body); } catch (Throwable $e) { /* already logged in helper */ }
+                                try { sendEmail($customerEmail, $subject, $body); } catch (Throwable $e) { /* logged */ }
                             }
+                        }
+                    }
+
+                    if ($success && $newStatus === 'approved' && $supportsInvoiceNumbers) {
+                        $invoiceStmt = $pdo->prepare('SELECT invoice_number FROM orders WHERE id = ?');
+                        $invoiceStmt->execute([$orderId]);
+                        $updatedInvoice = (string) ($invoiceStmt->fetchColumn() ?: '');
+                        if ($updatedInvoice !== '') {
+                            $_SESSION['pos_invoice_number'] = $updatedInvoice;
                         }
                     }
                 }
@@ -584,7 +540,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
     ]));
     exit;
 }
-
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pos_checkout'])) {
     $productIds = isset($_POST['product_id']) ? (array) $_POST['product_id'] : [];
@@ -1125,13 +1080,18 @@ if ($receiptDataJson === false) {
         </div>
 
         <div id="onlineTab" class="tab-panel<?= $activeTab === 'online' ? ' active' : '' ?>">
-            <?php if (isset($_GET['status_updated'])): ?>
+            <?php if (isset($_GET['disapproved_success']) && $_GET['disapproved_success'] === '1'): ?>
+                <div class="status-alert success">
+                    <i class="fas fa-check-circle"></i>
+                    Order disapproved and customer notified.
+                </div>
+            <?php elseif (isset($_GET['status_updated'])): ?>
                 <?php
                     $success = $_GET['status_updated'] === '1';
                     $statusErrorCode = $_GET['status_error'] ?? '';
                     $statusMessage = $success ? 'Order status updated.' : 'Unable to update order status.';
                     if (!$success && $statusErrorCode === 'missing_reason') {
-                        $statusMessage = 'Please choose a disapproval reason before disapproving an order.';
+                        $statusMessage = 'Please use the Disapprove button to choose a reason before updating the status.';
                     }
                 ?>
                 <div class="status-alert <?= $success ? 'success' : 'error' ?>">
