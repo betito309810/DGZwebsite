@@ -14,9 +14,7 @@
     };
 
     const state = {
-        reasons: Array.isArray(window.dgzPosData?.declineReasons)
-            ? window.dgzPosData.declineReasons.slice()
-            : [],
+        reasons: normalizeReasonsList(window.dgzPosData?.declineReasons),
         currentForm: null,
         currentRow: null,
     };
@@ -30,6 +28,40 @@
         wireStatusForms();
         wireModalButtons();
     });
+
+    function normalizeReasonsList(rawReasons) {
+        if (!Array.isArray(rawReasons)) {
+            return [];
+        }
+
+        const seenLabels = new Set();
+        const cleaned = [];
+
+        rawReasons.forEach((reason) => {
+            if (!reason) {
+                return;
+            }
+
+            const id = Number(reason.id || 0);
+            const label = typeof reason.label === 'string' ? reason.label.trim() : '';
+            if (label === '') {
+                return;
+            }
+
+            const labelKey = label.toLowerCase();
+            if (seenLabels.has(labelKey)) {
+                return;
+            }
+
+            seenLabels.add(labelKey);
+            cleaned.push({
+                id: id > 0 ? id : cleaned.length + 1,
+                label,
+            });
+        });
+
+        return cleaned;
+    }
 
     function cacheDom() {
         elements.declineModal = document.getElementById('declineOrderModal');
@@ -217,7 +249,7 @@
     }
 
     function setReasons(reasons) {
-        state.reasons = Array.isArray(reasons) ? reasons.slice() : [];
+        state.reasons = normalizeReasonsList(reasons);
         renderReasonSelect();
         renderReasonsManager();
     }

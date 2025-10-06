@@ -91,6 +91,14 @@ if (!function_exists('createOrderDeclineReason')) {
         }
 
         try {
+            $existing = findOrderDeclineReasonByLabel($pdo, $trimmed);
+            if ($existing !== null) {
+                return [
+                    'id' => (int) ($existing['id'] ?? 0),
+                    'label' => $existing['label'] ?? $trimmed,
+                ];
+            }
+
             $insert = $pdo->prepare(
                 'INSERT INTO order_decline_reasons (label) VALUES (?)'
             );
