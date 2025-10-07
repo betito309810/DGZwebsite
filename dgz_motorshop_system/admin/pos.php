@@ -108,6 +108,33 @@ if (empty($_SESSION['user_id'])) {
 }
 
 $pdo = db();
+if (!function_exists('ensureOrdersCustomerNoteColumn')) {
+    /**
+     * Added helper to upgrade the orders table so cashier notes can be saved from checkout.
+     */
+    function ensureOrdersCustomerNoteColumn(PDO $pdo): void
+    {
+        static $ensured = false;
+        if ($ensured) {
+            return;
+        }
+
+        $ensured = true;
+
+        try {
+            $stmt = $pdo->query("SHOW COLUMNS FROM orders LIKE 'customer_note'");
+            $hasColumn = $stmt !== false && $stmt->fetch() !== false;
+            if ($hasColumn) {
+                return;
+            }
+
+            $pdo->exec("ALTER TABLE orders ADD COLUMN customer_note TEXT NULL");
+        } catch (Throwable $e) {
+            error_log('Unable to ensure customer_note column: ' . $e->getMessage());
+        }
+    }
+}
+ensureOrdersCustomerNoteColumn($pdo); // Added call so POS reflects checkout notes even on older databases
 ensureOrderDeclineSchema($pdo); // Ensure orders table can store decline reasons
 $declineReasons = fetchOrderDeclineReasons($pdo); // Preload decline reasons for UI/bootstrap
 $declineReasonLookup = []; // Map reason id to label for quick lookups
@@ -1459,6 +1486,11 @@ if ($receiptDataJson === false) {
                         <div class="info-item">
                             <label>Phone:</label>
                             <span id="onlineOrderPhone"></span>
+                        </div>
+                        <div class="info-item note-item" id="onlineOrderNoteContainer" style="display:none;">
+                            <!-- Added container to show the cashier note captured during checkout -->
+                            <label>Customer Note:</label>
+                            <span id="onlineOrderNote"></span>
                         </div>
                         <div class="info-item" id="onlineOrderReferenceWrapper" style="display:none;">
                             <label>Reference:</label>

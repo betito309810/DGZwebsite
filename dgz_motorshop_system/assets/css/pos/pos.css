@@ -1194,6 +1194,12 @@ body {
     font-weight: 600;
     word-break: break-word;
 }
+.modal-overlay .transaction-modal .info-item.note-item {
+    grid-column: 1 / -1; /* Added so the cashier note stretches across the modal */
+}
+.modal-overlay .transaction-modal .info-item.note-item span {
+    white-space: pre-wrap; /* Added to keep multi-line notes readable */
+}
 
 .modal-overlay .transaction-modal .order-items {
     margin-top: 24px;

@@ -1,6 +1,7 @@
 <?php
 require __DIR__ . '/../config/config.php';
 $pdo = db();
+ensureOrdersCustomerNoteColumn($pdo); // Added call to prepare storage for customer cashier notes
 $errors = [];
 $referenceInput = '';
 
@@ -39,6 +40,33 @@ if (!function_exists('ordersHasColumn')) {
             $cache[$column] = false;
         }
         return $cache[$column];
+    }
+}
+
+if (!function_exists('ensureOrdersCustomerNoteColumn')) {
+    /**
+     * Added helper to make sure the orders table can store cashier notes when the schema allows it.
+     */
+    function ensureOrdersCustomerNoteColumn(PDO $pdo): void
+    {
+        static $ensured = false;
+        if ($ensured) {
+            return;
+        }
+
+        $ensured = true;
+
+        try {
+            $stmt = $pdo->query("SHOW COLUMNS FROM orders LIKE 'customer_note'");
+            $hasCustomerNote = $stmt !== false && $stmt->fetch() !== false;
+            if ($hasCustomerNote) {
+                return;
+            }
+
+            $pdo->exec("ALTER TABLE orders ADD COLUMN customer_note TEXT NULL");
+        } catch (Throwable $e) {
+            error_log('Unable to add customer_note column: ' . $e->getMessage());
+        }
     }
 }
 
@@ -150,6 +178,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
     $email = trim($_POST['email'] ?? '');
     $phone = trim($_POST['phone'] ?? '');
     $address = trim($_POST['address']);
+    $customerNote = trim((string) ($_POST['customer_note'] ?? '')); // Added capture for optional cashier note
+    if (mb_strlen($customerNote) > 500) {
+        $customerNote = mb_substr($customerNote, 0, 500); // Added guard to keep notes reasonably short
+    }
     $payment_method = $_POST['payment_method'] ?? '';
     $referenceInput = trim($_POST['reference_number'] ?? '');
     $proof_path = null;
@@ -265,12 +297,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
         try { $hasEmailColumn = ordersHasColumn($pdo, 'email'); } catch (Throwable $e) { $hasEmailColumn = false; }
         try { $hasPhoneColumn = ordersHasColumn($pdo, 'phone'); } catch (Throwable $e) { $hasPhoneColumn = false; }
         try { $hasLegacyContact = ordersHasColumn($pdo, 'contact'); } catch (Throwable $e) { $hasLegacyContact = false; }
+        try { $hasCustomerNoteColumn = ordersHasColumn($pdo, 'customer_note'); } catch (Throwable $e) { $hasCustomerNoteColumn = false; } // Added detection for dedicated notes column
+        try { $hasLegacyNotesColumn = ordersHasColumn($pdo, 'notes'); } catch (Throwable $e) { $hasLegacyNotesColumn = false; } // Added fallback for legacy installs using generic notes
 
         if ($hasEmailColumn) { $columns[] = 'email'; $values[] = $email; }
         if ($hasPhoneColumn) { $columns[] = 'phone'; $values[] = $phone; }
         if ($hasLegacyContact) { $columns[] = 'contact'; $values[] = $email; }
 
         if ($hasReferenceColumn) { $columns[] = 'reference_no'; $values[] = $referenceNumber; }
+        if ($hasCustomerNoteColumn) { $columns[] = 'customer_note'; $values[] = $customerNote !== '' ? $customerNote : null; } // Added storage for cashier notes when column exists
+        elseif ($hasLegacyNotesColumn) { $columns[] = 'notes'; $values[] = $customerNote !== '' ? $customerNote : null; } // Added fallback storage for systems that already expose a generic notes column
 
         $columns[] = 'status';
         $values[]  = 'pending';
@@ -402,6 +438,11 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                             <label>City</label>
                             <input type="text" name="city" value="<?= htmlspecialchars($_POST['city'] ?? '') ?>">
                         </div>
+                    </div>
+                    <div class="form-group">
+                        <!-- Added note textarea so customers can leave instructions for the cashier -->
+                        <label for="customer_note">Notes for the cashier</label>
+                        <textarea name="customer_note" id="customer_note" maxlength="500" placeholder="Add delivery instructions, preferred pickup time, etc."><?= htmlspecialchars($_POST['customer_note'] ?? '') ?></textarea>
                     </div>
                 </div>
 
