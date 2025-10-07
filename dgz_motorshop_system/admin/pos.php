@@ -153,11 +153,15 @@ $inventoryNotificationCount = $inventoryNotificationData['active_count'];
 // Fetch the authenticated user's information for the profile modal
 $current_user = null;
 try {
-    $stmt = $pdo->prepare('SELECT name, role, created_at FROM users WHERE id = ?');
+    $stmt = $pdo->prepare('SELECT name, role, created_at FROM users WHERE id = ? AND deleted_at IS NULL');
     $stmt->execute([$_SESSION['user_id']]);
     $current_user = $stmt->fetch();
 } catch (Exception $e) {
     error_log('User lookup failed: ' . $e->getMessage());
+}
+
+if (!$current_user) {
+    logoutDeactivatedUser('Your account is no longer active.');
 }
 
 function format_profile_date(?string $datetime): string

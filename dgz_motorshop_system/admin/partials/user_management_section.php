@@ -84,7 +84,7 @@ $showUserManagementBackButton = $showUserManagementBackButton ?? true;
                     </thead>
                     <tbody>
                         <?php foreach ($userManagementUsers as $user): ?>
-                            <tr>
+                        <tr class="<?php echo !empty($user['deleted_at']) ? 'user-row-inactive' : ''; ?>">
                                 <td><?php echo (int) $user['id']; ?></td>
                                 <td><?php echo htmlspecialchars($user['name']); ?></td>
                                 <td><?php echo htmlspecialchars($user['email'] ?? '—'); ?></td>
@@ -96,12 +96,24 @@ $showUserManagementBackButton = $showUserManagementBackButton ?? true;
                                 </td>
                                 <td><?php echo date('M d, Y H:i', strtotime($user['created_at'])); ?></td>
                                 <td class="table-actions">
-                                    <?php if ($user['role'] === 'staff'): ?>
-                                        <form method="post" class="inline-form" onsubmit="return confirm('Remove this staff account? This action cannot be undone.');">
+                                    <?php $isDeactivated = !empty($user['deleted_at']); ?>
+                                    <?php if ($user['role'] === 'staff' && !$isDeactivated): ?>
+                                        <form method="post" class="inline-form" onsubmit="return confirm('Deactivate this staff account? They will no longer be able to sign in.');">
                                             <input type="hidden" name="delete_user" value="1">
                                             <input type="hidden" name="delete_user_id" value="<?php echo (int) $user['id']; ?>">
                                             <button type="submit" class="danger-action">
-                                                <i class="fas fa-user-minus"></i> Remove
+                                                <i class="fas fa-user-slash"></i> Deactivate
+                                            </button>
+                                        </form>
+                                    <?php elseif ($user['role'] === 'staff' && $isDeactivated): ?>
+                                        <span class="status-badge status-inactive">
+                                            <i class="fas fa-user-slash"></i> Deactivated
+                                        </span>
+                                        <form method="post" class="inline-form" onsubmit="return confirm('Permanently delete this staff account? This action cannot be undone.');">
+                                            <input type="hidden" name="purge_user" value="1">
+                                            <input type="hidden" name="purge_user_id" value="<?php echo (int) $user['id']; ?>">
+                                            <button type="submit" class="danger-action danger-action-outline">
+                                                <i class="fas fa-user-times"></i> Delete Permanently
                                             </button>
                                         </form>
                                     <?php else: ?>

@@ -169,6 +169,18 @@ html, body {
     background: #b91c1c;
 }
 
+.danger-action-outline {
+    background: transparent;
+    color: #dc2626;
+    border: 1px solid #dc2626;
+}
+
+.danger-action-outline:hover {
+    background: rgba(220, 38, 38, 0.08);
+    color: #991b1b;
+    border-color: #b91c1c;
+}
+
 .muted {
     color: #9ca3af;
 }
@@ -190,6 +202,27 @@ html, body {
 .role-staff {
     background-color: rgba(16, 185, 129, 0.15);
     color: #047857;
+}
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.status-inactive {
+    background-color: rgba(239, 68, 68, 0.15);
+    color: #b91c1c;
+}
+
+.user-row-inactive td {
+    color: #9ca3af;
 }
 
 .empty-row {
