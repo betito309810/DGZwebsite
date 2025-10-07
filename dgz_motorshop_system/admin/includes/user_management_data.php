@@ -127,10 +127,19 @@ if ($role === 'admin') {
                     $pdo->rollBack();
                     $userManagementError = 'Deactivate this staff account before permanently deleting it.';
                 } else {
-                    $deleteStmt = $pdo->prepare('DELETE FROM users WHERE id = ? LIMIT 1');
-                    $deleteStmt->execute([$userId]);
-                    $pdo->commit();
-                    $userManagementSuccess = 'Staff account permanently removed.';
+                    $blockingReferences = findUserForeignKeyReferences($pdo, $userId);
+
+                    if (!empty($blockingReferences)) {
+                        $pdo->rollBack();
+                        $userManagementError = 'Cannot permanently delete this staff account because it is still referenced by other records ('
+                            . implode(', ', $blockingReferences)
+                            . '). Reassign or anonymize those records before trying again.';
+                    } else {
+                        $deleteStmt = $pdo->prepare('DELETE FROM users WHERE id = ? LIMIT 1');
+                        $deleteStmt->execute([$userId]);
+                        $pdo->commit();
+                        $userManagementSuccess = 'Staff account permanently removed.';
+                    }
                 }
             } catch (Exception $e) {
                 if ($pdo->inTransaction()) {
@@ -150,4 +159,50 @@ if ($role === 'admin') {
         ->fetchAll(PDO::FETCH_ASSOC);
 
     $userManagementUsers = array_merge($activeUsers, $inactiveUsers);
+}
+
+if (!function_exists('findUserForeignKeyReferences')) {
+    /**
+     * Return a list of foreign key columns that currently reference the provided user id.
+     */
+    function findUserForeignKeyReferences(PDO $pdo, int $userId): array
+    {
+        try {
+            $stmt = $pdo->query(
+                "SELECT TABLE_NAME, COLUMN_NAME\n                 FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE\n                 WHERE REFERENCED_TABLE_SCHEMA = DATABASE()\n                   AND REFERENCED_TABLE_NAME = 'users'"
+            );
+            $references = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable $e) {
+            return [];
+        }
+
+        $blocking = [];
+
+        foreach ($references as $reference) {
+            $table = $reference['TABLE_NAME'] ?? '';
+            $column = $reference['COLUMN_NAME'] ?? '';
+
+            if ($table === '' || $column === '' || strcasecmp($table, 'users') === 0) {
+                continue;
+            }
+
+            $tableIdentifier = '`' . str_replace('`', '``', $table) . '`';
+            $columnIdentifier = '`' . str_replace('`', '``', $column) . '`';
+
+            $sql = sprintf('SELECT 1 FROM %s WHERE %s = ? LIMIT 1', $tableIdentifier, $columnIdentifier);
+
+            try {
+                $checkStmt = $pdo->prepare($sql);
+                $checkStmt->execute([$userId]);
+
+                if ($checkStmt->fetchColumn() !== false) {
+                    $blocking[] = sprintf('%s.%s', $table, $column);
+                }
+            } catch (Throwable $e) {
+                continue;
+            }
+        }
+
+        return $blocking;
+    }
 }
