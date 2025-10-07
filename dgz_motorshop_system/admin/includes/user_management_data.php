@@ -25,6 +25,58 @@ $userManagementSuccess = $userManagementSuccess ?? null;
 $userManagementError = $userManagementError ?? null;
 $userManagementUsers = $userManagementUsers ?? [];
 
+if (!function_exists('findUserForeignKeyReferences')) {
+    /**
+     * Return a list of foreign key columns that currently reference the provided user id.
+     */
+    function findUserForeignKeyReferences(PDO $pdo, int $userId, ?bool &$lookupFailed = null): array
+    {
+        $lookupFailed = false;
+
+        try {
+            $stmt = $pdo->query(
+                "SELECT TABLE_NAME, COLUMN_NAME, TABLE_SCHEMA\n                 FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE\n                 WHERE REFERENCED_TABLE_SCHEMA = DATABASE()\n                   AND REFERENCED_TABLE_NAME = 'users'"
+            );
+            $references = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable $e) {
+            $lookupFailed = true;
+            return [];
+        }
+
+        $blocking = [];
+
+        foreach ($references as $reference) {
+            $table = $reference['TABLE_NAME'] ?? '';
+            $column = $reference['COLUMN_NAME'] ?? '';
+            $schema = $reference['TABLE_SCHEMA'] ?? '';
+
+            if ($table === '' || $column === '' || strcasecmp($table, 'users') === 0) {
+                continue;
+            }
+
+            $tableIdentifier = '`' . str_replace('`', '``', $table) . '`';
+            $columnIdentifier = '`' . str_replace('`', '``', $column) . '`';
+            $schemaIdentifier = $schema !== '' ? ('`' . str_replace('`', '``', $schema) . '`.') : '';
+
+            $sql = 'SELECT 1 FROM ' . $schemaIdentifier . $tableIdentifier . ' WHERE ' . $columnIdentifier . ' = ? LIMIT 1';
+
+            try {
+                $checkStmt = $pdo->prepare($sql);
+                $checkStmt->execute([$userId]);
+
+                if ($checkStmt->fetchColumn() !== false) {
+                    $blocking[] = sprintf('%s.%s', $table, $column);
+                }
+            } catch (Throwable $e) {
+                $lookupFailed = true;
+                continue;
+            }
+        }
+
+        return $blocking;
+    }
+}
+
 if ($role === 'admin') {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_user'])) {
         $name = trim($_POST['name'] ?? '');
@@ -189,54 +241,4 @@ if ($role === 'admin') {
     $userManagementUsers = array_merge($activeUsers, $inactiveUsers);
 }
 
-if (!function_exists('findUserForeignKeyReferences')) {
-    /**
-     * Return a list of foreign key columns that currently reference the provided user id.
-     */
-    function findUserForeignKeyReferences(PDO $pdo, int $userId, ?bool &$lookupFailed = null): array
-    {
-        $lookupFailed = false;
 
-        try {
-            $stmt = $pdo->query(
-                "SELECT TABLE_NAME, COLUMN_NAME, TABLE_SCHEMA\n                 FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE\n                 WHERE REFERENCED_TABLE_SCHEMA = DATABASE()\n                   AND REFERENCED_TABLE_NAME = 'users'"
-            );
-            $references = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        } catch (Throwable $e) {
-            $lookupFailed = true;
-            return [];
-        }
-
-        $blocking = [];
-
-        foreach ($references as $reference) {
-            $table = $reference['TABLE_NAME'] ?? '';
-            $column = $reference['COLUMN_NAME'] ?? '';
-            $schema = $reference['TABLE_SCHEMA'] ?? '';
-
-            if ($table === '' || $column === '' || strcasecmp($table, 'users') === 0) {
-                continue;
-            }
-
-            $tableIdentifier = '`' . str_replace('`', '``', $table) . '`';
-            $columnIdentifier = '`' . str_replace('`', '``', $column) . '`';
-            $schemaIdentifier = $schema !== '' ? ('`' . str_replace('`', '``', $schema) . '`.') : '';
-
-            $sql = 'SELECT 1 FROM ' . $schemaIdentifier . $tableIdentifier . ' WHERE ' . $columnIdentifier . ' = ? LIMIT 1';
-
-            try {
-                $checkStmt = $pdo->prepare($sql);
-                $checkStmt->execute([$userId]);
-
-                if ($checkStmt->fetchColumn() !== false) {
-                    $blocking[] = sprintf('%s.%s', $table, $column);
-                }
-            } catch (Throwable $e) {
-                $lookupFailed = true;
-                continue;
-            }
-        }
-
-        return $blocking;
-    }
-}
