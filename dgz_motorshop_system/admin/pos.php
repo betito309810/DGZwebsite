@@ -621,6 +621,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
 
                             if (strtolower(trim($customerName)) !== 'walk-in') {
                                 $itemData = prepareOrderItemsData($pdo, $orderId);
+                                $itemsTotal = (float) ($itemData['items_total'] ?? 0.0);
                                 $summaryTableHtml = (string) ($itemData['table_html'] ?? '');
 
                                 $createdAt = (string) ($orderInfo['created_at'] ?? '');
@@ -628,6 +629,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                                     ? date('F j, Y g:i A', strtotime($createdAt))
                                     : date('F j, Y g:i A');
 
+                                $orderTotal = (float) ($orderInfo['total'] ?? $itemsTotal);
                                 $invoiceNumber = trim((string) ($orderInfo['invoice_number'] ?? ''));
                                 $displayInvoice = $invoiceNumber !== ''
                                     ? $invoiceNumber
@@ -647,7 +649,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                                     . 'Thank you for choosing <strong>DGZ Motorshop</strong>!</p>'
                                     . '</div>';
 
-                                try { sendEmail($customerEmail, $subject, $body); } catch (Throwable $e) { /* logged */ }
+                                // Added: attach the same PDF receipt that approved customers receive.
+                                $receiptData = [
+                                    'order_id' => $orderId,
+                                    'invoice_number' => $invoiceNumber,
+                                    'customer_name' => $customerName,
+                                    'created_at' => $createdAt,
+                                    'sales_total' => $orderTotal,
+                                    'vatable' => $orderTotal / 1.12,
+                                    'vat' => $orderTotal - ($orderTotal / 1.12),
+                                    'amount_paid' => $orderTotal,
+                                    'change' => 0.0,
+                                    'cashier' => $_SESSION['username'] ?? 'Admin',
+                                    'items' => array_map(static function (array $item): array {
+                                        return [
+                                            'name' => $item['name'] ?? 'Item',
+                                            'quantity' => (int) ($item['quantity'] ?? 0),
+                                            'price' => (float) ($item['price'] ?? 0),
+                                            'total' => (float) ($item['total'] ?? 0),
+                                        ];
+                                    }, $itemData['items'] ?? []),
+                                ];
+
+                                $pdfContent = generateReceiptPDF($receiptData);
+                                $pdfFilename = 'receipt_' . $orderId . '.pdf';
+
+                                try {
+                                    sendEmail($customerEmail, $subject, $body, $pdfContent, $pdfFilename);
+                                } catch (Throwable $e) {
+                                    /* logged */
+                                }
                             }
                         }
                     }
