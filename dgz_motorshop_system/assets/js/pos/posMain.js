@@ -930,6 +930,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
+            posTableBody.addEventListener('focusin', (event) => {
+                if (!event.target.classList.contains('pos-qty')) {
+                    return;
+                }
+
+                const input = event.target;
+                const min = parseInt(input.min, 10) || 1;
+                const currentValue = parseInt(input.value, 10);
+                const safeValue = Number.isFinite(currentValue) && currentValue >= min ? currentValue : min;
+
+                input.dataset.previousValidValue = String(safeValue);
+            });
+
             posTableBody.addEventListener('input', (event) => {
                 if (event.target.classList.contains('pos-qty')) {
                     const input = event.target;
@@ -939,12 +952,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     if (!Number.isFinite(value) || value < min) {
                         value = min;
+                        input.value = value;
+                        input.dataset.previousValidValue = String(value);
+                        recalcTotals();
+                        persistTableState();
+                        return;
                     }
 
                     if (Number.isFinite(max) && max > 0 && value > max) {
-                        value = max;
+                        alert(`Only ${max} stock available.`);
+                        const previous = parseInt(input.dataset.previousValidValue || '', 10);
+                        const fallback = Number.isFinite(previous) && previous >= min ? previous : min;
+                        input.value = fallback;
+                        input.dataset.previousValidValue = String(fallback);
+                        input.focus();
+                        input.select();
+                        recalcTotals();
+                        persistTableState();
+                        return;
                     }
 
+                    input.dataset.previousValidValue = String(value);
                     input.value = value;
                     recalcTotals();
                     persistTableState();
