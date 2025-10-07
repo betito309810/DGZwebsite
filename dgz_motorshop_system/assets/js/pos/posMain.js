@@ -964,7 +964,7 @@ document.addEventListener('DOMContentLoaded', () => {
                          alert(`Only ${max} stock available.`);
                         value = max;
 
-                        alert(`Only ${max} stock available.`);
+                       
                         const previous = parseInt(input.dataset.previousValidValue || '', 10);
                         const fallback = Number.isFinite(previous) && previous >= min ? previous : min;
                         input.value = fallback;
