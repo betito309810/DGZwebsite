@@ -127,21 +127,49 @@ if ($role === 'admin') {
                     $pdo->rollBack();
                     $userManagementError = 'Deactivate this staff account before permanently deleting it.';
                 } else {
-                    $blockingReferences = findUserForeignKeyReferences($pdo, $userId);
+                    $lookupFailed = false;
+                    $blockingReferences = findUserForeignKeyReferences($pdo, $userId, $lookupFailed);
 
-                    if (!empty($blockingReferences)) {
+                    if (!$lookupFailed && !empty($blockingReferences)) {
                         $pdo->rollBack();
                         $userManagementError = 'Cannot permanently delete this staff account because it is still referenced by other records ('
                             . implode(', ', $blockingReferences)
                             . '). Reassign or anonymize those records before trying again.';
                     } else {
-                        $deleteStmt = $pdo->prepare('DELETE FROM users WHERE id = ? LIMIT 1');
-                        $deleteStmt->execute([$userId]);
-                        $pdo->commit();
-                        $userManagementSuccess = 'Staff account permanently removed.';
+                        try {
+                            $deleteStmt = $pdo->prepare('DELETE FROM users WHERE id = ? LIMIT 1');
+                            $deleteStmt->execute([$userId]);
+
+                            if ($deleteStmt->rowCount() < 1) {
+                                $pdo->rollBack();
+                                $userManagementError = 'The selected user no longer exists.';
+                            } else {
+                                $pdo->commit();
+                                $userManagementSuccess = 'Staff account permanently removed.';
+                            }
+                        } catch (PDOException $deleteException) {
+                            if ($pdo->inTransaction()) {
+                                $pdo->rollBack();
+                            }
+
+                            if ($deleteException->getCode() === '23000') {
+                                $postFailureLookupFailed = false;
+                                $blockingReferences = findUserForeignKeyReferences($pdo, $userId, $postFailureLookupFailed);
+
+                                if (!empty($blockingReferences)) {
+                                    $userManagementError = 'Cannot permanently delete this staff account because it is still referenced by other records ('
+                                        . implode(', ', $blockingReferences)
+                                        . '). Reassign or anonymize those records before trying again.';
+                                } else {
+                                    $userManagementError = 'Cannot permanently delete this staff account because it is still referenced by other records. Reassign or anonymize those records before trying again.';
+                                }
+                            } else {
+                                $userManagementError = 'Failed to permanently delete staff account: ' . $deleteException->getMessage();
+                            }
+                        }
                     }
                 }
-            } catch (Exception $e) {
+            } catch (Throwable $e) {
                 if ($pdo->inTransaction()) {
                     $pdo->rollBack();
                 }
@@ -165,14 +193,17 @@ if (!function_exists('findUserForeignKeyReferences')) {
     /**
      * Return a list of foreign key columns that currently reference the provided user id.
      */
-    function findUserForeignKeyReferences(PDO $pdo, int $userId): array
+    function findUserForeignKeyReferences(PDO $pdo, int $userId, ?bool &$lookupFailed = null): array
     {
+        $lookupFailed = false;
+
         try {
             $stmt = $pdo->query(
-                "SELECT TABLE_NAME, COLUMN_NAME\n                 FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE\n                 WHERE REFERENCED_TABLE_SCHEMA = DATABASE()\n                   AND REFERENCED_TABLE_NAME = 'users'"
+                "SELECT TABLE_NAME, COLUMN_NAME, TABLE_SCHEMA\n                 FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE\n                 WHERE REFERENCED_TABLE_SCHEMA = DATABASE()\n                   AND REFERENCED_TABLE_NAME = 'users'"
             );
             $references = $stmt->fetchAll(PDO::FETCH_ASSOC);
         } catch (Throwable $e) {
+            $lookupFailed = true;
             return [];
         }
 
@@ -181,6 +212,7 @@ if (!function_exists('findUserForeignKeyReferences')) {
         foreach ($references as $reference) {
             $table = $reference['TABLE_NAME'] ?? '';
             $column = $reference['COLUMN_NAME'] ?? '';
+            $schema = $reference['TABLE_SCHEMA'] ?? '';
 
             if ($table === '' || $column === '' || strcasecmp($table, 'users') === 0) {
                 continue;
@@ -188,8 +220,9 @@ if (!function_exists('findUserForeignKeyReferences')) {
 
             $tableIdentifier = '`' . str_replace('`', '``', $table) . '`';
             $columnIdentifier = '`' . str_replace('`', '``', $column) . '`';
+            $schemaIdentifier = $schema !== '' ? ('`' . str_replace('`', '``', $schema) . '`.') : '';
 
-            $sql = sprintf('SELECT 1 FROM %s WHERE %s = ? LIMIT 1', $tableIdentifier, $columnIdentifier);
+            $sql = 'SELECT 1 FROM ' . $schemaIdentifier . $tableIdentifier . ' WHERE ' . $columnIdentifier . ' = ? LIMIT 1';
 
             try {
                 $checkStmt = $pdo->prepare($sql);
@@ -199,6 +232,7 @@ if (!function_exists('findUserForeignKeyReferences')) {
                     $blocking[] = sprintf('%s.%s', $table, $column);
                 }
             } catch (Throwable $e) {
+                $lookupFailed = true;
                 continue;
             }
         }
