@@ -159,14 +159,14 @@ if ($role === 'admin') {
         <!-- Settings Content -->
         <div class="settings-content">
             <section class="settings-section card">
-                <button type="button" class="settings-toggle" data-target="profilePanel" data-default-state="open" aria-expanded="true">
+                <button type="button" class="settings-toggle" data-target="profilePanel" data-default-state="closed" aria-expanded="false">
                     <span class="label">
                         <i class="fas fa-user-circle"></i>
                         Profile
                     </span>
                     <i class="fas fa-chevron-down toggle-icon" aria-hidden="true"></i>
                 </button>
-                <div class="settings-panel open settings-profile-details" id="profilePanel">
+                <div class="settings-panel settings-profile-details" id="profilePanel">
                     <div class="profile-info">
                         <div class="profile-row">
                             <span class="profile-label">Name</span>
@@ -185,14 +185,14 @@ if ($role === 'admin') {
             </section>
 
             <section class="settings-section card">
-                <button type="button" class="settings-toggle" data-target="passwordPanel" data-default-state="open" aria-expanded="true">
+                <button type="button" class="settings-toggle" data-target="passwordPanel" data-default-state="closed" aria-expanded="false">
                     <span class="label">
                         <i class="fas fa-key"></i>
                         Change Password
                     </span>
                     <i class="fas fa-chevron-down toggle-icon" aria-hidden="true"></i>
                 </button>
-                <div class="settings-panel open" id="passwordPanel">
+                <div class="settings-panel" id="passwordPanel">
                     <?php if ($successMessage): ?>
                         <div class="alert alert-success"><?php echo htmlspecialchars($successMessage); ?></div>
                     <?php endif; ?>

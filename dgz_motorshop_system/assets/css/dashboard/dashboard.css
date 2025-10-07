@@ -540,7 +540,7 @@ body.modal-open {
     padding: 30px;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 0;
 }
 
 .settings-section {
