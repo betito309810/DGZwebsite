@@ -1,7 +1,6 @@
 <?php
 require __DIR__ . '/../config/config.php';
 $pdo = db();
-ensureOrdersCustomerNoteColumn($pdo); // Added call to prepare storage for customer cashier notes
 $errors = [];
 $referenceInput = '';
 
@@ -16,7 +15,7 @@ if (!function_exists('ordersHasReferenceColumn')) {
         try {
             $stmt = $pdo->query("SHOW COLUMNS FROM orders LIKE 'reference_no'");
             $hasColumn = $stmt !== false && $stmt->fetch() !== false;
-        } catch (Throwable $e) {
+        } catch (Exception $e) {
             $hasColumn = false;
         }
 
@@ -36,7 +35,7 @@ if (!function_exists('ordersHasColumn')) {
             $stmt = $pdo->prepare("SHOW COLUMNS FROM orders LIKE ?");
             $stmt->execute([$column]);
             $cache[$column] = $stmt !== false && $stmt->fetch() !== false;
-        } catch (Throwable $e) {
+        } catch (Exception $e) {
             $cache[$column] = false;
         }
         return $cache[$column];
@@ -64,11 +63,13 @@ if (!function_exists('ensureOrdersCustomerNoteColumn')) {
             }
 
             $pdo->exec("ALTER TABLE orders ADD COLUMN customer_note TEXT NULL");
-        } catch (Throwable $e) {
+        } catch (Exception $e) {
             error_log('Unable to add customer_note column: ' . $e->getMessage());
         }
     }
 }
+
+ensureOrdersCustomerNoteColumn($pdo); // Added call to prepare storage for customer cashier notes
 
 if (!function_exists('normaliseCartItems')) {
     function normaliseCartItems($items): array
@@ -294,11 +295,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
         $values  = [$customer_name, $address, $total, $payment_method, $proof_path];
 
         // Write to new columns when present
-        try { $hasEmailColumn = ordersHasColumn($pdo, 'email'); } catch (Throwable $e) { $hasEmailColumn = false; }
-        try { $hasPhoneColumn = ordersHasColumn($pdo, 'phone'); } catch (Throwable $e) { $hasPhoneColumn = false; }
-        try { $hasLegacyContact = ordersHasColumn($pdo, 'contact'); } catch (Throwable $e) { $hasLegacyContact = false; }
-        try { $hasCustomerNoteColumn = ordersHasColumn($pdo, 'customer_note'); } catch (Throwable $e) { $hasCustomerNoteColumn = false; } // Added detection for dedicated notes column
-        try { $hasLegacyNotesColumn = ordersHasColumn($pdo, 'notes'); } catch (Throwable $e) { $hasLegacyNotesColumn = false; } // Added fallback for legacy installs using generic notes
+        try { $hasEmailColumn = ordersHasColumn($pdo, 'email'); } catch (Exception $e) { $hasEmailColumn = false; }
+        try { $hasPhoneColumn = ordersHasColumn($pdo, 'phone'); } catch (Exception $e) { $hasPhoneColumn = false; }
+        try { $hasLegacyContact = ordersHasColumn($pdo, 'contact'); } catch (Exception $e) { $hasLegacyContact = false; }
+        try { $hasCustomerNoteColumn = ordersHasColumn($pdo, 'customer_note'); } catch (Exception $e) { $hasCustomerNoteColumn = false; } // Added detection for dedicated notes column
+        try { $hasLegacyNotesColumn = ordersHasColumn($pdo, 'notes'); } catch (Exception $e) { $hasLegacyNotesColumn = false; } // Added fallback for legacy installs using generic notes
 
         if ($hasEmailColumn) { $columns[] = 'email'; $values[] = $email; }
         if ($hasPhoneColumn) { $columns[] = 'phone'; $values[] = $phone; }
