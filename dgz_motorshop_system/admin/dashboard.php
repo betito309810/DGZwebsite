@@ -16,6 +16,7 @@ $role = $_SESSION['role'] ?? '';
 enforceStaffAccess();
 
 require_once __DIR__ . '/includes/inventory_notifications.php';
+require_once __DIR__ . '/includes/sales_periods.php';
 $notificationManageLink = 'inventory.php';
 $inventoryNotificationData = loadInventoryNotifications($pdo);
 $inventoryNotifications = $inventoryNotificationData['notifications'];
@@ -49,37 +50,63 @@ try {
     $low = [];
 }
 
-// Determine time range for top products
-$range = isset($_GET['top_range']) ? $_GET['top_range'] : 'daily';
+$topPeriodParam = $_GET['top_period'] ?? ($_GET['top_range'] ?? 'daily');
+$topValueParam = $_GET['top_value'] ?? null;
 
-// Build date filter with prepared statement
-$date_condition = "";
-switch ($range) {
+try {
+    $topPeriodInfo = resolve_sales_period($topPeriodParam, $topValueParam);
+} catch (Throwable $e) {
+    error_log('Top products period resolution failed: ' . $e->getMessage());
+    $topPeriodInfo = resolve_sales_period('daily');
+}
+
+$topPeriod = $topPeriodInfo['period'];
+$topPeriodValue = $topPeriodInfo['value'];
+$topPeriodLabel = $topPeriodInfo['label'];
+$topRangeStart = $topPeriodInfo['range_start'];
+$topRangeEnd = $topPeriodInfo['range_end'];
+$topRangeDisplay = $topRangeStart === $topRangeEnd
+    ? $topRangeStart
+    : $topRangeStart . ' - ' . $topRangeEnd;
+
+$topPickerType = 'date';
+$topPickerLabel = 'Select day';
+switch ($topPeriod) {
     case 'weekly':
-        $date_condition = "AND DATE(o.created_at) >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)";
+        $topPickerType = 'week';
+        $topPickerLabel = 'Select week';
         break;
     case 'monthly':
-        $date_condition = "AND DATE(o.created_at) >= DATE_SUB(CURDATE(), INTERVAL 1 MONTH)";
+        $topPickerType = 'month';
+        $topPickerLabel = 'Select month';
         break;
-    default:
-        $date_condition = "AND DATE(o.created_at) = CURDATE()";
+    case 'annually':
+        $topPickerType = 'number';
+        $topPickerLabel = 'Select year';
         break;
 }
 
 // Top selling products query (fixed and consolidated)
 try {
     $sql = "
-        SELECT p.*, COALESCE(SUM(oi.qty), 0) as sold
-        FROM products p
-        LEFT JOIN order_items oi ON oi.product_id = p.id
-        LEFT JOIN orders o ON o.id = oi.order_id
-        WHERE 1=1 {$date_condition}
+        SELECT p.*, COALESCE(SUM(oi.qty), 0) AS sold
+        FROM order_items oi
+        INNER JOIN orders o ON o.id = oi.order_id
+        INNER JOIN products p ON p.id = oi.product_id
+        WHERE o.created_at >= :start
+          AND o.created_at < :end
+          AND o.status IN ('approved', 'completed')
         GROUP BY p.id
         ORDER BY sold DESC
         LIMIT 5
     ";
 
-    $top = $pdo->query($sql)->fetchAll();
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([
+        ':start' => $topPeriodInfo['start'],
+        ':end' => $topPeriodInfo['end'],
+    ]);
+    $top = $stmt->fetchAll();
 } catch (Exception $e) {
     error_log("Top products query failed: " . $e->getMessage());
     $top = [];
@@ -224,17 +251,33 @@ $profile_created = format_profile_date($current_user['created_at'] ?? null);
                         </h3>
                         <!-- Time Range Selector for Top Products -->
                         <div class="period-selector">
-                            <form method="get" style="margin: 0;">
-                                <select name="top_range" id="top_range" onchange="this.form.submit()">
-                                    <option value="daily" <?= $range === 'daily' ? 'selected' : '' ?>>Daily</option>
-                                    <option value="weekly" <?= $range === 'weekly' ? 'selected' : '' ?>>Weekly</option>
-                                    <option value="monthly" <?= $range === 'monthly' ? 'selected' : '' ?>>Monthly
-                                    </option>
-                                </select>
+                            <form method="get" id="topSellingFilters" class="period-form" data-period="<?= htmlspecialchars($topPeriod) ?>" data-value="<?= htmlspecialchars($topPeriodValue) ?>" data-range="<?= htmlspecialchars($topRangeDisplay) ?>">
+                                <div class="control-group">
+                                    <label for="topSellingPeriod" class="control-label">View</label>
+                                    <select name="top_period" id="topSellingPeriod" class="period-dropdown" data-period-select>
+                                        <option value="daily" <?= $topPeriod === 'daily' ? 'selected' : '' ?>>Daily</option>
+                                        <option value="weekly" <?= $topPeriod === 'weekly' ? 'selected' : '' ?>>Weekly</option>
+                                        <option value="monthly" <?= $topPeriod === 'monthly' ? 'selected' : '' ?>>Monthly</option>
+                                        <option value="annually" <?= $topPeriod === 'annually' ? 'selected' : '' ?>>Annually</option>
+                                    </select>
+                                </div>
+                                <div class="control-group">
+                                    <label for="topSellingPicker" class="control-label" id="topSellingPickerLabel"><?= htmlspecialchars($topPickerLabel) ?></label>
+                                    <input
+                                        type="<?= htmlspecialchars($topPickerType) ?>"
+                                        name="top_value"
+                                        id="topSellingPicker"
+                                        class="period-input"
+                                        data-period-input
+                                        value="<?= htmlspecialchars($topPeriodValue) ?>"
+                                    >
+                                    <span class="control-hint" id="topSellingRangeHint"><?= htmlspecialchars($topRangeDisplay) ?></span>
+                                </div>
                             </form>
                         </div>
                     </div>
                     <div class="widget-content">
+                        <div class="selected-period">Showing data for <strong><?= htmlspecialchars($topPeriodLabel) ?></strong></div>
                         <?php if (empty($top)): ?>
                         <div class="empty-state">
                             <i class="fas fa-chart-bar" style="font-size: 2rem; margin-bottom: 10px;"></i>
@@ -280,6 +323,8 @@ $profile_created = format_profile_date($current_user['created_at'] ?? null);
     </div>
 
     <script src="../assets/js/notifications.js"></script>
+    <script src="../assets/js/sales/periodFilters.js"></script>
+    <script src="../assets/js/dashboard/topSellingFilters.js"></script>
     <script src="../assets/js/dashboard/userMenu.js"></script>
 
 </body>
