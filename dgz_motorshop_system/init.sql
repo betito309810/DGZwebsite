@@ -10,7 +10,8 @@ CREATE TABLE IF NOT EXISTS users (
   email VARCHAR(100) UNIQUE,
   password VARCHAR(255),
   role ENUM('admin','staff') DEFAULT 'staff',
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  deleted_at TIMESTAMP NULL DEFAULT NULL
 );
 
 -- products table

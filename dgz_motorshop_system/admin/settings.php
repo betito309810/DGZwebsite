@@ -25,11 +25,15 @@ $inventoryNotificationCount = $inventoryNotificationData['active_count'];
 // Fetch the authenticated user's information for the profile modal
 $current_user = null;
 try {
-    $stmt = $pdo->prepare('SELECT name, role, created_at FROM users WHERE id = ?');
+    $stmt = $pdo->prepare('SELECT name, role, created_at FROM users WHERE id = ? AND deleted_at IS NULL');
     $stmt->execute([$_SESSION['user_id']]);
     $current_user = $stmt->fetch();
 } catch (Exception $e) {
     error_log('User lookup failed: ' . $e->getMessage());
+}
+
+if (!$current_user) {
+    logoutDeactivatedUser('Your account is no longer active.');
 }
 
 function format_profile_date(?string $datetime): string
@@ -71,7 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['change_password'])) {
     } else {
         try {
             // Fetch current hashed password
-            $stmt = $pdo->prepare('SELECT password FROM users WHERE id = ?');
+            $stmt = $pdo->prepare('SELECT password FROM users WHERE id = ? AND deleted_at IS NULL');
             $stmt->execute([$_SESSION['user_id']]);
             $user = $stmt->fetch();
 
@@ -80,11 +84,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['change_password'])) {
             } else {
                 // Hash new password and update
                 $hashedNewPassword = password_hash($newPassword, PASSWORD_DEFAULT);
-                $updateStmt = $pdo->prepare('UPDATE users SET password = ? WHERE id = ?');
+                $updateStmt = $pdo->prepare('UPDATE users SET password = ? WHERE id = ? AND deleted_at IS NULL');
                 $updateStmt->execute([$hashedNewPassword, $_SESSION['user_id']]);
-                $successMessage = 'Password changed successfully.';
-                // Clear form fields after success
-                $_POST = [];
+
+                if ($updateStmt->rowCount() === 0) {
+                    $errorMessage = 'Unable to change password because the account is inactive.';
+                } else {
+                    $successMessage = 'Password changed successfully.';
+                    // Clear form fields after success
+                    $_POST = [];
+                }
             }
         } catch (Exception $e) {
             error_log('Password update failed: ' . $e->getMessage());

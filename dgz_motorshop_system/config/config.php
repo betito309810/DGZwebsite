@@ -167,3 +167,21 @@ if (!function_exists('enforceStaffAccess')) {
         }
     }
 }
+
+if (!function_exists('logoutDeactivatedUser')) {
+    function logoutDeactivatedUser(string $message = 'Your account has been deactivated.'): void
+    {
+        $query = http_build_query([
+            'status' => 'error',
+            'msg'    => $message,
+        ]);
+
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            $_SESSION = [];
+            session_destroy();
+        }
+
+        header('Location: login.php?' . $query);
+        exit;
+    }
+}

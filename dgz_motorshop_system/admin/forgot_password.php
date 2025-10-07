@@ -49,7 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         error_log("Invalid email format provided: " . $email);
     } else {
         // Ensure we only proceed when the email belongs to a registered user
-        $stmt = $pdo->prepare('SELECT id FROM users WHERE email = ?');
+        $stmt = $pdo->prepare('SELECT id FROM users WHERE email = ? AND deleted_at IS NULL');
         $stmt->execute([$email]);
         $user = $stmt->fetch();
 
@@ -122,9 +122,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         } else {
-            // For non-existent emails, add a small delay to prevent email enumeration
-            sleep(1);
-            $msg = 'A password reset link has been sent to your email address if it exists in our system.';
+            $inactiveStmt = $pdo->prepare('SELECT id FROM users WHERE email = ? AND deleted_at IS NOT NULL');
+            $inactiveStmt->execute([$email]);
+
+            if ($inactiveStmt->fetchColumn()) {
+                $msg = 'This account has been deactivated. Please contact an administrator for assistance.';
+            } else {
+                // For non-existent emails, add a small delay to prevent email enumeration
+                sleep(1);
+                $msg = 'A password reset link has been sent to your email address if it exists in our system.';
+            }
         }
     }
 }

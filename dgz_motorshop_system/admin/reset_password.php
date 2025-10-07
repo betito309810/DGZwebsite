@@ -54,7 +54,7 @@ if (!empty($token)) {
             SELECT pr.user_id, u.password
             FROM password_resets pr
             INNER JOIN users u ON u.id = pr.user_id
-            WHERE pr.token = ? AND pr.expires_at > NOW()
+            WHERE pr.token = ? AND pr.expires_at > NOW() AND u.deleted_at IS NULL
             LIMIT 1
         ');
         $stmt->execute([$token]);
@@ -96,8 +96,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $validToken) {
             $pdo->beginTransaction();
 
             // Store the new password and remove any outstanding reset links for this user
-            $stmt = $pdo->prepare('UPDATE users SET password = ? WHERE id = ?');
+            $stmt = $pdo->prepare('UPDATE users SET password = ? WHERE id = ? AND deleted_at IS NULL');
             $stmt->execute([$hashedPassword, $userId]);
+
+            if ($stmt->rowCount() === 0) {
+                throw new RuntimeException('Unable to reset password because the account is inactive.');
+            }
 
             $stmt = $pdo->prepare('DELETE FROM password_resets WHERE user_id = ?');
             $stmt->execute([$userId]);
@@ -111,11 +115,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $validToken) {
             ]);
             header('Location: login.php?' . $query);
             exit;
-        } catch (PDOException $e) {
+        } catch (Throwable $e) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
-            $msg = 'Database error: ' . $e->getMessage();
+            $msg = $e instanceof RuntimeException
+                ? $e->getMessage()
+                : 'Database error: ' . $e->getMessage();
         }
     }
 }

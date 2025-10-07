@@ -74,7 +74,7 @@ if ($role === 'admin') {
             try {
                 $pdo->beginTransaction();
 
-                $stmt = $pdo->prepare('SELECT role FROM users WHERE id = ? FOR UPDATE');
+                $stmt = $pdo->prepare('SELECT role, deleted_at FROM users WHERE id = ? FOR UPDATE');
                 $stmt->execute([$userId]);
                 $userToDelete = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -84,22 +84,31 @@ if ($role === 'admin') {
                 } elseif ($userToDelete['role'] !== 'staff') {
                     $pdo->rollBack();
                     $userManagementError = 'Only staff accounts can be removed.';
+                } elseif (!empty($userToDelete['deleted_at'])) {
+                    $pdo->rollBack();
+                    $userManagementError = 'This staff account is already deactivated.';
                 } else {
-                    $deleteStmt = $pdo->prepare('DELETE FROM users WHERE id = ?');
+                    $deleteStmt = $pdo->prepare('UPDATE users SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL');
                     $deleteStmt->execute([$userId]);
                     $pdo->commit();
-                    $userManagementSuccess = 'Staff account removed successfully.';
+                    $userManagementSuccess = 'Staff account deactivated successfully.';
                 }
             } catch (Exception $e) {
                 if ($pdo->inTransaction()) {
                     $pdo->rollBack();
                 }
-                $userManagementError = 'Failed to remove staff account: ' . $e->getMessage();
+                $userManagementError = 'Failed to deactivate staff account: ' . $e->getMessage();
             }
         }
     }
 
-    $userManagementUsers = $pdo
-        ->query('SELECT id, name, email, contact_number, role, created_at FROM users ORDER BY created_at DESC')
+    $activeUsers = $pdo
+        ->query('SELECT id, name, email, contact_number, role, created_at, deleted_at FROM users WHERE deleted_at IS NULL ORDER BY created_at DESC')
         ->fetchAll(PDO::FETCH_ASSOC);
+
+    $inactiveUsers = $pdo
+        ->query('SELECT id, name, email, contact_number, role, created_at, deleted_at FROM users WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC, created_at DESC')
+        ->fetchAll(PDO::FETCH_ASSOC);
+
+    $userManagementUsers = array_merge($activeUsers, $inactiveUsers);
 }

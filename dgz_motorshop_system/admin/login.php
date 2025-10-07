@@ -4,19 +4,33 @@ $pdo = db();
 $msg = $_GET['msg'] ?? '';
 $status = $_GET['status'] ?? '';
 if($_SERVER['REQUEST_METHOD']==='POST'){
-    $email = $_POST['email']; $pass = $_POST['password'];
-    $stmt = $pdo->prepare('SELECT * FROM users WHERE email=?');
-    $stmt->execute([$email]);
-    $u = $stmt->fetch();
-    if ($u) {
-        if (password_verify($pass, (string) $u['password'])) {
+    $email = trim($_POST['email'] ?? '');
+    $pass = $_POST['password'] ?? '';
+
+    if ($email !== '' && $pass !== '') {
+        $stmt = $pdo->prepare('SELECT * FROM users WHERE email = ? AND deleted_at IS NULL');
+        $stmt->execute([$email]);
+        $u = $stmt->fetch();
+
+        if ($u && password_verify($pass, (string) $u['password'])) {
             $_SESSION['user_id']=$u['id'];
             $_SESSION['role']=$u['role'];
             header('Location: dashboard.php'); exit;
         }
+
+        $inactiveStmt = $pdo->prepare('SELECT id FROM users WHERE email = ? AND deleted_at IS NOT NULL');
+        $inactiveStmt->execute([$email]);
+        if ($inactiveStmt->fetchColumn()) {
+            $msg = 'This account has been deactivated. Please contact an administrator.';
+            $status = 'error';
+        } else {
+            $msg='Invalid credentials';
+            $status = 'error';
+        }
+    } else {
+        $msg='Email and password are required.';
+        $status = 'error';
     }
-    $msg='Invalid credentials';
-    $status = 'error';
 }
 $hasMessage = $msg !== '';
 $alertClass = ($status === 'success') ? 'success-msg' : 'error-msg';

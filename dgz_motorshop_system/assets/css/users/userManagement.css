@@ -192,6 +192,27 @@ html, body {
     color: #047857;
 }
 
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.status-inactive {
+    background-color: rgba(239, 68, 68, 0.15);
+    color: #b91c1c;
+}
+
+.user-row-inactive td {
+    color: #9ca3af;
+}
+
 .empty-row {
     text-align: center;
     color: #6b7280;

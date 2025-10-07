@@ -17,6 +17,9 @@ $inventoryNotifications = $inventoryNotificationData['notifications'];
 $inventoryNotificationCount = $inventoryNotificationData['active_count'];
 
 $currentUser = loadCurrentUser($pdo, (int)$_SESSION['user_id']);
+if (!$currentUser) {
+    logoutDeactivatedUser('Your account is no longer active.');
+}
 $profile_name = $currentUser['name'] ?? 'N/A';
 $profile_role = !empty($currentUser['role']) ? ucfirst($currentUser['role']) : 'N/A';
 $profile_created = format_profile_date($currentUser['created_at'] ?? null);
@@ -664,9 +667,17 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
 function loadCurrentUser(PDO $pdo, int $userId): ?array
 {
     try {
-        $stmt = $pdo->prepare('SELECT id, name, role, created_at FROM users WHERE id = ?');
+        $stmt = $pdo->prepare('SELECT id, name, role, created_at, deleted_at FROM users WHERE id = ?');
         $stmt->execute([$userId]);
-        return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$user || !empty($user['deleted_at'])) {
+            return null;
+        }
+
+        unset($user['deleted_at']);
+
+        return $user;
     } catch (Throwable $e) {
         error_log('User lookup failed: ' . $e->getMessage());
         return null;

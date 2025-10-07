@@ -19,11 +19,15 @@ $inventoryNotificationCount = $inventoryNotificationData['active_count'];
 
 $currentUser = null;
 try {
-    $stmt = $pdo->prepare('SELECT id, name, role, created_at FROM users WHERE id = ?');
+    $stmt = $pdo->prepare('SELECT id, name, role, created_at FROM users WHERE id = ? AND deleted_at IS NULL');
     $stmt->execute([$_SESSION['user_id']]);
     $currentUser = $stmt->fetch(PDO::FETCH_ASSOC);
 } catch (Throwable $e) {
     error_log('User lookup failed: ' . $e->getMessage());
+}
+
+if (!$currentUser) {
+    logoutDeactivatedUser('Your account is no longer active.');
 }
 
 $receiptId = isset($_GET['receipt']) ? (int)$_GET['receipt'] : 0;
