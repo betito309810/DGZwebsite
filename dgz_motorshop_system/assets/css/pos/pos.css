@@ -1194,6 +1194,26 @@ body {
     font-weight: 600;
     word-break: break-word;
 }
+.modal-overlay .transaction-modal .info-item.note-item {
+    grid-column: 1 / -1; /* Added so the cashier note stretches across the modal */
+    padding: 16px;
+    border-radius: 12px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    margin-top: 12px;
+}
+.modal-overlay .transaction-modal .info-item.note-item label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: #0f172a;
+    text-transform: uppercase;
+}
+.modal-overlay .transaction-modal .info-item.note-item span {
+    white-space: pre-wrap; /* Added to keep multi-line notes readable */
+    color: #0f172a;
+    font-weight: 600;
+}
 
 .modal-overlay .transaction-modal .order-items {
     margin-top: 24px;
@@ -1204,6 +1224,9 @@ body {
     border-radius: 10px;
     overflow-x: auto;
     background: #fff;
+    /* Transaction detail items list - tweak max-height/overflow to adjust scroll behavior */
+    max-height: 320px;
+    overflow-y: auto;
 }
 
 .modal-overlay .transaction-modal .items-table {
