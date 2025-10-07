@@ -1240,6 +1240,11 @@ body {
     text-align: left;
     font-weight: 600;
     color: #475569;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    /* Order items sticky header - tweak background/shadow to change the pinned look */
+    box-shadow: 0 1px 0 rgba(15, 23, 42, 0.08);
 }
 
 .modal-overlay .transaction-modal .items-table tbody td {
