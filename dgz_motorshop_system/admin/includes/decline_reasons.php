@@ -51,6 +51,15 @@ if (!function_exists('ensureOrderDeclineSchema')) {
             error_log('Unable to ensure orders.decline_reason_note column: ' . $e->getMessage());
         }
 
+        try {
+            $hasAttachmentPath = $pdo->query("SHOW COLUMNS FROM orders LIKE 'decline_attachment_path'");
+            if ($hasAttachmentPath === false || $hasAttachmentPath->fetch() === false) {
+                $pdo->exec("ALTER TABLE orders ADD COLUMN decline_attachment_path VARCHAR(255) NULL");
+            }
+        } catch (Throwable $e) {
+            error_log('Unable to ensure orders.decline_attachment_path column: ' . $e->getMessage());
+        }
+
         $ensured = true;
     }
 }

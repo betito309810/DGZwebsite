@@ -7,6 +7,103 @@ require __DIR__ . '/includes/decline_reasons.php';
 
 header('Content-Type: application/json');
 
+/**
+ * Resolve the storage directory for decline attachments, creating it when missing.
+ * Added so we can ship supporting documents with the disapproval email.
+ */
+function ensureDeclineUploadDir(): string
+{
+    $baseUploads = dirname(__DIR__) . '/uploads';
+    $targetDir = $baseUploads . '/order-decline';
+
+    if (!is_dir($baseUploads) && !mkdir($baseUploads, 0775, true) && !is_dir($baseUploads)) {
+        throw new RuntimeException('Unable to prepare the uploads storage.');
+    }
+
+    if (!is_dir($targetDir) && !mkdir($targetDir, 0775, true) && !is_dir($targetDir)) {
+        throw new RuntimeException('Unable to prepare the decline attachment folder.');
+    }
+
+    return $targetDir;
+}
+
+/**
+ * Convert a stored relative attachment path into an absolute filesystem path.
+ */
+function absoluteDeclineAttachmentPath(string $relativePath): string
+{
+    if ($relativePath === '') {
+        return '';
+    }
+
+    if ($relativePath[0] === DIRECTORY_SEPARATOR) {
+        return $relativePath;
+    }
+
+    return dirname(__DIR__) . '/' . ltrim($relativePath, '/');
+}
+
+/**
+ * Validate and persist the uploaded attachment for the given order.
+ */
+function storeDeclineAttachment(array $file, int $orderId): array
+{
+    $error = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($error !== UPLOAD_ERR_OK) {
+        throw new RuntimeException('Attachment upload failed. Please try again.');
+    }
+
+    $tmpName = (string) ($file['tmp_name'] ?? '');
+    if ($tmpName === '' || !is_uploaded_file($tmpName)) {
+        throw new RuntimeException('Invalid attachment upload.');
+    }
+
+    $size = (int) ($file['size'] ?? 0);
+    if ($size <= 0 || $size > 5 * 1024 * 1024) {
+        throw new RuntimeException('Attachment must be smaller than 5MB.');
+    }
+
+    $finfo = new finfo(FILEINFO_MIME_TYPE);
+    $mime = $finfo ? (string) $finfo->file($tmpName) : '';
+    $allowed = [
+        'application/pdf' => 'pdf',
+        'image/jpeg' => 'jpg',
+        'image/png' => 'png',
+        'image/gif' => 'gif',
+        'image/webp' => 'webp',
+    ];
+    if (!isset($allowed[$mime])) {
+        throw new RuntimeException('Only PDF or image files are allowed for attachments.');
+    }
+
+    $targetBase = ensureDeclineUploadDir();
+    $orderDir = $targetBase . '/' . $orderId;
+    if (!is_dir($orderDir) && !mkdir($orderDir, 0775, true) && !is_dir($orderDir)) {
+        throw new RuntimeException('Unable to prepare the attachment folder.');
+    }
+
+    try {
+        $random = bin2hex(random_bytes(6));
+    } catch (Throwable $e) {
+        throw new RuntimeException('Failed to prepare the attachment name.');
+    }
+    $timestamp = date('YmdHis');
+    $filename = sprintf('decline-%d-%s-%s.%s', $orderId, $timestamp, $random, $allowed[$mime]);
+    $targetPath = $orderDir . '/' . $filename;
+
+    if (!move_uploaded_file($tmpName, $targetPath)) {
+        throw new RuntimeException('Failed to store the attachment.');
+    }
+
+    $relativePath = 'uploads/order-decline/' . $orderId . '/' . $filename;
+
+    return [
+        'relativePath' => $relativePath,
+        'absolutePath' => $targetPath,
+        'originalName' => (string) ($file['name'] ?? $filename),
+    ];
+}
+
 if (empty($_SESSION['user_id'])) {
     http_response_code(401);
     echo json_encode(['success' => false, 'message' => 'Authentication required.']);
@@ -19,17 +116,29 @@ if (strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
     exit;
 }
 
-$input = json_decode(file_get_contents('php://input') ?: '', true);
-if (!is_array($input)) {
-    http_response_code(400);
-    echo json_encode(['success' => false, 'message' => 'Invalid payload.']);
-    exit;
-}
+$contentType = (string) ($_SERVER['CONTENT_TYPE'] ?? '');
+$isJsonRequest = stripos($contentType, 'application/json') !== false;
 
-$orderId = isset($input['orderId']) ? (int) $input['orderId'] : 0;
-$reasonId = isset($input['reasonId']) ? (int) $input['reasonId'] : 0;
-$reasonLabel = isset($input['reasonLabel']) ? trim((string) $input['reasonLabel']) : '';
-$note = isset($input['note']) ? trim((string) $input['note']) : '';
+if ($isJsonRequest) {
+    $input = json_decode(file_get_contents('php://input') ?: '', true);
+    if (!is_array($input)) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => 'Invalid payload.']);
+        exit;
+    }
+
+    $orderId = isset($input['orderId']) ? (int) $input['orderId'] : 0;
+    $reasonId = isset($input['reasonId']) ? (int) $input['reasonId'] : 0;
+    $reasonLabel = isset($input['reasonLabel']) ? trim((string) $input['reasonLabel']) : '';
+    $note = isset($input['note']) ? trim((string) $input['note']) : '';
+    $attachmentFile = null;
+} else {
+    $orderId = isset($_POST['orderId']) ? (int) $_POST['orderId'] : 0;
+    $reasonId = isset($_POST['reasonId']) ? (int) $_POST['reasonId'] : 0;
+    $reasonLabel = isset($_POST['reasonLabel']) ? trim((string) $_POST['reasonLabel']) : '';
+    $note = isset($_POST['note']) ? trim((string) $_POST['note']) : '';
+    $attachmentFile = isset($_FILES['declineAttachment']) ? $_FILES['declineAttachment'] : null;
+}
 
 if ($orderId <= 0) {
     http_response_code(422);
@@ -40,11 +149,15 @@ if ($orderId <= 0) {
 $pdo = db();
 ensureOrderDeclineSchema($pdo);
 
+$storedAttachment = null;
+$existingAttachmentPath = '';
+$declineReason = null;
+
 try {
     $pdo->beginTransaction();
 
     $orderStmt = $pdo->prepare(
-        'SELECT id, customer_name, email, status, total, created_at
+        'SELECT id, customer_name, email, status, total, created_at, decline_attachment_path
          FROM orders
          WHERE id = ?
          LIMIT 1'
@@ -55,6 +168,8 @@ try {
     if (!$order) {
         throw new RuntimeException('Order not found.');
     }
+
+    $existingAttachmentPath = isset($order['decline_attachment_path']) ? trim((string) $order['decline_attachment_path']) : '';
 
     $currentStatus = strtolower((string) ($order['status'] ?? ''));
     if ($currentStatus === 'disapproved') {
@@ -70,7 +185,6 @@ try {
         throw new RuntimeException('Status update not allowed.');
     }
 
-    $declineReason = null;
     if ($reasonId > 0) {
         $declineReason = findOrderDeclineReason($pdo, $reasonId);
     }
@@ -93,14 +207,26 @@ try {
         }
     }
 
+    if (is_array($attachmentFile) && ($attachmentFile['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+        $storedAttachment = storeDeclineAttachment($attachmentFile, $orderId);
+    }
+
+    $newAttachmentPath = $storedAttachment['relativePath'] ?? $existingAttachmentPath;
+
     $updateStmt = $pdo->prepare(
         'UPDATE orders
              SET status = "disapproved",
                  decline_reason_id = ?,
-                 decline_reason_note = ?
+                 decline_reason_note = ?,
+                 decline_attachment_path = ?
            WHERE id = ?'
     );
-    $updateStmt->execute([$reasonId, $note !== '' ? $note : null, $orderId]);
+    $updateStmt->execute([
+        $reasonId,
+        $note !== '' ? $note : null,
+        $newAttachmentPath !== '' ? $newAttachmentPath : null,
+        $orderId,
+    ]);
 
     $pdo->commit();
 } catch (RuntimeException $e) {
@@ -120,7 +246,7 @@ try {
     exit;
 }
 
-// send email after commit
+// send email after commit, now with optional attachment
 try {
     $email = (string) ($order['email'] ?? '');
     $customerName = trim((string) ($order['customer_name'] ?? 'Customer'));
@@ -192,10 +318,33 @@ try {
             . '<p style="margin:16px 0 0;">Thank you,<br>DGZ Motorshop Team</p>'
             . '</div>';
 
-        sendEmail($email, 'Order Disapproved - DGZ Motorshop', $body);
+        $attachments = [];
+        if (!empty($storedAttachment['absolutePath'] ?? '')) {
+            $attachments[] = [
+                'path' => $storedAttachment['absolutePath'],
+                'name' => $storedAttachment['originalName'] ?? basename((string) $storedAttachment['absolutePath']),
+            ];
+        } elseif ($existingAttachmentPath !== '') {
+            $fallbackPath = absoluteDeclineAttachmentPath($existingAttachmentPath);
+            if ($fallbackPath !== '' && is_file($fallbackPath)) {
+                $attachments[] = [
+                    'path' => $fallbackPath,
+                    'name' => basename($fallbackPath),
+                ];
+            }
+        }
+
+        sendEmail($email, 'Order Disapproved - DGZ Motorshop', $body, null, 'document.pdf', $attachments);
     }
 } catch (Throwable $e) {
     error_log('Disapproval email failed: ' . $e->getMessage());
+}
+
+if ($existingAttachmentPath !== '' && !empty($storedAttachment['relativePath'] ?? '') && $existingAttachmentPath !== $storedAttachment['relativePath']) {
+    $oldAbsolute = absoluteDeclineAttachmentPath($existingAttachmentPath);
+    if ($oldAbsolute !== '' && is_file($oldAbsolute)) {
+        @unlink($oldAbsolute);
+    }
 }
 
 echo json_encode([

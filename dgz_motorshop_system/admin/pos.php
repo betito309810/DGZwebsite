@@ -1466,6 +1466,9 @@ if ($receiptDataJson === false) {
             <button type="button" id="openManageDeclineReasons" class="manage-reasons-button">Manage reasons</button>
             <label for="declineReasonNote" class="decline-label">Additional Details (optional)</label>
             <textarea id="declineReasonNote" rows="3" placeholder="Add context that will appear in the email."></textarea>
+            <!-- Added: optional evidence upload that is attached to the outgoing email -->
+            <label for="declineAttachment" class="decline-label">Attach proof (optional)</label>
+            <input type="file" id="declineAttachment" accept="image/*,application/pdf">
             <div id="declineModalError" class="decline-modal-error" aria-live="polite"></div>
             <div class="decline-modal-actions">
                 <button type="button" id="cancelDeclineOrder" class="secondary-button">Cancel</button>

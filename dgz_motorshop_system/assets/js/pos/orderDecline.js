@@ -67,6 +67,8 @@
         elements.declineModal = document.getElementById('declineOrderModal');
         elements.reasonSelect = document.getElementById('declineReasonSelect');
         elements.noteField = document.getElementById('declineReasonNote');
+        // Added: cache the optional attachment input so we can read/clear files.
+        elements.attachmentField = document.getElementById('declineAttachment');
         elements.errorBox = document.getElementById('declineModalError');
         elements.confirmButton = document.getElementById('confirmDeclineOrder');
         elements.cancelButton = document.getElementById('cancelDeclineOrder');
@@ -221,6 +223,9 @@
         if (elements.noteField) {
             elements.noteField.value = '';
         }
+        if (elements.attachmentField) {
+            elements.attachmentField.value = '';
+        }
         state.currentForm = null;
         state.currentRow = null;
     }
@@ -264,6 +269,26 @@
         const selectedOption = elements.reasonSelect.options[elements.reasonSelect.selectedIndex];
         const selectedLabel = selectedOption ? selectedOption.textContent.trim() : '';
         const note = elements.noteField ? elements.noteField.value.trim() : '';
+        const attachmentInput = elements.attachmentField;
+        const attachmentFile = attachmentInput?.files?.[0] || null;
+
+        if (attachmentFile) {
+            const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+            const maxSize = 5 * 1024 * 1024; // 5MB limit for uploads.
+            if (!allowedTypes.includes(attachmentFile.type)) {
+                if (elements.errorBox) {
+                    elements.errorBox.textContent = 'Only PDF or image files are allowed for attachments.';
+                }
+                attachmentInput.value = '';
+                return;
+            }
+            if (attachmentFile.size > maxSize) {
+                if (elements.errorBox) {
+                    elements.errorBox.textContent = 'Attachment is too large. Please keep files under 5MB.';
+                }
+                return;
+            }
+        }
 
         if (!selectedReasonId) {
             if (elements.errorBox) {
@@ -290,22 +315,26 @@
         }
 
         try {
+            // Build FormData payload so we can include the optional attachment.
+            const payload = new FormData();
+            payload.append('orderId', String(orderId));
+            payload.append('reasonId', String(selectedReasonId));
+            payload.append('reasonLabel', selectedLabel);
+            payload.append('note', note);
+            if (attachmentFile) {
+                payload.append('declineAttachment', attachmentFile);
+            }
+
             const response = await fetch(api.disapprove, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
                     'X-Requested-With': 'XMLHttpRequest',
                 },
                 credentials: 'same-origin',
-                body: JSON.stringify({
-                    orderId,
-                    reasonId: selectedReasonId,
-                    reasonLabel: selectedLabel,
-                    note,
-                }),
+                body: payload,
             });
 
-            const result = await response.json();
+            const result = await response.json().catch(() => null);
             if (!response.ok || !result?.success) {
                 throw new Error(result?.message || 'Unable to disapprove order.');
             }
