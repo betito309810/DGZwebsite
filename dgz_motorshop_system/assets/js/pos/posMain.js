@@ -60,6 +60,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const onlineOrderPayment = document.getElementById('onlineOrderPayment');
             const onlineOrderEmail = document.getElementById('onlineOrderEmail');
             const onlineOrderPhone = document.getElementById('onlineOrderPhone');
+            const onlineOrderNoteContainer = document.getElementById('onlineOrderNoteContainer');
+            const onlineOrderNote = document.getElementById('onlineOrderNote');
             const onlineOrderReferenceWrapper = document.getElementById('onlineOrderReferenceWrapper');
             const onlineOrderReference = document.getElementById('onlineOrderReference');
             const onlineOrderItemsBody = document.getElementById('onlineOrderItemsBody');
@@ -155,6 +157,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 onlineOrderPayment.textContent = safePayment !== '' ? safePayment : 'N/A';
                 onlineOrderEmail.textContent = (order.email || '').toString();
                 onlineOrderPhone.textContent = (order.phone || '').toString();
+
+                if (onlineOrderNoteContainer && onlineOrderNote) {
+                    const noteText = ((order.customer_note ?? order.notes) || '').toString().trim();
+                    if (noteText !== '') {
+                        onlineOrderNote.textContent = noteText; // Added cashier note so staff can review special instructions
+                        onlineOrderNoteContainer.style.display = 'flex';
+                    } else {
+                        onlineOrderNote.textContent = '';
+                        onlineOrderNoteContainer.style.display = 'none';
+                    }
+                }
 
                 if (referenceNumber && safePayment.toLowerCase() === 'gcash') {
                     onlineOrderReferenceWrapper.style.display = 'flex';

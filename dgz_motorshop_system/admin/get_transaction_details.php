@@ -45,6 +45,9 @@ try {
 
     $order['reference_number'] = $details['reference'];
     $order['phone'] = $order['phone'] ?? null;
+    $order['customer_note'] = isset($order['customer_note']) && $order['customer_note'] !== null
+        ? (string) $order['customer_note']
+        : (isset($order['notes']) ? (string) $order['notes'] : ''); // Added normalized field for cashier notes
 
     echo json_encode([
         'order' => $order,
