@@ -250,34 +250,45 @@ $profile_created = format_profile_date($current_user['created_at'] ?? null);
                             Top Selling Products
                         </h3>
                         <!-- Time Range Selector for Top Products -->
-                        <div class="period-selector">
-                            <form method="get" id="topSellingFilters" class="period-form" data-period="<?= htmlspecialchars($topPeriod) ?>" data-value="<?= htmlspecialchars($topPeriodValue) ?>" data-range="<?= htmlspecialchars($topRangeDisplay) ?>">
-                                <div class="control-group">
-                                    <label for="topSellingPeriod" class="control-label">View</label>
-                                    <select name="top_period" id="topSellingPeriod" class="period-dropdown" data-period-select>
-                                        <option value="daily" <?= $topPeriod === 'daily' ? 'selected' : '' ?>>Daily</option>
-                                        <option value="weekly" <?= $topPeriod === 'weekly' ? 'selected' : '' ?>>Weekly</option>
-                                        <option value="monthly" <?= $topPeriod === 'monthly' ? 'selected' : '' ?>>Monthly</option>
-                                        <option value="annually" <?= $topPeriod === 'annually' ? 'selected' : '' ?>>Annually</option>
-                                    </select>
-                                </div>
-                                <div class="control-group">
-                                    <label for="topSellingPicker" class="control-label" id="topSellingPickerLabel"><?= htmlspecialchars($topPickerLabel) ?></label>
-                                    <input
-                                        type="<?= htmlspecialchars($topPickerType) ?>"
-                                        name="top_value"
-                                        id="topSellingPicker"
-                                        class="period-input"
-                                        data-period-input
-                                        value="<?= htmlspecialchars($topPeriodValue) ?>"
-                                    >
-                                    <span class="control-hint" id="topSellingRangeHint"><?= htmlspecialchars($topRangeDisplay) ?></span>
-                                </div>
-                            </form>
-                        </div>
+                        <form
+                            method="get"
+                            action="dashboard.php"
+                            id="topSellingFilters"
+                            class="widget-controls period-form"
+                            data-period="<?= htmlspecialchars($topPeriod) ?>"
+                            data-value="<?= htmlspecialchars($topPeriodValue) ?>"
+                            data-range="<?= htmlspecialchars($topRangeDisplay) ?>"
+                        >
+                            <?php foreach ($_GET as $param => $value): ?>
+                                <?php if (!in_array($param, ['top_period', 'top_value', 'top_range'], true) && !is_array($value)): ?>
+                                    <input type="hidden" name="<?= htmlspecialchars($param) ?>" value="<?= htmlspecialchars($value) ?>">
+                                <?php endif; ?>
+                            <?php endforeach; ?>
+                            <div class="control-group">
+                                <label for="topSellingPeriod" class="control-label">View</label>
+                                <select name="top_period" id="topSellingPeriod" class="period-dropdown" data-period-select>
+                                    <option value="daily" <?= $topPeriod === 'daily' ? 'selected' : '' ?>>Daily</option>
+                                    <option value="weekly" <?= $topPeriod === 'weekly' ? 'selected' : '' ?>>Weekly</option>
+                                    <option value="monthly" <?= $topPeriod === 'monthly' ? 'selected' : '' ?>>Monthly</option>
+                                    <option value="annually" <?= $topPeriod === 'annually' ? 'selected' : '' ?>>Annually</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label for="topSellingPicker" class="control-label" id="topSellingPickerLabel"><?= htmlspecialchars($topPickerLabel) ?></label>
+                                <input
+                                    type="<?= htmlspecialchars($topPickerType) ?>"
+                                    name="top_value"
+                                    id="topSellingPicker"
+                                    class="period-input"
+                                    data-period-input
+                                    value="<?= htmlspecialchars($topPeriodValue) ?>"
+                                >
+                                <span class="control-hint" id="topSellingRangeHint"><?= htmlspecialchars($topRangeDisplay) ?></span>
+                            </div>
+                        </form>
                     </div>
                     <div class="widget-content">
-                        <div class="selected-period">Showing data for <strong><?= htmlspecialchars($topPeriodLabel) ?></strong></div>
+                        <div class="selected-period">Showing data for <strong id="topSellingSelectedLabel"><?= htmlspecialchars($topPeriodLabel) ?></strong></div>
                         <?php if (empty($top)): ?>
                         <div class="empty-state">
                             <i class="fas fa-chart-bar" style="font-size: 2rem; margin-bottom: 10px;"></i>
