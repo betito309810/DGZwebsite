@@ -109,6 +109,13 @@ $showUserManagementBackButton = $showUserManagementBackButton ?? true;
                                         <span class="status-badge status-inactive">
                                             <i class="fas fa-user-slash"></i> Deactivated
                                         </span>
+                                        <form method="post" class="inline-form" onsubmit="return confirm('Permanently delete this staff account? This action cannot be undone.');">
+                                            <input type="hidden" name="purge_user" value="1">
+                                            <input type="hidden" name="purge_user_id" value="<?php echo (int) $user['id']; ?>">
+                                            <button type="submit" class="danger-action danger-action-outline">
+                                                <i class="fas fa-user-times"></i> Delete Permanently
+                                            </button>
+                                        </form>
                                     <?php else: ?>
                                         <span class="muted">—</span>
                                     <?php endif; ?>

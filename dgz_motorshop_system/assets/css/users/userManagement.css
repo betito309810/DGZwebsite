@@ -169,6 +169,18 @@ html, body {
     background: #b91c1c;
 }
 
+.danger-action-outline {
+    background: transparent;
+    color: #dc2626;
+    border: 1px solid #dc2626;
+}
+
+.danger-action-outline:hover {
+    background: rgba(220, 38, 38, 0.08);
+    color: #991b1b;
+    border-color: #b91c1c;
+}
+
 .muted {
     color: #9ca3af;
 }

@@ -102,6 +102,45 @@ if ($role === 'admin') {
         }
     }
 
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['purge_user'])) {
+        $userId = filter_input(INPUT_POST, 'purge_user_id', FILTER_VALIDATE_INT);
+
+        if (!$userId) {
+            $userManagementError = 'Invalid user selection.';
+        } elseif ((int) $_SESSION['user_id'] === $userId) {
+            $userManagementError = 'You cannot delete your own account.';
+        } else {
+            try {
+                $pdo->beginTransaction();
+
+                $stmt = $pdo->prepare('SELECT role, deleted_at FROM users WHERE id = ? FOR UPDATE');
+                $stmt->execute([$userId]);
+                $userToDelete = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                if (!$userToDelete) {
+                    $pdo->rollBack();
+                    $userManagementError = 'The selected user no longer exists.';
+                } elseif ($userToDelete['role'] !== 'staff') {
+                    $pdo->rollBack();
+                    $userManagementError = 'Only staff accounts can be removed.';
+                } elseif (empty($userToDelete['deleted_at'])) {
+                    $pdo->rollBack();
+                    $userManagementError = 'Deactivate this staff account before permanently deleting it.';
+                } else {
+                    $deleteStmt = $pdo->prepare('DELETE FROM users WHERE id = ? LIMIT 1');
+                    $deleteStmt->execute([$userId]);
+                    $pdo->commit();
+                    $userManagementSuccess = 'Staff account permanently removed.';
+                }
+            } catch (Exception $e) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                $userManagementError = 'Failed to permanently delete staff account: ' . $e->getMessage();
+            }
+        }
+    }
+
     $activeUsers = $pdo
         ->query('SELECT id, name, email, contact_number, role, created_at, deleted_at FROM users WHERE deleted_at IS NULL ORDER BY created_at DESC')
         ->fetchAll(PDO::FETCH_ASSOC);
