@@ -1224,6 +1224,9 @@ body {
     border-radius: 10px;
     overflow-x: auto;
     background: #fff;
+    /* Transaction detail items list - tweak max-height/overflow to adjust scroll behavior */
+    max-height: 320px;
+    overflow-y: auto;
 }
 
 .modal-overlay .transaction-modal .items-table {
