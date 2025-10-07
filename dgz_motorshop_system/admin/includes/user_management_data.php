@@ -77,6 +77,50 @@ if (!function_exists('findUserForeignKeyReferences')) {
     }
 }
 
+if (!function_exists('formatUserForeignKeyReferenceLabels')) {
+    /**
+     * Provide human friendly labels for known foreign key references while still exposing
+     * the underlying table/column pairing for any unexpected dependencies.
+     */
+    function formatUserForeignKeyReferenceLabels(array $references): array
+    {
+        if (empty($references)) {
+            return [];
+        }
+
+        $labels = [
+            'inventory_ledger.created_by_user_id' => 'Inventory ledger entries (created by)',
+            'restock_request_history.noted_by' => 'Restock request history (noted by)',
+            'restock_requests.requested_by' => 'Restock requests (requested by)',
+            'stock_receipt_audit_log.action_by_user_id' => 'Stock receipt audit log (action by)',
+            'stock_receipt_files.uploaded_by_user_id' => 'Stock receipt files (uploaded by)',
+            'stock_receipts.created_by_user_id' => 'Stock receipts (created by)',
+            'stock_receipts.updated_by_user_id' => 'Stock receipts (updated by)',
+            'stock_receipts.received_by_user_id' => 'Stock receipts (received by)',
+            'stock_receipts.posted_by_user_id' => 'Stock receipts (posted by)',
+        ];
+
+        $formatted = [];
+
+        foreach ($references as $reference) {
+            $referenceKey = strtolower($reference);
+
+            if (isset($labels[$referenceKey])) {
+                $formatted[] = $labels[$referenceKey];
+                continue;
+            }
+
+            [$table, $column] = array_pad(explode('.', $reference, 2), 2, '');
+            $tableLabel = $table !== '' ? ucwords(str_replace('_', ' ', $table)) : 'Unknown table';
+            $columnLabel = $column !== '' ? strtolower(str_replace('_', ' ', $column)) : 'related data';
+
+            $formatted[] = sprintf('%s (%s)', $tableLabel, $columnLabel);
+        }
+
+        return $formatted;
+    }
+}
+
 if ($role === 'admin') {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_user'])) {
         $name = trim($_POST['name'] ?? '');
@@ -184,8 +228,9 @@ if ($role === 'admin') {
 
                     if (!$lookupFailed && !empty($blockingReferences)) {
                         $pdo->rollBack();
+                        $friendlyReferences = formatUserForeignKeyReferenceLabels($blockingReferences);
                         $userManagementError = 'Cannot permanently delete this staff account because it is still referenced by other records ('
-                            . implode(', ', $blockingReferences)
+                            . implode(', ', $friendlyReferences)
                             . '). Reassign or anonymize those records before trying again.';
                     } else {
                         try {
@@ -209,8 +254,9 @@ if ($role === 'admin') {
                                 $blockingReferences = findUserForeignKeyReferences($pdo, $userId, $postFailureLookupFailed);
 
                                 if (!empty($blockingReferences)) {
+                                    $friendlyReferences = formatUserForeignKeyReferenceLabels($blockingReferences);
                                     $userManagementError = 'Cannot permanently delete this staff account because it is still referenced by other records ('
-                                        . implode(', ', $blockingReferences)
+                                        . implode(', ', $friendlyReferences)
                                         . '). Reassign or anonymize those records before trying again.';
                                 } else {
                                     $userManagementError = 'Cannot permanently delete this staff account because it is still referenced by other records. Reassign or anonymize those records before trying again.';
