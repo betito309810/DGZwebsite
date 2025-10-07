@@ -1487,15 +1487,15 @@ if ($receiptDataJson === false) {
                             <label>Phone:</label>
                             <span id="onlineOrderPhone"></span>
                         </div>
-                        <div class="info-item note-item" id="onlineOrderNoteContainer" style="display:none;">
-                            <!-- Added container to show the cashier note captured during checkout -->
-                            <label>Customer Note:</label>
-                            <span id="onlineOrderNote"></span>
-                        </div>
                         <div class="info-item" id="onlineOrderReferenceWrapper" style="display:none;">
                             <label>Reference:</label>
                             <span id="onlineOrderReference"></span>
                         </div>
+                    </div>
+                    <div class="info-item note-item" id="onlineOrderNoteContainer" style="display:none;">
+                        <!-- Updated container so the cashier note sits at the end of the transaction details -->
+                        <label>Customer Note:</label>
+                        <span id="onlineOrderNote"></span>
                     </div>
                 </div>
                 <div class="order-items">
