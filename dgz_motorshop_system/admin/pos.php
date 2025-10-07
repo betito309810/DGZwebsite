@@ -520,6 +520,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                         }
                     }
 
+                    if ($success && $newStatus === 'completed') {
+                        // Added: let the customer know that the order was handed off to the courier.
+                        $orderInfoStmt = $pdo->prepare(
+                            'SELECT customer_name, email, phone, invoice_number, total, created_at FROM orders WHERE id = ? LIMIT 1'
+                        );
+                        $orderInfoStmt->execute([$orderId]);
+                        $orderInfo = $orderInfoStmt->fetch();
+
+                        $customerEmail = $orderInfo['email'] ?? '';
+                        if ($customerEmail && filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
+                            $customerName = trim((string) ($orderInfo['customer_name'] ?? 'Customer'));
+                            if (strtolower($customerName) !== 'walk-in') {
+                                $itemData = prepareOrderItemsData($pdo, $orderId);
+                                $summaryTableHtml = (string) ($itemData['table_html'] ?? '');
+
+                                $createdAt = (string) ($orderInfo['created_at'] ?? '');
+                                $prettyDate = $createdAt !== ''
+                                    ? date('F j, Y g:i A', strtotime($createdAt))
+                                    : date('F j, Y g:i A');
+
+                                $invoiceNumber = trim((string) ($orderInfo['invoice_number'] ?? ''));
+                                $displayInvoice = $invoiceNumber !== ''
+                                    ? $invoiceNumber
+                                    : 'INV-' . str_pad((string) $orderId, 6, '0', STR_PAD_LEFT);
+
+                                $subject = 'Order Update - DGZ Motorshop Order #' . (int) $orderId . ' is with the Courier';
+                                $body = '<div style="font-family: Arial, sans-serif; font-size:14px; color:#333;">'
+                                    . '<h2 style="color:#047857; margin-bottom:8px;">Your Order Is On Its Way</h2>'
+                                    . '<p style="margin:0 0 12px;">Hi ' . htmlspecialchars($customerName, ENT_QUOTES, 'UTF-8') . ',</p>'
+                                    . '<p style="margin:0 0 12px;">We\'re happy to let you know that your order #' . (int) $orderId
+                                    . ' has been handed over to our trusted courier partner for delivery.</p>'
+                                    . '<p style="margin:0 0 12px;">Invoice Number: <strong>'
+                                    . htmlspecialchars($displayInvoice, ENT_QUOTES, 'UTF-8') . '</strong><br>'
+                                    . 'Order Date: ' . htmlspecialchars($prettyDate, ENT_QUOTES, 'UTF-8') . '</p>'
+                                    . $summaryTableHtml
+                                    . '<p style="margin:12px 0 0;">We\'ll share another update once the delivery is complete. '
+                                    . 'Thank you for choosing <strong>DGZ Motorshop</strong>!</p>'
+                                    . '</div>';
+
+                                try { sendEmail($customerEmail, $subject, $body); } catch (Throwable $e) { /* logged */ }
+                            }
+                        }
+                    }
+
                     if ($success && $newStatus === 'approved' && $supportsInvoiceNumbers) {
                         $invoiceStmt = $pdo->prepare('SELECT invoice_number FROM orders WHERE id = ?');
                         $invoiceStmt->execute([$orderId]);
