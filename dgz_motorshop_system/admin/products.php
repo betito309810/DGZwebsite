@@ -505,17 +505,9 @@ $end_record = min($offset + $limit, $total_products);
                         <i class="fas fa-user"></i>
                     </div>
                     <div class="dropdown-menu" id="userDropdown">
-                        <button type="button" class="dropdown-item" id="profileTrigger">
-                            <i class="fas fa-user-cog"></i> Profile
-                        </button>
                         <a href="settings.php" class="dropdown-item">
                             <i class="fas fa-cog"></i> Settings
                         </a>
-                        <?php if ($role === 'admin'): ?>
-                        <a href="userManagement.php" class="dropdown-item">
-                            <i class="fas fa-users-cog"></i> User Management
-                        </a>
-                        <?php endif; ?>
                         <a href="login.php?logout=1" class="dropdown-item logout">
                             <i class="fas fa-sign-out-alt"></i> Logout
                         </a>

@@ -92,6 +92,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['change_password'])) {
         }
     }
 }
+
+$userManagementSuccess = null;
+$userManagementError = null;
+$userManagementUsers = [];
+
+if ($role === 'admin') {
+    require __DIR__ . '/includes/user_management_data.php';
+}
 ?>
 <!doctype html>
 <html>
@@ -102,6 +110,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['change_password'])) {
     <title>Settings</title>
     <link rel="stylesheet" href="../assets/css/style.css">
     <link rel="stylesheet" href="../assets/css/dashboard/dashboard.css">
+    <?php if ($role === 'admin'): ?>
+    <link rel="stylesheet" href="../assets/css/users/userManagement.css">
+    <?php endif; ?>
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
@@ -133,17 +144,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['change_password'])) {
                         <i class="fas fa-user"></i>
                     </div>
                     <div class="dropdown-menu" id="userDropdown">
-                        <button type="button" class="dropdown-item" id="profileTrigger">
-                            <i class="fas fa-user-cog"></i> Profile
-                        </button>
                         <a href="settings.php" class="dropdown-item">
                             <i class="fas fa-cog"></i> Settings
                         </a>
-                        <?php if ($role === 'admin'): ?>
-                        <a href="userManagement.php" class="dropdown-item">
-                            <i class="fas fa-users-cog"></i> User Management
-                        </a>
-                        <?php endif; ?>
                         <a href="login.php?logout=1" class="dropdown-item logout">
                             <i class="fas fa-sign-out-alt"></i> Logout
                         </a>
@@ -155,139 +158,158 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['change_password'])) {
 
         <!-- Settings Content -->
         <div class="settings-content">
-            <?php if ($successMessage): ?>
-                <div class="alert alert-success"><?php echo htmlspecialchars($successMessage); ?></div>
-            <?php endif; ?>
-            <?php if ($errorMessage): ?>
-                <div class="alert alert-error"><?php echo htmlspecialchars($errorMessage); ?></div>
-            <?php endif; ?>
-
-            <!-- Change Password Section -->
-            <section class="card settings-card">
-                <h3><i class="fas fa-key"></i> Change Password</h3>
-                <form method="post" class="password-form">
-                    <input type="hidden" name="change_password" value="1">
-                    <div class="form-row">
-                        <label for="current_password">Current Password</label>
-                        <input type="password" id="current_password" name="current_password" required autocomplete="current-password">
+            <section class="settings-section card">
+                <button type="button" class="settings-toggle" data-target="profilePanel" data-default-state="open" aria-expanded="true">
+                    <span class="label">
+                        <i class="fas fa-user-circle"></i>
+                        Profile
+                    </span>
+                    <i class="fas fa-chevron-down toggle-icon" aria-hidden="true"></i>
+                </button>
+                <div class="settings-panel open settings-profile-details" id="profilePanel">
+                    <div class="profile-info">
+                        <div class="profile-row">
+                            <span class="profile-label">Name</span>
+                            <span class="profile-value"><?= htmlspecialchars($profile_name) ?></span>
+                        </div>
+                        <div class="profile-row">
+                            <span class="profile-label">Role</span>
+                            <span class="profile-value"><?= htmlspecialchars($profile_role) ?></span>
+                        </div>
+                        <div class="profile-row">
+                            <span class="profile-label">Date created</span>
+                            <span class="profile-value"><?= htmlspecialchars($profile_created) ?></span>
+                        </div>
                     </div>
-                    <div class="form-row">
-                        <label for="new_password">New Password</label>
-                        <input type="password" id="new_password" name="new_password" required minlength="8" autocomplete="new-password">
-                    </div>
-                    <div class="form-row">
-                        <label for="confirm_new_password">Confirm New Password</label>
-                        <input type="password" id="confirm_new_password" name="confirm_new_password" required autocomplete="new-password">
-                    </div>
-                    <div class="form-actions">
-                        <button type="submit" class="primary-action">
-                            <i class="fas fa-save"></i> Change Password
-                        </button>
-                    </div>
-                </form>
-                <p class="form-hint">Enter your current password for verification. New password must be at least 8 characters long.</p>
+                </div>
             </section>
+
+            <section class="settings-section card">
+                <button type="button" class="settings-toggle" data-target="passwordPanel" data-default-state="open" aria-expanded="true">
+                    <span class="label">
+                        <i class="fas fa-key"></i>
+                        Change Password
+                    </span>
+                    <i class="fas fa-chevron-down toggle-icon" aria-hidden="true"></i>
+                </button>
+                <div class="settings-panel open" id="passwordPanel">
+                    <?php if ($successMessage): ?>
+                        <div class="alert alert-success"><?php echo htmlspecialchars($successMessage); ?></div>
+                    <?php endif; ?>
+                    <?php if ($errorMessage): ?>
+                        <div class="alert alert-error"><?php echo htmlspecialchars($errorMessage); ?></div>
+                    <?php endif; ?>
+                    <form method="post" class="password-form">
+                        <input type="hidden" name="change_password" value="1">
+                        <div class="form-row">
+                            <label for="current_password">Current Password</label>
+                            <input type="password" id="current_password" name="current_password" required autocomplete="current-password">
+                        </div>
+                        <div class="form-row">
+                            <label for="new_password">New Password</label>
+                            <input type="password" id="new_password" name="new_password" required minlength="8" autocomplete="new-password">
+                        </div>
+                        <div class="form-row">
+                            <label for="confirm_new_password">Confirm New Password</label>
+                            <input type="password" id="confirm_new_password" name="confirm_new_password" required autocomplete="new-password">
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="primary-action">
+                                <i class="fas fa-save"></i> Change Password
+                            </button>
+                        </div>
+                    </form>
+                    <p class="form-hint">Enter your current password for verification. New password must be at least 8 characters long.</p>
+                </div>
+            </section>
+
+            <?php if ($role === 'admin'): ?>
+            <section class="settings-section card">
+                <button type="button" class="settings-toggle" data-target="userManagementPanel" data-default-state="closed" aria-expanded="false">
+                    <span class="label">
+                        <i class="fas fa-users-cog"></i>
+                        User Management
+                    </span>
+                    <i class="fas fa-chevron-down toggle-icon" aria-hidden="true"></i>
+                </button>
+                <div class="settings-panel" id="userManagementPanel">
+                    <?php
+                        $showUserManagementBackButton = false;
+                        include __DIR__ . '/partials/user_management_section.php';
+                    ?>
+                </div>
+            </section>
+            <?php endif; ?>
         </div>
     </main>
 
-    <div class="modal-overlay" id="profileModal" aria-hidden="true">
-        <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="profileModalTitle">
-            <button type="button" class="modal-close" id="profileModalClose" aria-label="Close profile information">
-                <i class="fas fa-times"></i>
-            </button>
-            <h3 id="profileModalTitle">Profile information</h3>
-            <div class="profile-info">
-                <div class="profile-row">
-                    <span class="profile-label">Name</span>
-                    <span class="profile-value"><?= htmlspecialchars($profile_name) ?></span>
-                </div>
-                <div class="profile-row">
-                    <span class="profile-label">Role</span>
-                    <span class="profile-value"><?= htmlspecialchars($profile_role) ?></span>
-                </div>
-                <div class="profile-row">
-                    <span class="profile-label">Date created</span>
-                    <span class="profile-value"><?= htmlspecialchars($profile_created) ?></span>
-                </div>
-            </div>
-        </div>
-    </div>
-
+    <script src="../assets/js/dashboard/userMenu.js"></script>
+    <?php if ($role === 'admin'): ?>
+    <script src="../assets/js/users/userManagement.js"></script>
+    <?php endif; ?>
     <script src="../assets/js/notifications.js"></script>
     <script>
-        // Toggle user dropdown
-        function toggleDropdown() {
-            const dropdown = document.getElementById('userDropdown');
-            dropdown.classList.toggle('show');
-        }
+        document.addEventListener('DOMContentLoaded', function () {
+            const toggleButtons = document.querySelectorAll('.settings-toggle');
 
-        // Toggle mobile sidebar
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            sidebar.classList.toggle('mobile-open');
-        }
+            toggleButtons.forEach(function (button) {
+                const targetId = button.dataset.target;
+                const panel = document.getElementById(targetId);
 
-        document.addEventListener('DOMContentLoaded', function() {
-            const userMenu = document.querySelector('.user-menu');
-            const dropdown = document.getElementById('userDropdown');
-            const profileButton = document.getElementById('profileTrigger');
-            const profileModal = document.getElementById('profileModal');
-            const profileModalClose = document.getElementById('profileModalClose');
-
-            document.addEventListener('click', function(event) {
-                if (userMenu && dropdown && !userMenu.contains(event.target)) {
-                    dropdown.classList.remove('show');
+                if (!panel) {
+                    return;
                 }
 
-                const sidebar = document.getElementById('sidebar');
-                const toggle = document.querySelector('.mobile-toggle');
+                const defaultState = button.dataset.defaultState === 'open';
 
-                if (window.innerWidth <= 768 &&
-                    sidebar && toggle &&
-                    !sidebar.contains(event.target) &&
-                    !toggle.contains(event.target)) {
-                    sidebar.classList.remove('mobile-open');
+                const openPanel = function () {
+                    panel.classList.add('open');
+                    button.setAttribute('aria-expanded', 'true');
+                    panel.style.maxHeight = panel.scrollHeight + 'px';
+
+                    const cleanup = function (event) {
+                        if (event.propertyName === 'max-height') {
+                            panel.style.maxHeight = 'none';
+                            panel.removeEventListener('transitionend', cleanup);
+                        }
+                    };
+
+                    panel.addEventListener('transitionend', cleanup);
+                };
+
+                const closePanel = function () {
+                    panel.classList.remove('open');
+                    button.setAttribute('aria-expanded', 'false');
+                    panel.style.maxHeight = panel.scrollHeight + 'px';
+                    panel.offsetHeight;
+                    panel.style.maxHeight = '0px';
+                };
+
+                if (defaultState) {
+                    panel.classList.add('open');
+                    button.setAttribute('aria-expanded', 'true');
+                    panel.style.maxHeight = 'none';
+                } else {
+                    panel.classList.remove('open');
+                    button.setAttribute('aria-expanded', 'false');
+                    panel.style.maxHeight = '0px';
                 }
+
+                button.addEventListener('click', function () {
+                    if (panel.classList.contains('open')) {
+                        if (panel.style.maxHeight === 'none') {
+                            panel.style.maxHeight = panel.scrollHeight + 'px';
+                            panel.offsetHeight;
+                        }
+                        closePanel();
+                    } else {
+                        panel.style.maxHeight = '0px';
+                        requestAnimationFrame(openPanel);
+                    }
+                });
             });
-
-            if (profileButton && profileModal) {
-                const openProfileModal = function() {
-                    profileModal.classList.add('show');
-                    profileModal.setAttribute('aria-hidden', 'false');
-                    document.body.classList.add('modal-open');
-                };
-
-                const closeProfileModal = function() {
-                    profileModal.classList.remove('show');
-                    profileModal.setAttribute('aria-hidden', 'true');
-                    document.body.classList.remove('modal-open');
-                };
-
-                profileButton.addEventListener('click', function(event) {
-                    event.preventDefault();
-                    if (dropdown) {
-                        dropdown.classList.remove('show');
-                    }
-                    openProfileModal();
-                });
-
-                if (profileModalClose) {
-                    profileModalClose.addEventListener('click', function() {
-                        closeProfileModal();
-                    });
-                }
-
-                profileModal.addEventListener('click', function(event) {
-                    if (event.target === profileModal) {
-                        closeProfileModal();
-                    }
-                });
-
-                document.addEventListener('keydown', function(event) {
-                    if (event.key === 'Escape' && profileModal.classList.contains('show')) {
-                        closeProfileModal();
-                    }
-                });
-            }
         });
     </script>
+</body>
+
+</html>

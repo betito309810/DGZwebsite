@@ -535,6 +535,104 @@ body.modal-open {
     text-align: right;
 }
 
+/* Settings layout */
+.settings-content {
+    padding: 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.settings-section {
+    background: #ffffff;
+    border-radius: 16px;
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+    border: 1px solid #e2e8f0;
+    overflow: hidden;
+}
+
+.settings-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px;
+    background: transparent;
+    border: none;
+    font-size: 16px;
+    font-weight: 600;
+    color: #1f2937;
+    cursor: pointer;
+    transition: background 0.3s ease;
+}
+
+.settings-toggle .label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.settings-toggle:hover {
+    background: #f8fafc;
+}
+
+.settings-toggle .toggle-icon {
+    transition: transform 0.3s ease;
+}
+
+.settings-toggle[aria-expanded="true"] .toggle-icon {
+    transform: rotate(180deg);
+}
+
+.settings-panel {
+    border-top: 1px solid #e2e8f0;
+    padding: 0 24px;
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
+}
+
+.settings-panel.open {
+    opacity: 1;
+    padding: 24px;
+}
+
+.settings-panel .alert {
+    margin-bottom: 16px;
+}
+
+.settings-profile-details .profile-info {
+    margin-top: 0;
+}
+
+.settings-profile-details .profile-row {
+    padding: 12px 0;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.settings-profile-details .profile-row:last-child {
+    border-bottom: none;
+}
+
+@media (max-width: 768px) {
+    .settings-content {
+        padding: 20px;
+    }
+
+    .settings-toggle {
+        padding: 18px 20px;
+    }
+
+    .settings-panel {
+        padding: 0 20px;
+    }
+
+    .settings-panel.open {
+        padding: 20px;
+    }
+}
+
 @media (max-width: 480px) {
     .modal-content {
         padding: 24px 20px;

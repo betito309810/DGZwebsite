@@ -49,81 +49,11 @@ $profile_name = $current_user['name'] ?? 'N/A';
 $profile_role = !empty($current_user['role']) ? ucfirst($current_user['role']) : 'N/A';
 $profile_created = format_profile_date($current_user['created_at'] ?? null);
 
-$successMessage = null;
-$errorMessage = null;
+$userManagementSuccess = null;
+$userManagementError = null;
+$userManagementUsers = [];
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_user'])) {
-    $name = trim($_POST['name'] ?? '');
-    $contact = trim($_POST['contact_number'] ?? '');
-    $email = trim($_POST['email'] ?? '');
-    $password = $_POST['password'] ?? '';
-    $confirmPassword = $_POST['confirm_password'] ?? '';
-    $newRole = $_POST['role'] ?? 'staff';
-    $newRole = in_array($newRole, ['admin', 'staff'], true) ? $newRole : 'staff';
-
-    if ($name === '') {
-        $errorMessage = 'Name is required.';
-    } elseif ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $errorMessage = 'A valid email is required.';
-    } elseif ($password === '') {
-        $errorMessage = 'Password is required.';
-    } elseif ($password !== $confirmPassword) {
-        $errorMessage = 'Passwords do not match.';
-    } else {
-        try {
-            $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
-            $stmt = $pdo->prepare('INSERT INTO users (name, email, password, contact_number, role, created_at) VALUES (?, ?, ?, ?, ?, NOW())');
-            $stmt->execute([
-                $name,
-                $email,
-                $hashedPassword,
-                $contact !== '' ? $contact : null,
-                $newRole
-            ]);
-            $successMessage = 'New user account created successfully.';
-        } catch (Exception $e) {
-            $errorMessage = 'Failed to add user: ' . $e->getMessage();
-        }
-    }
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_user'])) {
-    $userId = filter_input(INPUT_POST, 'delete_user_id', FILTER_VALIDATE_INT);
-
-    if (!$userId) {
-        $errorMessage = 'Invalid user selection.';
-    } elseif ((int) $_SESSION['user_id'] === $userId) {
-        $errorMessage = 'You cannot delete your own account.';
-    } else {
-        try {
-            $pdo->beginTransaction();
-
-            $stmt = $pdo->prepare('SELECT role FROM users WHERE id = ? FOR UPDATE');
-            $stmt->execute([$userId]);
-            $userToDelete = $stmt->fetch(PDO::FETCH_ASSOC);
-
-            if (!$userToDelete) {
-                $pdo->rollBack();
-                $errorMessage = 'The selected user no longer exists.';
-            } elseif ($userToDelete['role'] !== 'staff') {
-                $pdo->rollBack();
-                $errorMessage = 'Only staff accounts can be removed.';
-            } else {
-                $deleteStmt = $pdo->prepare('DELETE FROM users WHERE id = ?');
-                $deleteStmt->execute([$userId]);
-                $pdo->commit();
-                $successMessage = 'Staff account removed successfully.';
-            }
-        } catch (Exception $e) {
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
-            }
-            $errorMessage = 'Failed to remove staff account: ' . $e->getMessage();
-        }
-    }
-}
-
-$users = $pdo->query('SELECT id, name, email, contact_number, role, created_at FROM users ORDER BY created_at DESC')->fetchAll(PDO::FETCH_ASSOC);
+require __DIR__ . '/includes/user_management_data.php';
 ?>
 <!doctype html>
 <html>
@@ -159,17 +89,9 @@ $users = $pdo->query('SELECT id, name, email, contact_number, role, created_at F
                         <i class="fas fa-user"></i>
                     </div>
                     <div class="dropdown-menu" id="userDropdown">
-                        <button type="button" class="dropdown-item" id="profileTrigger">
-                            <i class="fas fa-user-cog"></i> Profile
-                        </button>
                         <a href="settings.php" class="dropdown-item">
                             <i class="fas fa-cog"></i> Settings
                         </a>
-                        <?php if ($role === 'admin'): ?>
-                        <a href="userManagement.php" class="dropdown-item">
-                            <i class="fas fa-users-cog"></i> User Management
-                        </a>
-                        <?php endif; ?>
                         <a href="login.php?logout=1" class="dropdown-item logout">
                             <i class="fas fa-sign-out-alt"></i> Logout
                         </a>
@@ -178,117 +100,10 @@ $users = $pdo->query('SELECT id, name, email, contact_number, role, created_at F
             </div>
         </header>
 
-        <?php if ($successMessage): ?>
-            <div class="alert alert-success"><?php echo htmlspecialchars($successMessage); ?></div>
-        <?php endif; ?>
-        <?php if ($errorMessage): ?>
-            <div class="alert alert-error"><?php echo htmlspecialchars($errorMessage); ?></div>
-        <?php endif; ?>
-
-        <div class="page-toolbar">
-            <button type="button" class="secondary-action" id="backButton">
-                <i class="fas fa-arrow-left"></i> Back
-            </button>
-            <button id="toggleAddUser" class="primary-action" type="button">
-                <i class="fas fa-user-plus"></i> Add New User
-            </button>
-        </div>
-
-        <div class="content-grid">
-        <section id="addUserSection" class="card user-card hidden">
-            <h3><i class="fas fa-id-card"></i> New User Details</h3>
-            <form method="post" class="user-form">
-                <input type="hidden" name="add_user" value="1">
-                <div class="form-row">
-                    <label for="user_name">Name</label>
-                    <input type="text" id="user_name" name="name" required>
-                </div>
-                <div class="form-row">
-                    <label for="user_contact">Contact Number</label>
-                    <input type="tel" id="user_contact" name="contact_number" placeholder="Optional">
-                </div>
-                <div class="form-row">
-                    <label for="user_email">Email</label>
-                    <input type="email" id="user_email" name="email" required>
-                </div>
-                <div class="form-row">
-                    <label for="user_password">Password</label>
-                    <input type="password" id="user_password" name="password" required>
-                </div>
-                <div class="form-row">
-                    <label for="user_password_confirm">Confirm Password</label>
-                    <input type="password" id="user_password_confirm" name="confirm_password" required>
-                </div>
-                <div class="form-row">
-                    <label for="user_role">Role</label>
-                    <select id="user_role" name="role" required>
-                        <option value="staff">Staff</option>
-                        <option value="admin">Admin</option>
-                    </select>
-                </div>
-                <div class="form-actions">
-                    <button type="submit" class="primary-action">
-                        <i class="fas fa-save"></i> Save User
-                    </button>
-                    <button type="button" class="secondary-action" id="cancelAddUser">Cancel</button>
-                </div>
-            </form>
-            <p class="form-hint">Email and password can be assigned later by editing the user profile.</p>
-        </section>
-
-        <section class="card user-list">
-            <h3><i class="fas fa-users"></i> Registered Users</h3>
-            <div class="table-wrapper">
-                <table class="users-table">
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>Name</th>
-                            <th>Email</th>
-                            <th>Contact Number</th>
-                            <th>Role</th>
-                            <th>Created</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($users as $user): ?>
-                            <tr>
-                                <td><?php echo (int) $user['id']; ?></td>
-                                <td><?php echo htmlspecialchars($user['name']); ?></td>
-                                <td><?php echo htmlspecialchars($user['email'] ?? '—'); ?></td>
-                                <td><?php echo htmlspecialchars($user['contact_number'] ?? '—'); ?></td>
-                                <td>
-                                    <span class="role-badge role-<?php echo htmlspecialchars($user['role']); ?>">
-                                        <?php echo ucfirst($user['role']); ?>
-                                    </span>
-                                </td>
-                                <td><?php echo date('M d, Y H:i', strtotime($user['created_at'])); ?></td>
-                                <td class="table-actions">
-                                    <?php if ($user['role'] === 'staff'): ?>
-                                        <form method="post" class="inline-form" onsubmit="return confirm('Remove this staff account? This action cannot be undone.');">
-                                            <input type="hidden" name="delete_user" value="1">
-                                            <input type="hidden" name="delete_user_id" value="<?php echo (int) $user['id']; ?>">
-                                            <button type="submit" class="danger-action">
-                                                <i class="fas fa-user-minus"></i> Remove
-                                            </button>
-                                        </form>
-                                    <?php else: ?>
-                                        <span class="muted">—</span>
-                                    <?php endif; ?>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                        <?php if (empty($users)): ?>
-                            <tr>
-                                <td colspan="6" class="empty-row">No users found.</td>
-                            </tr>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
-            </div>
-        </section>
-        </div>
+        <?php
+            $showUserManagementBackButton = true;
+            include __DIR__ . '/partials/user_management_section.php';
+        ?>
     </main>
 
     <div class="modal-overlay" id="profileModal" aria-hidden="true">
