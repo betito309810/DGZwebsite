@@ -173,6 +173,32 @@ function ordersSupportsInvoiceNumbers(PDO $pdo): bool
 }
 
 /**
+ * Check if the legacy orders table exposes a specific column.
+ *
+ * We cache the lookup so we only hit INFORMATION_SCHEMA once per column.
+ */
+function ordersHasColumn(PDO $pdo, string $column): bool
+{
+    static $cache = [];
+
+    $normalized = strtolower($column);
+    if (array_key_exists($normalized, $cache)) {
+        return $cache[$normalized];
+    }
+
+    try {
+        $stmt = $pdo->prepare('SHOW COLUMNS FROM orders LIKE ?');
+        $stmt->execute([$column]);
+        $cache[$normalized] = $stmt !== false && $stmt->fetch() !== false;
+    } catch (Throwable $e) {
+        error_log('Unable to detect orders.' . $column . ' column: ' . $e->getMessage());
+        $cache[$normalized] = false;
+    }
+
+    return $cache[$normalized];
+}
+
+/**
  * Generate a unique invoice number with an INV- prefix.
  */
 function generateInvoiceNumber(PDO $pdo): string
@@ -340,6 +366,66 @@ function prepareOrderItemsData(PDO $pdo, int $orderId): array
     ];
 }
 
+/**
+ * Load the order details needed for transactional email notifications.
+ *
+ * Older installs sometimes keep customer emails in a `contact` column, so we
+ * look at both `email` and `contact` (when available) and return the first
+ * value that looks like a valid address.
+ */
+function fetchOrderNotificationContext(PDO $pdo, int $orderId): array
+{
+    $columns = ['customer_name', 'total', 'created_at'];
+
+    if (ordersHasColumn($pdo, 'email')) {
+        $columns[] = 'email';
+    }
+    if (ordersHasColumn($pdo, 'phone')) {
+        $columns[] = 'phone';
+    }
+    if (ordersHasColumn($pdo, 'contact')) {
+        $columns[] = 'contact AS legacy_contact';
+    }
+    if (ordersSupportsInvoiceNumbers($pdo)) {
+        $columns[] = 'invoice_number';
+    }
+
+    $sql = 'SELECT ' . implode(', ', $columns) . ' FROM orders WHERE id = ? LIMIT 1';
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([$orderId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+
+    if (empty($row)) {
+        return [];
+    }
+
+    $emailCandidates = [];
+    if (!empty($row['email'])) {
+        $emailCandidates[] = $row['email'];
+    }
+    if (!empty($row['legacy_contact'])) {
+        $emailCandidates[] = $row['legacy_contact'];
+    }
+
+    $email = '';
+    foreach ($emailCandidates as $candidate) {
+        $candidate = trim((string) $candidate);
+        if ($candidate !== '' && filter_var($candidate, FILTER_VALIDATE_EMAIL)) {
+            $email = $candidate;
+            break;
+        }
+    }
+
+    return [
+        'customer_name' => trim((string) ($row['customer_name'] ?? '')),
+        'email' => $email,
+        'phone' => trim((string) ($row['phone'] ?? '')),
+        'invoice_number' => trim((string) ($row['invoice_number'] ?? '')),
+        'total' => (float) ($row['total'] ?? 0.0),
+        'created_at' => (string) ($row['created_at'] ?? ''),
+    ];
+}
+
 // rewritten status handler (disapproval now handled through orderDisapprove.php)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status'])) {
     $orderId = isset($_POST['order_id']) ? (int) $_POST['order_id'] : 0;
@@ -418,26 +504,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                     $statusParam = $success ? '1' : '0';
 
                     if ($success && $newStatus === 'approved') {
-                        $orderInfoStmt = $pdo->prepare(
-                            'SELECT customer_name, email, phone, invoice_number, total, created_at FROM orders WHERE id = ? LIMIT 1'
-                        );
-                        $orderInfoStmt->execute([$orderId]);
-                        $orderInfo = $orderInfoStmt->fetch();
-
+                        $orderInfo = fetchOrderNotificationContext($pdo, $orderId);
                         $customerEmail = $orderInfo['email'] ?? '';
-                        if ($customerEmail && filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
-                            if (strtolower(trim($orderInfo['customer_name'] ?? '')) !== 'walk-in') {
+
+                        if ($customerEmail !== '' && filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
+                            $customerName = $orderInfo['customer_name'] !== ''
+                                ? $orderInfo['customer_name']
+                                : 'Customer';
+
+                            if (strtolower(trim($customerName)) !== 'walk-in') {
                                 $itemData = prepareOrderItemsData($pdo, $orderId);
                                 $itemsTotal = (float) ($itemData['items_total'] ?? 0.0);
                                 $summaryTableHtml = (string) ($itemData['table_html'] ?? '');
 
-                                $customerName = trim((string) ($orderInfo['customer_name'] ?? 'Customer'));
                                 $invoiceNumber = trim((string) ($orderInfo['invoice_number'] ?? ''));
                                 $createdAt = (string) ($orderInfo['created_at'] ?? '');
                                 $orderTotal = (float) ($orderInfo['total'] ?? $itemsTotal);
 
-                                $prettyDate = $createdAt !== '' ? date('F j, Y g:i A', strtotime($createdAt)) : date('F j, Y g:i A');
-                                $displayInvoice = $invoiceNumber !== '' ? $invoiceNumber : 'INV-' . str_pad((string) $orderId, 6, '0', STR_PAD_LEFT);
+                                $prettyDate = $createdAt !== ''
+                                    ? date('F j, Y g:i A', strtotime($createdAt))
+                                    : date('F j, Y g:i A');
+                                $displayInvoice = $invoiceNumber !== ''
+                                    ? $invoiceNumber
+                                    : 'INV-' . str_pad((string) $orderId, 6, '0', STR_PAD_LEFT);
 
                                 $subject = 'Order Approved - DGZ Motorshop Invoice ' . $displayInvoice;
 
@@ -481,22 +570,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                     }
 
                     if ($success && $newStatus === 'payment_verification') {
-                        $orderInfoStmt = $pdo->prepare(
-                            'SELECT customer_name, email, phone, total, created_at FROM orders WHERE id = ? LIMIT 1'
-                        );
-                        $orderInfoStmt->execute([$orderId]);
-                        $orderInfo = $orderInfoStmt->fetch();
-
+                        $orderInfo = fetchOrderNotificationContext($pdo, $orderId);
                         $customerEmail = $orderInfo['email'] ?? '';
-                        if ($customerEmail && filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
-                            if (strtolower(trim($orderInfo['customer_name'] ?? '')) !== 'walk-in') {
+
+                        if ($customerEmail !== '' && filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
+                            $customerName = $orderInfo['customer_name'] !== ''
+                                ? $orderInfo['customer_name']
+                                : 'Customer';
+
+                            if (strtolower(trim($customerName)) !== 'walk-in') {
                                 $itemData = prepareOrderItemsData($pdo, $orderId);
                                 $summaryTableHtml = (string) ($itemData['table_html'] ?? '');
 
-                                $customerName = trim((string) ($orderInfo['customer_name'] ?? 'Customer'));
                                 $createdAt = (string) ($orderInfo['created_at'] ?? '');
-                                $prettyDate = $createdAt !== '' ? date('F j, Y g:i A', strtotime($createdAt)) : date('F j, Y g:i A');
-                                $orderTotal = (float) ($orderInfo['total'] ?? 0);
+                                $prettyDate = $createdAt !== ''
+                                    ? date('F j, Y g:i A', strtotime($createdAt))
+                                    : date('F j, Y g:i A');
 
                                 $supportEmail = 'dgzstoninocapstone@gmail.com';
                                 $supportPhone = '(123) 456-7890';
@@ -522,16 +611,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
 
                     if ($success && $newStatus === 'completed') {
                         // Added: let the customer know that the order was handed off to the courier.
-                        $orderInfoStmt = $pdo->prepare(
-                            'SELECT customer_name, email, phone, invoice_number, total, created_at FROM orders WHERE id = ? LIMIT 1'
-                        );
-                        $orderInfoStmt->execute([$orderId]);
-                        $orderInfo = $orderInfoStmt->fetch();
-
+                        $orderInfo = fetchOrderNotificationContext($pdo, $orderId);
                         $customerEmail = $orderInfo['email'] ?? '';
-                        if ($customerEmail && filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
-                            $customerName = trim((string) ($orderInfo['customer_name'] ?? 'Customer'));
-                            if (strtolower($customerName) !== 'walk-in') {
+
+                        if ($customerEmail !== '' && filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
+                            $customerName = $orderInfo['customer_name'] !== ''
+                                ? $orderInfo['customer_name']
+                                : 'Customer';
+
+                            if (strtolower(trim($customerName)) !== 'walk-in') {
                                 $itemData = prepareOrderItemsData($pdo, $orderId);
                                 $summaryTableHtml = (string) ($itemData['table_html'] ?? '');
 
