@@ -38,7 +38,9 @@
             <h2>Visit Our Sto. Niño Branch</h2>
             <p>Drop by our Antipolo location for premium motorcycle parts, expert advice, and dependable service tailored to your ride.</p>
             <div class="map-container">
-                <iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3861.267286646947!2d121.1789203795543!3d14.5838395941613!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3397bf77cbabe495%3A0x3856d006fdaa046d!2sDGZ%20Antipolo%20Sto.%20Ni%C3%B1o!5e0!3m2!1sen!2sph!4v1758678676525!5m2!1sen!2sph" width="600" height="450" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+<!-- Google Maps iframe -->
+<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d304.1754523334477!2d121.17856621742249!3d14.583767431828697!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3397bf77cbabe495%3A0x3856d006fdaa046d!2sDGZ%20Antipolo%20Sto.%20Ni%C3%B1o!5e1!3m2!1sen!2sph!4v1759803072975!5m2!1sen!2sph" width="600" height="450" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+
             </div>
         </div>
 

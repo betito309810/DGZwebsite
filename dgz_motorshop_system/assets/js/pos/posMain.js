@@ -942,6 +942,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
 
                     if (Number.isFinite(max) && max > 0 && value > max) {
+                         alert(`Only ${max} stock available.`);
                         value = max;
                     }
 
