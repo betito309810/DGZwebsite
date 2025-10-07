@@ -217,22 +217,22 @@ $profile_created = format_profile_date($current_user['created_at'] ?? null);
         <div class="dashboard-content">
             <!-- Stats Overview -->
             <div class="stats-overview">
-                <div class="stat-card">
+                <a class="stat-card" href="sales.php">
                     <div class="stat-value"><?= intval($t['c']) ?></div>
                     <div class="stat-label">Today's Orders</div>
-                </div>
-                <div class="stat-card">
+                </a>
+                <a class="stat-card" href="sales.php">
                     <div class="stat-value">₱<?= number_format($t['s'], 2) ?></div>
                     <div class="stat-label">Today's Sales</div>
-                </div>
-                <div class="stat-card">
+                </a>
+                <a class="stat-card" href="inventory.php">
                     <div class="stat-value"><?= count($low) ?></div>
                     <div class="stat-label">Low Stock Items</div>
-                </div>
-                <div class="stat-card">
+                </a>
+                <a class="stat-card" href="sales.php">
                     <div class="stat-value"><?= count($top) ?></div>
                     <div class="stat-label">Top Products</div>
-                </div>
+                </a>
             </div>
 
             <!-- Dashboard Grid -->

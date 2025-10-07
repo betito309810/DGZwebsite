@@ -197,15 +197,25 @@ body {
 }
 
 .stat-card {
+    display: block;
     background: white;
     padding: 25px;
     border-radius: 12px;
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
     border-left: 4px solid #3498db;
     transition: transform 0.3s ease;
+    text-decoration: none;
+    color: inherit;
+    cursor: pointer;
 }
 
 .stat-card:hover {
+    transform: translateY(-2px);
+}
+
+.stat-card:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.3);
     transform: translateY(-2px);
 }
 
