@@ -239,13 +239,14 @@ body {
 }
 
 .widget-header {
-     height: 84px;              /* pick a value you like (56–68px works) */
-  padding: 0 25px;   
+    padding: 20px 24px;
     border-bottom: 1px solid #e9ecef;
     background: #f8f9fa;
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
+    gap: 16px;
+    flex-wrap: wrap;
 }
 .widget-title {
     font-size: 18px;
@@ -254,14 +255,17 @@ body {
     display: flex;
     align-items: center;
     gap: 12px;
+    margin: 0;
+    flex: 1 1 auto;
 }
 
 
 .period-form {
     display: flex;
-    align-items: flex-end;
-    gap: 16px;
+    align-items: flex-start;
+    gap: 12px;
     flex-wrap: wrap;
+    margin-left: auto;
 }
 
 .period-form .control-group {
@@ -312,22 +316,23 @@ body {
 
 .selected-period {
     font-size: 13px;
-    color: #7f8c8d;
-    margin-bottom: 12px;
+    color: #64748b;
+    margin: 0 0 16px 0;
 }
 
 @media (max-width: 768px) {
     .widget-header {
         flex-direction: column;
-        gap: 10px;
-        align-items: flex-start;
+        align-items: stretch;
+        gap: 12px;
     }
-    
+
     .period-form {
         width: 100%;
         flex-direction: column;
         align-items: stretch;
-        gap: 12px;
+        gap: 10px;
+        margin-left: 0;
     }
 
     .period-dropdown,

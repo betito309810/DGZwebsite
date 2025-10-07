@@ -77,18 +77,61 @@
                 return;
             }
 
-            if (!description || !window.SalesPeriodFilters || typeof window.SalesPeriodFilters.formatRangeText !== 'function') {
+            if (!description) {
                 hintElement.textContent = initialHint || '';
                 return;
             }
 
-            const rangeText = window.SalesPeriodFilters.formatRangeText({
-                start: description.rangeStart,
-                end: description.rangeEnd,
-            });
-            const nextHint = rangeText || '';
+            const nextHint = formatRangeHint(description.rangeStart, description.rangeEnd);
             hintElement.textContent = nextHint;
             initialHint = nextHint;
+        }
+
+        function formatRangeHint(start, end) {
+            const startDate = parseYMD(start);
+            const endDate = parseYMD(end);
+
+            if (!startDate && !endDate) {
+                return initialHint || '';
+            }
+
+            const formattedStart = formatFriendlyDate(startDate);
+            const formattedEnd = formatFriendlyDate(endDate);
+
+            if (!formattedEnd || formattedStart === formattedEnd) {
+                return formattedStart || formattedEnd || '';
+            }
+
+            if (!formattedStart) {
+                return formattedEnd;
+            }
+
+            return `${formattedStart} - ${formattedEnd}`;
+        }
+
+        function parseYMD(value) {
+            if (!value) {
+                return null;
+            }
+
+            const parts = value.split('-').map((part) => parseInt(part, 10));
+            if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) {
+                return null;
+            }
+
+            return new Date(parts[0], parts[1] - 1, parts[2]);
+        }
+
+        function formatFriendlyDate(date) {
+            if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+                return '';
+            }
+
+            return date.toLocaleDateString('en-US', {
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric',
+            });
         }
     }
 })(window, document);

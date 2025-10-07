@@ -65,9 +65,32 @@ $topPeriodValue = $topPeriodInfo['value'];
 $topPeriodLabel = $topPeriodInfo['label'];
 $topRangeStart = $topPeriodInfo['range_start'];
 $topRangeEnd = $topPeriodInfo['range_end'];
-$topRangeDisplay = $topRangeStart === $topRangeEnd
-    ? $topRangeStart
-    : $topRangeStart . ' - ' . $topRangeEnd;
+
+function format_top_selling_range(string $startDate, string $endDate): string
+{
+    $start = DateTimeImmutable::createFromFormat('Y-m-d', $startDate) ?: null;
+    $end = DateTimeImmutable::createFromFormat('Y-m-d', $endDate) ?: null;
+
+    if (!$start) {
+        return $startDate;
+    }
+
+    if (!$end) {
+        $end = $start;
+    }
+
+    if ($start->format('Y-m-d') === $end->format('Y-m-d')) {
+        return $start->format('F j, Y');
+    }
+
+    return sprintf(
+        '%s - %s',
+        $start->format('F j, Y'),
+        $end->format('F j, Y')
+    );
+}
+
+$topRangeDisplay = format_top_selling_range($topRangeStart, $topRangeEnd);
 
 $topPickerType = 'date';
 $topPickerLabel = 'Select day';
@@ -95,7 +118,7 @@ try {
         INNER JOIN products p ON p.id = oi.product_id
         WHERE o.created_at >= :start
           AND o.created_at < :end
-          AND o.status IN ('approved', 'completed')
+          AND o.status IN ('pending', 'payment_verification', 'approved', 'completed')
         GROUP BY p.id
         ORDER BY sold DESC
         LIMIT 5
