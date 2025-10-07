@@ -25,7 +25,7 @@ $inventoryNotificationCount = $inventoryNotificationData['active_count'];
 // Fetch the authenticated user's information for the profile modal
 $current_user = null;
 try {
-    $stmt = $pdo->prepare('SELECT name, role, created_at FROM users WHERE id = ?');
+    $stmt = $pdo->prepare('SELECT * FROM users WHERE id = ?');
     $stmt->execute([$_SESSION['user_id']]);
     $current_user = $stmt->fetch();
 } catch (Exception $e) {
@@ -46,9 +46,105 @@ function format_profile_date(?string $datetime): string
     return date('F j, Y g:i A', $timestamp);
 }
 
-$profile_name = $current_user['name'] ?? 'N/A';
-$profile_role = !empty($current_user['role']) ? ucfirst($current_user['role']) : 'N/A';
-$profile_created = format_profile_date($current_user['created_at'] ?? null);
+function resolve_profile_name(array $user): ?string
+{
+    $candidates = [];
+
+    foreach (['name', 'full_name', 'display_name'] as $key) {
+        if (!empty($user[$key])) {
+            $candidates[] = $user[$key];
+        }
+    }
+
+    if (!empty($user['first_name']) || !empty($user['last_name'])) {
+        $first = trim((string) ($user['first_name'] ?? ''));
+        $last = trim((string) ($user['last_name'] ?? ''));
+        $candidates[] = trim($first . ' ' . $last);
+    }
+
+    if (!empty($user['username'])) {
+        $candidates[] = $user['username'];
+    }
+
+    if (!empty($_SESSION['user_name'])) {
+        $candidates[] = $_SESSION['user_name'];
+    }
+
+    foreach ($candidates as $candidate) {
+        $candidate = trim((string) $candidate);
+        if ($candidate !== '') {
+            return $candidate;
+        }
+    }
+
+    return null;
+}
+
+function resolve_profile_created(array $user): ?string
+{
+    $candidates = [];
+
+    foreach (['created_at', 'date_created', 'createdAt', 'created_on'] as $key) {
+        if (!empty($user[$key])) {
+            $candidates[] = $user[$key];
+        }
+    }
+
+    if (!empty($_SESSION['user_created_at'])) {
+        $candidates[] = $_SESSION['user_created_at'];
+    }
+
+    foreach ($candidates as $candidate) {
+        $formatted = format_profile_date((string) $candidate);
+        if ($formatted !== 'N/A') {
+            return $formatted;
+        }
+    }
+
+    return null;
+}
+
+$profile_name = 'N/A';
+$profile_role = 'N/A';
+$profile_created = 'N/A';
+
+if (is_array($current_user) && !empty($current_user)) {
+    $resolvedName = resolve_profile_name($current_user);
+    if ($resolvedName !== null) {
+        $profile_name = $resolvedName;
+        $_SESSION['user_name'] = $resolvedName;
+    }
+
+    if (!empty($current_user['role'])) {
+        $profile_role = ucfirst((string) $current_user['role']);
+    }
+
+    $resolvedCreated = resolve_profile_created($current_user);
+    if ($resolvedCreated !== null) {
+        $profile_created = $resolvedCreated;
+
+        $rawCreated = $current_user['created_at'] ?? $current_user['date_created'] ?? $current_user['createdOn'] ?? null;
+        if (!empty($rawCreated)) {
+            $_SESSION['user_created_at'] = $rawCreated;
+        }
+    }
+} elseif (!empty($_SESSION['user_name']) || !empty($_SESSION['user_created_at'])) {
+    if (!empty($_SESSION['user_name'])) {
+        $profile_name = $_SESSION['user_name'];
+    }
+
+    if (!empty($_SESSION['role'])) {
+        $profile_role = ucfirst((string) $_SESSION['role']);
+    }
+
+    if (!empty($_SESSION['user_created_at'])) {
+        $profile_created = format_profile_date((string) $_SESSION['user_created_at']);
+    }
+} else {
+    if (!empty($_SESSION['role'])) {
+        $profile_role = ucfirst((string) $_SESSION['role']);
+    }
+}
 
 $successMessage = null;
 $errorMessage = null;
@@ -223,7 +319,6 @@ if ($role === 'admin') {
                 </div>
             </section>
 
-            <?php if ($role === 'admin'): ?>
             <section class="settings-section card">
                 <button type="button" class="settings-toggle" data-target="userManagementPanel" data-default-state="closed" aria-expanded="false">
                     <span class="label">
@@ -233,13 +328,18 @@ if ($role === 'admin') {
                     <i class="fas fa-chevron-down toggle-icon" aria-hidden="true"></i>
                 </button>
                 <div class="settings-panel" id="userManagementPanel">
-                    <?php
-                        $showUserManagementBackButton = false;
-                        include __DIR__ . '/partials/user_management_section.php';
-                    ?>
+                    <?php if ($role === 'admin'): ?>
+                        <?php
+                            $showUserManagementBackButton = false;
+                            include __DIR__ . '/partials/user_management_section.php';
+                        ?>
+                    <?php else: ?>
+                        <div class="access-restricted">
+                            User management tools are available to administrators only. Please contact an admin if you need to make account changes.
+                        </div>
+                    <?php endif; ?>
                 </div>
             </section>
-            <?php endif; ?>
         </div>
     </main>
 

@@ -12,6 +12,30 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
         if (password_verify($pass, (string) $u['password'])) {
             $_SESSION['user_id']=$u['id'];
             $_SESSION['role']=$u['role'];
+
+            // Persist commonly used profile information for faster access in
+            // areas where the full database record is not required.
+            $resolvedName = null;
+            if (!empty($u['name'])) {
+                $resolvedName = $u['name'];
+            } elseif (!empty($u['full_name'])) {
+                $resolvedName = $u['full_name'];
+            } elseif (!empty($u['first_name']) || !empty($u['last_name'])) {
+                $first = trim((string) ($u['first_name'] ?? ''));
+                $last = trim((string) ($u['last_name'] ?? ''));
+                $resolvedName = trim($first . ' ' . $last);
+            }
+
+            if (!empty($resolvedName)) {
+                $_SESSION['user_name'] = $resolvedName;
+            }
+
+            if (!empty($u['created_at'])) {
+                $_SESSION['user_created_at'] = $u['created_at'];
+            } elseif (!empty($u['date_created'])) {
+                $_SESSION['user_created_at'] = $u['date_created'];
+            }
+
             header('Location: dashboard.php'); exit;
         }
     }
