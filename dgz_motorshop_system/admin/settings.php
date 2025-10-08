@@ -221,7 +221,7 @@ if ($role === 'admin') {
     ?>
 
     <!-- Main Content -->
-    <main class="main-content">
+    <main class="main-content settings-layout">
         <!-- Header -->
         <!-- Notification Bell and User Menu -->
         <header class="header">
