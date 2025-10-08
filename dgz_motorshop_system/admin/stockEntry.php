@@ -304,10 +304,10 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
 
                     <?php if (!$formLocked): ?>
                         <div class="line-items-controls">
-                            <span class="line-items-hint">Add rows for each product received.</span>
                             <button type="button" class="btn-secondary" id="addLineItemBtn">
                                 <i class="fas fa-plus"></i> Add Line Item
                             </button>
+                            <span class="line-items-hint">Add rows for each product received.</span>
                         </div>
                     <?php endif; ?>
 
@@ -342,8 +342,10 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                                         <tr class="line-item-row<?= $rowHasDiscrepancy ? ' has-discrepancy' : '' ?>" data-selected-product="<?= $productId ? (int)$productId : '' ?>">
                                             <td>
                                                 <div class="product-selector">
-                                                    <input type="text" class="product-search" placeholder="Search name or code" value="">
-                                                    <div class="product-suggestions"></div>
+                                                    <div class="product-search-wrapper">
+                                                        <input type="text" class="product-search" placeholder="Search name or code" value="">
+                                                        <div class="product-suggestions"></div>
+                                                    </div>
                                                     <select name="product_id[]" class="product-select" required>
                                                         <option value="">Select product</option>
                                                         <?php foreach ($products as $product): ?>
