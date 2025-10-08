@@ -28,6 +28,7 @@
         <div class="nav-content">
             <a href="index.php" class="nav-link">HOME</a>
             <a href="about.php" class="nav-link active">ABOUT</a>
+            <a href="track-order.php" class="nav-link">TRACK ORDER</a>
 
         </div>
     </nav>

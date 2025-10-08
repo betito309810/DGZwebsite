@@ -58,8 +58,9 @@ natcasesort($categories);
     <!-- Navigation -->
     <nav class="nav">
         <div class="nav-content">
-            <a href="#home" class="nav-link active">HOME</a>
+            <a href="index.php" class="nav-link active">HOME</a>
             <a href="about.php" class="nav-link">ABOUT</a>
+            <a href="track-order.php" class="nav-link">TRACK ORDER</a>
 
         </div>
     </nav>
