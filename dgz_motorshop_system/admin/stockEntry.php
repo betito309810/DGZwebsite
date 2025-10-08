@@ -338,6 +338,9 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                                             <label>Product <span class="required">*</span></label>
                                             <div class="product-selector">
                                                 <div class="product-search-wrapper">
+                                                    <span class="product-search-icon" aria-hidden="true">
+                                                        <i class="fas fa-search"></i>
+                                                    </span>
                                                     <input type="text" class="product-search" placeholder="Search name or code" value="">
                                                     <button type="button" class="product-clear" aria-label="Clear selected product" hidden>
                                                         <i class="fas fa-times"></i>

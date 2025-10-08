@@ -310,19 +310,19 @@
     border-radius: 10px;
     background: #ffffff;
     transition: border-color 0.2s ease, box-shadow 0.2s ease, border-radius 0.2s ease;
+    gap: 4px;
+    padding-left: 12px;
 }
 
-.line-items-section .product-search-wrapper::before {
-    content: '\f002';
-    font-family: 'Font Awesome 6 Free';
-    font-weight: 900;
-    position: absolute;
-    left: 14px;
-    top: 50%;
-    transform: translateY(-50%);
+.line-items-section .product-search-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    min-width: 24px;
     color: #94a3b8;
+    font-size: 14px;
     pointer-events: none;
-    font-size: 13px;
 }
 
 .line-items-section .product-search {
@@ -330,7 +330,7 @@
     width: 100%;
     border: none;
     background: transparent;
-    padding: 10px 42px 10px 40px;
+    padding: 10px 42px 10px 4px;
     font-size: 14px;
     color: #0f172a;
 }
