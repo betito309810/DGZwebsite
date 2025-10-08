@@ -66,30 +66,31 @@
     gap: 10px;
 }
 
+
 .panel-toggle {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 14px;
-    border-radius: 8px;
-    border: 1px solid #cbd5f5;
-    background: #f1f5f9;
-    color: #1f2937;
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: none;
+    background: #17a2b8;
+    color: #ffffff;
     font-weight: 600;
     font-size: 13px;
     cursor: pointer;
-    transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
 }
 
 .panel-toggle:hover {
     transform: translateY(-1px);
-    box-shadow: 0 8px 16px rgba(148, 163, 184, 0.2);
-    background: #e2e8f0;
+    box-shadow: 0 6px 14px rgba(23, 162, 184, 0.28);
+    background-color: #148fa1;
 }
 
 .panel-toggle:focus {
     outline: none;
-    box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.35);
+    box-shadow: 0 0 0 3px rgba(23, 162, 184, 0.35);
 }
 
 .panel-toggle__icon {
