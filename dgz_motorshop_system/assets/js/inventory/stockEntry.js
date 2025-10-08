@@ -13,6 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const discrepancyNoteField = document.getElementById('discrepancy_note');
     const attachmentInput = document.getElementById('attachments');
     const attachmentList = document.getElementById('attachmentList');
+    const discrepancyRequiredIndicator = document.querySelector('[data-discrepancy-required]');
 
     if (!form || !lineItemsBody) {
         return;
@@ -51,6 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
         lineItemsBody.appendChild(newRow);
         bindRow(newRow);
         updateRemoveButtons();
+        updateDiscrepancyState();
     });
 
     saveDraftBtn?.addEventListener('click', () => {
@@ -83,6 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function cloneRow() {
         const clone = lineTemplates.row.cloneNode(true);
         clone.classList.remove('has-discrepancy');
+        clone.classList.remove('suggestions-open');
         clone.dataset.selectedProduct = '';
         clone.querySelectorAll('input').forEach((input) => {
             input.value = '';
@@ -94,6 +97,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const suggestions = clone.querySelector('.product-suggestions');
         if (suggestions) {
             suggestions.innerHTML = '';
+        }
+        const productSearch = clone.querySelector('.product-search');
+        if (productSearch) {
+            productSearch.value = '';
+            if (productSearch.dataset.defaultPlaceholder) {
+                productSearch.placeholder = productSearch.dataset.defaultPlaceholder;
+            }
         }
         const removeBtn = clone.querySelector('.remove-line-item');
         if (removeBtn) {
@@ -140,14 +150,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     const firstSuggestion = suggestions.querySelector('button');
                     if (firstSuggestion) {
                         event.preventDefault();
-                        applyProductSelection(row, firstSuggestion.dataset.productId);
+                        applyProductSelection(row, firstSuggestion.dataset.productId, { prefillSearch: false });
                     }
                 }
             });
 
             productSelect.addEventListener('change', () => {
                 const productId = productSelect.value;
-                applyProductSelection(row, productId, { skipFocus: true });
+                applyProductSelection(row, productId, { skipFocus: true, prefillSearch: false });
             });
 
             const presetId = row.dataset.selectedProduct;
@@ -171,16 +181,30 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateDiscrepancyState() {
+        if (!discrepancyNoteGroup) {
+            return;
+        }
         const hasAny = !!lineItemsBody.querySelector('.has-discrepancy');
+        const noteValue = (discrepancyNoteField?.value || '').trim();
+        const hasNote = noteValue !== '';
+        const shouldShow = hasAny || hasNote;
+
+        discrepancyNoteGroup.hidden = !shouldShow;
+
         if (hasAny) {
-            discrepancyNoteGroup.hidden = false;
             discrepancyNoteField?.setAttribute('required', 'required');
+            discrepancyRequiredIndicator?.removeAttribute('hidden');
         } else {
-            discrepancyNoteGroup.hidden = true;
             discrepancyNoteField?.removeAttribute('required');
-            if (discrepancyNoteField) {
-                discrepancyNoteField.value = '';
-            }
+            discrepancyRequiredIndicator?.setAttribute('hidden', 'hidden');
+        }
+
+        if (!hasAny && !hasNote && discrepancyNoteField) {
+            discrepancyNoteField.value = '';
+        }
+
+        if (discrepancyNoteGroup) {
+            discrepancyNoteGroup.dataset.hasInitial = hasNote ? '1' : '0';
         }
     }
 
@@ -207,6 +231,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const showDefault = options.showDefault ?? false;
         const query = term.trim().toLowerCase();
         suggestions.innerHTML = '';
+        row.classList.remove('suggestions-open');
 
         let results;
         if (!query) {
@@ -227,6 +252,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        row.classList.add('suggestions-open');
+
         results.forEach((entry) => {
             const button = document.createElement('button');
             button.type = 'button';
@@ -234,7 +261,7 @@ document.addEventListener('DOMContentLoaded', () => {
             button.dataset.productId = entry.id;
             button.textContent = entry.label;
             button.addEventListener('click', () => {
-                applyProductSelection(row, entry.id);
+                applyProductSelection(row, entry.id, { prefillSearch: false });
             });
             suggestions.appendChild(button);
         });
@@ -259,6 +286,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (suggestions && !options.keepSuggestions) {
                 suggestions.innerHTML = '';
             }
+            row.classList.remove('suggestions-open');
             return;
         }
 
@@ -279,6 +307,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (suggestions && !options.keepSuggestions) {
             suggestions.innerHTML = '';
         }
+        row.classList.remove('suggestions-open');
         if (!options.skipFocus) {
             searchInput.blur();
         }
@@ -300,6 +329,13 @@ document.addEventListener('DOMContentLoaded', () => {
             lineItemsBody.querySelectorAll('.product-suggestions').forEach((node) => {
                 node.innerHTML = '';
             });
+            lineItemsBody.querySelectorAll('.line-item-row.suggestions-open').forEach((row) => {
+                row.classList.remove('suggestions-open');
+            });
         }
+    });
+
+    discrepancyNoteField?.addEventListener('input', () => {
+        updateDiscrepancyState();
     });
 });

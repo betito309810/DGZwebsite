@@ -258,13 +258,6 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                             <?php endif; ?>
                         </p>
                     </div>
-                    <div class="panel-actions">
-                        <?php if (!$formLocked): ?>
-                        <button type="button" class="btn-secondary" id="addLineItemBtn">
-                            <i class="fas fa-plus"></i> Add Line Item
-                        </button>
-                        <?php endif; ?>
-                    </div>
                 </div>
                 <form id="stockInForm" method="POST" enctype="multipart/form-data" <?= $formLocked ? 'aria-disabled="true"' : '' ?>>
                     <?php if ($editingReceiptId): ?>
@@ -303,11 +296,20 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                             <label for="notes">Notes</label>
                             <textarea id="notes" name="notes" rows="3" placeholder="Any additional details"><?= htmlspecialchars($formNotes) ?></textarea>
                         </div>
-                        <div class="form-group" id="discrepancyNoteGroup" <?= $discrepancyGroupHiddenAttr ?> >
-                            <label for="discrepancy_note">Discrepancy Note <span class="required">*</span></label>
-                            <textarea id="discrepancy_note" name="discrepancy_note" rows="3" placeholder="Explain missing, damaged, or excess items"><?= htmlspecialchars($formDiscrepancyNote) ?></textarea>
+                        <div class="form-group" id="discrepancyNoteGroup" data-has-initial="<?= $hasPresetDiscrepancy ? '1' : '0' ?>" <?= $discrepancyGroupHiddenAttr ?> >
+                            <label for="discrepancy_note">Discrepancy Note <span class="required" data-discrepancy-required <?= $hasPresetDiscrepancy ? '' : 'hidden' ?>>*</span></label>
+                            <textarea id="discrepancy_note" name="discrepancy_note" rows="3" placeholder="Explain missing, damaged, or excess items"<?= $hasPresetDiscrepancy ? ' required' : '' ?>><?= htmlspecialchars($formDiscrepancyNote) ?></textarea>
                         </div>
                     </fieldset>
+
+                    <?php if (!$formLocked): ?>
+                        <div class="line-items-controls">
+                            <button type="button" class="btn-secondary" id="addLineItemBtn">
+                                <i class="fas fa-plus"></i> Add Line Item
+                            </button>
+                            <span class="line-items-hint">Add rows for each product received.</span>
+                        </div>
+                    <?php endif; ?>
 
                     <fieldset class="form-section line-items-section" aria-labelledby="lineItemsTitle" <?= $formLocked ? 'disabled' : '' ?>>
                         <legend id="lineItemsTitle">Line Items</legend>
@@ -741,6 +743,24 @@ function fetchSuppliersList(PDO $pdo): array
 }
 
 /**
+ * Use the database server time so posted timestamps align with other audit fields.
+ */
+function fetchDatabaseCurrentDateTime(PDO $pdo): string
+{
+    try {
+        $statement = $pdo->query('SELECT NOW()');
+        $value = $statement ? $statement->fetchColumn() : false;
+        if ($value !== false && $value !== null) {
+            return (string)$value;
+        }
+    } catch (Throwable $e) {
+        // Ignore and fall back to PHP time below.
+    }
+
+    return (new DateTimeImmutable())->format('Y-m-d H:i:s');
+}
+
+/**
  * Handle insert/update of a new stock receipt with items, attachments, and audit trail.
  */
 function handleStockReceiptSubmission(PDO $pdo, ?array $currentUser, array $post, array $files): array
@@ -828,8 +848,8 @@ function handleStockReceiptSubmission(PDO $pdo, ?array $currentUser, array $post
 
         $receiptCode = $existingReceipt['header']['receipt_code'] ?? generateReceiptCode($pdo);
         $receivedByUserId = $status === 'draft' ? null : $userId;
-        $postedAt = $status === 'draft' ? null : (new DateTimeImmutable())->format('Y-m-d H:i:s');
         $postedByUserId = $status === 'draft' ? null : $userId;
+        $postedAt = $status === 'draft' ? null : fetchDatabaseCurrentDateTime($pdo);
 
         if ($receiptId === 0) {
             $insertReceipt = $pdo->prepare('
@@ -1514,15 +1534,20 @@ function exportStockInReportCsv(string $filenameBase, array $headers, array $row
  */
 function exportStockInReportPdf(string $filenameBase, array $headers, array $rows, array $filters): void
 {
+    $columnWidths = [12, 12, 18, 12, 28, 12, 12, 16, 12];
+    $strongDivider = buildPdfTableDivider($columnWidths, '=');
+    $lightDivider = buildPdfTableDivider($columnWidths, '-');
+
     $lines = [];
-    $lines[] = 'Stock-In Report';
+    $lines[] = 'DGZ Motorshop · Stock-In Report';
+    $lines[] = 'Generated: ' . date('M d, Y g:i A');
 
     $activeFilters = [];
     if (!empty($filters['date_from_input'])) {
-        $activeFilters[] = 'From ' . $filters['date_from_input'];
+        $activeFilters[] = 'Date From: ' . $filters['date_from_input'];
     }
     if (!empty($filters['date_to_input'])) {
-        $activeFilters[] = 'To ' . $filters['date_to_input'];
+        $activeFilters[] = 'Date To: ' . $filters['date_to_input'];
     }
     if (!empty($filters['supplier'])) {
         $activeFilters[] = 'Supplier: ' . $filters['supplier'];
@@ -1533,7 +1558,7 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
         $activeFilters[] = 'Product ID: ' . $filters['product_id'];
     }
     if (!empty($filters['product_search'])) {
-        $activeFilters[] = 'Product search: ' . $filters['product_search'];
+        $activeFilters[] = 'Product Search: ' . $filters['product_search'];
     }
     if (!empty($filters['brand'])) {
         $activeFilters[] = 'Brand: ' . $filters['brand'];
@@ -1545,29 +1570,43 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
         $activeFilters[] = 'Status: ' . $filters['status_label'];
     }
 
+    $lines[] = '';
     if (!empty($activeFilters)) {
-        $lines[] = 'Filters: ' . implode(', ', $activeFilters);
+        $lines[] = 'Filters:';
+        foreach ($activeFilters as $filterLine) {
+            $lines[] = '  • ' . $filterLine;
+        }
+    } else {
+        $lines[] = 'Filters: All stock-in entries';
     }
 
-    $lines[] = implode(' | ', $headers);
+    $lines[] = '';
+    $lines[] = $strongDivider;
+    $lines[] = formatPdfTableRow($headers, $columnWidths);
+    $lines[] = $lightDivider;
 
     if (empty($rows)) {
         $lines[] = 'No stock-in records matched the selected filters.';
     } else {
         foreach ($rows as $row) {
-            $lines[] = implode(' | ', [
+            $lines[] = formatPdfTableRow([
                 $row['date_display'] ?? '',
                 $row['receipt_code'] ?? '',
                 $row['supplier_name'] ?? '',
                 $row['document_number'] ?? '',
-                $row['product_name'] ?? '',
-                (string)($row['qty_received'] ?? 0),
-                number_format((float)($row['unit_cost'] ?? 0), 2),
-                $row['receiver_name'] ?? '',
+                $row['product_name'] ?? 'Unknown Product',
+                $row['qty_received_display'] ?? (string)($row['qty_received'] ?? 0),
+                $row['unit_cost_display'] ?? number_format((float)($row['unit_cost'] ?? 0), 2),
+                $row['receiver_name'] ?? 'Pending',
                 $row['status_label'] ?? '',
-            ]);
+            ], $columnWidths);
         }
+        $lines[] = $strongDivider;
+        $lines[] = 'Total Rows: ' . count($rows);
     }
+
+    $lines[] = '';
+    $lines[] = 'Prepared via DGZ Inventory System';
 
     $pdfContent = buildSimplePdfDocument($lines);
 
@@ -1660,4 +1699,49 @@ function buildPdfContentStream(array $lines, int $leftMargin, int $topStart, int
     }
     $content .= "ET";
     return $content;
+}
+
+/**
+ * Calculate the divider width for the PDF table layout.
+ */
+function buildPdfTableDivider(array $columnWidths, string $character = '-'): string
+{
+    $columns = count($columnWidths);
+    $totalWidth = array_sum($columnWidths) + max(0, $columns - 1) * 3; // account for separators
+    return str_repeat($character, $totalWidth);
+}
+
+/**
+ * Format table rows with padding while safely trimming long values.
+ */
+function formatPdfTableRow(array $cells, array $columnWidths): string
+{
+    $formatted = [];
+    foreach ($columnWidths as $index => $width) {
+        $value = isset($cells[$index]) ? (string)$cells[$index] : '';
+        $ellipsis = $width > 3 ? '…' : '';
+
+        if (function_exists('mb_strimwidth')) {
+            $trimmed = mb_strimwidth($value, 0, $width, $ellipsis, 'UTF-8');
+            if (function_exists('mb_strwidth')) {
+                $displayWidth = mb_strwidth($trimmed, 'UTF-8');
+            } elseif (function_exists('mb_strlen')) {
+                $displayWidth = mb_strlen($trimmed, 'UTF-8');
+            } else {
+                $displayWidth = strlen($trimmed);
+            }
+        } else {
+            $maxLength = max(0, $width - strlen($ellipsis));
+            $trimmed = strlen($value) > $width ? substr($value, 0, $maxLength) . $ellipsis : substr($value, 0, $width);
+            $displayWidth = strlen($trimmed);
+        }
+
+        if ($displayWidth < $width) {
+            $trimmed .= str_repeat(' ', $width - $displayWidth);
+        }
+
+        $formatted[] = $trimmed;
+    }
+
+    return implode(' | ', $formatted);
 }
