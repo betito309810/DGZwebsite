@@ -2048,4 +2048,4 @@ function formatPdfTableRow(array $cells, array $columnWidths): string
     }
 
     return implode(' | ', $formatted);
-}
+}}}
