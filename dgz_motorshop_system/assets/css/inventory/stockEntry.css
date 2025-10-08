@@ -228,6 +228,18 @@
     margin-top: 16px;
 }
 
+/* Relocated discrepancy note positioning beneath the line items for clarity. */
+.line-items-section .discrepancy-note-group {
+    margin-top: 18px;
+}
+
+/* Helper text styling for the discrepancy note explanation. */
+.line-items-section .discrepancy-note-help {
+    margin: 0;
+    font-size: 12px;
+    color: #64748b;
+}
+
 .line-item-row {
     position: relative;
     background: #f8fafc;
