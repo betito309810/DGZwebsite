@@ -242,6 +242,10 @@ $page = max(1, $page);
 $limit = 15;
 $offset = ($page - 1) * $limit;
 
+$sort = $_GET['sort'] ?? '';
+$direction = strtolower($_GET['direction'] ?? 'asc');
+$direction = $direction === 'desc' ? 'desc' : 'asc';
+
 $whereSql = 'WHERE 1=1';
 $filterParams = [];
 
@@ -267,7 +271,12 @@ $countStmt->execute($filterParams);
 $totalInventoryProducts = (int) $countStmt->fetchColumn();
 $totalPages = (int) ceil($totalInventoryProducts / $limit);
 
-$inventorySql = 'SELECT * FROM products ' . $whereSql . ' ORDER BY created_at DESC LIMIT :limit OFFSET :offset';
+$orderBySql = 'ORDER BY created_at DESC';
+if ($sort === 'name') {
+    $orderBySql = 'ORDER BY name ' . strtoupper($direction);
+}
+
+$inventorySql = 'SELECT * FROM products ' . $whereSql . ' ' . $orderBySql . ' LIMIT :limit OFFSET :offset';
 $inventoryStmt = $pdo->prepare($inventorySql);
 foreach ($filterParams as $placeholder => $value) {
     $inventoryStmt->bindValue($placeholder, $value);
@@ -279,6 +288,23 @@ $inventoryProducts = $inventoryStmt->fetchAll();
 
 $startRecord = $totalInventoryProducts > 0 ? $offset + 1 : 0;
 $endRecord = min($offset + $limit, $totalInventoryProducts);
+
+$currentSort = $sort === 'name' ? 'name' : '';
+$currentDirection = $currentSort === 'name' ? $direction : '';
+$nameSortDirection = ($currentSort === 'name' && $currentDirection === 'asc') ? 'desc' : 'asc';
+$nameSortParams = $_GET;
+unset($nameSortParams['page']);
+$nameSortParams['page'] = 1;
+$nameSortParams['sort'] = 'name';
+$nameSortParams['direction'] = $nameSortDirection;
+$nameSortQuery = http_build_query($nameSortParams);
+$nameSortUrl = 'inventory.php' . ($nameSortQuery ? '?' . $nameSortQuery : '');
+$nameSortIndicator = '';
+if ($currentSort === 'name') {
+    $nameSortIndicator = $currentDirection === 'asc' ? '▲' : '▼';
+} else {
+    $nameSortIndicator = '↕';
+}
 
 // Restock requests overview data
 $restockRequests = $pdo->query('
@@ -485,6 +511,23 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
 
         .entries-table th {
             background-color: #f8f9fa;
+        }
+
+        .inventory-table th .sort-link {
+            color: inherit;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .inventory-table th .sort-link:hover {
+            text-decoration: underline;
+        }
+
+        .inventory-table th .sort-indicator {
+            font-size: 12px;
+            line-height: 1;
         }
 
         .hidden {
@@ -1049,6 +1092,8 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
         <div id="inventoryTable" class="table-container">
             <form method="get" class="inventory-filter-form" id="inventoryFilterForm">
                 <input type="hidden" name="page" value="1">
+                <input type="hidden" name="sort" value="<?= htmlspecialchars($currentSort) ?>">
+                <input type="hidden" name="direction" value="<?= htmlspecialchars($currentDirection ?: 'asc') ?>">
                 <div class="filter-row filter-row--toolbar">
                     <div class="filter-search-group">
                         <input type="text" name="search" aria-label="Search inventory" placeholder="Search product by name or code..." value="<?= htmlspecialchars($search) ?>" class="filter-search-input">
@@ -1083,19 +1128,23 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                     <thead>
                         <tr>
                             <th scope="col">Code</th>
-                            <th scope="col">Name</th>
+                            <th scope="col">
+                                <a href="<?= htmlspecialchars($nameSortUrl) ?>" class="sort-link">
+                                    Name
+                                    <span class="sort-indicator"><?= htmlspecialchars($nameSortIndicator) ?></span>
+                                </a>
+                            </th>
                             <th scope="col">Qty</th>
                             <th scope="col">Low Stock Threshold</th>
-                            <th scope="col">Date Added</th>
                             <?php if ($role === 'admin'): ?>
-                            <th scope="col">Update Stock</th>
+                            <th scope="col">Manual Adjust</th>
                             <?php endif; ?>
                         </tr>
                     </thead>
                     <tbody>
                         <?php if (empty($inventoryProducts)): ?>
                         <tr>
-                            <td colspan="<?= $role === 'admin' ? 6 : 5 ?>" class="empty-state">
+                            <td colspan="<?= $role === 'admin' ? 5 : 4 ?>" class="empty-state">
                                 <i class="fas fa-inbox"></i>
                                 No inventory items found matching the criteria.
                             </td>
@@ -1103,25 +1152,18 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                         <?php else: ?>
                         <?php foreach ($inventoryProducts as $p):
                             $low = $p['quantity'] <= $p['low_stock_threshold'];
-                            $createdAtRaw = $p['created_at'] ?? null;
-                            $createdAtDisplay = '—';
-                            if ($createdAtRaw) {
-                                $timestamp = strtotime($createdAtRaw);
-                                $createdAtDisplay = $timestamp !== false ? date('M d, Y', $timestamp) : $createdAtRaw;
-                            }
                         ?>
                         <tr<?= $low ? ' class="low-stock"' : '' ?> data-product-id="<?= (int) $p['id'] ?>">
                             <td><?= htmlspecialchars($p['code']) ?></td>
                             <td><?= htmlspecialchars($p['name']) ?></td>
                             <td><?= intval($p['quantity']) ?></td>
                             <td><?= intval($p['low_stock_threshold']) ?></td>
-                            <td><?= htmlspecialchars($createdAtDisplay) ?></td>
                             <?php if ($role === 'admin'): ?>
                             <td>
                                 <form method="post">
                                     <input type="hidden" name="id" value="<?= (int) $p['id'] ?>">
                                     <input type="number" name="change" value="0" step="1">
-                                    <button type="submit" name="update_stock">Apply</button>
+                                    <button type="submit" name="update_stock">Manual Adjust</button>
                                 </form>
                             </td>
                             <?php endif; ?>
