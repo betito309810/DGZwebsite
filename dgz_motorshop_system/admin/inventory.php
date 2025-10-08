@@ -4,6 +4,7 @@ if(empty($_SESSION['user_id'])){ header('Location: login.php'); exit; }
 $pdo = db();
 $role = $_SESSION['role'] ?? '';
 enforceStaffAccess();
+$canManualAdjust = in_array($role, ['admin', 'staff'], true);
 $userId = $_SESSION['user_id'] ?? 0;
 $allowedPriorities = ['low', 'medium', 'high'];
 
@@ -167,8 +168,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_restock_reques
 }
 
 
-// Handle stock updates (admin only)
-if ($role === 'admin' && isset($_POST['update_stock'])) {
+// Handle stock updates (admin and staff)
+if ($canManualAdjust && isset($_POST['update_stock'])) {
     $id = intval($_POST['id'] ?? 0);
     $change = intval($_POST['change'] ?? 0);
 
@@ -1136,7 +1137,7 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                             </th>
                             <th scope="col">Qty</th>
                             <th scope="col">Low Stock Threshold</th>
-                            <?php if ($role === 'admin'): ?>
+                            <?php if ($canManualAdjust): ?>
                             <th scope="col">Manual Adjust</th>
                             <?php endif; ?>
                         </tr>
@@ -1144,7 +1145,7 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                     <tbody>
                         <?php if (empty($inventoryProducts)): ?>
                         <tr>
-                            <td colspan="<?= $role === 'admin' ? 5 : 4 ?>" class="empty-state">
+                            <td colspan="<?= $canManualAdjust ? 5 : 4 ?>" class="empty-state">
                                 <i class="fas fa-inbox"></i>
                                 No inventory items found matching the criteria.
                             </td>
@@ -1158,7 +1159,7 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                             <td><?= htmlspecialchars($p['name']) ?></td>
                             <td><?= intval($p['quantity']) ?></td>
                             <td><?= intval($p['low_stock_threshold']) ?></td>
-                            <?php if ($role === 'admin'): ?>
+                            <?php if ($canManualAdjust): ?>
                             <td>
                                 <form method="post">
                                     <input type="hidden" name="id" value="<?= (int) $p['id'] ?>">
