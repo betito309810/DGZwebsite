@@ -540,7 +540,8 @@ body.modal-open {
     padding: 30px;
     display: flex;
     flex-direction: column;
-    gap: 0;
+    align-items: stretch;
+    gap: 20px;
 }
 
 .settings-section {
@@ -549,6 +550,12 @@ body.modal-open {
     box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
     border: 1px solid #e2e8f0;
     overflow: hidden;
+}
+
+.settings-content .card {
+    width: 100%;
+    max-width: 900px;
+    margin: 0 auto;
 }
 
 .settings-toggle {
@@ -618,6 +625,7 @@ body.modal-open {
 @media (max-width: 768px) {
     .settings-content {
         padding: 20px;
+        gap: 16px;
     }
 
     .settings-toggle {
