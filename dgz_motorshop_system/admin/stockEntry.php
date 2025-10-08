@@ -1538,6 +1538,7 @@ function exportStockInReportCsv(string $filenameBase, array $headers, array $row
  */
 function exportStockInReportPdf(string $filenameBase, array $headers, array $rows, array $filters): void
 {
+<<<<<<< HEAD
 
     $columnWidths = [12, 12, 18, 12, 28, 12, 12, 16, 12];
     $strongDivider = buildPdfTableDivider($columnWidths, '=');
@@ -1606,6 +1607,8 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
                 $row['status_label'] ?? '',
             ], $columnWidths);
 
+=======
+>>>>>>> codex/fix-stockentry-http-error-500
     require_once __DIR__ . '/../vendor/autoload.php';
 
     $generatedOn = date('F j, Y g:i A');
@@ -1634,18 +1637,22 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
             $filterSummaries[] = 'Date From: ' . $dateFromLabel;
         } else {
             $filterSummaries[] = 'Date To: ' . $dateToLabel;
+<<<<<<< HEAD
 
+=======
+>>>>>>> codex/fix-stockentry-http-error-500
         }
-        $lines[] = $strongDivider;
-        $lines[] = 'Total Rows: ' . count($rows);
     }
 
+<<<<<<< HEAD
 
     $lines[] = '';
     $lines[] = 'Prepared via DGZ Inventory System';
 
     $pdfContent = buildSimplePdfDocument($lines);
 
+=======
+>>>>>>> codex/fix-stockentry-http-error-500
     if (!empty($filters['supplier'])) {
         $filterSummaries[] = 'Supplier: ' . $filters['supplier'];
     }
@@ -1666,7 +1673,10 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
     if (!empty($filters['status_label'])) {
         $filterSummaries[] = 'Status: ' . $filters['status_label'];
     }
+<<<<<<< HEAD
 
+=======
+>>>>>>> codex/fix-stockentry-http-error-500
 
     $totalRows = count($rows);
     $totalQty = 0.0;
@@ -1921,6 +1931,7 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
     $dompdf->stream($filenameBase . '.pdf', ['Attachment' => true]);
     exit;
 }
+<<<<<<< HEAD
     }
 
 /**
@@ -2049,3 +2060,5 @@ function formatPdfTableRow(array $cells, array $columnWidths): string
 
     return implode(' | ', $formatted);
 }
+=======
+>>>>>>> codex/fix-stockentry-http-error-500

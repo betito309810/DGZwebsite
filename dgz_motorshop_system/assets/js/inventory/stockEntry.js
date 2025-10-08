@@ -21,8 +21,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const allProducts = Array.isArray(bootstrapData.products) ? bootstrapData.products : [];
     const formLocked = Boolean(bootstrapData.formLocked);
+    // Added guard to alert about unsaved Stock-In form changes before navigating away.
     const unsavedWarningMessage = 'You have unsaved stock-in form. '
-        + 'Save the form as a draft or post it before leaving, or do you want to discard it?';
+        + 'Save the form as a draft or post it before leaving. Or do you want to discard it?';
     let isFormDirty = false;
     let isSubmitting = false;
 
@@ -90,6 +91,11 @@ document.addEventListener('DOMContentLoaded', () => {
         form.addEventListener('change', () => {
             markDirty();
         }, true);
+        form.addEventListener('submit', () => {
+            isSubmitting = true;
+            resetDirty();
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+        });
     }
 
     const triggerSubmit = (action) => {
@@ -116,10 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
         bindRow(newRow);
         updateRemoveButtons();
         updateDiscrepancyState();
-<<<<<<< HEAD
-=======
         markDirty();
->>>>>>> codex/refactor-stockentry.php-design-elements-wrvzkx
     });
 
     saveDraftBtn?.addEventListener('click', () => {
@@ -158,11 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (select) {
             select.value = '';
         }
-<<<<<<< HEAD
-        clearProductSelection(clone);
-=======
         clearProductSelection(clone, { suppressDirty: true });
->>>>>>> codex/refactor-stockentry.php-design-elements-wrvzkx
         const removeBtn = clone.querySelector('.remove-line-item');
         if (removeBtn) {
             removeBtn.disabled = false;
@@ -207,10 +206,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     clearProductSelection(row, { keepInputValue: true, keepSuggestions: true });
                 }
                 renderProductSuggestions(row, currentValue);
-<<<<<<< HEAD
-=======
                 markDirty();
->>>>>>> codex/refactor-stockentry.php-design-elements-wrvzkx
             });
             productSearch.addEventListener('focus', () => {
                 if (row.dataset.selectedProduct) {
@@ -239,15 +235,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const presetId = row.dataset.selectedProduct;
             if (presetId) {
-<<<<<<< HEAD
-                applyProductSelection(row, presetId, { skipFocus: true, renderSuggestions: false });
-            } else if (productSelect.value) {
-                applyProductSelection(row, productSelect.value, { skipFocus: true, renderSuggestions: false });
-=======
                 applyProductSelection(row, presetId, { skipFocus: true, renderSuggestions: false, skipDirty: true });
             } else if (productSelect.value) {
                 applyProductSelection(row, productSelect.value, { skipFocus: true, renderSuggestions: false, skipDirty: true });
->>>>>>> codex/refactor-stockentry.php-design-elements-wrvzkx
             }
         }
     }
@@ -410,22 +400,16 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             row.classList.remove('suggestions-open');
             clearBtn?.setAttribute('hidden', 'hidden');
-<<<<<<< HEAD
-=======
             if (!options.suppressDirty && hadSelection) {
                 markDirty();
             }
->>>>>>> codex/refactor-stockentry.php-design-elements-wrvzkx
             return;
         }
 
         const label = buildProductLabel(product);
 
         select.value = String(product.id);
-<<<<<<< HEAD
-=======
         const previousSelection = row.dataset.selectedProduct;
->>>>>>> codex/refactor-stockentry.php-design-elements-wrvzkx
         row.dataset.selectedProduct = String(product.id);
         row.dataset.selectedLabel = label;
         searchInput.value = label;
@@ -485,41 +469,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function clearProductSelection(row, options = {}) {
-        const select = row.querySelector('select[name="product_id[]"]');
-        const searchInput = row.querySelector('.product-search');
-        const suggestions = row.querySelector('.product-suggestions');
-        const clearBtn = row.querySelector('.product-clear');
-
-        if (select) {
-            select.value = '';
-        }
-        row.dataset.selectedProduct = '';
-        row.dataset.selectedLabel = '';
-
-        if (searchInput && !options.keepInputValue) {
-            searchInput.value = '';
-        }
-        if (searchInput && searchInput.dataset.defaultPlaceholder && !options.keepPlaceholder) {
-            searchInput.placeholder = searchInput.dataset.defaultPlaceholder;
-        }
-
-        if (!options.keepSuggestions && suggestions) {
-            suggestions.innerHTML = '';
-        }
-        if (!options.keepSuggestions) {
-            row.classList.remove('suggestions-open');
-        }
-
-        if (clearBtn && !options.keepClearButton) {
-            clearBtn.setAttribute('hidden', 'hidden');
-        }
-
-        if (options.focus && searchInput) {
-            searchInput.focus();
-        }
-    }
-
     function buildProductLabel(product) {
         const parts = [product.name];
         if (product.code) {
@@ -540,6 +489,7 @@ document.addEventListener('DOMContentLoaded', () => {
             .replace(/'/g, '&#39;');
     }
 
+    // Intercept navigation clicks so unsaved Stock-In forms prompt before leaving the page.
     document.addEventListener('click', (event) => {
         if (!event.target.closest('.product-selector')) {
             lineItemsBody.querySelectorAll('.product-suggestions').forEach((node) => {
@@ -548,8 +498,6 @@ document.addEventListener('DOMContentLoaded', () => {
             lineItemsBody.querySelectorAll('.line-item-row.suggestions-open').forEach((row) => {
                 row.classList.remove('suggestions-open');
             });
-<<<<<<< HEAD
-=======
         }
 
         if (formLocked || !isFormDirty || isSubmitting) {
@@ -578,15 +526,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const proceed = window.confirm(unsavedWarningMessage);
         if (proceed) {
             navigateAway(link.href);
->>>>>>> codex/refactor-stockentry.php-design-elements-wrvzkx
         }
     });
 
     discrepancyNoteField?.addEventListener('input', () => {
         updateDiscrepancyState();
-<<<<<<< HEAD
-=======
         markDirty();
->>>>>>> codex/refactor-stockentry.php-design-elements-wrvzkx
     });
 });
