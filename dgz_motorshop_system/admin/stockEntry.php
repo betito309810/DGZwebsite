@@ -314,78 +314,74 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                     <fieldset class="form-section line-items-section" aria-labelledby="lineItemsTitle" <?= $formLocked ? 'disabled' : '' ?>>
                         <legend id="lineItemsTitle">Line Items</legend>
                         <p class="table-hint table-hint-inline">Tip: Use Qty Expected to highlight discrepancies before posting.</p>
-                        <div class="table-wrapper">
-                            <table class="line-items-table">
-                                <thead>
-                                    <tr>
-                                        <th>Product <span class="required">*</span></th>
-                                        <th>Qty Expected</th>
-                                        <th>Qty Received <span class="required">*</span></th>
-                                        <th>Unit Cost</th>
-                                        <th>Expiry</th>
-                                        <th>Lot / Batch</th>
-                                        <th></th>
-                                    </tr>
-                                </thead>
-                                <tbody id="lineItemsBody">
-                                    <?php foreach ($existingItems as $index => $item): ?>
-                                        <?php
-                                            $productId = $item['product_id'];
-                                            $qtyExpected = $item['qty_expected'];
-                                            $qtyReceived = $item['qty_received'];
-                                            $unitCost = $item['unit_cost'];
-                                            $expiryDate = $item['expiry_date'];
-                                            $lotNumber = $item['lot_number'];
-                                            $rowHasDiscrepancy = !empty($item['has_discrepancy']);
-                                            $rowInvalidExpiry = !empty($item['invalid_expiry']);
-                                        ?>
-                                        <tr class="line-item-row<?= $rowHasDiscrepancy ? ' has-discrepancy' : '' ?>" data-selected-product="<?= $productId ? (int)$productId : '' ?>">
-                                            <td>
-                                                <div class="product-selector">
-                                                    <div class="product-search-wrapper">
-                                                        <input type="text" class="product-search" placeholder="Search name or code" value="">
-                                                        <button type="button" class="product-clear" aria-label="Clear selected product" hidden>
-                                                            <i class="fas fa-times"></i>
-                                                        </button>
-                                                        <div class="product-suggestions"></div>
-                                                    </div>
-                                                    <select name="product_id[]" class="product-select" required>
-                                                        <option value="">Select product</option>
-                                                        <?php foreach ($products as $product): ?>
-                                                            <option value="<?= (int)$product['id'] ?>" <?= $productId == (int)$product['id'] ? 'selected' : '' ?>>
-                                                                <?= htmlspecialchars($product['name']) ?>
-                                                            </option>
-                                                        <?php endforeach; ?>
-                                                    </select>
+                        <div id="lineItemsBody" class="line-items-body">
+                            <?php foreach ($existingItems as $index => $item): ?>
+                                <?php
+                                    $productId = $item['product_id'];
+                                    $qtyExpected = $item['qty_expected'];
+                                    $qtyReceived = $item['qty_received'];
+                                    $unitCost = $item['unit_cost'];
+                                    $expiryDate = $item['expiry_date'];
+                                    $lotNumber = $item['lot_number'];
+                                    $rowHasDiscrepancy = !empty($item['has_discrepancy']);
+                                    $rowInvalidExpiry = !empty($item['invalid_expiry']);
+                                ?>
+                                <div class="line-item-row<?= $rowHasDiscrepancy ? ' has-discrepancy' : '' ?>" data-selected-product="<?= $productId ? (int)$productId : '' ?>">
+                                    <div class="line-item-header">
+                                        <h4 class="line-item-title">Item <?= $index + 1 ?></h4>
+                                        <button type="button" class="icon-btn remove-line-item" aria-label="Remove line item" <?= ($index === 0 || $formLocked) ? 'disabled' : '' ?>>
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                    <div class="line-item-grid">
+                                        <div class="line-item-field product-field">
+                                            <label>Product <span class="required">*</span></label>
+                                            <div class="product-selector">
+                                                <div class="product-search-wrapper">
+                                                    <input type="text" class="product-search" placeholder="Search name or code" value="">
+                                                    <button type="button" class="product-clear" aria-label="Clear selected product" hidden>
+                                                        <i class="fas fa-times"></i>
+                                                    </button>
+                                                    <div class="product-suggestions"></div>
                                                 </div>
-                                            </td>
-                                            <td>
-                                                <input type="number" name="qty_expected[]" min="0" step="1" placeholder="0" value="<?= $qtyExpected !== null ? htmlspecialchars((string)$qtyExpected) : '' ?>">
-                                            </td>
-                                            <td>
-                                                <input type="number" name="qty_received[]" min="0" step="1" placeholder="0" value="<?= $qtyReceived !== null ? htmlspecialchars((string)$qtyReceived) : '' ?>" <?= $formLocked ? 'readonly' : 'required' ?>>
-                                            </td>
-                                            <td>
-                                                <input type="number" name="unit_cost[]" min="0" step="0.01" placeholder="0.00" value="<?= $unitCost !== null ? htmlspecialchars(number_format((float)$unitCost, 2, '.', '')) : '' ?>">
-                                            </td>
-                                            <td>
+                                                <select name="product_id[]" class="product-select" required>
+                                                    <option value="">Select product</option>
+                                                    <?php foreach ($products as $product): ?>
+                                                        <option value="<?= (int)$product['id'] ?>" <?= $productId == (int)$product['id'] ? 'selected' : '' ?>>
+                                                            <?= htmlspecialchars($product['name']) ?>
+                                                        </option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="line-item-field">
+                                            <label>Qty Expected</label>
+                                            <input type="number" name="qty_expected[]" min="0" step="1" placeholder="0" value="<?= $qtyExpected !== null ? htmlspecialchars((string)$qtyExpected) : '' ?>">
+                                        </div>
+                                        <div class="line-item-field">
+                                            <label>Qty Received <span class="required">*</span></label>
+                                            <input type="number" name="qty_received[]" min="0" step="1" placeholder="0" value="<?= $qtyReceived !== null ? htmlspecialchars((string)$qtyReceived) : '' ?>" <?= $formLocked ? 'readonly' : 'required' ?>>
+                                        </div>
+                                        <div class="line-item-field">
+                                            <label>Unit Cost</label>
+                                            <input type="number" name="unit_cost[]" min="0" step="0.01" placeholder="0.00" value="<?= $unitCost !== null ? htmlspecialchars(number_format((float)$unitCost, 2, '.', '')) : '' ?>">
+                                        </div>
+                                        <div class="line-item-field">
+                                            <label>Expiry</label>
+                                            <div>
                                                 <input type="date" name="expiry_date[]" value="<?= $expiryDate ? htmlspecialchars($expiryDate) : '' ?>">
                                                 <?php if ($rowInvalidExpiry): ?>
                                                     <small class="input-error">Use YYYY-MM-DD (e.g., <?= date('Y-m-d') ?>).</small>
                                                 <?php endif; ?>
-                                            </td>
-                                            <td>
-                                                <input type="text" name="lot_number[]" placeholder="Lot or batch" value="<?= $lotNumber ? htmlspecialchars($lotNumber) : '' ?>">
-                                            </td>
-                                            <td class="actions">
-                                                <button type="button" class="icon-btn remove-line-item" aria-label="Remove line item" <?= ($index === 0 || $formLocked) ? 'disabled' : '' ?>>
-                                                    <i class="fas fa-trash"></i>
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
+                                            </div>
+                                        </div>
+                                        <div class="line-item-field">
+                                            <label>Lot / Batch</label>
+                                            <input type="text" name="lot_number[]" placeholder="Lot or batch" value="<?= $lotNumber ? htmlspecialchars($lotNumber) : '' ?>">
+                                        </div>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
                         </div>
                     </fieldset>
 

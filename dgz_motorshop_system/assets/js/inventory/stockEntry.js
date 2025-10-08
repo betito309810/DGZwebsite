@@ -218,12 +218,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const rows = Array.from(lineItemsBody.querySelectorAll('.line-item-row'));
         rows.forEach((row, index) => {
             const removeBtn = row.querySelector('.remove-line-item');
-            if (!removeBtn) {
-                return;
+            if (removeBtn) {
+                removeBtn.disabled = rows.length === 1;
+                if (index > 0) {
+                    removeBtn.disabled = false;
+                }
             }
-            removeBtn.disabled = rows.length === 1;
-            if (index > 0) {
-                removeBtn.disabled = false;
+        });
+        refreshLineItemLabels(rows);
+    }
+
+    function refreshLineItemLabels(rows = null) {
+        const lineRows = rows || Array.from(lineItemsBody.querySelectorAll('.line-item-row'));
+        lineRows.forEach((row, index) => {
+            const title = row.querySelector('.line-item-title');
+            if (title) {
+                title.textContent = `Item ${index + 1}`;
             }
         });
     }
