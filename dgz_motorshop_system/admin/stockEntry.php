@@ -258,13 +258,6 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                             <?php endif; ?>
                         </p>
                     </div>
-                    <div class="panel-actions">
-                        <?php if (!$formLocked): ?>
-                        <button type="button" class="btn-secondary" id="addLineItemBtn">
-                            <i class="fas fa-plus"></i> Add Line Item
-                        </button>
-                        <?php endif; ?>
-                    </div>
                 </div>
                 <form id="stockInForm" method="POST" enctype="multipart/form-data" <?= $formLocked ? 'aria-disabled="true"' : '' ?>>
                     <?php if ($editingReceiptId): ?>
@@ -303,82 +296,95 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                             <label for="notes">Notes</label>
                             <textarea id="notes" name="notes" rows="3" placeholder="Any additional details"><?= htmlspecialchars($formNotes) ?></textarea>
                         </div>
-                        <div class="form-group" id="discrepancyNoteGroup" <?= $discrepancyGroupHiddenAttr ?> >
-                            <label for="discrepancy_note">Discrepancy Note <span class="required">*</span></label>
-                            <textarea id="discrepancy_note" name="discrepancy_note" rows="3" placeholder="Explain missing, damaged, or excess items"><?= htmlspecialchars($formDiscrepancyNote) ?></textarea>
+                        <div class="form-group" id="discrepancyNoteGroup" data-has-initial="<?= $hasPresetDiscrepancy ? '1' : '0' ?>" <?= $discrepancyGroupHiddenAttr ?> >
+                            <label for="discrepancy_note">Discrepancy Note <span class="required" data-discrepancy-required <?= $hasPresetDiscrepancy ? '' : 'hidden' ?>>*</span></label>
+                            <textarea id="discrepancy_note" name="discrepancy_note" rows="3" placeholder="Explain missing, damaged, or excess items"<?= $hasPresetDiscrepancy ? ' required' : '' ?>><?= htmlspecialchars($formDiscrepancyNote) ?></textarea>
                         </div>
                     </fieldset>
+
+                    <?php if (!$formLocked): ?>
+                        <div class="line-items-controls">
+                            <button type="button" class="btn-secondary" id="addLineItemBtn">
+                                <i class="fas fa-plus"></i> Add Line Item
+                            </button>
+                            <span class="line-items-hint">Add rows for each product received.</span>
+                        </div>
+                    <?php endif; ?>
 
                     <fieldset class="form-section line-items-section" aria-labelledby="lineItemsTitle" <?= $formLocked ? 'disabled' : '' ?>>
                         <legend id="lineItemsTitle">Line Items</legend>
                         <p class="table-hint table-hint-inline">Tip: Use Qty Expected to highlight discrepancies before posting.</p>
-                        <div class="table-wrapper">
-                            <table class="line-items-table">
-                                <thead>
-                                    <tr>
-                                        <th>Product <span class="required">*</span></th>
-                                        <th>Qty Expected</th>
-                                        <th>Qty Received <span class="required">*</span></th>
-                                        <th>Unit Cost</th>
-                                        <th>Expiry</th>
-                                        <th>Lot / Batch</th>
-                                        <th></th>
-                                    </tr>
-                                </thead>
-                                <tbody id="lineItemsBody">
-                                    <?php foreach ($existingItems as $index => $item): ?>
-                                        <?php
-                                            $productId = $item['product_id'];
-                                            $qtyExpected = $item['qty_expected'];
-                                            $qtyReceived = $item['qty_received'];
-                                            $unitCost = $item['unit_cost'];
-                                            $expiryDate = $item['expiry_date'];
-                                            $lotNumber = $item['lot_number'];
-                                            $rowHasDiscrepancy = !empty($item['has_discrepancy']);
-                                            $rowInvalidExpiry = !empty($item['invalid_expiry']);
-                                        ?>
-                                        <tr class="line-item-row<?= $rowHasDiscrepancy ? ' has-discrepancy' : '' ?>" data-selected-product="<?= $productId ? (int)$productId : '' ?>">
-                                            <td>
-                                                <div class="product-selector">
+                        <div id="lineItemsBody" class="line-items-body">
+                            <?php foreach ($existingItems as $index => $item): ?>
+                                <?php
+                                    $productId = $item['product_id'];
+                                    $qtyExpected = $item['qty_expected'];
+                                    $qtyReceived = $item['qty_received'];
+                                    $unitCost = $item['unit_cost'];
+                                    $expiryDate = $item['expiry_date'];
+                                    $lotNumber = $item['lot_number'];
+                                    $rowHasDiscrepancy = !empty($item['has_discrepancy']);
+                                    $rowInvalidExpiry = !empty($item['invalid_expiry']);
+                                ?>
+                                <div class="line-item-row<?= $rowHasDiscrepancy ? ' has-discrepancy' : '' ?>" data-selected-product="<?= $productId ? (int)$productId : '' ?>">
+                                    <div class="line-item-header">
+                                        <h4 class="line-item-title">Item <?= $index + 1 ?></h4>
+                                        <button type="button" class="icon-btn remove-line-item" aria-label="Remove line item" <?= ($index === 0 || $formLocked) ? 'disabled' : '' ?>>
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                    <div class="line-item-grid">
+                                        <div class="line-item-field product-field">
+                                            <label>Product <span class="required">*</span></label>
+                                            <div class="product-selector">
+                                                <div class="product-search-wrapper">
+                                                    <span class="product-search-icon" aria-hidden="true">
+                                                        <i class="fas fa-search"></i>
+                                                    </span>
                                                     <input type="text" class="product-search" placeholder="Search name or code" value="">
+                                                    <button type="button" class="product-clear" aria-label="Clear selected product" hidden>
+                                                        <i class="fas fa-times"></i>
+                                                    </button>
                                                     <div class="product-suggestions"></div>
-                                                    <select name="product_id[]" class="product-select" required>
-                                                        <option value="">Select product</option>
-                                                        <?php foreach ($products as $product): ?>
-                                                            <option value="<?= (int)$product['id'] ?>" <?= $productId == (int)$product['id'] ? 'selected' : '' ?>>
-                                                                <?= htmlspecialchars($product['name']) ?>
-                                                            </option>
-                                                        <?php endforeach; ?>
-                                                    </select>
                                                 </div>
-                                            </td>
-                                            <td>
-                                                <input type="number" name="qty_expected[]" min="0" step="1" placeholder="0" value="<?= $qtyExpected !== null ? htmlspecialchars((string)$qtyExpected) : '' ?>">
-                                            </td>
-                                            <td>
-                                                <input type="number" name="qty_received[]" min="0" step="1" placeholder="0" value="<?= $qtyReceived !== null ? htmlspecialchars((string)$qtyReceived) : '' ?>" <?= $formLocked ? 'readonly' : 'required' ?>>
-                                            </td>
-                                            <td>
-                                                <input type="number" name="unit_cost[]" min="0" step="0.01" placeholder="0.00" value="<?= $unitCost !== null ? htmlspecialchars(number_format((float)$unitCost, 2, '.', '')) : '' ?>">
-                                            </td>
-                                            <td>
+                                                <select name="product_id[]" class="product-select" required>
+                                                    <option value="">Select product</option>
+                                                    <?php foreach ($products as $product): ?>
+                                                        <option value="<?= (int)$product['id'] ?>" <?= $productId == (int)$product['id'] ? 'selected' : '' ?>>
+                                                            <?= htmlspecialchars($product['name']) ?>
+                                                        </option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="line-item-field">
+                                            <label>Qty Expected</label>
+                                            <input type="number" name="qty_expected[]" min="0" step="1" placeholder="0" value="<?= $qtyExpected !== null ? htmlspecialchars((string)$qtyExpected) : '' ?>">
+                                        </div>
+                                        <div class="line-item-field">
+                                            <label>Qty Received <span class="required">*</span></label>
+                                            <input type="number" name="qty_received[]" min="0" step="1" placeholder="0" value="<?= $qtyReceived !== null ? htmlspecialchars((string)$qtyReceived) : '' ?>" <?= $formLocked ? 'readonly' : 'required' ?>>
+                                        </div>
+                                        <div class="line-item-field">
+                                            <label>Unit Cost</label>
+                                            <input type="number" name="unit_cost[]" min="0" step="0.01" placeholder="0.00" value="<?= $unitCost !== null ? htmlspecialchars(number_format((float)$unitCost, 2, '.', '')) : '' ?>">
+                                        </div>
+                                        <div class="line-item-field">
+                                            <label>Expiry</label>
+                                            <div>
                                                 <input type="date" name="expiry_date[]" value="<?= $expiryDate ? htmlspecialchars($expiryDate) : '' ?>">
                                                 <?php if ($rowInvalidExpiry): ?>
                                                     <small class="input-error">Use YYYY-MM-DD (e.g., <?= date('Y-m-d') ?>).</small>
                                                 <?php endif; ?>
-                                            </td>
-                                            <td>
-                                                <input type="text" name="lot_number[]" placeholder="Lot or batch" value="<?= $lotNumber ? htmlspecialchars($lotNumber) : '' ?>">
-                                            </td>
-                                            <td class="actions">
-                                                <button type="button" class="icon-btn remove-line-item" aria-label="Remove line item" <?= ($index === 0 || $formLocked) ? 'disabled' : '' ?>>
-                                                    <i class="fas fa-trash"></i>
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
+                                            </div>
+                                        </div>
+                                        <div class="line-item-field">
+                                            <label>Lot / Batch</label>
+                                            <input type="text" name="lot_number[]" placeholder="Lot or batch" value="<?= $lotNumber ? htmlspecialchars($lotNumber) : '' ?>">
+                                        </div>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
                         </div>
                     </fieldset>
 
@@ -491,7 +497,7 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                 </form>
                 <?php if (!empty($stockInReportRows)): ?>
                     <div class="table-wrapper">
-                        <table class="line-items-table">
+                        <table class="data-table">
                             <thead>
                                 <tr>
                                     <th>Date</th>
@@ -537,7 +543,7 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                 </div>
                 <?php if (!empty($currentInventorySnapshot)): ?>
                     <div class="table-wrapper">
-                        <table class="line-items-table">
+                        <table class="data-table data-table--compact">
                             <thead>
                                 <tr>
                                     <th>Product</th>
@@ -578,7 +584,7 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                 </div>
                 <?php if (!empty($recentReceipts)): ?>
                     <div class="table-wrapper">
-                        <table class="line-items-table">
+                        <table class="data-table data-table--compact">
                             <thead>
                                 <tr>
                                     <th>Posted</th>
@@ -741,6 +747,24 @@ function fetchSuppliersList(PDO $pdo): array
 }
 
 /**
+ * Use the database server time so posted timestamps align with other audit fields.
+ */
+function fetchDatabaseCurrentDateTime(PDO $pdo): string
+{
+    try {
+        $statement = $pdo->query('SELECT NOW()');
+        $value = $statement ? $statement->fetchColumn() : false;
+        if ($value !== false && $value !== null) {
+            return (string)$value;
+        }
+    } catch (Throwable $e) {
+        // Ignore and fall back to PHP time below.
+    }
+
+    return (new DateTimeImmutable())->format('Y-m-d H:i:s');
+}
+
+/**
  * Handle insert/update of a new stock receipt with items, attachments, and audit trail.
  */
 function handleStockReceiptSubmission(PDO $pdo, ?array $currentUser, array $post, array $files): array
@@ -828,8 +852,8 @@ function handleStockReceiptSubmission(PDO $pdo, ?array $currentUser, array $post
 
         $receiptCode = $existingReceipt['header']['receipt_code'] ?? generateReceiptCode($pdo);
         $receivedByUserId = $status === 'draft' ? null : $userId;
-        $postedAt = $status === 'draft' ? null : (new DateTimeImmutable())->format('Y-m-d H:i:s');
         $postedByUserId = $status === 'draft' ? null : $userId;
+        $postedAt = $status === 'draft' ? null : fetchDatabaseCurrentDateTime($pdo);
 
         if ($receiptId === 0) {
             $insertReceipt = $pdo->prepare('
@@ -1510,154 +1534,312 @@ function exportStockInReportCsv(string $filenameBase, array $headers, array $row
 }
 
 /**
- * Emit report data as a simple text-based PDF.
+ * Emit report data as a Dompdf-rendered PDF so it matches the styling of the sales report.
  */
 function exportStockInReportPdf(string $filenameBase, array $headers, array $rows, array $filters): void
 {
-    $lines = [];
-    $lines[] = 'Stock-In Report';
+    require_once __DIR__ . '/../vendor/autoload.php';
 
-    $activeFilters = [];
-    if (!empty($filters['date_from_input'])) {
-        $activeFilters[] = 'From ' . $filters['date_from_input'];
-    }
-    if (!empty($filters['date_to_input'])) {
-        $activeFilters[] = 'To ' . $filters['date_to_input'];
-    }
-    if (!empty($filters['supplier'])) {
-        $activeFilters[] = 'Supplier: ' . $filters['supplier'];
-    }
-    if (!empty($filters['product_label'])) {
-        $activeFilters[] = 'Product: ' . $filters['product_label'];
-    } elseif (!empty($filters['product_id'])) {
-        $activeFilters[] = 'Product ID: ' . $filters['product_id'];
-    }
-    if (!empty($filters['product_search'])) {
-        $activeFilters[] = 'Product search: ' . $filters['product_search'];
-    }
-    if (!empty($filters['brand'])) {
-        $activeFilters[] = 'Brand: ' . $filters['brand'];
-    }
-    if (!empty($filters['category'])) {
-        $activeFilters[] = 'Category: ' . $filters['category'];
-    }
-    if (!empty($filters['status_label'])) {
-        $activeFilters[] = 'Status: ' . $filters['status_label'];
+    $generatedOn = date('F j, Y g:i A');
+    $reportTitle = 'DGZ Motorshop · Stock-In Report';
+
+    $filterSummaries = [];
+
+    $dateFromLabel = '';
+    if (!empty($filters['date_from'])) {
+        $dateFromLabel = date('M d, Y', strtotime($filters['date_from']));
+    } elseif (!empty($filters['date_from_input'])) {
+        $dateFromLabel = $filters['date_from_input'];
     }
 
-    if (!empty($activeFilters)) {
-        $lines[] = 'Filters: ' . implode(', ', $activeFilters);
+    $dateToLabel = '';
+    if (!empty($filters['date_to'])) {
+        $dateToLabel = date('M d, Y', strtotime($filters['date_to']));
+    } elseif (!empty($filters['date_to_input'])) {
+        $dateToLabel = $filters['date_to_input'];
     }
 
-    $lines[] = implode(' | ', $headers);
-
-    if (empty($rows)) {
-        $lines[] = 'No stock-in records matched the selected filters.';
-    } else {
-        foreach ($rows as $row) {
-            $lines[] = implode(' | ', [
-                $row['date_display'] ?? '',
-                $row['receipt_code'] ?? '',
-                $row['supplier_name'] ?? '',
-                $row['document_number'] ?? '',
-                $row['product_name'] ?? '',
-                (string)($row['qty_received'] ?? 0),
-                number_format((float)($row['unit_cost'] ?? 0), 2),
-                $row['receiver_name'] ?? '',
-                $row['status_label'] ?? '',
-            ]);
+    if ($dateFromLabel !== '' || $dateToLabel !== '') {
+        if ($dateFromLabel !== '' && $dateToLabel !== '') {
+            $filterSummaries[] = 'Date: ' . $dateFromLabel . ' – ' . $dateToLabel;
+        } elseif ($dateFromLabel !== '') {
+            $filterSummaries[] = 'Date From: ' . $dateFromLabel;
+        } else {
+            $filterSummaries[] = 'Date To: ' . $dateToLabel;
         }
     }
 
-    $pdfContent = buildSimplePdfDocument($lines);
+    if (!empty($filters['supplier'])) {
+        $filterSummaries[] = 'Supplier: ' . $filters['supplier'];
+    }
+    if (!empty($filters['product_label'])) {
+        $filterSummaries[] = 'Product: ' . $filters['product_label'];
+    } elseif (!empty($filters['product_id'])) {
+        $filterSummaries[] = 'Product ID: ' . $filters['product_id'];
+    }
+    if (!empty($filters['product_search'])) {
+        $filterSummaries[] = 'Search: ' . $filters['product_search'];
+    }
+    if (!empty($filters['brand'])) {
+        $filterSummaries[] = 'Brand: ' . $filters['brand'];
+    }
+    if (!empty($filters['category'])) {
+        $filterSummaries[] = 'Category: ' . $filters['category'];
+    }
+    if (!empty($filters['status_label'])) {
+        $filterSummaries[] = 'Status: ' . $filters['status_label'];
+    }
 
-    header('Content-Type: application/pdf');
-    header('Content-Disposition: attachment; filename="' . $filenameBase . '.pdf"');
-    header('Pragma: no-cache');
-    header('Expires: 0');
-    header('Content-Length: ' . strlen($pdfContent));
-    echo $pdfContent;
+    $totalRows = count($rows);
+    $totalQty = 0.0;
+    $totalValue = 0.0;
+    $receiptTracker = [];
+
+    foreach ($rows as $row) {
+        $qty = isset($row['qty_received']) ? (float)$row['qty_received'] : 0.0;
+        $totalQty += $qty;
+
+        $unitCost = isset($row['unit_cost']) ? (float)$row['unit_cost'] : 0.0;
+        $totalValue += $qty * $unitCost;
+
+        if (!empty($row['receipt_code'])) {
+            $receiptTracker[$row['receipt_code']] = true;
+        }
+    }
+
+    $uniqueReceipts = count($receiptTracker);
+
+    ob_start();
+    ?>
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title><?= htmlspecialchars($reportTitle) ?></title>
+        <style>
+            body {
+                font-family: 'Helvetica', Arial, sans-serif;
+                font-size: 12px;
+                color: #1f2937;
+                margin: 24px;
+                line-height: 1.5;
+            }
+            .header {
+                text-align: center;
+                margin-bottom: 24px;
+                border-bottom: 2px solid #0f172a;
+                padding-bottom: 16px;
+            }
+            .header h1 {
+                margin: 0;
+                font-size: 24px;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+            }
+            .header h2 {
+                margin: 8px 0 6px;
+                font-size: 18px;
+                font-weight: 600;
+            }
+            .header p {
+                margin: 0;
+                color: #475569;
+            }
+            .section {
+                margin-bottom: 24px;
+            }
+            .section h3 {
+                margin: 0 0 12px;
+                font-size: 15px;
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+                color: #0f172a;
+            }
+            .filters ul {
+                list-style: none;
+                padding: 0;
+                margin: 0;
+            }
+            .filters li {
+                padding: 4px 0;
+                border-bottom: 1px solid #e2e8f0;
+            }
+            .filters li:last-child {
+                border-bottom: none;
+            }
+            .summary table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+            .summary th,
+            .summary td {
+                padding: 10px 12px;
+                border: 1px solid #d1d5db;
+                font-size: 12px;
+                text-align: left;
+            }
+            .summary th {
+                background: #f8fafc;
+                width: 45%;
+                font-weight: 700;
+            }
+            .report-table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 11px;
+            }
+            .report-table thead th {
+                background: #0f172a;
+                color: #ffffff;
+                text-transform: uppercase;
+                letter-spacing: 0.06em;
+                padding: 10px;
+                text-align: left;
+            }
+            .report-table tbody td {
+                padding: 9px 10px;
+                border-bottom: 1px solid #e2e8f0;
+            }
+            .report-table tbody tr:nth-child(even) {
+                background: #f8fafc;
+            }
+            .report-table tbody tr:last-child td {
+                border-bottom: 0;
+            }
+            .report-table .status-cell {
+                text-align: center;
+            }
+            .badge {
+                display: inline-block;
+                padding: 3px 8px;
+                border-radius: 999px;
+                font-weight: 600;
+                font-size: 10px;
+                letter-spacing: 0.04em;
+            }
+            .badge-posted {
+                background: #dcfce7;
+                color: #166534;
+            }
+            .badge-draft {
+                background: #e2e8f0;
+                color: #1f2937;
+            }
+            .badge-with_discrepancy {
+                background: #fef3c7;
+                color: #92400e;
+            }
+            .empty-row td {
+                text-align: center;
+                padding: 18px 12px;
+                color: #6b7280;
+                font-style: italic;
+            }
+            .footer {
+                margin-top: 36px;
+                text-align: center;
+                font-size: 10px;
+                color: #64748b;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>DGZ Motorshop</h1>
+            <h2>Stock-In Report</h2>
+            <p>Generated on <?= htmlspecialchars($generatedOn) ?></p>
+        </div>
+
+        <div class="section filters">
+            <h3>Filters</h3>
+            <ul>
+                <?php if (empty($filterSummaries)): ?>
+                    <li>All stock-in entries</li>
+                <?php else: ?>
+                    <?php foreach ($filterSummaries as $line): ?>
+                        <li><?= htmlspecialchars($line) ?></li>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </ul>
+        </div>
+
+        <div class="section summary">
+            <h3>Summary</h3>
+            <table>
+                <tr>
+                    <th>Total Rows</th>
+                    <td><?= number_format($totalRows) ?></td>
+                </tr>
+                <tr>
+                    <th>Distinct Receipts</th>
+                    <td><?= number_format($uniqueReceipts) ?></td>
+                </tr>
+                <tr>
+                    <th>Total Quantity Received</th>
+                    <td><?= number_format($totalQty, 0) ?></td>
+                </tr>
+                <tr>
+                    <th>Estimated Total Value</th>
+                    <td>&#8369;<?= number_format($totalValue, 2) ?></td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="section">
+            <h3>Stock-In Details</h3>
+            <table class="report-table">
+                <thead>
+                    <tr>
+                        <?php foreach ($headers as $header): ?>
+                            <th><?= htmlspecialchars($header) ?></th>
+                        <?php endforeach; ?>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (empty($rows)): ?>
+                        <tr class="empty-row">
+                            <td colspan="<?= count($headers) ?>">No stock-in records matched the selected filters.</td>
+                        </tr>
+                    <?php else: ?>
+                        <?php foreach ($rows as $row): ?>
+                            <?php
+                                $qtyDisplay = $row['qty_received_display'] ?? number_format((float)($row['qty_received'] ?? 0), 0);
+                                $unitCostDisplay = $row['unit_cost_display'] ?? number_format((float)($row['unit_cost'] ?? 0), 2);
+                                $statusValue = $row['status'] ?? '';
+                                $statusLabel = $row['status_label'] ?? formatStockReceiptStatus($statusValue);
+                            ?>
+                            <tr>
+                                <td><?= htmlspecialchars($row['date_display'] ?? '') ?></td>
+                                <td><?= htmlspecialchars($row['receipt_code'] ?? '') ?></td>
+                                <td><?= htmlspecialchars($row['supplier_name'] ?? '') ?></td>
+                                <td><?= htmlspecialchars($row['document_number'] ?? '') ?></td>
+                                <td><?= htmlspecialchars($row['product_name'] ?? 'Unknown Product') ?></td>
+                                <td><?= htmlspecialchars($qtyDisplay) ?></td>
+                                <td>&#8369;<?= htmlspecialchars($unitCostDisplay) ?></td>
+                                <td><?= htmlspecialchars($row['receiver_name'] ?? 'Pending') ?></td>
+                                <td class="status-cell"><span class="badge badge-<?= htmlspecialchars($statusValue) ?>"><?= htmlspecialchars($statusLabel) ?></span></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="footer">Prepared via DGZ Inventory System</div>
+    </body>
+    </html>
+    <?php
+    $html = ob_get_clean();
+
+    $options = new \Dompdf\Options();
+    $options->set('isHtml5ParserEnabled', true);
+    $options->set('isRemoteEnabled', true);
+
+    $dompdf = new \Dompdf\Dompdf($options);
+    $dompdf->loadHtml($html);
+    $dompdf->setPaper('A4', 'portrait');
+    $dompdf->render();
+
+    $dompdf->stream($filenameBase . '.pdf', ['Attachment' => true]);
     exit;
-}
-
-/**
- * Create a minimal multi-page PDF string from plain text lines.
- */
-function buildSimplePdfDocument(array $lines): string
-{
-    if (empty($lines)) {
-        $lines[] = 'No data available.';
-    }
-
-    $pageHeight = 792; // 11in @ 72dpi
-    $leftMargin = 40;
-    $topStart = 760;
-    $lineHeight = 16;
-    $bottomMargin = 40;
-    $linesPerPage = max(1, (int)floor(($topStart - $bottomMargin) / $lineHeight));
-    $lineChunks = array_chunk($lines, $linesPerPage);
-
-    $objects = [];
-    $kids = [];
-    $objectNumber = 1;
-
-    $catalogObject = $objectNumber++;
-    $pagesObject = $objectNumber++;
-    $fontObject = $objectNumber++;
-
-    $objects[$fontObject] = $fontObject . ' 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj';
-
-    foreach ($lineChunks as $chunkIndex => $chunk) {
-        $contentStream = buildPdfContentStream($chunk, $leftMargin, $topStart, $lineHeight);
-        $contentObject = $objectNumber++;
-        $pageObject = $objectNumber++;
-
-        $objects[$contentObject] = $contentObject . " 0 obj << /Length " . strlen($contentStream) . " >> stream\n"
-            . $contentStream . "\nendstream\nendobj";
-
-        $objects[$pageObject] = $pageObject . ' 0 obj << /Type /Page /Parent ' . $pagesObject . ' 0 R /MediaBox [0 0 612 ' . $pageHeight . '] /Resources << /Font << /F1 ' . $fontObject . ' 0 R >> >> /Contents ' . $contentObject . ' 0 R >> endobj';
-
-        $kids[] = $pageObject . ' 0 R';
-    }
-
-    $objects[$pagesObject] = $pagesObject . ' 0 obj << /Type /Pages /Count ' . count($kids) . ' /Kids [' . implode(' ', $kids) . '] >> endobj';
-    $objects[$catalogObject] = $catalogObject . ' 0 obj << /Type /Catalog /Pages ' . $pagesObject . ' 0 R >> endobj';
-
-    ksort($objects);
-
-    $pdf = "%PDF-1.4\n";
-    $offsets = [];
-    foreach ($objects as $number => $objectString) {
-        $offsets[$number] = strlen($pdf);
-        $pdf .= $objectString . "\n";
-    }
-
-    $xrefPosition = strlen($pdf);
-    $maxObject = max(array_keys($objects));
-    $pdf .= "xref\n0 " . ($maxObject + 1) . "\n";
-    $pdf .= "0000000000 65535 f \n";
-    for ($i = 1; $i <= $maxObject; $i++) {
-        $offset = $offsets[$i] ?? 0;
-        $pdf .= sprintf("%010d 00000 n ", $offset) . "\n";
-    }
-    $pdf .= "trailer << /Size " . ($maxObject + 1) . ' /Root ' . $catalogObject . " 0 R >>\n";
-    $pdf .= "startxref\n" . $xrefPosition . "\n%%EOF";
-
-    return $pdf;
-}
-
-/**
- * Generate the page content stream for the simple PDF builder.
- */
-function buildPdfContentStream(array $lines, int $leftMargin, int $topStart, int $lineHeight): string
-{
-    $content = "BT\n/F1 12 Tf\n";
-    $currentY = $topStart;
-    foreach ($lines as $line) {
-        $escaped = str_replace(['\\', '(', ')'], ['\\\\', '\\(', '\\)'], $line);
-        $content .= sprintf("1 0 0 1 %d %d Tm (%s) Tj\n", $leftMargin, $currentY, $escaped);
-        $currentY -= $lineHeight;
-    }
-    $content .= "ET";
-    return $content;
 }

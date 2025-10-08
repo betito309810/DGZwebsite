@@ -13,6 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const discrepancyNoteField = document.getElementById('discrepancy_note');
     const attachmentInput = document.getElementById('attachments');
     const attachmentList = document.getElementById('attachmentList');
+    const discrepancyRequiredIndicator = document.querySelector('[data-discrepancy-required]');
 
     if (!form || !lineItemsBody) {
         return;
@@ -51,6 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
         lineItemsBody.appendChild(newRow);
         bindRow(newRow);
         updateRemoveButtons();
+        updateDiscrepancyState();
     });
 
     saveDraftBtn?.addEventListener('click', () => {
@@ -83,18 +85,20 @@ document.addEventListener('DOMContentLoaded', () => {
     function cloneRow() {
         const clone = lineTemplates.row.cloneNode(true);
         clone.classList.remove('has-discrepancy');
+        clone.classList.remove('suggestions-open');
         clone.dataset.selectedProduct = '';
+        clone.dataset.selectedLabel = '';
         clone.querySelectorAll('input').forEach((input) => {
+            if (input.classList.contains('product-search')) {
+                return;
+            }
             input.value = '';
         });
         const select = clone.querySelector('select[name="product_id[]"]');
         if (select) {
             select.value = '';
         }
-        const suggestions = clone.querySelector('.product-suggestions');
-        if (suggestions) {
-            suggestions.innerHTML = '';
-        }
+        clearProductSelection(clone);
         const removeBtn = clone.querySelector('.remove-line-item');
         if (removeBtn) {
             removeBtn.disabled = false;
@@ -109,6 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const productSelect = row.querySelector('select[name="product_id[]"]');
         const productSearch = row.querySelector('.product-search');
         const suggestions = row.querySelector('.product-suggestions');
+        const clearBtn = row.querySelector('.product-clear');
 
         expectedInput?.addEventListener('input', () => {
             evaluateRowDiscrepancy(row);
@@ -130,9 +135,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 productSearch.dataset.defaultPlaceholder = productSearch.placeholder;
             }
             productSearch.addEventListener('input', () => {
-                renderProductSuggestions(row, productSearch.value);
+                const currentValue = productSearch.value;
+                if (row.dataset.selectedProduct && currentValue !== (row.dataset.selectedLabel || '')) {
+                    clearProductSelection(row, { keepInputValue: true, keepSuggestions: true });
+                }
+                renderProductSuggestions(row, currentValue);
             });
             productSearch.addEventListener('focus', () => {
+                if (row.dataset.selectedProduct) {
+                    productSearch.select();
+                }
                 renderProductSuggestions(row, productSearch.value, { showDefault: true });
             });
             productSearch.addEventListener('keydown', (event) => {
@@ -150,11 +162,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 applyProductSelection(row, productId, { skipFocus: true });
             });
 
+            clearBtn?.addEventListener('click', () => {
+                clearProductSelection(row, { focus: true });
+            });
+
             const presetId = row.dataset.selectedProduct;
             if (presetId) {
-                applyProductSelection(row, presetId, { skipFocus: true, renderSuggestions: false, prefillSearch: false });
+                applyProductSelection(row, presetId, { skipFocus: true, renderSuggestions: false });
             } else if (productSelect.value) {
-                applyProductSelection(row, productSelect.value, { skipFocus: true, renderSuggestions: false, prefillSearch: false });
+                applyProductSelection(row, productSelect.value, { skipFocus: true, renderSuggestions: false });
             }
         }
     }
@@ -171,16 +187,30 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateDiscrepancyState() {
+        if (!discrepancyNoteGroup) {
+            return;
+        }
         const hasAny = !!lineItemsBody.querySelector('.has-discrepancy');
+        const noteValue = (discrepancyNoteField?.value || '').trim();
+        const hasNote = noteValue !== '';
+        const shouldShow = hasAny || hasNote;
+
+        discrepancyNoteGroup.hidden = !shouldShow;
+
         if (hasAny) {
-            discrepancyNoteGroup.hidden = false;
             discrepancyNoteField?.setAttribute('required', 'required');
+            discrepancyRequiredIndicator?.removeAttribute('hidden');
         } else {
-            discrepancyNoteGroup.hidden = true;
             discrepancyNoteField?.removeAttribute('required');
-            if (discrepancyNoteField) {
-                discrepancyNoteField.value = '';
-            }
+            discrepancyRequiredIndicator?.setAttribute('hidden', 'hidden');
+        }
+
+        if (!hasAny && !hasNote && discrepancyNoteField) {
+            discrepancyNoteField.value = '';
+        }
+
+        if (discrepancyNoteGroup) {
+            discrepancyNoteGroup.dataset.hasInitial = hasNote ? '1' : '0';
         }
     }
 
@@ -188,12 +218,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const rows = Array.from(lineItemsBody.querySelectorAll('.line-item-row'));
         rows.forEach((row, index) => {
             const removeBtn = row.querySelector('.remove-line-item');
-            if (!removeBtn) {
-                return;
+            if (removeBtn) {
+                removeBtn.disabled = rows.length === 1;
+                if (index > 0) {
+                    removeBtn.disabled = false;
+                }
             }
-            removeBtn.disabled = rows.length === 1;
-            if (index > 0) {
-                removeBtn.disabled = false;
+        });
+        refreshLineItemLabels(rows);
+    }
+
+    function refreshLineItemLabels(rows = null) {
+        const lineRows = rows || Array.from(lineItemsBody.querySelectorAll('.line-item-row'));
+        lineRows.forEach((row, index) => {
+            const title = row.querySelector('.line-item-title');
+            if (title) {
+                title.textContent = `Item ${index + 1}`;
             }
         });
     }
@@ -207,6 +247,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const showDefault = options.showDefault ?? false;
         const query = term.trim().toLowerCase();
         suggestions.innerHTML = '';
+        row.classList.remove('suggestions-open');
 
         let results;
         if (!query) {
@@ -223,16 +264,44 @@ document.addEventListener('DOMContentLoaded', () => {
                 emptyState.className = 'product-suggestion-empty';
                 emptyState.textContent = 'No matches found';
                 suggestions.appendChild(emptyState);
+                row.classList.add('suggestions-open');
+                suggestions.scrollTop = 0;
             }
             return;
         }
+
+        row.classList.add('suggestions-open');
+        suggestions.scrollTop = 0;
 
         results.forEach((entry) => {
             const button = document.createElement('button');
             button.type = 'button';
             button.className = 'product-suggestion-item';
             button.dataset.productId = entry.id;
-            button.textContent = entry.label;
+
+            const product = productMap.get(String(entry.id));
+            const name = product?.name || entry.label;
+            const metaParts = [];
+            if (product?.code) {
+                metaParts.push(`#${product.code}`);
+            }
+            if (product?.brand) {
+                metaParts.push(product.brand);
+            }
+            if (product?.category) {
+                metaParts.push(product.category);
+            }
+            const meta = metaParts.join(' • ');
+            const title = product ? buildProductLabel(product) : entry.label;
+            button.title = title;
+            if (meta) {
+                button.innerHTML = [
+                    `<span class="product-suggestion-name">${escapeHtml(name)}</span>`,
+                    `<span class="product-suggestion-meta">${escapeHtml(meta)}</span>`,
+                ].join('');
+            } else {
+                button.innerHTML = `<span class="product-suggestion-name">${escapeHtml(name)}</span>`;
+            }
             button.addEventListener('click', () => {
                 applyProductSelection(row, entry.id);
             });
@@ -244,6 +313,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const select = row.querySelector('select[name="product_id[]"]');
         const searchInput = row.querySelector('.product-search');
         const suggestions = row.querySelector('.product-suggestions');
+        const clearBtn = row.querySelector('.product-clear');
         if (!select || !searchInput) {
             return;
         }
@@ -256,31 +326,66 @@ document.addEventListener('DOMContentLoaded', () => {
                 searchInput.placeholder = searchInput.dataset.defaultPlaceholder;
             }
             row.dataset.selectedProduct = '';
+            row.dataset.selectedLabel = '';
             if (suggestions && !options.keepSuggestions) {
                 suggestions.innerHTML = '';
             }
+            row.classList.remove('suggestions-open');
+            clearBtn?.setAttribute('hidden', 'hidden');
             return;
         }
 
-        const prefillSearch = options.prefillSearch !== false;
         const label = buildProductLabel(product);
 
         select.value = String(product.id);
-        if (prefillSearch) {
-            searchInput.value = label;
-            searchInput.placeholder = searchInput.dataset.defaultPlaceholder || searchInput.placeholder;
-        } else {
-            searchInput.value = '';
-            if (label) {
-                searchInput.placeholder = label;
-            }
-        }
         row.dataset.selectedProduct = String(product.id);
+        row.dataset.selectedLabel = label;
+        searchInput.value = label;
+        if (searchInput.dataset.defaultPlaceholder) {
+            searchInput.placeholder = searchInput.dataset.defaultPlaceholder;
+        }
         if (suggestions && !options.keepSuggestions) {
             suggestions.innerHTML = '';
         }
+        row.classList.remove('suggestions-open');
+        clearBtn?.removeAttribute('hidden');
         if (!options.skipFocus) {
             searchInput.blur();
+        }
+    }
+
+    function clearProductSelection(row, options = {}) {
+        const select = row.querySelector('select[name="product_id[]"]');
+        const searchInput = row.querySelector('.product-search');
+        const suggestions = row.querySelector('.product-suggestions');
+        const clearBtn = row.querySelector('.product-clear');
+
+        if (select) {
+            select.value = '';
+        }
+        row.dataset.selectedProduct = '';
+        row.dataset.selectedLabel = '';
+
+        if (searchInput && !options.keepInputValue) {
+            searchInput.value = '';
+        }
+        if (searchInput && searchInput.dataset.defaultPlaceholder && !options.keepPlaceholder) {
+            searchInput.placeholder = searchInput.dataset.defaultPlaceholder;
+        }
+
+        if (!options.keepSuggestions && suggestions) {
+            suggestions.innerHTML = '';
+        }
+        if (!options.keepSuggestions) {
+            row.classList.remove('suggestions-open');
+        }
+
+        if (clearBtn && !options.keepClearButton) {
+            clearBtn.setAttribute('hidden', 'hidden');
+        }
+
+        if (options.focus && searchInput) {
+            searchInput.focus();
         }
     }
 
@@ -295,11 +400,27 @@ document.addEventListener('DOMContentLoaded', () => {
         return parts.filter(Boolean).join(' ');
     }
 
+    function escapeHtml(value) {
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
     document.addEventListener('click', (event) => {
         if (!event.target.closest('.product-selector')) {
             lineItemsBody.querySelectorAll('.product-suggestions').forEach((node) => {
                 node.innerHTML = '';
             });
+            lineItemsBody.querySelectorAll('.line-item-row.suggestions-open').forEach((row) => {
+                row.classList.remove('suggestions-open');
+            });
         }
+    });
+
+    discrepancyNoteField?.addEventListener('input', () => {
+        updateDiscrepancyState();
     });
 });
