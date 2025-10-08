@@ -1538,74 +1538,6 @@ function exportStockInReportCsv(string $filenameBase, array $headers, array $row
  */
 function exportStockInReportPdf(string $filenameBase, array $headers, array $rows, array $filters): void
 {
-<<<<<<< HEAD
-    $columnWidths = [12, 12, 18, 12, 28, 12, 12, 16, 12];
-    $strongDivider = buildPdfTableDivider($columnWidths, '=');
-    $lightDivider = buildPdfTableDivider($columnWidths, '-');
-
-    $lines = [];
-    $lines[] = 'DGZ Motorshop · Stock-In Report';
-    $lines[] = 'Generated: ' . date('M d, Y g:i A');
-
-    $activeFilters = [];
-    if (!empty($filters['date_from_input'])) {
-        $activeFilters[] = 'Date From: ' . $filters['date_from_input'];
-    }
-    if (!empty($filters['date_to_input'])) {
-        $activeFilters[] = 'Date To: ' . $filters['date_to_input'];
-    }
-    if (!empty($filters['supplier'])) {
-        $activeFilters[] = 'Supplier: ' . $filters['supplier'];
-    }
-    if (!empty($filters['product_label'])) {
-        $activeFilters[] = 'Product: ' . $filters['product_label'];
-    } elseif (!empty($filters['product_id'])) {
-        $activeFilters[] = 'Product ID: ' . $filters['product_id'];
-    }
-    if (!empty($filters['product_search'])) {
-        $activeFilters[] = 'Product Search: ' . $filters['product_search'];
-    }
-    if (!empty($filters['brand'])) {
-        $activeFilters[] = 'Brand: ' . $filters['brand'];
-    }
-    if (!empty($filters['category'])) {
-        $activeFilters[] = 'Category: ' . $filters['category'];
-    }
-    if (!empty($filters['status_label'])) {
-        $activeFilters[] = 'Status: ' . $filters['status_label'];
-    }
-
-    $lines[] = '';
-    if (!empty($activeFilters)) {
-        $lines[] = 'Filters:';
-        foreach ($activeFilters as $filterLine) {
-            $lines[] = '  • ' . $filterLine;
-        }
-    } else {
-        $lines[] = 'Filters: All stock-in entries';
-    }
-
-    $lines[] = '';
-    $lines[] = $strongDivider;
-    $lines[] = formatPdfTableRow($headers, $columnWidths);
-    $lines[] = $lightDivider;
-
-    if (empty($rows)) {
-        $lines[] = 'No stock-in records matched the selected filters.';
-    } else {
-        foreach ($rows as $row) {
-            $lines[] = formatPdfTableRow([
-                $row['date_display'] ?? '',
-                $row['receipt_code'] ?? '',
-                $row['supplier_name'] ?? '',
-                $row['document_number'] ?? '',
-                $row['product_name'] ?? 'Unknown Product',
-                $row['qty_received_display'] ?? (string)($row['qty_received'] ?? 0),
-                $row['unit_cost_display'] ?? number_format((float)($row['unit_cost'] ?? 0), 2),
-                $row['receiver_name'] ?? 'Pending',
-                $row['status_label'] ?? '',
-            ], $columnWidths);
-=======
     require_once __DIR__ . '/../vendor/autoload.php';
 
     $generatedOn = date('F j, Y g:i A');
@@ -1634,18 +1566,9 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
             $filterSummaries[] = 'Date From: ' . $dateFromLabel;
         } else {
             $filterSummaries[] = 'Date To: ' . $dateToLabel;
->>>>>>> codex/refactor-stockentry.php-design-elements-wrvzkx
         }
-        $lines[] = $strongDivider;
-        $lines[] = 'Total Rows: ' . count($rows);
     }
 
-<<<<<<< HEAD
-    $lines[] = '';
-    $lines[] = 'Prepared via DGZ Inventory System';
-
-    $pdfContent = buildSimplePdfDocument($lines);
-=======
     if (!empty($filters['supplier'])) {
         $filterSummaries[] = 'Supplier: ' . $filters['supplier'];
     }
@@ -1666,7 +1589,6 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
     if (!empty($filters['status_label'])) {
         $filterSummaries[] = 'Status: ' . $filters['status_label'];
     }
->>>>>>> codex/refactor-stockentry.php-design-elements-wrvzkx
 
     $totalRows = count($rows);
     $totalQty = 0.0;
@@ -1921,133 +1843,3 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
     $dompdf->stream($filenameBase . '.pdf', ['Attachment' => true]);
     exit;
 }
-<<<<<<< HEAD
-
-/**
- * Create a minimal multi-page PDF string from plain text lines.
- */
-function buildSimplePdfDocument(array $lines): string
-{
-    if (empty($lines)) {
-        $lines[] = 'No data available.';
-    }
-
-    $pageHeight = 792; // 11in @ 72dpi
-    $leftMargin = 40;
-    $topStart = 760;
-    $lineHeight = 16;
-    $bottomMargin = 40;
-    $linesPerPage = max(1, (int)floor(($topStart - $bottomMargin) / $lineHeight));
-    $lineChunks = array_chunk($lines, $linesPerPage);
-
-    $objects = [];
-    $kids = [];
-    $objectNumber = 1;
-
-    $catalogObject = $objectNumber++;
-    $pagesObject = $objectNumber++;
-    $fontObject = $objectNumber++;
-
-    $objects[$fontObject] = $fontObject . ' 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj';
-
-    foreach ($lineChunks as $chunkIndex => $chunk) {
-        $contentStream = buildPdfContentStream($chunk, $leftMargin, $topStart, $lineHeight);
-        $contentObject = $objectNumber++;
-        $pageObject = $objectNumber++;
-
-        $objects[$contentObject] = $contentObject . " 0 obj << /Length " . strlen($contentStream) . " >> stream\n"
-            . $contentStream . "\nendstream\nendobj";
-
-        $objects[$pageObject] = $pageObject . ' 0 obj << /Type /Page /Parent ' . $pagesObject . ' 0 R /MediaBox [0 0 612 ' . $pageHeight . '] /Resources << /Font << /F1 ' . $fontObject . ' 0 R >> >> /Contents ' . $contentObject . ' 0 R >> endobj';
-
-        $kids[] = $pageObject . ' 0 R';
-    }
-
-    $objects[$pagesObject] = $pagesObject . ' 0 obj << /Type /Pages /Count ' . count($kids) . ' /Kids [' . implode(' ', $kids) . '] >> endobj';
-    $objects[$catalogObject] = $catalogObject . ' 0 obj << /Type /Catalog /Pages ' . $pagesObject . ' 0 R >> endobj';
-
-    ksort($objects);
-
-    $pdf = "%PDF-1.4\n";
-    $offsets = [];
-    foreach ($objects as $number => $objectString) {
-        $offsets[$number] = strlen($pdf);
-        $pdf .= $objectString . "\n";
-    }
-
-    $xrefPosition = strlen($pdf);
-    $maxObject = max(array_keys($objects));
-    $pdf .= "xref\n0 " . ($maxObject + 1) . "\n";
-    $pdf .= "0000000000 65535 f \n";
-    for ($i = 1; $i <= $maxObject; $i++) {
-        $offset = $offsets[$i] ?? 0;
-        $pdf .= sprintf("%010d 00000 n ", $offset) . "\n";
-    }
-    $pdf .= "trailer << /Size " . ($maxObject + 1) . ' /Root ' . $catalogObject . " 0 R >>\n";
-    $pdf .= "startxref\n" . $xrefPosition . "\n%%EOF";
-
-    return $pdf;
-}
-
-/**
- * Generate the page content stream for the simple PDF builder.
- */
-function buildPdfContentStream(array $lines, int $leftMargin, int $topStart, int $lineHeight): string
-{
-    $content = "BT\n/F1 12 Tf\n";
-    $currentY = $topStart;
-    foreach ($lines as $line) {
-        $escaped = str_replace(['\\', '(', ')'], ['\\\\', '\\(', '\\)'], $line);
-        $content .= sprintf("1 0 0 1 %d %d Tm (%s) Tj\n", $leftMargin, $currentY, $escaped);
-        $currentY -= $lineHeight;
-    }
-    $content .= "ET";
-    return $content;
-}
-
-/**
- * Calculate the divider width for the PDF table layout.
- */
-function buildPdfTableDivider(array $columnWidths, string $character = '-'): string
-{
-    $columns = count($columnWidths);
-    $totalWidth = array_sum($columnWidths) + max(0, $columns - 1) * 3; // account for separators
-    return str_repeat($character, $totalWidth);
-}
-
-/**
- * Format table rows with padding while safely trimming long values.
- */
-function formatPdfTableRow(array $cells, array $columnWidths): string
-{
-    $formatted = [];
-    foreach ($columnWidths as $index => $width) {
-        $value = isset($cells[$index]) ? (string)$cells[$index] : '';
-        $ellipsis = $width > 3 ? '…' : '';
-
-        if (function_exists('mb_strimwidth')) {
-            $trimmed = mb_strimwidth($value, 0, $width, $ellipsis, 'UTF-8');
-            if (function_exists('mb_strwidth')) {
-                $displayWidth = mb_strwidth($trimmed, 'UTF-8');
-            } elseif (function_exists('mb_strlen')) {
-                $displayWidth = mb_strlen($trimmed, 'UTF-8');
-            } else {
-                $displayWidth = strlen($trimmed);
-            }
-        } else {
-            $maxLength = max(0, $width - strlen($ellipsis));
-            $trimmed = strlen($value) > $width ? substr($value, 0, $maxLength) . $ellipsis : substr($value, 0, $width);
-            $displayWidth = strlen($trimmed);
-        }
-
-        if ($displayWidth < $width) {
-            $trimmed .= str_repeat(' ', $width - $displayWidth);
-        }
-
-        $formatted[] = $trimmed;
-    }
-
-    return implode(' | ', $formatted);
-}
-=======
->>>>>>> codex/refactor-stockentry.php-design-elements-wrvzkx
