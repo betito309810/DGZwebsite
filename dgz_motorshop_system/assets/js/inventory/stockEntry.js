@@ -259,7 +259,30 @@ document.addEventListener('DOMContentLoaded', () => {
             button.type = 'button';
             button.className = 'product-suggestion-item';
             button.dataset.productId = entry.id;
-            button.textContent = entry.label;
+
+            const product = productMap.get(String(entry.id));
+            const name = product?.name || entry.label;
+            const metaParts = [];
+            if (product?.code) {
+                metaParts.push(`#${product.code}`);
+            }
+            if (product?.brand) {
+                metaParts.push(product.brand);
+            }
+            if (product?.category) {
+                metaParts.push(product.category);
+            }
+            const meta = metaParts.join(' • ');
+            const title = product ? buildProductLabel(product) : entry.label;
+            button.title = title;
+            if (meta) {
+                button.innerHTML = [
+                    `<span class="product-suggestion-name">${escapeHtml(name)}</span>`,
+                    `<span class="product-suggestion-meta">${escapeHtml(meta)}</span>`,
+                ].join('');
+            } else {
+                button.innerHTML = `<span class="product-suggestion-name">${escapeHtml(name)}</span>`;
+            }
             button.addEventListener('click', () => {
                 applyProductSelection(row, entry.id, { prefillSearch: false });
             });
@@ -322,6 +345,15 @@ document.addEventListener('DOMContentLoaded', () => {
             parts.push(`(${product.brand})`);
         }
         return parts.filter(Boolean).join(' ');
+    }
+
+    function escapeHtml(value) {
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     }
 
     document.addEventListener('click', (event) => {
