@@ -370,8 +370,10 @@ form button {
     font-weight: inherit;
 }
 
-#productsTable thead th .sort-link:hover {
-    color: #2563eb;
+#productsTable thead th .sort-link:visited,
+#productsTable thead th .sort-link:hover,
+#productsTable thead th .sort-link:focus {
+    color: inherit;
 }
 
 #productsTable thead th .sort-indicator {
