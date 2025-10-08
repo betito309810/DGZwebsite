@@ -21,7 +21,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const allProducts = Array.isArray(bootstrapData.products) ? bootstrapData.products : [];
     const formLocked = Boolean(bootstrapData.formLocked);
-    const unsavedWarningMessage = 'You have unsaved stock-in changes. Save the document as a draft or post it before leaving.';
+    const unsavedWarningMessage = 'You have unsaved stock-in form. '
+        + 'Save the form as a draft or post it before leaving, or do you want to discard it?';
     let isFormDirty = false;
     let isSubmitting = false;
 
