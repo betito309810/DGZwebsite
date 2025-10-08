@@ -111,6 +111,7 @@
     gap: 12px;
     margin: 0 0 16px;
     flex-wrap: wrap;
+    justify-content: space-between;
 }
 
 .line-items-controls .btn-secondary {
@@ -120,6 +121,10 @@
 .line-items-hint {
     font-size: 13px;
     color: #64748b;
+}
+
+.line-items-controls .btn-secondary {
+    margin-left: auto;
 }
 
 .line-items-section {
@@ -193,6 +198,10 @@
     text-align: left;
     font-size: 14px;
     vertical-align: top;
+}
+
+.line-items-table tbody tr:last-child td {
+    border-bottom: none;
 }
 
 .line-items-section .line-items-table td:first-child,

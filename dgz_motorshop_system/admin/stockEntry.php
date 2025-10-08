@@ -304,10 +304,10 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
 
                     <?php if (!$formLocked): ?>
                         <div class="line-items-controls">
+                            <span class="line-items-hint">Add rows for each product received.</span>
                             <button type="button" class="btn-secondary" id="addLineItemBtn">
                                 <i class="fas fa-plus"></i> Add Line Item
                             </button>
-                            <span class="line-items-hint">Add rows for each product received.</span>
                         </div>
                     <?php endif; ?>
 
