@@ -1538,7 +1538,7 @@ function exportStockInReportCsv(string $filenameBase, array $headers, array $row
  */
 function exportStockInReportPdf(string $filenameBase, array $headers, array $rows, array $filters): void
 {
-<<<<<<< HEAD
+
     $columnWidths = [12, 12, 18, 12, 28, 12, 12, 16, 12];
     $strongDivider = buildPdfTableDivider($columnWidths, '=');
     $lightDivider = buildPdfTableDivider($columnWidths, '-');
@@ -1605,7 +1605,7 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
                 $row['receiver_name'] ?? 'Pending',
                 $row['status_label'] ?? '',
             ], $columnWidths);
-=======
+
     require_once __DIR__ . '/../vendor/autoload.php';
 
     $generatedOn = date('F j, Y g:i A');
@@ -1634,18 +1634,18 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
             $filterSummaries[] = 'Date From: ' . $dateFromLabel;
         } else {
             $filterSummaries[] = 'Date To: ' . $dateToLabel;
->>>>>>> codex/refactor-stockentry.php-design-elements-wrvzkx
+
         }
         $lines[] = $strongDivider;
         $lines[] = 'Total Rows: ' . count($rows);
     }
 
-<<<<<<< HEAD
+
     $lines[] = '';
     $lines[] = 'Prepared via DGZ Inventory System';
 
     $pdfContent = buildSimplePdfDocument($lines);
-=======
+
     if (!empty($filters['supplier'])) {
         $filterSummaries[] = 'Supplier: ' . $filters['supplier'];
     }
@@ -1666,7 +1666,7 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
     if (!empty($filters['status_label'])) {
         $filterSummaries[] = 'Status: ' . $filters['status_label'];
     }
->>>>>>> codex/refactor-stockentry.php-design-elements-wrvzkx
+
 
     $totalRows = count($rows);
     $totalQty = 0.0;
@@ -1921,7 +1921,7 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
     $dompdf->stream($filenameBase . '.pdf', ['Attachment' => true]);
     exit;
 }
-<<<<<<< HEAD
+    }
 
 /**
  * Create a minimal multi-page PDF string from plain text lines.
@@ -2049,5 +2049,3 @@ function formatPdfTableRow(array $cells, array $columnWidths): string
 
     return implode(' | ', $formatted);
 }
-=======
->>>>>>> codex/refactor-stockentry.php-design-elements-wrvzkx
