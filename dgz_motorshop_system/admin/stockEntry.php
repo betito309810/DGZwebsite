@@ -258,8 +258,22 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                             <?php endif; ?>
                         </p>
                     </div>
+                    <div class="panel-actions">
+                        <button
+                            type="button"
+                            class="panel-toggle"
+                            data-toggle-target="stockInFormContainer"
+                            data-expanded-text="Hide Form"
+                            data-collapsed-text="Show Form"
+                            aria-expanded="true"
+                        >
+                            <i class="fas fa-chevron-up panel-toggle__icon" aria-hidden="true"></i>
+                            <span class="panel-toggle__label">Hide Form</span>
+                        </button>
+                    </div>
                 </div>
-                <form id="stockInForm" method="POST" enctype="multipart/form-data" <?= $formLocked ? 'aria-disabled="true"' : '' ?>>
+                <div id="stockInFormContainer" class="panel-content">
+                    <form id="stockInForm" method="POST" enctype="multipart/form-data" <?= $formLocked ? 'aria-disabled="true"' : '' ?>>
                     <?php if ($editingReceiptId): ?>
                         <input type="hidden" name="receipt_id" value="<?= (int)$editingReceiptId ?>">
                     <?php endif; ?>
@@ -421,7 +435,8 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                             <a class="btn-secondary" href="stockReceiptView.php?receipt=<?= (int)$activeReceipt['header']['id'] ?>">View Details</a>
                         <?php endif; ?>
                     </div>
-                </form>
+                    </form>
+                </div>
             </section>
 
             <!-- Stock-In report with filters, preview table, and export triggers -->
@@ -431,8 +446,22 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                         <h3 id="stockInReportTitle">Stock-In Report</h3>
                         <p class="panel-subtitle">Filter received stock entries and export the result set for external analysis.</p>
                     </div>
+                    <div class="panel-actions">
+                        <button
+                            type="button"
+                            class="panel-toggle"
+                            data-toggle-target="stockInReportContent"
+                            data-expanded-text="Hide Report"
+                            data-collapsed-text="Show Report"
+                            aria-expanded="true"
+                        >
+                            <i class="fas fa-chevron-up panel-toggle__icon" aria-hidden="true"></i>
+                            <span class="panel-toggle__label">Hide Report</span>
+                        </button>
+                    </div>
                 </div>
-                <form class="report-filters" method="GET" aria-label="Stock-In report filters">
+                <div id="stockInReportContent" class="panel-content">
+                    <form class="report-filters" method="GET" aria-label="Stock-In report filters">
                     <div class="form-grid">
                         <div class="form-group">
                             <label for="filter_date_from">Date From</label>
@@ -494,8 +523,8 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                         <button type="submit" class="btn-secondary" name="stock_in_export" value="csv">Export CSV</button>
                         <button type="submit" class="btn-secondary" name="stock_in_export" value="pdf">Export PDF</button>
                     </div>
-                </form>
-                <?php if (!empty($stockInReportRows)): ?>
+                    </form>
+                    <?php if (!empty($stockInReportRows)): ?>
                     <div class="table-wrapper">
                         <table class="data-table">
                             <thead>
@@ -528,9 +557,10 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                             </tbody>
                         </table>
                     </div>
-                <?php else: ?>
-                    <p class="empty-state">No stock-in activity matches the selected filters.</p>
-                <?php endif; ?>
+                    <?php else: ?>
+                        <p class="empty-state">No stock-in activity matches the selected filters.</p>
+                    <?php endif; ?>
+                </div>
             </section>
 
             <!-- Current inventory snapshot derived from latest stock-in posts -->
@@ -581,8 +611,22 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                         <h3 id="recentReceiptsTitle">Recent Stock-In Activity</h3>
                         <p class="panel-subtitle">Latest receipts with status and totals.</p>
                     </div>
+                    <div class="panel-actions">
+                        <button
+                            type="button"
+                            class="panel-toggle"
+                            data-toggle-target="recentReceiptsContent"
+                            data-expanded-text="Hide Activity"
+                            data-collapsed-text="Show Activity"
+                            aria-expanded="true"
+                        >
+                            <i class="fas fa-chevron-up panel-toggle__icon" aria-hidden="true"></i>
+                            <span class="panel-toggle__label">Hide Activity</span>
+                        </button>
+                    </div>
                 </div>
-                <?php if (!empty($recentReceipts)): ?>
+                <div id="recentReceiptsContent" class="panel-content">
+                    <?php if (!empty($recentReceipts)): ?>
                     <div class="table-wrapper">
                         <table class="data-table data-table--compact">
                             <thead>
@@ -619,9 +663,10 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                             </tbody>
                         </table>
                     </div>
-                <?php else: ?>
-                    <p class="empty-state">No stock-in documents recorded yet.</p>
-                <?php endif; ?>
+                    <?php else: ?>
+                        <p class="empty-state">No stock-in documents recorded yet.</p>
+                    <?php endif; ?>
+                </div>
             </section>
         </div>
     </main>

@@ -15,6 +15,49 @@ document.addEventListener('DOMContentLoaded', () => {
     const attachmentList = document.getElementById('attachmentList');
     const discrepancyRequiredIndicator = document.querySelector('[data-discrepancy-required]');
 
+    const panelToggleButtons = document.querySelectorAll('[data-toggle-target]');
+
+    panelToggleButtons.forEach((button) => {
+        const targetId = button.getAttribute('data-toggle-target');
+        if (!targetId) {
+            return;
+        }
+        const target = document.getElementById(targetId);
+        if (!target) {
+            return;
+        }
+
+        const collapsedText = button.getAttribute('data-collapsed-text') || 'Show';
+        const expandedText = button.getAttribute('data-expanded-text') || 'Hide';
+        const label = button.querySelector('.panel-toggle__label');
+        const icon = button.querySelector('.panel-toggle__icon');
+        const startCollapsed = button.getAttribute('data-start-collapsed') === 'true';
+
+        if (startCollapsed) {
+            target.classList.add('hidden');
+        }
+
+        const syncState = (isHidden) => {
+            button.setAttribute('aria-expanded', (!isHidden).toString());
+            if (label) {
+                label.textContent = isHidden ? collapsedText : expandedText;
+            }
+            if (icon) {
+                icon.className = `${isHidden ? 'fas fa-chevron-down' : 'fas fa-chevron-up'} panel-toggle__icon`;
+            }
+        };
+
+        syncState(target.classList.contains('hidden'));
+
+        button.addEventListener('click', () => {
+            const isHidden = target.classList.toggle('hidden');
+            syncState(isHidden);
+            if (!isHidden) {
+                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        });
+    });
+
     if (!form || !lineItemsBody) {
         return;
     }
