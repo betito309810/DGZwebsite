@@ -497,7 +497,7 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                 </form>
                 <?php if (!empty($stockInReportRows)): ?>
                     <div class="table-wrapper">
-                        <table class="line-items-table">
+                        <table class="data-table">
                             <thead>
                                 <tr>
                                     <th>Date</th>
@@ -543,7 +543,7 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                 </div>
                 <?php if (!empty($currentInventorySnapshot)): ?>
                     <div class="table-wrapper">
-                        <table class="line-items-table">
+                        <table class="data-table data-table--compact">
                             <thead>
                                 <tr>
                                     <th>Product</th>
@@ -584,7 +584,7 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                 </div>
                 <?php if (!empty($recentReceipts)): ?>
                     <div class="table-wrapper">
-                        <table class="line-items-table">
+                        <table class="data-table data-table--compact">
                             <thead>
                                 <tr>
                                     <th>Posted</th>
@@ -1534,10 +1534,11 @@ function exportStockInReportCsv(string $filenameBase, array $headers, array $row
 }
 
 /**
- * Emit report data as a simple text-based PDF.
+ * Emit report data as a Dompdf-rendered PDF so it matches the styling of the sales report.
  */
 function exportStockInReportPdf(string $filenameBase, array $headers, array $rows, array $filters): void
 {
+<<<<<<< HEAD
     $columnWidths = [12, 12, 18, 12, 28, 12, 12, 16, 12];
     $strongDivider = buildPdfTableDivider($columnWidths, '=');
     $lightDivider = buildPdfTableDivider($columnWidths, '-');
@@ -1604,24 +1605,323 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
                 $row['receiver_name'] ?? 'Pending',
                 $row['status_label'] ?? '',
             ], $columnWidths);
+=======
+    require_once __DIR__ . '/../vendor/autoload.php';
+
+    $generatedOn = date('F j, Y g:i A');
+    $reportTitle = 'DGZ Motorshop · Stock-In Report';
+
+    $filterSummaries = [];
+
+    $dateFromLabel = '';
+    if (!empty($filters['date_from'])) {
+        $dateFromLabel = date('M d, Y', strtotime($filters['date_from']));
+    } elseif (!empty($filters['date_from_input'])) {
+        $dateFromLabel = $filters['date_from_input'];
+    }
+
+    $dateToLabel = '';
+    if (!empty($filters['date_to'])) {
+        $dateToLabel = date('M d, Y', strtotime($filters['date_to']));
+    } elseif (!empty($filters['date_to_input'])) {
+        $dateToLabel = $filters['date_to_input'];
+    }
+
+    if ($dateFromLabel !== '' || $dateToLabel !== '') {
+        if ($dateFromLabel !== '' && $dateToLabel !== '') {
+            $filterSummaries[] = 'Date: ' . $dateFromLabel . ' – ' . $dateToLabel;
+        } elseif ($dateFromLabel !== '') {
+            $filterSummaries[] = 'Date From: ' . $dateFromLabel;
+        } else {
+            $filterSummaries[] = 'Date To: ' . $dateToLabel;
+>>>>>>> codex/refactor-stockentry.php-design-elements-wrvzkx
         }
         $lines[] = $strongDivider;
         $lines[] = 'Total Rows: ' . count($rows);
     }
 
+<<<<<<< HEAD
     $lines[] = '';
     $lines[] = 'Prepared via DGZ Inventory System';
 
     $pdfContent = buildSimplePdfDocument($lines);
+=======
+    if (!empty($filters['supplier'])) {
+        $filterSummaries[] = 'Supplier: ' . $filters['supplier'];
+    }
+    if (!empty($filters['product_label'])) {
+        $filterSummaries[] = 'Product: ' . $filters['product_label'];
+    } elseif (!empty($filters['product_id'])) {
+        $filterSummaries[] = 'Product ID: ' . $filters['product_id'];
+    }
+    if (!empty($filters['product_search'])) {
+        $filterSummaries[] = 'Search: ' . $filters['product_search'];
+    }
+    if (!empty($filters['brand'])) {
+        $filterSummaries[] = 'Brand: ' . $filters['brand'];
+    }
+    if (!empty($filters['category'])) {
+        $filterSummaries[] = 'Category: ' . $filters['category'];
+    }
+    if (!empty($filters['status_label'])) {
+        $filterSummaries[] = 'Status: ' . $filters['status_label'];
+    }
+>>>>>>> codex/refactor-stockentry.php-design-elements-wrvzkx
 
-    header('Content-Type: application/pdf');
-    header('Content-Disposition: attachment; filename="' . $filenameBase . '.pdf"');
-    header('Pragma: no-cache');
-    header('Expires: 0');
-    header('Content-Length: ' . strlen($pdfContent));
-    echo $pdfContent;
+    $totalRows = count($rows);
+    $totalQty = 0.0;
+    $totalValue = 0.0;
+    $receiptTracker = [];
+
+    foreach ($rows as $row) {
+        $qty = isset($row['qty_received']) ? (float)$row['qty_received'] : 0.0;
+        $totalQty += $qty;
+
+        $unitCost = isset($row['unit_cost']) ? (float)$row['unit_cost'] : 0.0;
+        $totalValue += $qty * $unitCost;
+
+        if (!empty($row['receipt_code'])) {
+            $receiptTracker[$row['receipt_code']] = true;
+        }
+    }
+
+    $uniqueReceipts = count($receiptTracker);
+
+    ob_start();
+    ?>
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title><?= htmlspecialchars($reportTitle) ?></title>
+        <style>
+            body {
+                font-family: 'Helvetica', Arial, sans-serif;
+                font-size: 12px;
+                color: #1f2937;
+                margin: 24px;
+                line-height: 1.5;
+            }
+            .header {
+                text-align: center;
+                margin-bottom: 24px;
+                border-bottom: 2px solid #0f172a;
+                padding-bottom: 16px;
+            }
+            .header h1 {
+                margin: 0;
+                font-size: 24px;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+            }
+            .header h2 {
+                margin: 8px 0 6px;
+                font-size: 18px;
+                font-weight: 600;
+            }
+            .header p {
+                margin: 0;
+                color: #475569;
+            }
+            .section {
+                margin-bottom: 24px;
+            }
+            .section h3 {
+                margin: 0 0 12px;
+                font-size: 15px;
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+                color: #0f172a;
+            }
+            .filters ul {
+                list-style: none;
+                padding: 0;
+                margin: 0;
+            }
+            .filters li {
+                padding: 4px 0;
+                border-bottom: 1px solid #e2e8f0;
+            }
+            .filters li:last-child {
+                border-bottom: none;
+            }
+            .summary table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+            .summary th,
+            .summary td {
+                padding: 10px 12px;
+                border: 1px solid #d1d5db;
+                font-size: 12px;
+                text-align: left;
+            }
+            .summary th {
+                background: #f8fafc;
+                width: 45%;
+                font-weight: 700;
+            }
+            .report-table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 11px;
+            }
+            .report-table thead th {
+                background: #0f172a;
+                color: #ffffff;
+                text-transform: uppercase;
+                letter-spacing: 0.06em;
+                padding: 10px;
+                text-align: left;
+            }
+            .report-table tbody td {
+                padding: 9px 10px;
+                border-bottom: 1px solid #e2e8f0;
+            }
+            .report-table tbody tr:nth-child(even) {
+                background: #f8fafc;
+            }
+            .report-table tbody tr:last-child td {
+                border-bottom: 0;
+            }
+            .report-table .status-cell {
+                text-align: center;
+            }
+            .badge {
+                display: inline-block;
+                padding: 3px 8px;
+                border-radius: 999px;
+                font-weight: 600;
+                font-size: 10px;
+                letter-spacing: 0.04em;
+            }
+            .badge-posted {
+                background: #dcfce7;
+                color: #166534;
+            }
+            .badge-draft {
+                background: #e2e8f0;
+                color: #1f2937;
+            }
+            .badge-with_discrepancy {
+                background: #fef3c7;
+                color: #92400e;
+            }
+            .empty-row td {
+                text-align: center;
+                padding: 18px 12px;
+                color: #6b7280;
+                font-style: italic;
+            }
+            .footer {
+                margin-top: 36px;
+                text-align: center;
+                font-size: 10px;
+                color: #64748b;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>DGZ Motorshop</h1>
+            <h2>Stock-In Report</h2>
+            <p>Generated on <?= htmlspecialchars($generatedOn) ?></p>
+        </div>
+
+        <div class="section filters">
+            <h3>Filters</h3>
+            <ul>
+                <?php if (empty($filterSummaries)): ?>
+                    <li>All stock-in entries</li>
+                <?php else: ?>
+                    <?php foreach ($filterSummaries as $line): ?>
+                        <li><?= htmlspecialchars($line) ?></li>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </ul>
+        </div>
+
+        <div class="section summary">
+            <h3>Summary</h3>
+            <table>
+                <tr>
+                    <th>Total Rows</th>
+                    <td><?= number_format($totalRows) ?></td>
+                </tr>
+                <tr>
+                    <th>Distinct Receipts</th>
+                    <td><?= number_format($uniqueReceipts) ?></td>
+                </tr>
+                <tr>
+                    <th>Total Quantity Received</th>
+                    <td><?= number_format($totalQty, 0) ?></td>
+                </tr>
+                <tr>
+                    <th>Estimated Total Value</th>
+                    <td>&#8369;<?= number_format($totalValue, 2) ?></td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="section">
+            <h3>Stock-In Details</h3>
+            <table class="report-table">
+                <thead>
+                    <tr>
+                        <?php foreach ($headers as $header): ?>
+                            <th><?= htmlspecialchars($header) ?></th>
+                        <?php endforeach; ?>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (empty($rows)): ?>
+                        <tr class="empty-row">
+                            <td colspan="<?= count($headers) ?>">No stock-in records matched the selected filters.</td>
+                        </tr>
+                    <?php else: ?>
+                        <?php foreach ($rows as $row): ?>
+                            <?php
+                                $qtyDisplay = $row['qty_received_display'] ?? number_format((float)($row['qty_received'] ?? 0), 0);
+                                $unitCostDisplay = $row['unit_cost_display'] ?? number_format((float)($row['unit_cost'] ?? 0), 2);
+                                $statusValue = $row['status'] ?? '';
+                                $statusLabel = $row['status_label'] ?? formatStockReceiptStatus($statusValue);
+                            ?>
+                            <tr>
+                                <td><?= htmlspecialchars($row['date_display'] ?? '') ?></td>
+                                <td><?= htmlspecialchars($row['receipt_code'] ?? '') ?></td>
+                                <td><?= htmlspecialchars($row['supplier_name'] ?? '') ?></td>
+                                <td><?= htmlspecialchars($row['document_number'] ?? '') ?></td>
+                                <td><?= htmlspecialchars($row['product_name'] ?? 'Unknown Product') ?></td>
+                                <td><?= htmlspecialchars($qtyDisplay) ?></td>
+                                <td>&#8369;<?= htmlspecialchars($unitCostDisplay) ?></td>
+                                <td><?= htmlspecialchars($row['receiver_name'] ?? 'Pending') ?></td>
+                                <td class="status-cell"><span class="badge badge-<?= htmlspecialchars($statusValue) ?>"><?= htmlspecialchars($statusLabel) ?></span></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="footer">Prepared via DGZ Inventory System</div>
+    </body>
+    </html>
+    <?php
+    $html = ob_get_clean();
+
+    $options = new \Dompdf\Options();
+    $options->set('isHtml5ParserEnabled', true);
+    $options->set('isRemoteEnabled', true);
+
+    $dompdf = new \Dompdf\Dompdf($options);
+    $dompdf->loadHtml($html);
+    $dompdf->setPaper('A4', 'portrait');
+    $dompdf->render();
+
+    $dompdf->stream($filenameBase . '.pdf', ['Attachment' => true]);
     exit;
 }
+<<<<<<< HEAD
 
 /**
  * Create a minimal multi-page PDF string from plain text lines.
@@ -1749,3 +2049,5 @@ function formatPdfTableRow(array $cells, array $columnWidths): string
 
     return implode(' | ', $formatted);
 }
+=======
+>>>>>>> codex/refactor-stockentry.php-design-elements-wrvzkx

@@ -20,6 +20,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const allProducts = Array.isArray(bootstrapData.products) ? bootstrapData.products : [];
+    const formLocked = Boolean(bootstrapData.formLocked);
+    const unsavedWarningMessage = 'You have unsaved stock-in form. '
+        + 'Save the form as a draft or post it before leaving, or do you want to discard it?';
+    let isFormDirty = false;
+    let isSubmitting = false;
+
     const productMap = new Map();
     const productSearchIndex = allProducts.map((product) => {
         productMap.set(String(product.id), product);
@@ -42,6 +48,63 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
+    const handleBeforeUnload = (event) => {
+        if (!isFormDirty || isSubmitting) {
+            return;
+        }
+        event.preventDefault();
+        event.returnValue = unsavedWarningMessage;
+        return unsavedWarningMessage;
+    };
+
+    const markDirty = () => {
+        if (formLocked || isSubmitting) {
+            return;
+        }
+        if (!isFormDirty) {
+            isFormDirty = true;
+            form.setAttribute('data-dirty', 'true');
+        }
+    };
+
+    const resetDirty = () => {
+        if (!isFormDirty) {
+            return;
+        }
+        isFormDirty = false;
+        form.removeAttribute('data-dirty');
+    };
+
+    const navigateAway = (href) => {
+        isSubmitting = true;
+        resetDirty();
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+        window.location.href = href;
+    };
+
+    if (!formLocked) {
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        form.addEventListener('input', () => {
+            markDirty();
+        }, true);
+        form.addEventListener('change', () => {
+            markDirty();
+        }, true);
+    }
+
+    const triggerSubmit = (action) => {
+        if (!form || formLocked) {
+            return;
+        }
+        formActionField.value = action;
+        if (form.reportValidity()) {
+            isSubmitting = true;
+            resetDirty();
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+            form.submit();
+        }
+    };
+
     // Bind base row listeners immediately.
     bindRow(lineTemplates.row);
     updateRemoveButtons();
@@ -53,22 +116,18 @@ document.addEventListener('DOMContentLoaded', () => {
         bindRow(newRow);
         updateRemoveButtons();
         updateDiscrepancyState();
+<<<<<<< HEAD
+=======
+        markDirty();
+>>>>>>> codex/refactor-stockentry.php-design-elements-wrvzkx
     });
 
     saveDraftBtn?.addEventListener('click', () => {
-        if (!form) return;
-        formActionField.value = 'save_draft';
-        if (form.reportValidity()) {
-            form.submit();
-        }
+        triggerSubmit('save_draft');
     });
 
     postReceiptBtn?.addEventListener('click', () => {
-        if (!form) return;
-        formActionField.value = 'post_receipt';
-        if (form.reportValidity()) {
-            form.submit();
-        }
+        triggerSubmit('post_receipt');
     });
 
     attachmentInput?.addEventListener('change', () => {
@@ -80,6 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
             item.innerHTML = `<i class="fas fa-paperclip"></i> <span>${file.name}</span>`;
             attachmentList.appendChild(item);
         });
+        markDirty();
     });
 
     function cloneRow() {
@@ -98,7 +158,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (select) {
             select.value = '';
         }
+<<<<<<< HEAD
         clearProductSelection(clone);
+=======
+        clearProductSelection(clone, { suppressDirty: true });
+>>>>>>> codex/refactor-stockentry.php-design-elements-wrvzkx
         const removeBtn = clone.querySelector('.remove-line-item');
         if (removeBtn) {
             removeBtn.disabled = false;
@@ -117,9 +181,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         expectedInput?.addEventListener('input', () => {
             evaluateRowDiscrepancy(row);
+            markDirty();
         });
         receivedInput?.addEventListener('input', () => {
             evaluateRowDiscrepancy(row);
+            markDirty();
         });
         removeBtn?.addEventListener('click', () => {
             if (lineItemsBody.children.length <= 1) {
@@ -128,6 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
             row.remove();
             updateRemoveButtons();
             updateDiscrepancyState();
+            markDirty();
         });
 
         if (productSearch && suggestions && productSelect) {
@@ -140,6 +207,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     clearProductSelection(row, { keepInputValue: true, keepSuggestions: true });
                 }
                 renderProductSuggestions(row, currentValue);
+<<<<<<< HEAD
+=======
+                markDirty();
+>>>>>>> codex/refactor-stockentry.php-design-elements-wrvzkx
             });
             productSearch.addEventListener('focus', () => {
                 if (row.dataset.selectedProduct) {
@@ -168,9 +239,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const presetId = row.dataset.selectedProduct;
             if (presetId) {
+<<<<<<< HEAD
                 applyProductSelection(row, presetId, { skipFocus: true, renderSuggestions: false });
             } else if (productSelect.value) {
                 applyProductSelection(row, productSelect.value, { skipFocus: true, renderSuggestions: false });
+=======
+                applyProductSelection(row, presetId, { skipFocus: true, renderSuggestions: false, skipDirty: true });
+            } else if (productSelect.value) {
+                applyProductSelection(row, productSelect.value, { skipFocus: true, renderSuggestions: false, skipDirty: true });
+>>>>>>> codex/refactor-stockentry.php-design-elements-wrvzkx
             }
         }
     }
@@ -325,6 +402,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (searchInput.dataset.defaultPlaceholder) {
                 searchInput.placeholder = searchInput.dataset.defaultPlaceholder;
             }
+            const hadSelection = !!row.dataset.selectedProduct;
             row.dataset.selectedProduct = '';
             row.dataset.selectedLabel = '';
             if (suggestions && !options.keepSuggestions) {
@@ -332,12 +410,22 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             row.classList.remove('suggestions-open');
             clearBtn?.setAttribute('hidden', 'hidden');
+<<<<<<< HEAD
+=======
+            if (!options.suppressDirty && hadSelection) {
+                markDirty();
+            }
+>>>>>>> codex/refactor-stockentry.php-design-elements-wrvzkx
             return;
         }
 
         const label = buildProductLabel(product);
 
         select.value = String(product.id);
+<<<<<<< HEAD
+=======
+        const previousSelection = row.dataset.selectedProduct;
+>>>>>>> codex/refactor-stockentry.php-design-elements-wrvzkx
         row.dataset.selectedProduct = String(product.id);
         row.dataset.selectedLabel = label;
         searchInput.value = label;
@@ -351,6 +439,49 @@ document.addEventListener('DOMContentLoaded', () => {
         clearBtn?.removeAttribute('hidden');
         if (!options.skipFocus) {
             searchInput.blur();
+        }
+        if (!options.skipDirty && previousSelection !== String(product.id)) {
+            markDirty();
+        }
+    }
+
+    function clearProductSelection(row, options = {}) {
+        const select = row.querySelector('select[name="product_id[]"]');
+        const searchInput = row.querySelector('.product-search');
+        const suggestions = row.querySelector('.product-suggestions');
+        const clearBtn = row.querySelector('.product-clear');
+        const hadSelection = !!row.dataset.selectedProduct;
+
+        if (select) {
+            select.value = '';
+        }
+        row.dataset.selectedProduct = '';
+        row.dataset.selectedLabel = '';
+
+        if (searchInput && !options.keepInputValue) {
+            searchInput.value = '';
+        }
+        if (searchInput && searchInput.dataset.defaultPlaceholder && !options.keepPlaceholder) {
+            searchInput.placeholder = searchInput.dataset.defaultPlaceholder;
+        }
+
+        if (!options.keepSuggestions && suggestions) {
+            suggestions.innerHTML = '';
+        }
+        if (!options.keepSuggestions) {
+            row.classList.remove('suggestions-open');
+        }
+
+        if (clearBtn && !options.keepClearButton) {
+            clearBtn.setAttribute('hidden', 'hidden');
+        }
+
+        if (options.focus && searchInput) {
+            searchInput.focus();
+        }
+
+        if (!options.suppressDirty && (hadSelection || !options.keepInputValue)) {
+            markDirty();
         }
     }
 
@@ -417,10 +548,45 @@ document.addEventListener('DOMContentLoaded', () => {
             lineItemsBody.querySelectorAll('.line-item-row.suggestions-open').forEach((row) => {
                 row.classList.remove('suggestions-open');
             });
+<<<<<<< HEAD
+=======
+        }
+
+        if (formLocked || !isFormDirty || isSubmitting) {
+            return;
+        }
+
+        const link = event.target.closest('a[href]');
+        if (!link) {
+            return;
+        }
+
+        if (link.dataset.allowUnsaved === 'true') {
+            return;
+        }
+
+        if (link.target && link.target !== '_self') {
+            return;
+        }
+
+        const href = link.getAttribute('href');
+        if (!href || href.startsWith('#') || href.startsWith('javascript:')) {
+            return;
+        }
+
+        event.preventDefault();
+        const proceed = window.confirm(unsavedWarningMessage);
+        if (proceed) {
+            navigateAway(link.href);
+>>>>>>> codex/refactor-stockentry.php-design-elements-wrvzkx
         }
     });
 
     discrepancyNoteField?.addEventListener('input', () => {
         updateDiscrepancyState();
+<<<<<<< HEAD
+=======
+        markDirty();
+>>>>>>> codex/refactor-stockentry.php-design-elements-wrvzkx
     });
 });

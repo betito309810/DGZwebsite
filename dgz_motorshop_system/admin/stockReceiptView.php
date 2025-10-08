@@ -176,7 +176,7 @@ $profile_created = isset($currentUser['created_at']) ? formatStockReceiptDateTim
                     </div>
                 </div>
                 <div class="table-wrapper">
-                    <table class="line-items-table">
+                    <table class="data-table">
                         <thead>
                             <tr>
                                 <th>#</th>
@@ -251,7 +251,7 @@ $profile_created = isset($currentUser['created_at']) ? formatStockReceiptDateTim
                 </div>
                 <?php if (!empty($auditLog)): ?>
                     <div class="table-wrapper">
-                        <table class="line-items-table">
+                        <table class="data-table data-table--compact">
                             <thead>
                                 <tr>
                                     <th>Date</th>
