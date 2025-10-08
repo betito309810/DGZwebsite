@@ -228,6 +228,34 @@
     margin-top: 16px;
 }
 
+/* Helper text styling so the per-item discrepancy notes stay readable beside each product. */
+.line-items-section .discrepancy-note-help {
+    margin: 0;
+    font-size: 12px;
+    color: #64748b;
+}
+
+/* Added per-item discrepancy note styling to visually pair variance notes with the related product row. */
+.line-item-discrepancy-note {
+    margin-top: 14px;
+    padding: 14px 16px;
+    border-radius: 10px;
+    border: 1px solid #dbeafe;
+    background: #f8fbff;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.line-item-discrepancy-note textarea {
+    resize: vertical;
+}
+
+.line-item-row.has-discrepancy .line-item-discrepancy-note {
+    border-color: #f97316;
+    background: #fff7ed;
+}
+
 .line-item-row {
     position: relative;
     background: #f8fafc;

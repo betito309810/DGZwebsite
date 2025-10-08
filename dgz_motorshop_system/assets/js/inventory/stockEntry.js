@@ -9,11 +9,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveDraftBtn = document.getElementById('saveDraftBtn');
     const postReceiptBtn = document.getElementById('postReceiptBtn');
     const lineItemsBody = document.getElementById('lineItemsBody');
-    const discrepancyNoteGroup = document.getElementById('discrepancyNoteGroup');
-    const discrepancyNoteField = document.getElementById('discrepancy_note');
+    const discrepancySummaryField = document.getElementById('discrepancy_note');
     const attachmentInput = document.getElementById('attachments');
     const attachmentList = document.getElementById('attachmentList');
-    const discrepancyRequiredIndicator = document.querySelector('[data-discrepancy-required]');
 
     const panelToggleButtons = document.querySelectorAll('[data-toggle-target]');
     const panelTransitionHandlers = new WeakMap();
@@ -278,6 +276,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         formActionField.value = action;
+        updateDiscrepancySummaryField();
         if (form.reportValidity()) {
             isSubmitting = true;
             resetDirty();
@@ -341,6 +340,19 @@ document.addEventListener('DOMContentLoaded', () => {
         if (removeBtn) {
             removeBtn.disabled = false;
         }
+        const noteWrapper = clone.querySelector('.line-item-discrepancy-note');
+        const noteField = clone.querySelector('.item-discrepancy-note');
+        const noteRequiredBadge = clone.querySelector('.item-discrepancy-required');
+        if (noteWrapper) {
+            noteWrapper.hidden = true;
+        }
+        if (noteField) {
+            noteField.value = '';
+            noteField.removeAttribute('required');
+        }
+        if (noteRequiredBadge) {
+            noteRequiredBadge.setAttribute('hidden', 'hidden');
+        }
         return clone;
     }
 
@@ -352,6 +364,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const productSearch = row.querySelector('.product-search');
         const suggestions = row.querySelector('.product-suggestions');
         const clearBtn = row.querySelector('.product-clear');
+        const noteField = row.querySelector('.item-discrepancy-note');
 
         expectedInput?.addEventListener('input', () => {
             evaluateRowDiscrepancy(row);
@@ -359,6 +372,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         receivedInput?.addEventListener('input', () => {
             evaluateRowDiscrepancy(row);
+            markDirty();
+        });
+        noteField?.addEventListener('input', () => {
+            syncRowDiscrepancyNote(row);
+            updateDiscrepancySummaryField();
             markDirty();
         });
         removeBtn?.addEventListener('click', () => {
@@ -425,35 +443,68 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const hasDiscrepancy = expected !== null && received !== null && expected !== received;
         row.classList.toggle('has-discrepancy', hasDiscrepancy);
-        updateDiscrepancyState();
+        syncRowDiscrepancyNote(row, hasDiscrepancy);
+        updateDiscrepancySummaryField();
     }
 
     function updateDiscrepancyState() {
-        if (!discrepancyNoteGroup) {
+        const rows = Array.from(lineItemsBody.querySelectorAll('.line-item-row'));
+        rows.forEach((row) => {
+            syncRowDiscrepancyNote(row);
+        });
+        updateDiscrepancySummaryField();
+    }
+
+    function syncRowDiscrepancyNote(row, hasDiscrepancyOverride) {
+        const noteWrapper = row.querySelector('.line-item-discrepancy-note');
+        const noteField = row.querySelector('.item-discrepancy-note');
+        const requiredBadge = row.querySelector('.item-discrepancy-required');
+        if (!noteWrapper || !noteField) {
             return;
         }
-        const hasAny = !!lineItemsBody.querySelector('.has-discrepancy');
-        const noteValue = (discrepancyNoteField?.value || '').trim();
-        const hasNote = noteValue !== '';
-        const shouldShow = hasAny || hasNote;
 
-        discrepancyNoteGroup.hidden = !shouldShow;
+        const hasDiscrepancy = typeof hasDiscrepancyOverride === 'boolean'
+            ? hasDiscrepancyOverride
+            : row.classList.contains('has-discrepancy');
+        const hasValue = noteField.value.trim() !== '';
+        const shouldShow = hasDiscrepancy || hasValue;
 
-        if (hasAny) {
-            discrepancyNoteField?.setAttribute('required', 'required');
-            discrepancyRequiredIndicator?.removeAttribute('hidden');
+        noteWrapper.hidden = !shouldShow;
+
+        if (hasDiscrepancy) {
+            noteField.setAttribute('required', 'required');
+            requiredBadge?.removeAttribute('hidden');
         } else {
-            discrepancyNoteField?.removeAttribute('required');
-            discrepancyRequiredIndicator?.setAttribute('hidden', 'hidden');
+            noteField.removeAttribute('required');
+            requiredBadge?.setAttribute('hidden', 'hidden');
+            if (!hasValue) {
+                noteField.value = '';
+            }
         }
+    }
 
-        if (!hasAny && !hasNote && discrepancyNoteField) {
-            discrepancyNoteField.value = '';
+    function updateDiscrepancySummaryField() {
+        if (!discrepancySummaryField) {
+            return;
         }
-
-        if (discrepancyNoteGroup) {
-            discrepancyNoteGroup.dataset.hasInitial = hasNote ? '1' : '0';
-        }
+        const rows = Array.from(lineItemsBody.querySelectorAll('.line-item-row'));
+        const lines = rows
+            .filter((row) => row.classList.contains('has-discrepancy'))
+            .map((row, index) => {
+                const noteField = row.querySelector('.item-discrepancy-note');
+                const note = (noteField?.value || '').trim();
+                if (!note) {
+                    return '';
+                }
+                const expected = row.querySelector('input[name="qty_expected[]"]')?.value || 'n/a';
+                const received = row.querySelector('input[name="qty_received[]"]')?.value || '0';
+                const label = row.dataset.selectedLabel
+                    || row.querySelector('select[name="product_id[]"] option:checked')?.text?.trim()
+                    || `Item ${index + 1}`;
+                return `${label} (Expected ${expected || 'n/a'} / Received ${received || '0'}): ${note}`;
+            })
+            .filter(Boolean);
+        discrepancySummaryField.value = lines.join('\n');
     }
 
     function updateRemoveButtons() {
@@ -578,6 +629,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!options.suppressDirty && hadSelection) {
                 markDirty();
             }
+            updateDiscrepancySummaryField();
             return;
         }
 
@@ -602,6 +654,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!options.skipDirty && previousSelection !== String(product.id)) {
             markDirty();
         }
+        updateDiscrepancySummaryField();
     }
 
     function clearProductSelection(row, options = {}) {
@@ -642,6 +695,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!options.suppressDirty && (hadSelection || !options.keepInputValue)) {
             markDirty();
         }
+        updateDiscrepancySummaryField();
     }
 
     function buildProductLabel(product) {
@@ -704,8 +758,4 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    discrepancyNoteField?.addEventListener('input', () => {
-        updateDiscrepancyState();
-        markDirty();
-    });
 });

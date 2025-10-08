@@ -139,6 +139,7 @@ if ($activeReceipt) {
             'lot_number' => $item['lot_number'],
             'has_discrepancy' => $item['qty_expected'] !== null && (int)$item['qty_expected'] !== (int)$item['qty_received'],
             'invalid_expiry' => false,
+            'discrepancy_note' => $item['discrepancy_note'] ?? '',
         ];
     }
 }
@@ -161,22 +162,12 @@ if (empty($existingItems)) {
         'lot_number' => null,
         'has_discrepancy' => false,
         'invalid_expiry' => false,
+        'discrepancy_note' => '',
     ];
 }
 
 $existingAttachments = $activeReceipt['attachments'] ?? [];
 $formLocked = !$moduleReady || ($activeReceipt && $activeReceipt['header']['status'] !== 'draft');
-$hasPresetDiscrepancy = false;
-foreach ($existingItems as $item) {
-    if (!empty($item['has_discrepancy'])) {
-        $hasPresetDiscrepancy = true;
-        break;
-    }
-}
-if (trim((string)$formDiscrepancyNote) !== '') {
-    $hasPresetDiscrepancy = true;
-}
-$discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
 
 ?>
 <!DOCTYPE html>
@@ -310,10 +301,6 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                             <label for="notes">Notes</label>
                             <textarea id="notes" name="notes" rows="3" placeholder="Any additional details"><?= htmlspecialchars($formNotes) ?></textarea>
                         </div>
-                        <div class="form-group" id="discrepancyNoteGroup" data-has-initial="<?= $hasPresetDiscrepancy ? '1' : '0' ?>" <?= $discrepancyGroupHiddenAttr ?> >
-                            <label for="discrepancy_note">Discrepancy Note <span class="required" data-discrepancy-required <?= $hasPresetDiscrepancy ? '' : 'hidden' ?>>*</span></label>
-                            <textarea id="discrepancy_note" name="discrepancy_note" rows="3" placeholder="Explain missing, damaged, or excess items"<?= $hasPresetDiscrepancy ? ' required' : '' ?>><?= htmlspecialchars($formDiscrepancyNote) ?></textarea>
-                        </div>
                     </fieldset>
 
                     <?php if (!$formLocked): ?>
@@ -339,6 +326,8 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                                     $lotNumber = $item['lot_number'];
                                     $rowHasDiscrepancy = !empty($item['has_discrepancy']);
                                     $rowInvalidExpiry = !empty($item['invalid_expiry']);
+                                    $rowDiscrepancyNote = trim((string)($item['discrepancy_note'] ?? ''));
+                                    $rowNoteVisible = $rowHasDiscrepancy || $rowDiscrepancyNote !== '';
                                 ?>
                                 <div class="line-item-row<?= $rowHasDiscrepancy ? ' has-discrepancy' : '' ?>" data-selected-product="<?= $productId ? (int)$productId : '' ?>">
                                     <div class="line-item-header">
@@ -397,9 +386,15 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                                             <input type="text" name="lot_number[]" placeholder="Lot or batch" value="<?= $lotNumber ? htmlspecialchars($lotNumber) : '' ?>">
                                         </div>
                                     </div>
+                                    <div class="line-item-discrepancy-note" <?= $rowNoteVisible ? '' : 'hidden' ?>>
+                                        <label>Discrepancy Note <span class="required item-discrepancy-required" <?= $rowHasDiscrepancy ? '' : 'hidden' ?>>*</span></label>
+                                        <textarea class="item-discrepancy-note" name="item_discrepancy_note[]" rows="2" placeholder="Explain the variance" <?= $rowHasDiscrepancy ? 'required' : '' ?>><?= htmlspecialchars($rowDiscrepancyNote) ?></textarea>
+                                        <p class="discrepancy-note-help">Show why this product differs so staff can follow up quickly.</p>
+                                    </div>
                                 </div>
                             <?php endforeach; ?>
                         </div>
+                        <input type="hidden" id="discrepancy_note" name="discrepancy_note" value="<?= htmlspecialchars($formDiscrepancyNote) ?>">
                     </fieldset>
 
                     <fieldset class="form-section" aria-labelledby="attachmentsTitle" <?= $formLocked ? 'disabled' : '' ?>>
@@ -876,13 +871,22 @@ function handleStockReceiptSubmission(PDO $pdo, ?array $currentUser, array $post
             $response['errors'][] = 'Quantity received must be greater than zero for all items.';
             break;
         }
-        if ($item['qty_expected'] !== null && $item['qty_expected'] !== $item['qty_received']) {
+        if (!empty($item['has_discrepancy'])) {
             $hasDiscrepancy = true;
+            if ($action === 'post_receipt' && empty($item['discrepancy_note'])) {
+                $response['errors'][] = 'Please provide a discrepancy note for each item with quantity differences.';
+                break;
+            }
         }
     }
 
-    if ($action === 'post_receipt' && $hasDiscrepancy && $discrepancyNote === '') {
-        $response['errors'][] = 'Please provide a discrepancy note to explain quantity differences.';
+    if ($hasDiscrepancy) {
+        $compiledNote = buildItemDiscrepancySummary($pdo, $items);
+        if ($compiledNote !== '') {
+            $discrepancyNote = $compiledNote;
+        }
+    } else {
+        $discrepancyNote = '';
     }
 
     if (!empty($response['errors'])) {
@@ -1033,6 +1037,7 @@ function normalizeLineItems(array $post): array
     $unitCost = $post['unit_cost'] ?? [];
     $expiryDate = $post['expiry_date'] ?? [];
     $lotNumbers = $post['lot_number'] ?? [];
+    $itemNotes = $post['item_discrepancy_note'] ?? [];
 
     $items = [];
     foreach ($productIds as $index => $productIdRaw) {
@@ -1052,6 +1057,10 @@ function normalizeLineItems(array $post): array
         $expiry = $rawExpiry !== '' ? validateDateValue($rawExpiry) : null;
         $lot = isset($lotNumbers[$index]) ? trim((string)$lotNumbers[$index]) : null;
 
+        $rowNote = isset($itemNotes[$index]) ? trim((string)$itemNotes[$index]) : '';
+
+        $hasRowDiscrepancy = $expected !== null && $expected !== $itemQtyReceived;
+
         $items[] = [
             'product_id' => $productId,
             'qty_expected' => $expected,
@@ -1060,6 +1069,8 @@ function normalizeLineItems(array $post): array
             'expiry_date' => $expiry,
             'invalid_expiry' => $rawExpiry !== '' && $expiry === null,
             'lot_number' => $lot !== '' ? $lot : null,
+            'discrepancy_note' => $rowNote !== '' ? $rowNote : null,
+            'has_discrepancy' => $hasRowDiscrepancy,
         ];
     }
 
@@ -1077,6 +1088,7 @@ function normalizeLineItemsPreserveBlank(array $post): array
     $unitCost = $post['unit_cost'] ?? [];
     $expiryDate = $post['expiry_date'] ?? [];
     $lotNumbers = $post['lot_number'] ?? [];
+    $itemNotes = $post['item_discrepancy_note'] ?? [];
 
     $rowCount = max(
         count($productIds),
@@ -1084,7 +1096,8 @@ function normalizeLineItemsPreserveBlank(array $post): array
         count($qtyReceived),
         count($unitCost),
         count($expiryDate),
-        count($lotNumbers)
+        count($lotNumbers),
+        count($itemNotes)
     );
 
     $items = [];
@@ -1102,6 +1115,8 @@ function normalizeLineItemsPreserveBlank(array $post): array
         $expiry = $expiryRaw !== '' ? validateDateValue($expiryRaw) : null;
         $invalidExpiry = $expiryRaw !== '' && $expiry === null;
 
+        $rowNote = isset($itemNotes[$index]) ? trim((string)$itemNotes[$index]) : '';
+
         $items[] = [
             'product_id' => $productId,
             'qty_expected' => $expected,
@@ -1112,10 +1127,64 @@ function normalizeLineItemsPreserveBlank(array $post): array
             'lot_number' => $lotRaw !== '' ? $lotRaw : null,
             'has_discrepancy' => $expected !== null && $received !== null && $expected !== $received,
             'invalid_expiry' => $invalidExpiry,
+            'discrepancy_note' => $rowNote,
         ];
     }
 
     return $items;
+}
+
+/**
+ * Collate per-item discrepancy notes into a readable summary stored on the receipt header.
+ */
+function buildItemDiscrepancySummary(PDO $pdo, array $items): string
+{
+    $lines = [];
+    $productIds = [];
+    foreach ($items as $item) {
+        if (empty($item['has_discrepancy'])) {
+            continue;
+        }
+        if (!empty($item['product_id'])) {
+            $productIds[(int)$item['product_id']] = true;
+        }
+    }
+
+    $productLabels = [];
+    if (!empty($productIds)) {
+        $placeholders = implode(',', array_fill(0, count($productIds), '?'));
+        $stmt = $pdo->prepare("SELECT id, name, code FROM products WHERE id IN ($placeholders)");
+        $stmt->execute(array_keys($productIds));
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $label = trim((string)($row['name'] ?? ''));
+            $code = trim((string)($row['code'] ?? ''));
+            if ($label === '') {
+                $label = 'Product #' . (int)$row['id'];
+            }
+            if ($code !== '') {
+                $label .= ' (#' . $code . ')';
+            }
+            $productLabels[(int)$row['id']] = $label;
+        }
+    }
+
+    foreach ($items as $index => $item) {
+        if (empty($item['has_discrepancy'])) {
+            continue;
+        }
+        $note = trim((string)($item['discrepancy_note'] ?? ''));
+        if ($note === '') {
+            continue;
+        }
+        $expected = $item['qty_expected'];
+        $received = $item['qty_received'];
+        $label = $productLabels[$item['product_id']] ?? 'Item ' . ($index + 1);
+        $expectedLabel = $expected === null ? 'n/a' : (string)$expected;
+        $receivedLabel = $received === null ? 'n/a' : (string)$received;
+        $lines[] = sprintf('%s (Expected %s / Received %s): %s', $label, $expectedLabel, $receivedLabel, $note);
+    }
+
+    return implode(PHP_EOL, $lines);
 }
 
 /**
