@@ -413,6 +413,9 @@ $search = $_GET['search'] ?? '';
 $brand_filter = $_GET['brand'] ?? '';
 $category_filter = $_GET['category'] ?? '';
 $supplier_filter = $_GET['supplier'] ?? '';
+$sort = $_GET['sort'] ?? '';
+$direction = strtolower($_GET['direction'] ?? 'asc');
+$direction = $direction === 'desc' ? 'desc' : 'asc';
 
 // Pagination setup (matching sales.php style)
 $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
@@ -453,7 +456,11 @@ $total_products = $count_stmt->fetchColumn();
 $total_pages = ceil($total_products / $limit);
 
 // Main query with LIMIT and OFFSET (using named params like sales.php)
-$sql = 'SELECT * FROM products ' . $where_sql . ' ORDER BY id DESC LIMIT :limit OFFSET :offset';
+$order_sql = 'ORDER BY id DESC';
+if ($sort === 'name') {
+    $order_sql = 'ORDER BY name ' . strtoupper($direction) . ', id DESC';
+}
+$sql = 'SELECT * FROM products ' . $where_sql . ' ' . $order_sql . ' LIMIT :limit OFFSET :offset';
 $stmt = $pdo->prepare($sql);
 foreach ($filter_params as $placeholder => $value) {
     $stmt->bindValue($placeholder, $value);
@@ -466,6 +473,22 @@ $products = $stmt->fetchAll();
 // Calculate showing info (like sales.php)
 $start_record = $offset + 1;
 $end_record = min($offset + $limit, $total_products);
+$currentSort = $sort === 'name' ? 'name' : '';
+$currentDirection = $currentSort === 'name' ? $direction : '';
+$nameSortDirection = ($currentSort === 'name' && $currentDirection === 'asc') ? 'desc' : 'asc';
+$nameSortParams = $_GET;
+unset($nameSortParams['page']);
+$nameSortParams['page'] = 1;
+$nameSortParams['sort'] = 'name';
+$nameSortParams['direction'] = $nameSortDirection;
+$nameSortQuery = http_build_query($nameSortParams);
+$nameSortUrl = 'products.php' . ($nameSortQuery ? '?' . $nameSortQuery : '');
+$nameSortIndicator = '';
+if ($currentSort === 'name') {
+    $nameSortIndicator = $currentDirection === 'asc' ? '▲' : '▼';
+} else {
+    $nameSortIndicator = '↕';
+}
 ?>
 <!doctype html>
 <html>
@@ -625,6 +648,8 @@ $end_record = min($offset + $limit, $total_products);
         <div id="productsTable" class="table-container">
             <form method="get" class="products-filter-form" id="productsFilterForm">
                 <input type="hidden" name="page" value="1">
+                <input type="hidden" name="sort" value="<?= htmlspecialchars($currentSort) ?>">
+                <input type="hidden" name="direction" value="<?= htmlspecialchars($currentDirection ?: 'asc') ?>">
                 <div class="filter-row">
                     <div class="filter-search-group">
                         <input type="text" name="search" aria-label="Search products" placeholder="Search product by name or code..."
@@ -659,7 +684,12 @@ $end_record = min($offset + $limit, $total_products);
                     <thead>
                         <tr>
                             <th scope="col">Code</th>
-                            <th scope="col">Name</th>
+                            <th scope="col">
+                                <a href="<?= htmlspecialchars($nameSortUrl) ?>" class="sort-link">
+                                    Name
+                                    <span class="sort-indicator"><?= htmlspecialchars($nameSortIndicator) ?></span>
+                                </a>
+                            </th>
                             <th scope="col">Qty</th>
                             <th scope="col">Price</th>
                             <th scope="col">Action</th>
