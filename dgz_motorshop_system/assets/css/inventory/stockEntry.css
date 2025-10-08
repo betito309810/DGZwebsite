@@ -352,7 +352,9 @@
 .line-item-row.suggestions-open .product-search-wrapper {
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
-    border-bottom-color: transparent;
+    border-bottom-color: #9ac5ff;
+    border-left-color: #9ac5ff;
+    border-right-color: #9ac5ff;
 }
 
 .line-items-section .product-clear {
@@ -406,14 +408,21 @@
     border-top: none;
     box-shadow: 0 18px 36px rgba(15, 23, 42, 0.14);
     border-radius: 0 0 12px 12px;
-    display: flex;
+    display: none;
     flex-direction: column;
     max-height: 260px;
     overflow-y: auto;
-    padding: 4px 0;
+    padding: 0;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease;
 }
 
 .line-item-row.suggestions-open .product-suggestions {
+    display: flex;
+    padding: 4px 0;
+    pointer-events: auto;
+    opacity: 1;
     border-color: #9ac5ff;
 }
 

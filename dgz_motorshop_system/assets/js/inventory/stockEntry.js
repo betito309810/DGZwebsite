@@ -264,11 +264,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 emptyState.className = 'product-suggestion-empty';
                 emptyState.textContent = 'No matches found';
                 suggestions.appendChild(emptyState);
+                row.classList.add('suggestions-open');
+                suggestions.scrollTop = 0;
             }
             return;
         }
 
         row.classList.add('suggestions-open');
+        suggestions.scrollTop = 0;
 
         results.forEach((entry) => {
             const button = document.createElement('button');
