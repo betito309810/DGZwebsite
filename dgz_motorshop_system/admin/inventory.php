@@ -786,7 +786,7 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
         </div>
         <!-- Restock Request Form -->
 
-        <div id="restockRequestForm" class="restock-request hidden">
+        <div id="restockRequestForm" class="restock-request hidden" aria-hidden="true">
             <h3><i class="fas fa-clipboard-list"></i> Submit Restock Request</h3>
             <form method="post" class="restock-form"
                 data-initial-product="<?php echo htmlspecialchars($restockFormData['product']); ?>"

@@ -1,4 +1,128 @@
 // file 2 start – inventory page helpers (safe to extract)
+        const restockAnimationHandlers = new WeakMap();
+        let restockScrollTimer;
+
+        function setRestockVisibility(element, state) {
+            if (!element) {
+                return;
+            }
+            element.dataset.panelVisibility = state;
+        }
+
+        function isRestockHidden(element) {
+            if (!element) {
+                return true;
+            }
+            const state = element.dataset.panelVisibility;
+            if (state === 'hiding') {
+                return true;
+            }
+            if (state === 'visible' || state === 'showing') {
+                return false;
+            }
+            return element.classList.contains('hidden');
+        }
+
+        function clearRestockAnimation(element) {
+            if (!element) {
+                return;
+            }
+            const activeHandler = restockAnimationHandlers.get(element);
+            if (activeHandler) {
+                element.removeEventListener('transitionend', activeHandler);
+                restockAnimationHandlers.delete(element);
+            }
+            element.style.removeProperty('height');
+            element.style.removeProperty('overflow');
+            element.style.removeProperty('transition');
+            element.style.removeProperty('opacity');
+        }
+
+        function registerRestockTransition(element, callback) {
+            const handler = (event) => {
+                if (event.target !== element || event.propertyName !== 'height') {
+                    return;
+                }
+                element.removeEventListener('transitionend', handler);
+                restockAnimationHandlers.delete(element);
+                callback();
+            };
+
+            const existing = restockAnimationHandlers.get(element);
+            if (existing) {
+                element.removeEventListener('transitionend', existing);
+            }
+
+            restockAnimationHandlers.set(element, handler);
+            element.addEventListener('transitionend', handler);
+        }
+
+        function hideSection(element) {
+            if (!element || element.classList.contains('hidden')) {
+                clearRestockAnimation(element);
+                setRestockVisibility(element, 'hidden');
+                return;
+            }
+
+            clearRestockAnimation(element);
+
+            const startHeight = element.scrollHeight;
+            if (startHeight === 0) {
+                element.classList.add('hidden');
+                setRestockVisibility(element, 'hidden');
+                return;
+            }
+
+            setRestockVisibility(element, 'hiding');
+            element.style.height = `${startHeight}px`;
+            element.style.opacity = '1';
+            element.style.overflow = 'hidden';
+            element.style.transition = 'height 0.3s ease, opacity 0.2s ease';
+
+            requestAnimationFrame(() => {
+                element.style.height = '0px';
+                element.style.opacity = '0';
+            });
+
+            registerRestockTransition(element, () => {
+                element.classList.add('hidden');
+                clearRestockAnimation(element);
+                setRestockVisibility(element, 'hidden');
+            });
+        }
+
+        function showSection(element) {
+            if (!element) {
+                return;
+            }
+
+            clearRestockAnimation(element);
+            element.classList.remove('hidden');
+            setRestockVisibility(element, 'showing');
+
+            const targetHeight = element.scrollHeight;
+            if (targetHeight === 0) {
+                clearRestockAnimation(element);
+                setRestockVisibility(element, 'visible');
+                return;
+            }
+
+            element.style.height = '0px';
+            element.style.opacity = '0';
+            element.style.overflow = 'hidden';
+            element.style.transition = 'height 0.3s ease, opacity 0.2s ease';
+
+            requestAnimationFrame(() => {
+                element.style.height = `${targetHeight}px`;
+                element.style.opacity = '1';
+            });
+
+            registerRestockTransition(element, () => {
+                clearRestockAnimation(element);
+                setRestockVisibility(element, 'visible');
+            });
+        }
+
         function openStockModal() {
             const modal = document.getElementById('stockEntryModal');
             if (modal) {
@@ -15,7 +139,22 @@
 
         function toggleRestockForm() {
             const form = document.getElementById('restockRequestForm');
-            form?.classList.toggle('hidden');
+            if (!form) {
+                return;
+            }
+
+            if (isRestockHidden(form)) {
+                showSection(form);
+                form.setAttribute('aria-hidden', 'false');
+                window.clearTimeout(restockScrollTimer);
+                restockScrollTimer = window.setTimeout(() => {
+                    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 320);
+            } else {
+                window.clearTimeout(restockScrollTimer);
+                hideSection(form);
+                form.setAttribute('aria-hidden', 'true');
+            }
         }
 
         function toggleRestockStatus() {

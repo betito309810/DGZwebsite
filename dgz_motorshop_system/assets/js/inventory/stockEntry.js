@@ -16,6 +16,126 @@ document.addEventListener('DOMContentLoaded', () => {
     const discrepancyRequiredIndicator = document.querySelector('[data-discrepancy-required]');
 
     const panelToggleButtons = document.querySelectorAll('[data-toggle-target]');
+    const panelTransitionHandlers = new WeakMap();
+
+    const setPanelVisibilityState = (element, state) => {
+        element.dataset.panelVisibility = state;
+    };
+
+    const isPanelHidden = (element) => {
+        const state = element.dataset.panelVisibility;
+        if (state === 'hiding') {
+            return true;
+        }
+        if (state === 'visible' || state === 'showing') {
+            return false;
+        }
+        return element.classList.contains('hidden');
+    };
+
+    const clearPanelAnimation = (element) => {
+        const activeHandler = panelTransitionHandlers.get(element);
+        if (activeHandler) {
+            element.removeEventListener('transitionend', activeHandler);
+            panelTransitionHandlers.delete(element);
+        }
+        element.style.removeProperty('height');
+        element.style.removeProperty('overflow');
+        element.style.removeProperty('transition');
+        element.style.removeProperty('opacity');
+    };
+
+    const registerPanelTransition = (element, callback) => {
+        const handler = (event) => {
+            if (event.target !== element || event.propertyName !== 'height') {
+                return;
+            }
+            element.removeEventListener('transitionend', handler);
+            panelTransitionHandlers.delete(element);
+            callback();
+        };
+
+        const existingHandler = panelTransitionHandlers.get(element);
+        if (existingHandler) {
+            element.removeEventListener('transitionend', existingHandler);
+        }
+
+        panelTransitionHandlers.set(element, handler);
+        element.addEventListener('transitionend', handler);
+    };
+
+    const hidePanel = (element, { immediate = false } = {}) => {
+        if (element.classList.contains('hidden')) {
+            clearPanelAnimation(element);
+            setPanelVisibilityState(element, 'hidden');
+            return;
+        }
+
+        clearPanelAnimation(element);
+
+        if (immediate) {
+            element.classList.add('hidden');
+            setPanelVisibilityState(element, 'hidden');
+            return;
+        }
+
+        const startHeight = element.scrollHeight;
+        if (startHeight === 0) {
+            element.classList.add('hidden');
+            setPanelVisibilityState(element, 'hidden');
+            return;
+        }
+
+        setPanelVisibilityState(element, 'hiding');
+        element.style.height = `${startHeight}px`;
+        element.style.opacity = '1';
+        element.style.overflow = 'hidden';
+        element.style.transition = 'height 0.3s ease, opacity 0.2s ease';
+
+        requestAnimationFrame(() => {
+            element.style.height = '0px';
+            element.style.opacity = '0';
+        });
+
+        registerPanelTransition(element, () => {
+            element.classList.add('hidden');
+            setPanelVisibilityState(element, 'hidden');
+            clearPanelAnimation(element);
+        });
+    };
+
+    const showPanel = (element, { immediate = false } = {}) => {
+        clearPanelAnimation(element);
+        element.classList.remove('hidden');
+        setPanelVisibilityState(element, 'showing');
+
+        if (immediate) {
+            setPanelVisibilityState(element, 'visible');
+            return;
+        }
+
+        const targetHeight = element.scrollHeight;
+        if (targetHeight === 0) {
+            clearPanelAnimation(element);
+            setPanelVisibilityState(element, 'visible');
+            return;
+        }
+
+        element.style.height = '0px';
+        element.style.opacity = '0';
+        element.style.overflow = 'hidden';
+        element.style.transition = 'height 0.3s ease, opacity 0.2s ease';
+
+        requestAnimationFrame(() => {
+            element.style.height = `${targetHeight}px`;
+            element.style.opacity = '1';
+        });
+
+        registerPanelTransition(element, () => {
+            setPanelVisibilityState(element, 'visible');
+            clearPanelAnimation(element);
+        });
+    };
 
     panelToggleButtons.forEach((button) => {
         const targetId = button.getAttribute('data-toggle-target');
@@ -34,7 +154,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const startCollapsed = button.getAttribute('data-start-collapsed') === 'true';
 
         if (startCollapsed) {
-            target.classList.add('hidden');
+            hidePanel(target, { immediate: true });
+        } else {
+            showPanel(target, { immediate: true });
         }
 
         const syncState = (isHidden) => {
@@ -45,15 +167,25 @@ document.addEventListener('DOMContentLoaded', () => {
             if (icon) {
                 icon.className = `${isHidden ? 'fas fa-chevron-down' : 'fas fa-chevron-up'} panel-toggle__icon`;
             }
+            target.setAttribute('aria-hidden', isHidden.toString());
         };
 
-        syncState(target.classList.contains('hidden'));
+        syncState(isPanelHidden(target));
+
+        let scrollTimer;
 
         button.addEventListener('click', () => {
-            const isHidden = target.classList.toggle('hidden');
-            syncState(isHidden);
-            if (!isHidden) {
-                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            const isCurrentlyHidden = isPanelHidden(target);
+            if (isCurrentlyHidden) {
+                showPanel(target);
+                syncState(false);
+                window.clearTimeout(scrollTimer);
+                scrollTimer = window.setTimeout(() => {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 320);
+            } else {
+                hidePanel(target);
+                syncState(true);
             }
         });
     });
