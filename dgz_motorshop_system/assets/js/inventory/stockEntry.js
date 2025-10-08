@@ -87,24 +87,18 @@ document.addEventListener('DOMContentLoaded', () => {
         clone.classList.remove('has-discrepancy');
         clone.classList.remove('suggestions-open');
         clone.dataset.selectedProduct = '';
+        clone.dataset.selectedLabel = '';
         clone.querySelectorAll('input').forEach((input) => {
+            if (input.classList.contains('product-search')) {
+                return;
+            }
             input.value = '';
         });
         const select = clone.querySelector('select[name="product_id[]"]');
         if (select) {
             select.value = '';
         }
-        const suggestions = clone.querySelector('.product-suggestions');
-        if (suggestions) {
-            suggestions.innerHTML = '';
-        }
-        const productSearch = clone.querySelector('.product-search');
-        if (productSearch) {
-            productSearch.value = '';
-            if (productSearch.dataset.defaultPlaceholder) {
-                productSearch.placeholder = productSearch.dataset.defaultPlaceholder;
-            }
-        }
+        clearProductSelection(clone);
         const removeBtn = clone.querySelector('.remove-line-item');
         if (removeBtn) {
             removeBtn.disabled = false;
@@ -119,6 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const productSelect = row.querySelector('select[name="product_id[]"]');
         const productSearch = row.querySelector('.product-search');
         const suggestions = row.querySelector('.product-suggestions');
+        const clearBtn = row.querySelector('.product-clear');
 
         expectedInput?.addEventListener('input', () => {
             evaluateRowDiscrepancy(row);
@@ -140,9 +135,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 productSearch.dataset.defaultPlaceholder = productSearch.placeholder;
             }
             productSearch.addEventListener('input', () => {
-                renderProductSuggestions(row, productSearch.value);
+                const currentValue = productSearch.value;
+                if (row.dataset.selectedProduct && currentValue !== (row.dataset.selectedLabel || '')) {
+                    clearProductSelection(row, { keepInputValue: true, keepSuggestions: true });
+                }
+                renderProductSuggestions(row, currentValue);
             });
             productSearch.addEventListener('focus', () => {
+                if (row.dataset.selectedProduct) {
+                    productSearch.select();
+                }
                 renderProductSuggestions(row, productSearch.value, { showDefault: true });
             });
             productSearch.addEventListener('keydown', (event) => {
@@ -150,21 +152,25 @@ document.addEventListener('DOMContentLoaded', () => {
                     const firstSuggestion = suggestions.querySelector('button');
                     if (firstSuggestion) {
                         event.preventDefault();
-                        applyProductSelection(row, firstSuggestion.dataset.productId, { prefillSearch: false });
+                        applyProductSelection(row, firstSuggestion.dataset.productId);
                     }
                 }
             });
 
             productSelect.addEventListener('change', () => {
                 const productId = productSelect.value;
-                applyProductSelection(row, productId, { skipFocus: true, prefillSearch: false });
+                applyProductSelection(row, productId, { skipFocus: true });
+            });
+
+            clearBtn?.addEventListener('click', () => {
+                clearProductSelection(row, { focus: true });
             });
 
             const presetId = row.dataset.selectedProduct;
             if (presetId) {
-                applyProductSelection(row, presetId, { skipFocus: true, renderSuggestions: false, prefillSearch: false });
+                applyProductSelection(row, presetId, { skipFocus: true, renderSuggestions: false });
             } else if (productSelect.value) {
-                applyProductSelection(row, productSelect.value, { skipFocus: true, renderSuggestions: false, prefillSearch: false });
+                applyProductSelection(row, productSelect.value, { skipFocus: true, renderSuggestions: false });
             }
         }
     }
@@ -284,7 +290,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 button.innerHTML = `<span class="product-suggestion-name">${escapeHtml(name)}</span>`;
             }
             button.addEventListener('click', () => {
-                applyProductSelection(row, entry.id, { prefillSearch: false });
+                applyProductSelection(row, entry.id);
             });
             suggestions.appendChild(button);
         });
@@ -294,6 +300,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const select = row.querySelector('select[name="product_id[]"]');
         const searchInput = row.querySelector('.product-search');
         const suggestions = row.querySelector('.product-suggestions');
+        const clearBtn = row.querySelector('.product-clear');
         if (!select || !searchInput) {
             return;
         }
@@ -306,33 +313,66 @@ document.addEventListener('DOMContentLoaded', () => {
                 searchInput.placeholder = searchInput.dataset.defaultPlaceholder;
             }
             row.dataset.selectedProduct = '';
+            row.dataset.selectedLabel = '';
             if (suggestions && !options.keepSuggestions) {
                 suggestions.innerHTML = '';
             }
             row.classList.remove('suggestions-open');
+            clearBtn?.setAttribute('hidden', 'hidden');
             return;
         }
 
-        const prefillSearch = options.prefillSearch !== false;
         const label = buildProductLabel(product);
 
         select.value = String(product.id);
-        if (prefillSearch) {
-            searchInput.value = label;
-            searchInput.placeholder = searchInput.dataset.defaultPlaceholder || searchInput.placeholder;
-        } else {
-            searchInput.value = '';
-            if (label) {
-                searchInput.placeholder = label;
-            }
-        }
         row.dataset.selectedProduct = String(product.id);
+        row.dataset.selectedLabel = label;
+        searchInput.value = label;
+        if (searchInput.dataset.defaultPlaceholder) {
+            searchInput.placeholder = searchInput.dataset.defaultPlaceholder;
+        }
         if (suggestions && !options.keepSuggestions) {
             suggestions.innerHTML = '';
         }
         row.classList.remove('suggestions-open');
+        clearBtn?.removeAttribute('hidden');
         if (!options.skipFocus) {
             searchInput.blur();
+        }
+    }
+
+    function clearProductSelection(row, options = {}) {
+        const select = row.querySelector('select[name="product_id[]"]');
+        const searchInput = row.querySelector('.product-search');
+        const suggestions = row.querySelector('.product-suggestions');
+        const clearBtn = row.querySelector('.product-clear');
+
+        if (select) {
+            select.value = '';
+        }
+        row.dataset.selectedProduct = '';
+        row.dataset.selectedLabel = '';
+
+        if (searchInput && !options.keepInputValue) {
+            searchInput.value = '';
+        }
+        if (searchInput && searchInput.dataset.defaultPlaceholder && !options.keepPlaceholder) {
+            searchInput.placeholder = searchInput.dataset.defaultPlaceholder;
+        }
+
+        if (!options.keepSuggestions && suggestions) {
+            suggestions.innerHTML = '';
+        }
+        if (!options.keepSuggestions) {
+            row.classList.remove('suggestions-open');
+        }
+
+        if (clearBtn && !options.keepClearButton) {
+            clearBtn.setAttribute('hidden', 'hidden');
+        }
+
+        if (options.focus && searchInput) {
+            searchInput.focus();
         }
     }
 
