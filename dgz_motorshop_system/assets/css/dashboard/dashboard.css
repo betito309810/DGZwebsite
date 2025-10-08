@@ -602,16 +602,6 @@ body.modal-open {
     margin-bottom: 16px;
 }
 
-.settings-panel .access-restricted {
-    padding: 16px;
-    background: #eff6ff;
-    border: 1px solid #bfdbfe;
-    border-radius: 12px;
-    color: #1d4ed8;
-    font-size: 14px;
-    line-height: 1.5;
-}
-
 .settings-profile-details .profile-info {
     margin-top: 0;
 }

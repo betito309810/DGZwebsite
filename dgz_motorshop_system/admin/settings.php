@@ -319,6 +319,7 @@ if ($role === 'admin') {
                 </div>
             </section>
 
+            <?php if ($role === 'admin'): ?>
             <section class="settings-section card">
                 <button type="button" class="settings-toggle" data-target="userManagementPanel" data-default-state="closed" aria-expanded="false">
                     <span class="label">
@@ -328,18 +329,13 @@ if ($role === 'admin') {
                     <i class="fas fa-chevron-down toggle-icon" aria-hidden="true"></i>
                 </button>
                 <div class="settings-panel" id="userManagementPanel">
-                    <?php if ($role === 'admin'): ?>
-                        <?php
-                            $showUserManagementBackButton = false;
-                            include __DIR__ . '/partials/user_management_section.php';
-                        ?>
-                    <?php else: ?>
-                        <div class="access-restricted">
-                            User management tools are available to administrators only. Please contact an admin if you need to make account changes.
-                        </div>
-                    <?php endif; ?>
+                    <?php
+                        $showUserManagementBackButton = false;
+                        include __DIR__ . '/partials/user_management_section.php';
+                    ?>
                 </div>
             </section>
+            <?php endif; ?>
         </div>
     </main>
 
