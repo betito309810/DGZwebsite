@@ -108,6 +108,11 @@ $inventorySearchTerm = trim((string)($_GET['inv_search'] ?? ''));
 $inventoryBrandFilter = trim((string)($_GET['inv_brand'] ?? ''));
 $inventoryCategoryFilter = trim((string)($_GET['inv_category'] ?? ''));
 $inventorySupplierFilter = trim((string)($_GET['inv_supplier'] ?? ''));
+$inventorySort = isset($_GET['inv_sort']) ? trim((string)$_GET['inv_sort']) : 'name_asc';
+$inventorySortOptions = ['name_asc', 'name_desc'];
+if (!in_array($inventorySort, $inventorySortOptions, true)) {
+    $inventorySort = 'name_asc';
+}
 $inventoryPage = isset($_GET['inv_page']) ? (int)$_GET['inv_page'] : 1;
 $inventoryPage = max(1, $inventoryPage);
 $inventoryLimit = 20;
@@ -148,6 +153,9 @@ if ($inventoryCategoryFilter !== '') {
 if ($inventorySupplierFilter !== '') {
     $inventoryFilterParams['inv_supplier'] = $inventorySupplierFilter;
 }
+if ($inventorySort !== 'name_asc') {
+    $inventoryFilterParams['inv_sort'] = $inventorySort;
+}
 
 $inventoryTotalCount = countCurrentInventoryRecords($pdo, $inventoryFilters);
 $inventoryTotalPages = $inventoryTotalCount > 0 ? (int)ceil($inventoryTotalCount / $inventoryLimit) : 0;
@@ -160,7 +168,7 @@ if ($inventoryOffset < 0) {
     $inventoryOffset = 0;
 }
 
-$currentInventorySnapshot = fetchCurrentInventorySnapshot($pdo, $inventoryFilters, $inventoryLimit, $inventoryOffset);
+$currentInventorySnapshot = fetchCurrentInventorySnapshot($pdo, $inventoryFilters, $inventoryLimit, $inventoryOffset, $inventorySort);
 $inventoryStartRecord = $inventoryTotalCount === 0 ? 0 : $inventoryOffset + 1;
 $inventoryEndRecord = $inventoryTotalCount === 0 ? 0 : min($inventoryOffset + $inventoryLimit, $inventoryTotalCount);
 
@@ -326,8 +334,21 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                         <h3 id="inventorySnapshotTitle">Current Inventory</h3>
                         <p class="panel-subtitle">Quickly review on-hand counts with filters and pagination.</p>
                     </div>
+                    <div class="panel-actions">
+                        <button
+                            type="button"
+                            class="panel-toggle"
+                            data-toggle-target="inventorySnapshotContainer"
+                            data-expanded-text="Hide Inventory"
+                            data-collapsed-text="Show Inventory"
+                            aria-expanded="true"
+                        >
+                            <i class="fas fa-chevron-up panel-toggle__icon" aria-hidden="true"></i>
+                            <span class="panel-toggle__label">Hide Inventory</span>
+                        </button>
+                    </div>
                 </div>
-                <div class="panel-content inventory-table-container">
+                <div class="panel-content inventory-table-container" id="inventorySnapshotContainer">
                     <form method="get" class="inventory-filter-form" id="inventoryFilterForm" aria-label="Inventory filters">
                         <input type="hidden" name="inv_page" value="1">
                         <?php foreach ($inventoryPreservedParams as $paramKey => $paramValue): ?>
@@ -370,6 +391,10 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                                         <?= htmlspecialchars($supplierOption) ?>
                                     </option>
                                 <?php endforeach; ?>
+                            </select>
+                            <select name="inv_sort" class="filter-select" aria-label="Sort inventory by name">
+                                <option value="name_asc" <?= $inventorySort === 'name_asc' ? 'selected' : '' ?>>Name A → Z</option>
+                                <option value="name_desc" <?= $inventorySort === 'name_desc' ? 'selected' : '' ?>>Name Z → A</option>
                             </select>
                             <button type="submit" class="filter-submit" data-filter-submit>Filter</button>
                             <a class="filter-reset" href="<?= htmlspecialchars($inventoryResetUrl) ?>">Reset</a>
@@ -1712,11 +1737,18 @@ function countCurrentInventoryRecords(PDO $pdo, array $filters): int
 
 /**
  * Retrieve a paginated inventory snapshot with optional receipt join for last received date.
+ *
+ * @param string $sort Controls alphabetical ordering by product name.
  */
-function fetchCurrentInventorySnapshot(PDO $pdo, array $filters, int $limit, int $offset): array
+function fetchCurrentInventorySnapshot(PDO $pdo, array $filters, int $limit, int $offset, string $sort): array
 {
     $params = [];
     $whereClause = buildInventoryWhereClause($filters, $params);
+
+    $orderClause = 'p.name ASC';
+    if ($sort === 'name_desc') {
+        $orderClause = 'p.name DESC';
+    }
 
     $sql = '
         SELECT
@@ -1740,7 +1772,7 @@ function fetchCurrentInventorySnapshot(PDO $pdo, array $filters, int $limit, int
             GROUP BY sri.product_id
         ) last ON last.product_id = p.id
         WHERE ' . $whereClause . '
-        ORDER BY p.name ASC
+        ORDER BY ' . $orderClause . '
         LIMIT :limit OFFSET :offset
     ';
 
@@ -1768,7 +1800,7 @@ function fetchCurrentInventorySnapshot(PDO $pdo, array $filters, int $limit, int
                 p.low_stock_threshold
             FROM products p
             WHERE ' . $whereClause . '
-            ORDER BY p.name ASC
+            ORDER BY ' . $orderClause . '
             LIMIT :limit OFFSET :offset
         ';
 
