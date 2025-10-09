@@ -31,9 +31,9 @@ try {
 
     // Get order items with product details
     $stmt = $pdo->prepare("
-        SELECT oi.*, p.name, p.code 
+        SELECT oi.*, COALESCE(oi.description, p.name) AS name, p.code
         FROM order_items oi
-        JOIN products p ON p.id = oi.product_id
+        LEFT JOIN products p ON p.id = oi.product_id
         WHERE oi.order_id = ?
     ");
     $stmt->execute([$order_id]);

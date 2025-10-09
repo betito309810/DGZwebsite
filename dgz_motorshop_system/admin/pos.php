@@ -135,6 +135,33 @@ if (!function_exists('ensureOrdersCustomerNoteColumn')) {
     }
 }
 ensureOrdersCustomerNoteColumn($pdo); // Added call so POS reflects checkout notes even on older databases
+if (!function_exists('ensureOrderItemsDescriptionColumn')) {
+    /**
+     * Ensure order_items table can store custom item labels (e.g. POS services).
+     */
+    function ensureOrderItemsDescriptionColumn(PDO $pdo): void
+    {
+        static $ensured = false;
+        if ($ensured) {
+            return;
+        }
+
+        $ensured = true;
+
+        try {
+            $stmt = $pdo->query("SHOW COLUMNS FROM order_items LIKE 'description'");
+            $hasColumn = $stmt !== false && $stmt->fetch() !== false;
+            if ($hasColumn) {
+                return;
+            }
+
+            $pdo->exec("ALTER TABLE order_items ADD COLUMN description VARCHAR(255) NULL");
+        } catch (Throwable $e) {
+            error_log('Unable to ensure order_items.description column: ' . $e->getMessage());
+        }
+    }
+}
+ensureOrderItemsDescriptionColumn($pdo);
 ensureOrderDeclineSchema($pdo); // Ensure orders table can store decline reasons
 $declineReasons = fetchOrderDeclineReasons($pdo); // Preload decline reasons for UI/bootstrap
 $declineReasonLookup = []; // Map reason id to label for quick lookups
@@ -323,7 +350,7 @@ function generateInvoiceNumber(PDO $pdo): string
 function prepareOrderItemsData(PDO $pdo, int $orderId): array
 {
     $itemsStmt = $pdo->prepare(
-        'SELECT oi.product_id, oi.qty, oi.price, p.name AS product_name
+        'SELECT oi.product_id, oi.qty, oi.price, oi.description, p.name AS product_name
          FROM order_items oi
          LEFT JOIN products p ON p.id = oi.product_id
          WHERE oi.order_id = ?'
@@ -336,7 +363,10 @@ function prepareOrderItemsData(PDO $pdo, int $orderId): array
     $itemsForReceipt = [];
 
     foreach ($rawItems as $row) {
-        $name = trim((string) ($row['product_name'] ?? ''));
+        $name = trim((string) ($row['description'] ?? ''));
+        if ($name === '') {
+            $name = trim((string) ($row['product_name'] ?? ''));
+        }
         if ($name === '') {
             $name = 'Item #' . (int) ($row['product_id'] ?? 0);
         }
@@ -732,60 +762,109 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pos_checkout'])) {
-    $productIds = isset($_POST['product_id']) ? (array) $_POST['product_id'] : [];
-    $quantities = isset($_POST['qty']) ? (array) $_POST['qty'] : [];
     $amountPaid = isset($_POST['amount_paid']) ? (float) $_POST['amount_paid'] : 0.0;
-
-    if (empty($productIds)) {
-        $_SESSION['pos_active_tab'] = 'walkin';
-        echo "<script>alert('No item selected in POS!'); window.location='pos.php';</script>";
-        exit;
-    }
-
     $cartItems = [];
     $salesTotal = 0.0;
 
-    foreach ($productIds as $index => $rawProductId) {
-        $productId = (int) $rawProductId;
-        if ($productId <= 0) {
-            continue;
-        }
+    $lineItemsInput = $_POST['line_items'] ?? [];
+    $productLookupStmt = $pdo->prepare('SELECT id, name, price, quantity FROM products WHERE id = ?');
 
-        $qty = isset($quantities[$index]) ? (int) $quantities[$index] : 0;
-        if ($qty <= 0) {
-            $qty = 1;
-        }
-
-        $productStmt = $pdo->prepare('SELECT id, name, price, quantity FROM products WHERE id = ?');
-        $productStmt->execute([$productId]);
-        $product = $productStmt->fetch();
-
+    $processProduct = static function (\PDOStatement $stmt, int $productId, int $qty) use (&$cartItems, &$salesTotal): void {
+        $stmt->execute([$productId]);
+        $product = $stmt->fetch();
         if (!$product) {
-            continue;
+            return;
         }
 
-        $availableQty = (int) $product['quantity'];
+        $availableQty = (int) ($product['quantity'] ?? 0);
         if ($availableQty <= 0) {
-            continue;
+            return;
         }
 
         if ($qty > $availableQty) {
             $qty = $availableQty;
         }
 
-        $lineTotal = (float) $product['price'] * $qty;
+        if ($qty <= 0) {
+            return;
+        }
+
+        $price = (float) ($product['price'] ?? 0);
+        $lineTotal = $price * $qty;
         $salesTotal += $lineTotal;
 
         $cartItems[] = [
+            'type' => 'product',
             'id' => (int) $product['id'],
+            'name' => (string) ($product['name'] ?? 'Product'),
             'qty' => $qty,
-            'price' => (float) $product['price'],
+            'price' => $price,
         ];
+    };
+
+    if (is_array($lineItemsInput) && !empty($lineItemsInput)) {
+        foreach ($lineItemsInput as $itemData) {
+            $type = strtolower((string) ($itemData['type'] ?? 'product'));
+            $qty = (int) ($itemData['qty'] ?? 0);
+            if ($qty <= 0) {
+                $qty = 1;
+            }
+
+            if ($type === 'service') {
+                $name = trim((string) ($itemData['name'] ?? ''));
+                $price = isset($itemData['price']) ? (float) $itemData['price'] : 0.0;
+
+                if ($name === '' || $price <= 0) {
+                    continue;
+                }
+
+                $lineTotal = $price * $qty;
+                $salesTotal += $lineTotal;
+
+                $cartItems[] = [
+                    'type' => 'service',
+                    'name' => $name,
+                    'qty' => $qty,
+                    'price' => $price,
+                ];
+                continue;
+            }
+
+            $productId = (int) ($itemData['product_id'] ?? 0);
+            if ($productId <= 0) {
+                continue;
+            }
+
+            $processProduct($productLookupStmt, $productId, $qty);
+        }
+    } else {
+        $productIds = isset($_POST['product_id']) ? (array) $_POST['product_id'] : [];
+        $quantities = isset($_POST['qty']) ? (array) $_POST['qty'] : [];
+
+        foreach ($productIds as $index => $rawProductId) {
+            $productId = (int) $rawProductId;
+            if ($productId <= 0) {
+                continue;
+            }
+
+            $qty = isset($quantities[$index]) ? (int) $quantities[$index] : 0;
+            if ($qty <= 0) {
+                $qty = 1;
+            }
+
+            $processProduct($productLookupStmt, $productId, $qty);
+        }
     }
 
     if (empty($cartItems)) {
         $_SESSION['pos_active_tab'] = 'walkin';
         echo "<script>alert('No item selected in POS!'); window.location='pos.php';</script>";
+        exit;
+    }
+
+    if ($salesTotal <= 0) {
+        $_SESSION['pos_active_tab'] = 'walkin';
+        echo "<script>alert('Please provide valid item prices.'); window.location='pos.php';</script>";
         exit;
     }
 
@@ -838,20 +917,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pos_checkout'])) {
             $orderValues[] = $invoiceNumber;
         }
 
-       $placeholders = str_repeat('?, ', count($orderColumns) - 1) . '?';
-$orderStmt = $pdo->prepare(
-    'INSERT INTO orders (' . implode(', ', $orderColumns) . ') VALUES (' . $placeholders . ')'
-);
-$orderStmt->execute($orderValues);
-
+        $placeholders = str_repeat('?, ', count($orderColumns) - 1) . '?';
+        $orderStmt = $pdo->prepare(
+            'INSERT INTO orders (' . implode(', ', $orderColumns) . ') VALUES (' . $placeholders . ')'
+        );
+        $orderStmt->execute($orderValues);
 
         $orderId = (int) $pdo->lastInsertId();
 
-        $itemInsertStmt = $pdo->prepare('INSERT INTO order_items (order_id, product_id, qty, price) VALUES (?,?,?,?)');
+        $itemInsertStmt = $pdo->prepare('INSERT INTO order_items (order_id, product_id, qty, price, description) VALUES (?,?,?,?,?)');
         $inventoryUpdateStmt = $pdo->prepare('UPDATE products SET quantity = quantity - ? WHERE id = ?');
 
         foreach ($cartItems as $item) {
-            $itemInsertStmt->execute([$orderId, $item['id'], $item['qty'], $item['price']]);
+            if ($item['type'] === 'service') {
+                $itemInsertStmt->execute([$orderId, null, $item['qty'], $item['price'], $item['name']]);
+                continue;
+            }
+
+            $itemInsertStmt->execute([$orderId, $item['id'], $item['qty'], $item['price'], $item['name']]);
             $inventoryUpdateStmt->execute([$item['qty'], $item['id']]);
         }
 
@@ -859,7 +942,6 @@ $orderStmt->execute($orderValues);
 
         error_log("Starting PDF generation for order: " . $orderId);
 
-        // Generate receipt data for PDF
         $receiptData = [
             'order_id' => $orderId,
             'invoice_number' => $invoiceNumber,
@@ -871,73 +953,52 @@ $orderStmt->execute($orderValues);
             'amount_paid' => $amountPaid,
             'change' => $change,
             'cashier' => $_SESSION['username'] ?? 'Admin',
-            'items' => []
-        ];
-
-        // Add items with proper error handling
-        foreach ($cartItems as $item) {
-            try {
-                $stmt = $pdo->prepare('SELECT name FROM products WHERE id = ?');
-                $stmt->execute([$item['id']]);
-                $product = $stmt->fetch();
-                $receiptData['items'][] = [
-                    'name' => $product['name'] ?? 'Unknown Product',
+            'items' => array_map(static function (array $item): array {
+                return [
+                    'name' => $item['name'],
                     'quantity' => $item['qty'],
                     'price' => $item['price'],
-                    'total' => $item['price'] * $item['qty']
+                    'total' => $item['price'] * $item['qty'],
                 ];
-            } catch (Exception $e) {
-                error_log("Error fetching product details: " . $e->getMessage());
-            }
-        }
+            }, $cartItems),
+        ];
 
         try {
-            // First generate the PDF for printing (but don't send email for walk-in customers)
             $options = new Options();
             $options->set('defaultFont', 'Arial');
             $dompdf = new Dompdf($options);
 
-            // Create HTML for receipt
             $html = '<h1>DGZ Motorshop Receipt</h1>';
             $html .= '<p>Order #: ' . $orderId . '</p>';
-            $html .= '<p>Invoice #: ' . $invoiceNumber . '</p>';
+            $html .= '<p>Invoice #: ' . htmlspecialchars($invoiceNumber, ENT_QUOTES, 'UTF-8') . '</p>';
             $html .= '<p>Date: ' . date('Y-m-d H:i:s') . '</p>';
             $html .= '<h2>Items</h2>';
             $html .= '<table border="1" cellpadding="5">';
             $html .= '<tr><th>Item</th><th>Quantity</th><th>Price</th><th>Total</th></tr>';
-            
+
             foreach ($cartItems as $item) {
-                $stmt = $pdo->prepare('SELECT name FROM products WHERE id = ?');
-                $stmt->execute([$item['id']]);
-                $product = $stmt->fetch();
                 $total = $item['price'] * $item['qty'];
-                
                 $html .= '<tr>';
-                $html .= '<td>' . htmlspecialchars($product['name']) . '</td>';
+                $html .= '<td>' . htmlspecialchars($item['name'], ENT_QUOTES, 'UTF-8') . '</td>';
                 $html .= '<td>' . $item['qty'] . '</td>';
                 $html .= '<td>₱' . number_format($item['price'], 2) . '</td>';
                 $html .= '<td>₱' . number_format($total, 2) . '</td>';
                 $html .= '</tr>';
             }
-            
+
             $html .= '</table>';
             $html .= '<p><strong>Total Amount:</strong> ₱' . number_format($salesTotal, 2) . '</p>';
             $html .= '<p><strong>Amount Paid:</strong> ₱' . number_format($amountPaid, 2) . '</p>';
             $html .= '<p><strong>Change:</strong> ₱' . number_format($change, 2) . '</p>';
 
-            // Generate PDF
             $dompdf->loadHtml($html);
             $dompdf->setPaper('A4', 'portrait');
             $dompdf->render();
             $pdfContent = $dompdf->output();
-            
+
             error_log("PDF Generated for printing. Size: " . strlen($pdfContent) . " bytes");
-            
-            // Skip email sending for walk-in customers
-            // Walk-in customers get their receipt printed directly at the POS
         } catch (Exception $e) {
             error_log("Error in PDF/email process for order {$orderId}: " . $e->getMessage());
-            // Continue with the order process even if PDF/email fails
         }
 
         $params = [
@@ -1095,7 +1156,7 @@ if (isset($_GET['ok'], $_GET['order_id']) && $_GET['ok'] === '1') {
 
         if ($orderRow) {
             $itemsStmt = $pdo->prepare(
-                'SELECT oi.product_id, oi.qty, oi.price, p.name
+                'SELECT oi.product_id, oi.qty, oi.price, oi.description, p.name
                  FROM order_items oi
                  LEFT JOIN products p ON p.id = oi.product_id
                  WHERE oi.order_id = ?'
@@ -1104,7 +1165,10 @@ if (isset($_GET['ok'], $_GET['order_id']) && $_GET['ok'] === '1') {
             $itemRows = $itemsStmt->fetchAll();
 
             $items = array_map(static function (array $item): array {
-                $name = trim((string) ($item['name'] ?? ''));
+                $name = trim((string) ($item['description'] ?? ''));
+                if ($name === '') {
+                    $name = trim((string) ($item['name'] ?? ''));
+                }
                 if ($name === '') {
                     $name = 'Item #' . (int) ($item['product_id'] ?? 0);
                 }
@@ -1202,6 +1266,9 @@ if ($receiptDataJson === false) {
             <div class="walkin-actions">
                 <button type="button" id="openProductModal" class="primary-button">
                     <i class="fas fa-search"></i> Search Product
+                </button>
+                <button type="button" id="addServiceButton" class="secondary-button">
+                    <i class="fas fa-wrench"></i> Add Service
                 </button>
                  <div class="top-total-simple">
                     <span id="topTotalAmountSimple">₱0.00</span>
@@ -1555,6 +1622,28 @@ if ($receiptDataJson === false) {
     
 
      
+    <div id="serviceModal" class="modal-overlay" style="display:none;">
+        <div class="modal-content service-modal">
+            <button id="closeServiceModal" type="button" class="modal-close">&times;</button>
+            <h3>Add Service</h3>
+            <form id="serviceForm">
+                <label for="serviceName">Service Name</label>
+                <input type="text" id="serviceName" placeholder="Describe the service" maxlength="150" required>
+                <div class="service-form-grid">
+                    <div class="service-field">
+                        <label for="servicePrice">Price</label>
+                        <input type="number" id="servicePrice" min="0.01" step="0.01" placeholder="0.00" required>
+                    </div>
+                    <div class="service-field">
+                        <label for="serviceQty">Quantity</label>
+                        <input type="number" id="serviceQty" min="1" value="1" required>
+                    </div>
+                </div>
+                <button type="submit" class="primary-button full-width">Add to POS</button>
+            </form>
+        </div>
+    </div>
+
     <div id="productModal" class="modal-overlay" style="display:none;">
         <div class="modal-content large-modal">
             <button id="closeProductModal" type="button" class="modal-close">&times;</button>

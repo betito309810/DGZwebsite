@@ -254,7 +254,7 @@ try {
 
     if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) && strtolower($customerName) !== 'walk-in') {
         $itemsStmt = $pdo->prepare(
-            'SELECT oi.qty, oi.price, p.name
+            'SELECT oi.qty, oi.price, COALESCE(oi.description, p.name) AS item_name
                FROM order_items oi
           LEFT JOIN products p ON p.id = oi.product_id
               WHERE oi.order_id = ?'
@@ -269,7 +269,7 @@ try {
             $price = (float) ($item['price'] ?? 0);
             $line = $qty * $price;
             $total += $line;
-            $label = trim((string) ($item['name'] ?? 'Item'));
+            $label = trim((string) ($item['item_name'] ?? 'Item'));
             if ($label === '') {
                 $label = 'Item';
             }

@@ -627,6 +627,35 @@ body {
     white-space: nowrap;
 }
 
+#posTable td.pos-name.service-entry {
+    white-space: normal;
+}
+
+#posTable td.pos-name .pos-service-name {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 14px;
+    color: #1f2937;
+    background: #fff;
+}
+
+#posTable td.pos-price.service-entry {
+    width: 140px;
+}
+
+#posTable td.pos-price .pos-service-price {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 14px;
+    text-align: right;
+    color: #1f2937;
+    background: #fff;
+}
+
 /* ADDED: Tooltip for long product names on hover */
 #posTable td.pos-name:hover {
     white-space: normal;
@@ -1012,6 +1041,87 @@ body {
     padding: 24px;
     position: relative;
     box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+}
+
+#serviceModal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0,0,0,0.3);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+}
+
+#serviceModal .modal-content {
+    background: #fff;
+    border-radius: 12px;
+    width: min(420px, 95%);
+    padding: 24px;
+    position: relative;
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+#serviceModal h3 {
+    margin: 0;
+    font-size: 1.2rem;
+    color: #111827;
+}
+
+#serviceModal form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.service-form-grid {
+    display: flex;
+    gap: 12px;
+}
+
+.service-form-grid .service-field {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+#serviceModal label {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #374151;
+}
+
+#serviceModal input[type="text"],
+#serviceModal input[type="number"] {
+    padding: 10px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 15px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+#serviceModal input[type="text"]:focus,
+#serviceModal input[type="number"]:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+#serviceModal .primary-button {
+    margin-top: 4px;
+}
+
+@media (max-width: 600px) {
+    .service-form-grid {
+        flex-direction: column;
+    }
 }
 
 /* Added styles for product modal large modal */

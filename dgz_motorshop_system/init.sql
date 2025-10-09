@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS order_items (
   product_id INT,
   qty INT,
   price DECIMAL(10,2),
+  description VARCHAR(255) DEFAULT NULL,
   FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
   FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL
 );

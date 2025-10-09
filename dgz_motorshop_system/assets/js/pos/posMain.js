@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const posStateKey = 'posTable';
             const tabStateKey = 'posActiveTab';
             let hasShownCheckoutAlert = false;
+            let customLineCounter = 0;
 
             const sidebar = document.getElementById('sidebar');
             const mobileToggle = document.querySelector('.mobile-toggle');
@@ -38,6 +39,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const productSearchInput = document.getElementById('productSearchInput');
             const productSearchTableBody = document.getElementById('productSearchTableBody');
             const addSelectedProductsButton = document.getElementById('addSelectedProducts');
+            const addServiceButton = document.getElementById('addServiceButton');
+            const serviceModal = document.getElementById('serviceModal');
+            const closeServiceModalButton = document.getElementById('closeServiceModal');
+            const serviceForm = document.getElementById('serviceForm');
+            const serviceNameInput = document.getElementById('serviceName');
+            const servicePriceInput = document.getElementById('servicePrice');
+            const serviceQtyInput = document.getElementById('serviceQty');
 
             const receiptModal = document.getElementById('receiptModal');
             const closeReceiptModalButton = document.getElementById('closeReceiptModal');
@@ -312,16 +320,44 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             // End POS totals recalculator
 
+            function generateLineId(prefix = 'line') {
+                customLineCounter += 1;
+                return `${prefix}-${Date.now()}-${customLineCounter}`;
+            }
+
             // Begin POS cart state persister
             function persistTableState() {
                 const rows = [];
                 posTableBody.querySelectorAll('tr').forEach((row) => {
+                    const type = row.dataset.itemType || 'product';
+                    const priceCell = row.querySelector('.pos-price');
+                    const qtyInput = row.querySelector('.pos-qty');
+                    let nameValue = '';
+                    let priceValue = 0;
+                    let availableValue = null;
+                    let productId = null;
+
+                    if (type === 'service') {
+                        const nameInput = row.querySelector('.pos-service-name');
+                        const priceInput = row.querySelector('.pos-service-price');
+                        nameValue = nameInput ? nameInput.value.trim() : '';
+                        priceValue = priceInput ? parseFloat(priceInput.value || '0') : 0;
+                    } else {
+                        const nameText = row.querySelector('.pos-name-text');
+                        nameValue = nameText ? nameText.textContent.trim() : '';
+                        priceValue = priceCell ? parseFloat(priceCell.dataset.rawPrice || '0') : 0;
+                        availableValue = parseInt(row.querySelector('.pos-available')?.textContent || '0', 10) || 0;
+                        productId = row.dataset.productId || null;
+                    }
+
                     rows.push({
-                        id: row.dataset.productId,
-                        name: row.querySelector('.pos-name').textContent,
-                        price: parseFloat(row.querySelector('.pos-price').dataset.rawPrice || '0'),
-                        available: parseInt(row.querySelector('.pos-available').textContent, 10) || 0,
-                        qty: parseInt(row.querySelector('.pos-qty').value, 10) || 1,
+                        lineId: row.dataset.lineId || null,
+                        type,
+                        productId,
+                        name: nameValue,
+                        price: priceValue,
+                        available: availableValue,
+                        qty: qtyInput ? (parseInt(qtyInput.value, 10) || 1) : 1,
                     });
                 });
 
@@ -355,47 +391,115 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Begin POS cart row creator
             function createRow(item) {
-                if (posTableBody.querySelector(`[data-product-id="${item.id}"]`)) {
+                const type = item.type === 'service' ? 'service' : 'product';
+                const productId = type === 'product' ? String(item.id) : null;
+                if (type === 'product' && productId && posTableBody.querySelector(`[data-product-id="${productId}"]`)) {
                     return;
                 }
 
+                const lineId = item.lineId || (type === 'product' && productId ? `product-${productId}` : generateLineId(type));
+                const resolvedName = item.name || (type === 'service' ? '' : 'Item');
+                const resolvedPrice = Number.isFinite(item.price) ? item.price : 0;
+                const resolvedQty = Math.max(1, item.qty || 1);
+
                 const tr = document.createElement('tr');
-                tr.dataset.productId = String(item.id);
+                tr.dataset.lineId = lineId;
+                tr.dataset.itemType = type;
+                if (type === 'product' && productId) {
+                    tr.dataset.productId = productId;
+                }
+
+                const baseName = `line_items[${lineId}]`;
 
                 const nameCell = document.createElement('td');
                 nameCell.className = 'pos-name';
-                nameCell.textContent = item.name;
-                tr.appendChild(nameCell);
+                if (type === 'service') {
+                    nameCell.classList.add('service-entry');
+                }
+
+                const typeInput = document.createElement('input');
+                typeInput.type = 'hidden';
+                typeInput.name = `${baseName}[type]`;
+                typeInput.value = type;
+                nameCell.appendChild(typeInput);
+
+                if (type === 'service') {
+                    const serviceNameInput = document.createElement('input');
+                    serviceNameInput.type = 'text';
+                    serviceNameInput.className = 'pos-service-name';
+                    serviceNameInput.name = `${baseName}[name]`;
+                    serviceNameInput.placeholder = 'Service description';
+                    serviceNameInput.required = true;
+                    serviceNameInput.value = resolvedName;
+                    nameCell.appendChild(serviceNameInput);
+                } else {
+                    const nameText = document.createElement('span');
+                    nameText.className = 'pos-name-text';
+                    nameText.textContent = resolvedName;
+                    nameCell.appendChild(nameText);
+
+                    const nameHidden = document.createElement('input');
+                    nameHidden.type = 'hidden';
+                    nameHidden.name = `${baseName}[name]`;
+                    nameHidden.value = resolvedName;
+                    nameCell.appendChild(nameHidden);
+
+                    const productInput = document.createElement('input');
+                    productInput.type = 'hidden';
+                    productInput.name = `${baseName}[product_id]`;
+                    productInput.value = productId || '';
+                    nameCell.appendChild(productInput);
+                }
 
                 const priceCell = document.createElement('td');
                 priceCell.className = 'pos-price';
-                priceCell.dataset.rawPrice = String(item.price);
-                priceCell.textContent = formatPeso(item.price);
-                tr.appendChild(priceCell);
+                if (type === 'service') {
+                    priceCell.classList.add('service-entry');
+                }
+
+                if (type === 'service') {
+                    const servicePriceInput = document.createElement('input');
+                    servicePriceInput.type = 'number';
+                    servicePriceInput.className = 'pos-service-price';
+                    servicePriceInput.name = `${baseName}[price]`;
+                    servicePriceInput.min = '0.01';
+                    servicePriceInput.step = '0.01';
+                    servicePriceInput.required = true;
+                    servicePriceInput.value = resolvedPrice > 0 ? resolvedPrice.toFixed(2) : '';
+                    priceCell.dataset.rawPrice = String(resolvedPrice > 0 ? resolvedPrice : 0);
+                    priceCell.appendChild(servicePriceInput);
+                } else {
+                    priceCell.dataset.rawPrice = String(resolvedPrice);
+                    const priceText = document.createElement('span');
+                    priceText.className = 'pos-price-display';
+                    priceText.textContent = formatPeso(resolvedPrice);
+                    priceCell.appendChild(priceText);
+
+                    const priceHidden = document.createElement('input');
+                    priceHidden.type = 'hidden';
+                    priceHidden.name = `${baseName}[price]`;
+                    priceHidden.value = resolvedPrice;
+                    priceCell.appendChild(priceHidden);
+                }
 
                 const availableCell = document.createElement('td');
                 availableCell.className = 'pos-available';
-                availableCell.textContent = Number.isFinite(item.available) ? item.available : 0;
-                tr.appendChild(availableCell);
+                availableCell.textContent = type === 'product'
+                    ? (Number.isFinite(item.available) ? item.available : 0)
+                    : '—';
 
                 const qtyCell = document.createElement('td');
                 qtyCell.className = 'pos-actions';
 
-                const productInput = document.createElement('input');
-                productInput.type = 'hidden';
-                productInput.name = 'product_id[]';
-                productInput.value = item.id;
-                qtyCell.appendChild(productInput);
-
                 const qtyInput = document.createElement('input');
                 qtyInput.type = 'number';
                 qtyInput.className = 'pos-qty';
-                qtyInput.name = 'qty[]';
+                qtyInput.name = `${baseName}[qty]`;
                 qtyInput.min = '1';
-                if (Number.isFinite(item.max) && item.max > 0) {
+                if (type === 'product' && Number.isFinite(item.max) && item.max > 0) {
                     qtyInput.max = String(item.max);
                 }
-                qtyInput.value = Math.max(1, item.qty || 1);
+                qtyInput.value = resolvedQty;
                 qtyCell.appendChild(qtyInput);
 
                 const removeButton = document.createElement('button');
@@ -405,6 +509,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 removeButton.innerHTML = "<i class='fas fa-times'></i>";
                 qtyCell.appendChild(removeButton);
 
+                tr.appendChild(nameCell);
+                tr.appendChild(priceCell);
+                tr.appendChild(availableCell);
                 tr.appendChild(qtyCell);
                 posTableBody.appendChild(tr);
             }
@@ -434,7 +541,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     qtyInput.value = newQty;
                 } else {
                     createRow({
+                        type: 'product',
                         id: product.id,
+                        lineId: `product-${product.id}`,
                         name: product.name,
                         price: Number(product.price) || 0,
                         available: availableQty,
@@ -459,16 +568,45 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 data.forEach((item) => {
-                    const product = productCatalog.find((productItem) => String(productItem.id) === String(item.id));
-                    const availableQty = product ? Number(product.quantity) : Number(item.available);
-                    createRow({
-                        id: item.id,
-                        name: product ? product.name : item.name,
-                        price: product ? Number(product.price) : Number(item.price),
-                        available: Number.isFinite(availableQty) ? availableQty : 0,
-                        qty: Number(item.qty) || 1,
-                        max: Math.max(Number(item.qty) || 1, Number.isFinite(availableQty) ? availableQty : 0),
-                    });
+                    const type = item.type || 'product';
+                    if (type === 'service') {
+                        createRow({
+                            type: 'service',
+                            lineId: item.lineId || generateLineId('service'),
+                            name: item.name || '',
+                            price: Number(item.price) || 0,
+                            qty: Number(item.qty) || 1,
+                        });
+                        return;
+                    }
+
+                    const productId = item.productId || item.id;
+                    if (!productId) {
+                        return;
+                    }
+
+                    const product = productCatalog.find((productItem) => String(productItem.id) === String(productId));
+                    if (product) {
+                        const availableQty = Number(product.quantity) || 0;
+                        createRow({
+                            type: 'product',
+                            id: product.id,
+                            lineId: item.lineId || `product-${product.id}`,
+                            name: product.name,
+                            price: Number(product.price) || 0,
+                            available: availableQty,
+                            qty: Number(item.qty) || 1,
+                            max: availableQty,
+                        });
+                    } else {
+                        createRow({
+                            type: 'service',
+                            lineId: item.lineId || generateLineId('service'),
+                            name: item.name || `Item #${productId}`,
+                            price: Number(item.price) || 0,
+                            qty: Number(item.qty) || 1,
+                        });
+                    }
                 });
 
                 updateEmptyState();
@@ -490,6 +628,35 @@ document.addEventListener('DOMContentLoaded', () => {
                 productModal.style.display = 'none';
             }
             // End POS product picker closer
+
+            function resetServiceForm() {
+                if (serviceForm) {
+                    serviceForm.reset();
+                }
+                if (serviceQtyInput) {
+                    serviceQtyInput.value = '1';
+                }
+                if (servicePriceInput) {
+                    servicePriceInput.value = '';
+                }
+            }
+
+            function openServiceModal() {
+                if (!serviceModal) {
+                    return;
+                }
+                resetServiceForm();
+                serviceModal.style.display = 'flex';
+                serviceNameInput?.focus();
+            }
+
+            function closeServiceModal() {
+                if (!serviceModal) {
+                    return;
+                }
+                serviceModal.style.display = 'none';
+                resetServiceForm();
+            }
 
             // Begin POS product table renderer
             function renderProductTable(filter = '') {
@@ -910,6 +1077,61 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
+            addServiceButton?.addEventListener('click', () => {
+                openServiceModal();
+            });
+
+            closeServiceModalButton?.addEventListener('click', () => {
+                closeServiceModal();
+            });
+
+            serviceModal?.addEventListener('click', (event) => {
+                if (event.target === serviceModal) {
+                    closeServiceModal();
+                }
+            });
+
+            serviceForm?.addEventListener('submit', (event) => {
+                event.preventDefault();
+
+                const name = serviceNameInput?.value.trim() || '';
+                let price = parseFloat(servicePriceInput?.value || '0');
+                let qty = parseInt(serviceQtyInput?.value || '1', 10);
+
+                if (name === '') {
+                    alert('Please enter a service description.');
+                    serviceNameInput?.focus();
+                    return;
+                }
+
+                if (!Number.isFinite(price) || price <= 0) {
+                    alert('Please enter a valid service price.');
+                    servicePriceInput?.focus();
+                    return;
+                }
+
+                if (!Number.isFinite(qty) || qty <= 0) {
+                    qty = 1;
+                }
+
+                price = parseFloat(price.toFixed(2));
+                qty = Math.max(1, qty);
+
+                createRow({
+                    type: 'service',
+                    lineId: generateLineId('service'),
+                    name,
+                    price,
+                    qty,
+                });
+
+                updateEmptyState();
+                recalcTotals();
+                persistTableState();
+                updateSettleButtonState();
+                closeServiceModal();
+            });
+
             productSearchInput?.addEventListener('input', (event) => {
                 renderProductTable(event.target.value.trim());
             });
@@ -957,42 +1179,62 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             posTableBody.addEventListener('input', (event) => {
-                if (event.target.classList.contains('pos-qty')) {
-                    const input = event.target;
-                    const min = parseInt(input.min, 10) || 1;
-                    const max = parseInt(input.max, 10);
-                    let value = parseInt(input.value, 10);
+                const target = event.target;
+                if (target.classList.contains('pos-qty')) {
+                    const min = parseInt(target.min, 10) || 1;
+                    const max = parseInt(target.max, 10);
+                    let value = parseInt(target.value, 10);
 
                     if (!Number.isFinite(value) || value < min) {
                         value = min;
-                        input.value = value;
-                        input.dataset.previousValidValue = String(value);
+                        target.value = value;
+                        target.dataset.previousValidValue = String(value);
                         recalcTotals();
                         persistTableState();
                         return;
                     }
 
                     if (Number.isFinite(max) && max > 0 && value > max) {
-
-                         alert(`Only ${max} stock available.`);
-                        value = max;
-
-                       
-                        const previous = parseInt(input.dataset.previousValidValue || '', 10);
+                        alert(`Only ${max} stock available.`);
+                        const previous = parseInt(target.dataset.previousValidValue || '', 10);
                         const fallback = Number.isFinite(previous) && previous >= min ? previous : min;
-                        input.value = fallback;
-                        input.dataset.previousValidValue = String(fallback);
-                        input.focus();
-                        input.select();
+                        target.value = fallback;
+                        target.dataset.previousValidValue = String(fallback);
+                        target.focus();
+                        target.select();
                         recalcTotals();
                         persistTableState();
                         return;
-
                     }
 
-                    input.dataset.previousValidValue = String(value);
-                    input.value = value;
+                    target.dataset.previousValidValue = String(value);
+                    target.value = value;
                     recalcTotals();
+                    persistTableState();
+                    return;
+                }
+
+                if (target.classList.contains('pos-service-price')) {
+                    let value = parseFloat(target.value);
+                    if (!Number.isFinite(value) || value <= 0) {
+                        value = 0;
+                        target.value = '';
+                    } else {
+                        target.value = value.toFixed(2);
+                    }
+
+                    const priceCell = target.closest('.pos-price');
+                    if (priceCell) {
+                        priceCell.dataset.rawPrice = String(value);
+                    }
+
+                    recalcTotals();
+                    updateSettleButtonState();
+                    persistTableState();
+                    return;
+                }
+
+                if (target.classList.contains('pos-service-name')) {
                     persistTableState();
                 }
             });
