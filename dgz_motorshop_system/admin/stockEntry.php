@@ -1580,80 +1580,11 @@ function exportStockInReportCsv(string $filenameBase, array $headers, array $row
 }
 
 /**
- * Emit report data as a Dompdf-rendered PDF so it matches the styling of the sales report.
+ * Emit report data as a Dompdf-rendered PDF when available and fall back to a
+ * simple text-based PDF builder if the dependency is missing.
  */
 function exportStockInReportPdf(string $filenameBase, array $headers, array $rows, array $filters): void
 {
-
-    $columnWidths = [12, 12, 18, 12, 28, 12, 12, 16, 12];
-    $strongDivider = buildPdfTableDivider($columnWidths, '=');
-    $lightDivider = buildPdfTableDivider($columnWidths, '-');
-
-    $lines = [];
-    $lines[] = 'DGZ Motorshop · Stock-In Report';
-    $lines[] = 'Generated: ' . date('M d, Y g:i A');
-
-    $activeFilters = [];
-    if (!empty($filters['date_from_input'])) {
-        $activeFilters[] = 'Date From: ' . $filters['date_from_input'];
-    }
-    if (!empty($filters['date_to_input'])) {
-        $activeFilters[] = 'Date To: ' . $filters['date_to_input'];
-    }
-    if (!empty($filters['supplier'])) {
-        $activeFilters[] = 'Supplier: ' . $filters['supplier'];
-    }
-    if (!empty($filters['product_label'])) {
-        $activeFilters[] = 'Product: ' . $filters['product_label'];
-    } elseif (!empty($filters['product_id'])) {
-        $activeFilters[] = 'Product ID: ' . $filters['product_id'];
-    }
-    if (!empty($filters['product_search'])) {
-        $activeFilters[] = 'Product Search: ' . $filters['product_search'];
-    }
-    if (!empty($filters['brand'])) {
-        $activeFilters[] = 'Brand: ' . $filters['brand'];
-    }
-    if (!empty($filters['category'])) {
-        $activeFilters[] = 'Category: ' . $filters['category'];
-    }
-    if (!empty($filters['status_label'])) {
-        $activeFilters[] = 'Status: ' . $filters['status_label'];
-    }
-
-    $lines[] = '';
-    if (!empty($activeFilters)) {
-        $lines[] = 'Filters:';
-        foreach ($activeFilters as $filterLine) {
-            $lines[] = '  • ' . $filterLine;
-        }
-    } else {
-        $lines[] = 'Filters: All stock-in entries';
-    }
-
-    $lines[] = '';
-    $lines[] = $strongDivider;
-    $lines[] = formatPdfTableRow($headers, $columnWidths);
-    $lines[] = $lightDivider;
-
-    if (empty($rows)) {
-        $lines[] = 'No stock-in records matched the selected filters.';
-    } else {
-        foreach ($rows as $row) {
-            $lines[] = formatPdfTableRow([
-                $row['date_display'] ?? '',
-                $row['receipt_code'] ?? '',
-                $row['supplier_name'] ?? '',
-                $row['document_number'] ?? '',
-                $row['product_name'] ?? 'Unknown Product',
-                $row['qty_received_display'] ?? (string)($row['qty_received'] ?? 0),
-                $row['unit_cost_display'] ?? number_format((float)($row['unit_cost'] ?? 0), 2),
-                $row['receiver_name'] ?? 'Pending',
-                $row['status_label'] ?? '',
-            ], $columnWidths);
-
-    require_once __DIR__ . '/../vendor/autoload.php';
-
     $generatedOn = date('F j, Y g:i A');
     $reportTitle = 'DGZ Motorshop · Stock-In Report';
 
@@ -1680,17 +1611,8 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
             $filterSummaries[] = 'Date From: ' . $dateFromLabel;
         } else {
             $filterSummaries[] = 'Date To: ' . $dateToLabel;
-
         }
-        $lines[] = $strongDivider;
-        $lines[] = 'Total Rows: ' . count($rows);
     }
-
-
-    $lines[] = '';
-    $lines[] = 'Prepared via DGZ Inventory System';
-
-    $pdfContent = buildSimplePdfDocument($lines);
 
     if (!empty($filters['supplier'])) {
         $filterSummaries[] = 'Supplier: ' . $filters['supplier'];
@@ -1712,7 +1634,6 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
     if (!empty($filters['status_label'])) {
         $filterSummaries[] = 'Status: ' . $filters['status_label'];
     }
-
 
     $totalRows = count($rows);
     $totalQty = 0.0;
@@ -1955,19 +1876,96 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
     <?php
     $html = ob_get_clean();
 
-    $options = new \Dompdf\Options();
-    $options->set('isHtml5ParserEnabled', true);
-    $options->set('isRemoteEnabled', true);
+    $autoloadPaths = [
+        __DIR__ . '/../vendor/autoload.php',
+        __DIR__ . '/../../vendor/autoload.php',
+        dirname(__DIR__, 3) . '/vendor/autoload.php',
+    ];
 
-    $dompdf = new \Dompdf\Dompdf($options);
-    $dompdf->loadHtml($html);
-    $dompdf->setPaper('A4', 'portrait');
-    $dompdf->render();
+    $dompdfAvailable = false;
+    foreach ($autoloadPaths as $autoloadPath) {
+        if (file_exists($autoloadPath)) {
+            require_once $autoloadPath;
+            if (class_exists('\Dompdf\Dompdf')) {
+                $dompdfAvailable = true;
+                break;
+            }
+        }
+    }
 
-    $dompdf->stream($filenameBase . '.pdf', ['Attachment' => true]);
+    if ($dompdfAvailable) {
+        $options = new \Dompdf\Options();
+        $options->set('isHtml5ParserEnabled', true);
+        $options->set('isRemoteEnabled', true);
+
+        $dompdf = new \Dompdf\Dompdf($options);
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper('A4', 'portrait');
+        $dompdf->render();
+
+        $dompdf->stream($filenameBase . '.pdf', ['Attachment' => true]);
+        exit;
+    }
+
+    $columnWidths = [12, 12, 18, 12, 28, 12, 12, 16, 12];
+    $strongDivider = buildPdfTableDivider($columnWidths, '=');
+    $lightDivider = buildPdfTableDivider($columnWidths, '-');
+
+    $lines = [];
+    $lines[] = 'DGZ Motorshop · Stock-In Report';
+    $lines[] = 'Generated: ' . date('M d, Y g:i A');
+    $lines[] = '';
+
+    if (empty($filterSummaries)) {
+        $lines[] = 'Filters: All stock-in entries';
+    } else {
+        $lines[] = 'Filters:';
+        foreach ($filterSummaries as $filterLine) {
+            $lines[] = '  • ' . $filterLine;
+        }
+    }
+
+    $lines[] = '';
+    $lines[] = $strongDivider;
+    $lines[] = formatPdfTableRow($headers, $columnWidths);
+    $lines[] = $lightDivider;
+
+    if (empty($rows)) {
+        $lines[] = 'No stock-in records matched the selected filters.';
+    } else {
+        foreach ($rows as $row) {
+            $lines[] = formatPdfTableRow([
+                $row['date_display'] ?? '',
+                $row['receipt_code'] ?? '',
+                $row['supplier_name'] ?? '',
+                $row['document_number'] ?? '',
+                $row['product_name'] ?? 'Unknown Product',
+                $row['qty_received_display'] ?? (string)($row['qty_received'] ?? 0),
+                $row['unit_cost_display'] ?? number_format((float)($row['unit_cost'] ?? 0), 2),
+                $row['receiver_name'] ?? 'Pending',
+                $row['status_label'] ?? formatStockReceiptStatus($row['status'] ?? ''),
+            ], $columnWidths);
+        }
+    }
+
+    $lines[] = $lightDivider;
+    $lines[] = 'Total Rows: ' . $totalRows;
+    $lines[] = 'Distinct Receipts: ' . $uniqueReceipts;
+    $lines[] = 'Total Quantity Received: ' . number_format($totalQty, 0);
+    $lines[] = 'Estimated Total Value: ₱' . number_format($totalValue, 2);
+    $lines[] = '';
+    $lines[] = 'Prepared via DGZ Inventory System';
+
+    $pdfContent = buildSimplePdfDocument($lines);
+
+    header('Content-Type: application/pdf');
+    header('Content-Disposition: attachment; filename="' . $filenameBase . '.pdf"');
+    header('Pragma: no-cache');
+    header('Expires: 0');
+
+    echo $pdfContent;
     exit;
 }
-
 
 /**
  * Create a minimal multi-page PDF string from plain text lines.
@@ -2094,4 +2092,4 @@ function formatPdfTableRow(array $cells, array $columnWidths): string
     }
 
     return implode(' | ', $formatted);
-}}}
+}
