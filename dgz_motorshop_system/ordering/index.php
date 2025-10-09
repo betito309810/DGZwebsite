@@ -104,10 +104,23 @@ natcasesort($categories);
                         $hasCustomImage = $rawImagePath !== '';
                         $normalizedImagePath = $hasCustomImage ? '../' . ltrim($rawImagePath, '/') : '../assets/img/product-placeholder.svg';
                     ?>
-                    <div class="product-card" data-category="<?= htmlspecialchars($categorySlug) ?>" data-brand="<?= htmlspecialchars(strtolower($brand)) ?>" data-product-id="<?= (int) $p['id'] ?>" data-product-name="<?= htmlspecialchars($p['name']) ?>">
-                        <button type="button" class="product-photo" data-product-gallery-trigger data-primary-image="<?= htmlspecialchars($hasCustomImage ? $normalizedImagePath : '../assets/img/product-placeholder.svg') ?>" aria-label="View photos for <?= htmlspecialchars($p['name']) ?>">
+                    <div class="product-card"
+                        data-category="<?= htmlspecialchars($categorySlug) ?>"
+                        data-brand="<?= htmlspecialchars(strtolower($brand)) ?>"
+                        data-product-id="<?= (int) $p['id'] ?>"
+                        data-product-name="<?= htmlspecialchars($p['name']) ?>"
+                        data-product-brand="<?= htmlspecialchars($brand) ?>"
+                        data-product-category-label="<?= htmlspecialchars($category) ?>"
+                        data-product-description="<?= htmlspecialchars($p['description'], ENT_QUOTES) ?>"
+                        data-product-price="<?= htmlspecialchars(number_format((float)$p['price'], 2, '.', '')) ?>"
+                        data-product-quantity="<?= (int) $p['quantity'] ?>"
+                        data-primary-image="<?= htmlspecialchars($hasCustomImage ? $normalizedImagePath : '../assets/img/product-placeholder.svg') ?>"
+                        tabindex="0"
+                        aria-label="View <?= htmlspecialchars($p['name']) ?> details">
+                        <!-- Updated: the hero thumbnail now acts as the primary trigger for the richer detail modal. -->
+                        <div class="product-photo">
                             <img src="<?= htmlspecialchars($normalizedImagePath) ?>" alt="<?= htmlspecialchars($p['name']) ?>" loading="lazy">
-                        </button>
+                        </div>
                         <div class="product-info">
                             <h3><?=htmlspecialchars($p['name'])?></h3>
                         </div>
@@ -127,8 +140,9 @@ natcasesort($categories);
                         <!-- Buy Now area now feeds into the shared cart flow -->
                         <div class="buy-form">
                             <input type="number" name="qty" value="1" min="1" max="<?=max(1,$p['quantity'])?>"
-                                class="qty-input" <?= $p['quantity'] == 0 ? 'disabled' : '' ?>>
+                                class="qty-input" <?= $p['quantity'] == 0 ? 'disabled' : '' ?> data-gallery-ignore="true">
                             <button type="button" class="buy-btn" <?= $p['quantity'] == 0 ? 'disabled' : '' ?>
+                                data-gallery-ignore="true"
                                 onclick="(function(button) {
                                     const qtyInput = button.parentElement.querySelector('.qty-input');
                                     if (qtyInput && !qtyInput.checkValidity()) {
@@ -143,7 +157,7 @@ natcasesort($categories);
                         </div>
 
                         <!-- Add to Cart Button -->
-                        <button class="add-cart-btn"
+                        <button class="add-cart-btn" data-gallery-ignore="true"
                             onclick="(function(button) {
                                 const qtyInput = button.parentElement.querySelector('.qty-input');
                                 const qty = qtyInput ? parseInt(qtyInput.value) || 1 : 1;
@@ -157,10 +171,6 @@ natcasesort($categories);
                             <?= $p['quantity'] == 0 ? 'disabled' : '' ?>>
                             <i class="fas fa-cart-plus"></i> Add to Cart
                         </button>
-                        <button type="button" class="view-gallery-btn" data-product-gallery-trigger data-primary-image="<?= htmlspecialchars($hasCustomImage ? $normalizedImagePath : '../assets/img/product-placeholder.svg') ?>">
-                            <i class="fas fa-images"></i>
-                            <span>View Photos</span>
-                        </button>
                     </div>
                     <?php endforeach; ?>
                 </div>
@@ -168,26 +178,40 @@ natcasesort($categories);
             <!-- Footer -->
 
     </div>
-    <!-- Added: Modal container that renders the enlarged product gallery for storefront visitors. -->
+    <!-- Updated: Modal container now mirrors a marketplace-style product detail layout for richer previews. -->
     <div class="product-gallery-modal" id="productGalleryModal" aria-hidden="true" tabindex="-1">
         <div class="product-gallery-dialog" role="dialog" aria-modal="true" aria-labelledby="productGalleryTitle">
             <button type="button" class="product-gallery-close" id="productGalleryClose" aria-label="Close product gallery">
                 <i class="fas fa-times"></i>
             </button>
-            <div class="product-gallery-stage">
-                <button type="button" class="gallery-nav gallery-nav--prev" id="productGalleryPrev" aria-label="View previous photo">
-                    <i class="fas fa-chevron-left"></i>
-                </button>
-                <figure>
-                    <img id="productGalleryMain" src="../assets/img/product-placeholder.svg" alt="Selected product photo">
-                    <figcaption id="productGalleryTitle"></figcaption>
-                </figure>
-                <button type="button" class="gallery-nav gallery-nav--next" id="productGalleryNext" aria-label="View next photo">
-                    <i class="fas fa-chevron-right"></i>
-                </button>
+            <div class="product-gallery-content">
+                <section class="product-gallery-media">
+                    <div class="product-gallery-main">
+                        <button type="button" class="gallery-nav gallery-nav--prev" id="productGalleryPrev" aria-label="View previous photo">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <figure>
+                            <img id="productGalleryMain" src="../assets/img/product-placeholder.svg" alt="Selected product photo">
+                            <figcaption id="productGalleryImageCaption"></figcaption>
+                        </figure>
+                        <button type="button" class="gallery-nav gallery-nav--next" id="productGalleryNext" aria-label="View next photo">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                    <div class="product-gallery-thumbs" id="productGalleryThumbs" role="list"></div>
+                    <div class="product-gallery-status" id="productGalleryStatus"></div>
+                </section>
+                <section class="product-gallery-details" aria-live="polite">
+                    <p class="product-gallery-brand" id="productGalleryBrand"></p>
+                    <h2 class="product-gallery-heading" id="productGalleryTitle"></h2>
+                    <div class="product-gallery-price" id="productGalleryPrice"></div>
+                    <div class="product-gallery-meta">
+                        <span id="productGalleryCategory"></span>
+                        <span id="productGalleryStock"></span>
+                    </div>
+                    <p class="product-gallery-description" id="productGalleryDescription"></p>
+                </section>
             </div>
-            <div class="product-gallery-thumbs" id="productGalleryThumbs" role="list"></div>
-            <div class="product-gallery-status" id="productGalleryStatus"></div>
         </div>
     </div>
     <!-- Cart functionality -->

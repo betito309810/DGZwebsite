@@ -1,32 +1,81 @@
 /**
  * Added: Front-end controller that powers the product gallery modal on the
- * public storefront. It fetches the selected product's photo set and renders
- * them inside an accessible carousel-like experience.
+ * public storefront. It now mirrors a two-column marketplace layout so shoppers
+ * get a large preview on the left and rich details on the right.
  */
 (function () {
     const modal = document.getElementById('productGalleryModal');
     const mainImage = document.getElementById('productGalleryMain');
-    const caption = document.getElementById('productGalleryTitle');
+    const imageCaption = document.getElementById('productGalleryImageCaption');
     const status = document.getElementById('productGalleryStatus');
     const thumbs = document.getElementById('productGalleryThumbs');
     const closeButton = document.getElementById('productGalleryClose');
     const prevButton = document.getElementById('productGalleryPrev');
     const nextButton = document.getElementById('productGalleryNext');
+    const brandField = document.getElementById('productGalleryBrand');
+    const titleField = document.getElementById('productGalleryTitle');
+    const priceField = document.getElementById('productGalleryPrice');
+    const categoryField = document.getElementById('productGalleryCategory');
+    const stockField = document.getElementById('productGalleryStock');
+    const descriptionField = document.getElementById('productGalleryDescription');
+    const productsGrid = document.querySelector('.products-grid');
 
-    if (!modal || !mainImage || !caption || !thumbs || !closeButton) {
+    if (!modal || !mainImage || !imageCaption || !thumbs || !closeButton) {
         return;
     }
 
     const state = {
         productId: null,
         productName: '',
+        brand: '',
+        categoryLabel: '',
+        price: '',
+        quantity: null,
+        description: '',
         images: [],
         index: 0,
     };
 
+    let lastActiveElement = null;
+
     function setAriaHidden(isHidden) {
         modal.setAttribute('aria-hidden', String(isHidden));
         document.body.classList.toggle('modal-open', !isHidden);
+    }
+
+    function formatCurrency(value) {
+        const numeric = Number(value);
+        if (Number.isFinite(numeric)) {
+            return numeric.toLocaleString('en-PH', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+            });
+        }
+        return value;
+    }
+
+    function updateDetails() {
+        const brandLabel = (state.brand || '').trim();
+        brandField.textContent = brandLabel ? `Brand: ${brandLabel}` : 'Brand: Unspecified';
+
+        const productTitle = (state.productName || '').trim();
+        titleField.textContent = productTitle || 'Product details';
+
+        priceField.textContent = state.price ? `₱${formatCurrency(state.price)}` : '₱0.00';
+
+        const categoryLabel = (state.categoryLabel || 'Other').trim();
+        categoryField.textContent = `Category: ${categoryLabel || 'Other'}`;
+
+        if (typeof state.quantity === 'number') {
+            stockField.textContent = state.quantity > 0
+                ? `Stock: ${state.quantity} available`
+                : 'Stock: Out of stock';
+        } else {
+            stockField.textContent = 'Stock: Check availability';
+        }
+
+        const descriptionCopy = (state.description || '').trim();
+        descriptionField.textContent = descriptionCopy || 'No description provided yet.';
     }
 
     function updateStage() {
@@ -37,7 +86,7 @@
         const current = state.images[state.index];
         mainImage.src = current.url;
         mainImage.alt = `${state.productName} photo ${state.index + 1}`;
-        caption.textContent = state.productName;
+        imageCaption.textContent = state.productName;
         status.textContent = `${state.index + 1} of ${state.images.length}`;
 
         Array.from(thumbs.children).forEach((btn, idx) => {
@@ -102,19 +151,9 @@
         return result;
     }
 
-    function openModal(productId, productName, primaryImage) {
-        state.productId = productId;
-        state.productName = productName;
-        state.index = 0;
-        state.images = normaliseImages(productName, [], primaryImage);
-
-        renderThumbnails();
-        updateStage();
-        setAriaHidden(false);
-        modal.focus();
-
+    function fetchGallery(productId, productName, primaryImage) {
         fetch(`api/product-images.php?product_id=${encodeURIComponent(productId)}`)
-            .then((response) => response.ok ? response.json() : Promise.reject(new Error('Unable to load images')))
+            .then((response) => (response.ok ? response.json() : Promise.reject(new Error('Unable to load images'))))
             .then((data) => {
                 const payloadImages = Array.isArray(data?.images) ? data.images : [];
                 state.images = normaliseImages(productName, payloadImages, primaryImage);
@@ -127,28 +166,71 @@
             });
     }
 
+    function openModalFromCard(card) {
+        const productId = card.dataset.productId;
+        const productName = card.dataset.productName || 'Product photo';
+        const primaryImage = card.dataset.primaryImage || '../assets/img/product-placeholder.svg';
+
+        if (!productId) {
+            return;
+        }
+
+        lastActiveElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+        state.productId = productId;
+        state.productName = productName.trim() || 'Product photo';
+        state.brand = (card.dataset.productBrand || '').trim();
+        state.categoryLabel = (card.dataset.productCategoryLabel || '').trim();
+        state.price = card.dataset.productPrice || '';
+        const parsedQuantity = Number.parseInt(card.dataset.productQuantity, 10);
+        state.quantity = Number.isNaN(parsedQuantity) ? null : parsedQuantity;
+        state.description = card.dataset.productDescription || '';
+        state.index = 0;
+        state.images = normaliseImages(productName, [], primaryImage);
+
+        updateDetails();
+        renderThumbnails();
+        updateStage();
+        setAriaHidden(false);
+        modal.focus();
+
+        fetchGallery(productId, productName, primaryImage);
+    }
+
     function closeModal() {
         setAriaHidden(true);
         state.productId = null;
         state.productName = '';
         state.images = [];
         state.index = 0;
+        status.textContent = '';
+        thumbs.innerHTML = '';
+
+        if (lastActiveElement) {
+            lastActiveElement.focus({ preventScroll: true });
+        }
     }
 
-    document.querySelectorAll('[data-product-gallery-trigger]').forEach((trigger) => {
-        trigger.addEventListener('click', (event) => {
-            const card = event.currentTarget.closest('.product-card');
-            if (!card) {
-                return;
+    // Added: open the modal when shoppers click anywhere on the card except
+    // inputs/buttons marked with data-gallery-ignore.
+    productsGrid?.addEventListener('click', (event) => {
+        if (event.target.closest('[data-gallery-ignore]')) {
+            return;
+        }
+        const card = event.target.closest('.product-card');
+        if (!card) {
+            return;
+        }
+        openModalFromCard(card);
+    });
+
+    productsGrid?.addEventListener('keydown', (event) => {
+        if (event.target instanceof HTMLElement && event.target.classList.contains('product-card')) {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                openModalFromCard(event.target);
             }
-            const productId = card.dataset.productId;
-            const productName = card.dataset.productName || 'Product photo';
-            const primaryImage = trigger.getAttribute('data-primary-image') || '../assets/img/product-placeholder.svg';
-            if (!productId) {
-                return;
-            }
-            openModal(productId, productName, primaryImage);
-        });
+        }
     });
 
     closeButton.addEventListener('click', closeModal);
