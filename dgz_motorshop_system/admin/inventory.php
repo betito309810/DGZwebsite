@@ -1054,6 +1054,13 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
 
 
         <!-- Main Inventory Table -->
+        <div class="inventory-page-actions">
+            <?php if ($role === 'admin' || $role === 'staff'): ?>
+            <a href="stockEntry.php" class="btn-action add-stock-btn">Add Stock</a>
+            <?php endif; ?>
+            <a href="<?= htmlspecialchars($exportUrl) ?>" class="btn-action export-btn">Export CSV</a>
+        </div>
+
         <div id="inventoryTable" class="table-container">
             <form method="get" class="inventory-filter-form" id="inventoryFilterForm">
                 <input type="hidden" name="page" value="1">
@@ -1081,13 +1088,6 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                     <button type="submit" class="filter-submit" data-filter-submit>Filter</button>
                 </div>
             </form>
-
-            <div class="inventory-toolbar-actions">
-                <?php if ($role === 'admin' || $role === 'staff'): ?>
-                <a href="stockEntry.php" class="btn-action add-stock-btn">Add Stock</a>
-                <?php endif; ?>
-                <a href="<?= htmlspecialchars($exportUrl) ?>" class="btn-action export-btn">Export CSV</a>
-            </div>
 
             <div class="table-wrapper">
                 <table class="inventory-table manual-inventory-table">
