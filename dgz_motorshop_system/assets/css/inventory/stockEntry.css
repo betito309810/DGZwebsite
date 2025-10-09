@@ -943,6 +943,23 @@
     letter-spacing: 0.03em;
 }
 
+.inventory-table th .sort-link {
+    color: inherit;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.inventory-table th .sort-link:hover {
+    text-decoration: underline;
+}
+
+.inventory-table th .sort-indicator {
+    font-size: 12px;
+    line-height: 1;
+}
+
 .inventory-table td {
     font-size: 14px;
 }

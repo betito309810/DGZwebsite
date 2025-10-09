@@ -108,11 +108,15 @@ $inventorySearchTerm = trim((string)($_GET['inv_search'] ?? ''));
 $inventoryBrandFilter = trim((string)($_GET['inv_brand'] ?? ''));
 $inventoryCategoryFilter = trim((string)($_GET['inv_category'] ?? ''));
 $inventorySupplierFilter = trim((string)($_GET['inv_supplier'] ?? ''));
-$inventorySort = isset($_GET['inv_sort']) ? trim((string)$_GET['inv_sort']) : 'name_asc';
-$inventorySortOptions = ['name_asc', 'name_desc'];
-if (!in_array($inventorySort, $inventorySortOptions, true)) {
-    $inventorySort = 'name_asc';
+$inventorySortField = isset($_GET['inv_sort']) ? trim((string)$_GET['inv_sort']) : 'name';
+if ($inventorySortField !== 'name') {
+    $inventorySortField = 'name';
 }
+$inventorySortDirection = strtolower((string)($_GET['inv_direction'] ?? 'asc'));
+if (!in_array($inventorySortDirection, ['asc', 'desc'], true)) {
+    $inventorySortDirection = 'asc';
+}
+$inventorySort = $inventorySortField . '_' . $inventorySortDirection;
 $inventoryPage = isset($_GET['inv_page']) ? (int)$_GET['inv_page'] : 1;
 $inventoryPage = max(1, $inventoryPage);
 $inventoryLimit = 20;
@@ -153,8 +157,9 @@ if ($inventoryCategoryFilter !== '') {
 if ($inventorySupplierFilter !== '') {
     $inventoryFilterParams['inv_supplier'] = $inventorySupplierFilter;
 }
-if ($inventorySort !== 'name_asc') {
-    $inventoryFilterParams['inv_sort'] = $inventorySort;
+if ($inventorySortDirection === 'desc') {
+    $inventoryFilterParams['inv_sort'] = $inventorySortField;
+    $inventoryFilterParams['inv_direction'] = $inventorySortDirection;
 }
 
 $inventoryTotalCount = countCurrentInventoryRecords($pdo, $inventoryFilters);
@@ -178,6 +183,19 @@ $inventoryBaseUrl = 'stockEntry.php' . ($inventoryBaseQuery !== '' ? '?' . $inve
 
 $inventoryResetQuery = http_build_query($inventoryPreservedParams);
 $inventoryResetUrl = 'stockEntry.php' . ($inventoryResetQuery !== '' ? '?' . $inventoryResetQuery : '');
+
+$inventoryNameSortIndicator = $inventorySortDirection === 'asc' ? '▲' : '▼';
+$inventoryNameSortDirectionNext = $inventorySortDirection === 'asc' ? 'desc' : 'asc';
+$inventoryNameSortParams = $inventoryFilterParams;
+$inventoryNameSortParams['inv_page'] = 1;
+$inventoryNameSortParams['inv_sort'] = 'name';
+if ($inventoryNameSortDirectionNext === 'asc') {
+    unset($inventoryNameSortParams['inv_direction']);
+} else {
+    $inventoryNameSortParams['inv_direction'] = $inventoryNameSortDirectionNext;
+}
+$inventoryNameSortQuery = http_build_query($inventoryNameSortParams);
+$inventoryNameSortUrl = 'stockEntry.php' . ($inventoryNameSortQuery !== '' ? '?' . $inventoryNameSortQuery : '');
 
 $stockInReportRows = [];
 
@@ -351,6 +369,8 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                 <div class="panel-content inventory-table-container" id="inventorySnapshotContainer">
                     <form method="get" class="inventory-filter-form" id="inventoryFilterForm" aria-label="Inventory filters">
                         <input type="hidden" name="inv_page" value="1">
+                        <input type="hidden" name="inv_sort" value="<?= htmlspecialchars($inventorySortField) ?>">
+                        <input type="hidden" name="inv_direction" value="<?= htmlspecialchars($inventorySortDirection) ?>">
                         <?php foreach ($inventoryPreservedParams as $paramKey => $paramValue): ?>
                             <input type="hidden" name="<?= htmlspecialchars($paramKey) ?>" value="<?= htmlspecialchars((string)$paramValue) ?>">
                         <?php endforeach; ?>
@@ -392,10 +412,6 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                                     </option>
                                 <?php endforeach; ?>
                             </select>
-                            <select name="inv_sort" class="filter-select" aria-label="Sort inventory by name">
-                                <option value="name_asc" <?= $inventorySort === 'name_asc' ? 'selected' : '' ?>>Name A → Z</option>
-                                <option value="name_desc" <?= $inventorySort === 'name_desc' ? 'selected' : '' ?>>Name Z → A</option>
-                            </select>
                             <button type="submit" class="filter-submit" data-filter-submit>Filter</button>
                             <a class="filter-reset" href="<?= htmlspecialchars($inventoryResetUrl) ?>">Reset</a>
                         </div>
@@ -407,7 +423,12 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                                 <thead>
                                     <tr>
                                         <th scope="col">Code</th>
-                                        <th scope="col">Name</th>
+                                        <th scope="col" aria-sort="<?= $inventorySortDirection === 'asc' ? 'ascending' : 'descending' ?>">
+                                            <a href="<?= htmlspecialchars($inventoryNameSortUrl) ?>" class="sort-link">
+                                                Name
+                                                <span class="sort-indicator" aria-hidden="true"><?= htmlspecialchars($inventoryNameSortIndicator) ?></span>
+                                            </a>
+                                        </th>
                                         <th scope="col">Brand</th>
                                         <th scope="col">Category</th>
                                         <th scope="col">On-hand</th>
