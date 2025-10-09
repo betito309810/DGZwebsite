@@ -202,7 +202,8 @@ table tr:last-child td {
     flex-direction: column;
     gap: 16px;
     margin: 0;
-    box-shadow: none;
+    /* New: add a subtle shadow so the filters stand out on light backgrounds */
+    box-shadow: 0 18px 32px -20px rgba(15, 23, 42, 0.45);
     border: none;
     border-radius: 12px 12px 0 0;
 }
@@ -217,6 +218,61 @@ table tr:last-child td {
     align-items: center;
     justify-content: space-between;
     gap: 16px;
+}
+
+/* New: styling for manual adjustment notifications and highlights */
+#inventoryTable .inventory-alert {
+    margin: 0 0 20px;
+    padding: 14px 18px;
+    border-radius: 10px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 14px 28px -16px rgba(15, 23, 42, 0.35);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+#inventoryTable .inventory-alert--success {
+    background: rgba(34, 197, 94, 0.12);
+    color: #166534;
+    border: 1px solid rgba(34, 197, 94, 0.35);
+}
+
+#inventoryTable .inventory-alert.is-fading {
+    opacity: 0;
+    transform: translateY(-8px);
+}
+
+#inventoryTable .inventory-alert--warning {
+    background: rgba(250, 204, 21, 0.18);
+    color: #854d0e;
+    border: 1px solid rgba(250, 204, 21, 0.38);
+}
+
+#inventoryTable .inventory-alert--error {
+    background: rgba(248, 113, 113, 0.18);
+    color: #991b1b;
+    border: 1px solid rgba(248, 113, 113, 0.38);
+}
+
+.manual-adjust-highlight {
+    animation: manualAdjustGlow 2.4s ease-out;
+}
+
+@keyframes manualAdjustGlow {
+    0% {
+        box-shadow: inset 0 0 0 0 rgba(59, 130, 246, 0.28);
+        background-color: rgba(59, 130, 246, 0.12);
+    }
+    60% {
+        box-shadow: inset 0 0 0 4px rgba(59, 130, 246, 0.12);
+        background-color: rgba(191, 219, 254, 0.24);
+    }
+    100% {
+        box-shadow: inset 0 0 0 0 rgba(59, 130, 246, 0);
+        background-color: transparent;
+    }
 }
 
 #inventoryTable .filter-search-group {

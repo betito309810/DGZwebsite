@@ -168,18 +168,65 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_restock_reques
 }
 
 
-// Handle stock updates (admin and staff)
+// New: capture manual adjustment feedback so we can flash a message and return to the edited row
 if ($canManualAdjust && isset($_POST['update_stock'])) {
     $id = intval($_POST['id'] ?? 0);
     $change = intval($_POST['change'] ?? 0);
+    $redirectTarget = 'inventory.php';
 
-    if ($id && $change !== 0) {
-        $stmt = $pdo->prepare('UPDATE products SET quantity = quantity + ? WHERE id = ?');
-        $stmt->execute([$change, $id]);
+    if ($id) {
+        $redirectTarget .= '#product-' . $id;
     }
 
-    header('Location: inventory.php');
+    if ($id && $change !== 0) {
+        try {
+            $pdo->beginTransaction();
+
+            $lookupStmt = $pdo->prepare('SELECT name FROM products WHERE id = ? LIMIT 1');
+            $lookupStmt->execute([$id]);
+            $productRow = $lookupStmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$productRow) {
+                throw new RuntimeException('The selected product could not be found.');
+            }
+
+            $updateStmt = $pdo->prepare('UPDATE products SET quantity = quantity + ? WHERE id = ?');
+            $updateStmt->execute([$change, $id]);
+
+            $pdo->commit();
+
+            $verb = $change > 0 ? 'added to' : 'removed from';
+            $quantityChanged = abs($change);
+            $_SESSION['manual_adjust_message'] = [
+                'type' => 'success',
+                'text' => sprintf('%dpcs %s "%s"', $quantityChanged, $verb, $productRow['name']),
+                'product_id' => $id,
+            ];
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+
+            $_SESSION['manual_adjust_message'] = [
+                'type' => 'error',
+                'text' => 'Unable to update the product quantity. Please try again.',
+            ];
+        }
+    } else {
+        $_SESSION['manual_adjust_message'] = [
+            'type' => 'warning',
+            'text' => 'Enter a quantity before submitting a manual adjustment.',
+        ];
+    }
+
+    header('Location: ' . $redirectTarget);
     exit;
+}
+
+// New: hydrate any manual adjustment flash message for the next render cycle
+$manualAdjustFeedback = $_SESSION['manual_adjust_message'] ?? null;
+if ($manualAdjustFeedback) {
+    unset($_SESSION['manual_adjust_message']);
 }
 // Handle stock entry submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_stock'])) {
@@ -1062,6 +1109,16 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
         </div>
 
         <div id="inventoryTable" class="table-container">
+            <?php if ($manualAdjustFeedback): ?>
+            <div
+                class="inventory-alert inventory-alert--<?= htmlspecialchars($manualAdjustFeedback['type'] ?? 'info') ?>"
+                role="status"
+                data-inventory-flash
+            >
+                <?= htmlspecialchars($manualAdjustFeedback['text'] ?? '') ?>
+            </div>
+            <?php endif; ?>
+
             <form method="get" class="inventory-filter-form" id="inventoryFilterForm">
                 <input type="hidden" name="page" value="1">
                 <input type="hidden" name="sort" value="<?= htmlspecialchars($currentSort) ?>">
@@ -1121,8 +1178,18 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                             $productPrice = isset($p['price']) ? (float) $p['price'] : 0;
                             $brandLabel = trim((string) ($p['brand'] ?? ''));
                             $categoryLabel = trim((string) ($p['category'] ?? ''));
+                            // New: flag the row that just received a manual adjustment so we can highlight it
+                            $isFlashProduct = $manualAdjustFeedback && isset($manualAdjustFeedback['product_id']) && intval($manualAdjustFeedback['product_id']) === intval($p['id']);
+                            $rowClasses = [];
+                            if ($low) {
+                                $rowClasses[] = 'low-stock';
+                            }
+                            if ($isFlashProduct) {
+                                $rowClasses[] = 'manual-adjust-highlight';
+                            }
+                            $rowClassAttribute = empty($rowClasses) ? '' : ' class="' . implode(' ', $rowClasses) . '"';
                         ?>
-                        <tr<?= $low ? ' class="low-stock"' : '' ?> data-product-id="<?= (int) $p['id'] ?>">
+                        <tr<?= $rowClassAttribute ?> id="product-<?= (int) $p['id'] ?>" data-product-id="<?= (int) $p['id'] ?>" data-flash-product="<?= $isFlashProduct ? 'true' : 'false' ?>">
                             <td><?= htmlspecialchars($p['code']) ?></td>
                             <td>
                                 <div class="product-info">

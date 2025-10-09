@@ -448,5 +448,24 @@
                     searchInput.focus();
                 });
             }
+
+            // New: surface manual adjustment feedback and keep the user near the edited product
+            const flashAlert = document.querySelector('[data-inventory-flash]');
+            if (flashAlert) {
+                window.setTimeout(() => {
+                    flashAlert.classList.add('is-fading');
+                }, 3600);
+                window.setTimeout(() => {
+                    flashAlert.remove();
+                }, 4600);
+            }
+
+            const flashRow = document.querySelector('tr[data-flash-product="true"]');
+            if (flashRow) {
+                flashRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                window.setTimeout(() => {
+                    flashRow.classList.remove('manual-adjust-highlight');
+                }, 4000);
+            }
             // file 2 end
         });
