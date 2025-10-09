@@ -116,7 +116,8 @@
                     setSelectWithFallback('edit_supplier', 'edit_supplier_new', btn.dataset.supplier || '');
                     const preview = document.getElementById('editImagePreview');
                     if (preview) {
-                        preview.src = 'https://via.placeholder.com/120x120?text=No+Image';
+                        const imageUrl = btn.dataset.imageUrl || '../assets/img/product-placeholder.svg';
+                        preview.src = imageUrl;
                     }
                     if (editModal) {
                         editModal.style.display = 'flex';

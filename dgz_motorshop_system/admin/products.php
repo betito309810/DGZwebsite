@@ -4,6 +4,178 @@ if(empty($_SESSION['user_id'])){ header('Location: login.php'); exit; }
 $pdo = db();
 $role = $_SESSION['role'] ?? '';
 enforceStaffAccess();
+// Added: helper utilities that manage product image uploads in a single place.
+if (!function_exists('ensureProductImageDirectory')) {
+    /**
+     * Ensure the upload directory for a product exists and return its absolute path.
+     */
+    function ensureProductImageDirectory(int $productId): string
+    {
+        $uploadsRoot = __DIR__ . '/../uploads';
+        if (!is_dir($uploadsRoot)) {
+            mkdir($uploadsRoot, 0775, true);
+        }
+
+        $productsRoot = $uploadsRoot . '/products';
+        if (!is_dir($productsRoot)) {
+            mkdir($productsRoot, 0775, true);
+        }
+
+        $productDir = $productsRoot . '/' . $productId;
+        if (!is_dir($productDir)) {
+            mkdir($productDir, 0775, true);
+        }
+
+        return $productDir;
+    }
+}
+
+if (!function_exists('moveUploadedProductImage')) {
+    /**
+     * Move the uploaded main product image into place and return the stored relative path.
+     */
+    function moveUploadedProductImage(?array $file, int $productId): ?string
+    {
+        if (!$file || ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+            return null;
+        }
+
+        if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            throw new RuntimeException('Image upload failed with error code ' . ($file['error'] ?? 'unknown'));
+        }
+
+        $imageMeta = @getimagesize($file['tmp_name'] ?? '');
+        if ($imageMeta === false) {
+            throw new RuntimeException('Uploaded file is not a valid image.');
+        }
+
+        $extension = image_type_to_extension($imageMeta[2] ?? IMAGETYPE_JPEG, false);
+        if (!$extension) {
+            $extension = strtolower(pathinfo($file['name'] ?? '', PATHINFO_EXTENSION));
+        }
+
+        $extension = strtolower(preg_replace('/[^a-z0-9]/i', '', (string) $extension));
+        if ($extension === '' || !preg_match('/^(jpe?g|png|gif|webp)$/', $extension)) {
+            $extension = 'jpg';
+        }
+
+        $targetDir = ensureProductImageDirectory($productId);
+        $targetPath = $targetDir . '/main.' . $extension;
+        $previousMainFiles = glob($targetDir . '/main.*');
+
+        if (!move_uploaded_file($file['tmp_name'], $targetPath)) {
+            throw new RuntimeException('Failed to move uploaded image to product directory.');
+        }
+
+        @chmod($targetPath, 0644);
+
+        foreach ($previousMainFiles as $previous) {
+            if ($previous !== $targetPath && is_file($previous)) {
+                @unlink($previous);
+            }
+        }
+
+        return 'uploads/products/' . $productId . '/main.' . $extension;
+    }
+}
+
+if (!function_exists('normaliseUploadedFilesArray')) {
+    /**
+     * Normalise the $_FILES multi-upload structure into a flat array for iteration.
+     */
+    function normaliseUploadedFilesArray(?array $files): array
+    {
+        if (!$files || !isset($files['name'])) {
+            return [];
+        }
+
+        if (!is_array($files['name'])) {
+            return [$files];
+        }
+
+        $normalised = [];
+        $count = count($files['name']);
+        for ($i = 0; $i < $count; $i++) {
+            $normalised[] = [
+                'name' => $files['name'][$i] ?? null,
+                'type' => $files['type'][$i] ?? null,
+                'tmp_name' => $files['tmp_name'][$i] ?? null,
+                'error' => $files['error'][$i] ?? null,
+                'size' => $files['size'][$i] ?? null,
+            ];
+        }
+
+        return $normalised;
+    }
+}
+
+if (!function_exists('persistGalleryUploads')) {
+    /**
+     * Save any additional gallery images and persist references to the database.
+     */
+    function persistGalleryUploads(PDO $pdo, ?array $files, int $productId): void
+    {
+        $normalised = normaliseUploadedFilesArray($files);
+        if (empty($normalised)) {
+            return;
+        }
+
+        $storedPaths = [];
+        $uploadDir = ensureProductImageDirectory($productId);
+
+        foreach ($normalised as $file) {
+            if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+                continue;
+            }
+
+            $imageMeta = @getimagesize($file['tmp_name'] ?? '');
+            if ($imageMeta === false) {
+                continue;
+            }
+
+            $extension = image_type_to_extension($imageMeta[2] ?? IMAGETYPE_JPEG, false);
+            if (!$extension) {
+                $extension = strtolower(pathinfo($file['name'] ?? '', PATHINFO_EXTENSION));
+            }
+
+            $extension = strtolower(preg_replace('/[^a-z0-9]/i', '', (string) $extension));
+            if ($extension === '' || !preg_match('/^(jpe?g|png|gif|webp)$/', $extension)) {
+                $extension = 'jpg';
+            }
+
+            try {
+                $randomSuffix = random_int(1000, 9999);
+            } catch (Exception $e) {
+                $randomSuffix = mt_rand(1000, 9999);
+            }
+
+            $fileName = sprintf('gallery-%s-%04d.%s', date('YmdHis'), $randomSuffix, $extension);
+            $targetPath = $uploadDir . '/' . $fileName;
+
+            if (!move_uploaded_file($file['tmp_name'], $targetPath)) {
+                continue;
+            }
+
+            @chmod($targetPath, 0644);
+            $storedPaths[] = 'uploads/products/' . $productId . '/' . $fileName;
+        }
+
+        if (empty($storedPaths)) {
+            return;
+        }
+
+        $sortStmt = $pdo->prepare('SELECT COALESCE(MAX(sort_order), 0) FROM product_images WHERE product_id = ?');
+        $sortStmt->execute([$productId]);
+        $sortOrder = (int) $sortStmt->fetchColumn();
+
+        $insertStmt = $pdo->prepare('INSERT INTO product_images (product_id, file_path, sort_order) VALUES (?, ?, ?)');
+        foreach ($storedPaths as $path) {
+            $sortOrder++;
+            $insertStmt->execute([$productId, $path, $sortOrder]);
+        }
+    }
+}
+
 // Product Add History for modal (HTML table, not JSON)
 if (isset($_GET['history']) && $_GET['history'] == '1') {
     $sql = "
@@ -227,6 +399,7 @@ if ($product) {
                         'brand' => $product['brand'] ?? null,
                         'category' => $product['category'] ?? null,
                         'supplier' => $product['supplier'] ?? null,
+                        'image' => $product['image'] ?? null,
                     ],
                 ];
 
@@ -269,6 +442,9 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_product'])){
     $qty = isset($_POST['quantity']) ? (int) $_POST['quantity'] : 0;
     $low = isset($_POST['low_stock_threshold']) ? (int) $_POST['low_stock_threshold'] : 0;
     $id = isset($_POST['id']) ? (int) $_POST['id'] : 0;
+
+    $mainImageFile = $_FILES['image'] ?? null;
+    $galleryImageFiles = $_FILES['gallery_images'] ?? null;
     
     // Handle brand and category
     $brand = trim($_POST['brand'] ?? '');
@@ -306,6 +482,7 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_product'])){
         'brand' => $brand,
         'category' => $category,
         'supplier' => $supplier,
+        'image' => null,
     ];
 
     $user_id = $_SESSION['user_id'];
@@ -313,13 +490,27 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_product'])){
     if($id > 0) {
         // Get old product data for history
         $stmt = $pdo->prepare("SELECT * FROM products WHERE id = ?");
-$stmt->execute([$id]);
-$old_product = $stmt->fetch();
-        
-        // Update product
-        $stmt = $pdo->prepare('UPDATE products SET code=?, name=?, description=?, price=?, quantity=?, low_stock_threshold=?, brand=?, category=?, supplier=? WHERE id=?');
-        $stmt->execute([$code, $name, $desc, $price, $qty, $low, $brand, $category, $supplier, $id]);
-        
+        $stmt->execute([$id]);
+        $old_product = $stmt->fetch();
+
+        $existingImagePath = $old_product['image'] ?? null;
+        $newImagePath = null;
+        try {
+            $newImagePath = moveUploadedProductImage($mainImageFile, $id);
+        } catch (RuntimeException $e) {
+            // Added: keep processing but surface the failure in logs for debugging.
+            error_log('Product image upload failed: ' . $e->getMessage());
+        }
+
+        $imagePathForUpdate = $newImagePath !== null ? $newImagePath : $existingImagePath;
+        $currentSnapshot['image'] = $imagePathForUpdate;
+
+        // Update product (now persisting the image column as well).
+        $stmt = $pdo->prepare('UPDATE products SET code=?, name=?, description=?, price=?, quantity=?, low_stock_threshold=?, brand=?, category=?, supplier=?, image=? WHERE id=?');
+        $stmt->execute([$code, $name, $desc, $price, $qty, $low, $brand, $category, $supplier, $imagePathForUpdate, $id]);
+
+        persistGalleryUploads($pdo, $galleryImageFiles, $id);
+
         // Record edit in history
         $changes = [];
         $previousSnapshot = [
@@ -332,6 +523,7 @@ $old_product = $stmt->fetch();
             'brand' => $old_product['brand'] ?? null,
             'category' => $old_product['category'] ?? null,
             'supplier' => $old_product['supplier'] ?? null,
+            'image' => $old_product['image'] ?? null,
         ];
 
         // Added: build structured change list so history modal can render exact edits.
@@ -345,6 +537,7 @@ $old_product = $stmt->fetch();
             'brand' => ['label' => 'Brand', 'type' => 'text'],
             'category' => ['label' => 'Category', 'type' => 'text'],
             'supplier' => ['label' => 'Supplier', 'type' => 'text'],
+            'image' => ['label' => 'Main image', 'type' => 'text'],
         ];
 
         foreach ($fieldsToCompare as $field => $meta) {
@@ -372,21 +565,36 @@ $old_product = $stmt->fetch();
             ->execute([$id, $user_id, 'edit', json_encode($historyPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)]);
     } else {
         // Insert new product
-        $stmt = $pdo->prepare('INSERT INTO products (code, name, description, price, quantity, low_stock_threshold, brand, category, supplier) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
-        $stmt->execute([$code, $name, $desc, $price, $qty, $low, $brand, $category, $supplier]);
+        $stmt = $pdo->prepare('INSERT INTO products (code, name, description, price, quantity, low_stock_threshold, brand, category, supplier, image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        $stmt->execute([$code, $name, $desc, $price, $qty, $low, $brand, $category, $supplier, null]);
         $product_id = $pdo->lastInsertId();
-        
+
+        $storedImagePath = null;
+        try {
+            $storedImagePath = moveUploadedProductImage($mainImageFile, (int) $product_id);
+        } catch (RuntimeException $e) {
+            error_log('Product image upload failed: ' . $e->getMessage());
+        }
+
+        if ($storedImagePath !== null) {
+            $pdo->prepare('UPDATE products SET image = ? WHERE id = ?')->execute([$storedImagePath, $product_id]);
+        }
+
+        $currentSnapshot['image'] = $storedImagePath;
+        persistGalleryUploads($pdo, $galleryImageFiles, (int) $product_id);
+
         // Record addition in history
         $historyPayload = [
             'summary' => sprintf(
-                'Added %s (%s). Stock: %s • Price: ₱%s • Brand: %s • Category: %s • Supplier: %s',
+                'Added %s (%s). Stock: %s • Price: ₱%s • Brand: %s • Category: %s • Supplier: %s%s',
                 $name !== '' ? $name : 'Unnamed product',
                 $code !== '' ? $code : 'no code',
                 number_format($qty),
                 number_format($price, 2),
                 $brand ?? '-',
                 $category ?? '-',
-                $supplier ?? '-'
+                $supplier ?? '-',
+                $storedImagePath ? ' • Photo uploaded' : ''
             ),
             'snapshot' => $currentSnapshot,
         ];
@@ -573,7 +781,7 @@ if ($currentSort === 'name') {
                 style="display:grid; grid-template-columns: 2fr 1fr; gap:40px; max-width:820px; width:95vw; padding:36px 36px 28px 36px; border-radius:16px; background:#fff; box-shadow:0 8px 32px rgba(0,0,0,0.18); position:relative; align-items:start;">
                 <button type="button" id="closeAddModal"
                     style="position:absolute; top:14px; right:18px; background:none; border:none; font-size:24px; color:#888;">&times;</button>
-                <form method="post" enctype="multipart/form-data"
+                <form method="post" id="addProductForm" enctype="multipart/form-data"
                     style="display:grid; grid-template-columns: 1fr 1fr; gap:18px 24px; width:100%; align-items:start; background:none; box-shadow:none; border:none; padding:0; margin:0;">
                     <h3 style="margin-bottom:8px; grid-column:1/3;">Add Product</h3>
                     <input type="hidden" name="id" value="0">
@@ -633,10 +841,17 @@ if ($currentSort === 'name') {
                 <div class="modal-image-upload"
                     style="display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:18px; min-width:180px; max-width:220px;">
                     <label style="width:100%;text-align:center;">Product Image:
-                        <input name="image" type="file" accept="image/*" onchange="previewAddImage(event)">
+                        <input name="image" type="file" accept="image/*" form="addProductForm" onchange="previewAddImage(event)">
+                    </label>
+                    <p style="font-size:12px; color:#4b5563; text-align:center; margin:0;">
+                        <!-- Added: brief guidance so staff know the target dimensions and storage path. -->
+                        Upload square photos (~600×600px). Files are stored under <code>/uploads/products</code>.
+                    </p>
+                    <label style="width:100%;text-align:center;">Additional Gallery Images:
+                        <input name="gallery_images[]" type="file" accept="image/*" multiple form="addProductForm">
                     </label>
                     <img id="addImagePreview" class="modal-image-preview"
-                        src="https://via.placeholder.com/120x120?text=No+Image" alt="Preview">
+                        src="../assets/img/product-placeholder.svg" alt="Preview">
                 </div>
             </div>
         </div>
@@ -719,7 +934,9 @@ if ($currentSort === 'name') {
                                     data-low="<?=htmlspecialchars($p['low_stock_threshold'])?>"
                                     data-brand="<?=htmlspecialchars($p['brand'] ?? '')?>"
                                     data-category="<?=htmlspecialchars($p['category'] ?? '')?>"
-                                    data-supplier="<?=htmlspecialchars($p['supplier'] ?? '')?>"><i class="fas fa-edit"></i>Edit</a>
+                                    data-supplier="<?=htmlspecialchars($p['supplier'] ?? '')?>"
+                                    data-image="<?=htmlspecialchars($p['image'] ?? '')?>"
+                                    data-image-url="<?=htmlspecialchars(($p['image'] ?? '') !== '' ? '../' . ltrim($p['image'], '/') : '../assets/img/product-placeholder.svg')?>"><i class="fas fa-edit"></i>Edit</a>
                                 <a href="products.php?delete=<?=$p['id']?>" class="delete-btn action-btn"
                                     onclick="return confirm('Delete?')"> <i class="fas fa-trash"></i>Delete</a>
                             </td>
@@ -871,11 +1088,18 @@ if ($currentSort === 'name') {
                 <div class="modal-image-upload"
                     style="display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:18px; min-width:180px; max-width:220px;">
                     <label style="width:100%;text-align:center;">Product Image:
-                        <input name="image" id="edit_image" type="file" accept="image/*"
+                        <input name="image" id="edit_image" type="file" accept="image/*" form="editProductForm"
                             onchange="previewEditImage(event)">
                     </label>
+                    <p style="font-size:12px; color:#4b5563; text-align:center; margin:0;">
+                        <!-- Added: mirror guidance for edit flow. -->
+                        Upload square photos (~600×600px). Files are stored under <code>/uploads/products</code>.
+                    </p>
+                    <label style="width:100%;text-align:center;">Additional Gallery Images:
+                        <input name="gallery_images[]" id="edit_gallery_images" type="file" accept="image/*" multiple form="editProductForm">
+                    </label>
                     <img id="editImagePreview" class="modal-image-preview"
-                        src="https://via.placeholder.com/120x120?text=No+Image" alt="Preview">
+                        src="../assets/img/product-placeholder.svg" alt="Preview">
                 </div>
             </div>
         </div>

@@ -373,30 +373,49 @@ body {
     border-color: #00bcd4;
 }
 
-.product-header {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    margin-bottom: 20px;
+.product-photo {
+    /* Added: square thumbnail container that doubles as an accessible gallery trigger. */
+    width: 100%;
+    padding-top: 100%;
+    position: relative;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid #e0e6ed;
+    background: #f7f9fb;
+    cursor: pointer;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+    margin-bottom: 18px;
 }
 
-.product-avatar {
-    width: 50px;
-    height: 50px;
-    background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
-    border-radius: 12px;
+.product-photo:hover,
+.product-photo:focus {
+    box-shadow: 0 18px 36px rgba(0, 0, 0, 0.12);
+    transform: translateY(-2px);
+}
+
+.product-photo img {
+    /* Added: thumbnails assume uploads are ~600x600px to remain sharp on high-density screens. */
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.product-info {
     display: flex;
+    justify-content: space-between;
     align-items: center;
-    justify-content: center;
-    font-size: 20px;
-    color: white;
+    gap: 12px;
+    margin-bottom: 12px;
 }
 
 .product-info h3 {
     font-size: 18px;
     font-weight: 600;
     color: #2d3436;
-    margin-bottom: 5px;
+    margin: 0;
 }
 
 .product-description {
@@ -410,7 +429,7 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
+    margin-bottom: 16px;
 }
 
 .price {
@@ -503,6 +522,35 @@ body {
     box-shadow: none;
 }
 
+.view-gallery-btn {
+    /* Added: dedicated button that opens the gallery modal. */
+    width: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-radius: 12px;
+    border: 1px solid #d0d7e2;
+    background: #f4f7fb;
+    color: #0f172a;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+    margin-top: 12px;
+}
+
+.view-gallery-btn:hover,
+.view-gallery-btn:focus {
+    background: #e0ecff;
+    color: #1d4ed8;
+    transform: translateY(-1px);
+}
+
+.view-gallery-btn i {
+    font-size: 16px;
+}
+
 /* Update buy form for two buttons */
 .buy-form.two-buttons {
     display: flex;
@@ -519,6 +567,142 @@ body {
 .buy-form.two-buttons .add-cart-btn {
     flex: 1;
     min-width: 100px;
+}
+
+/* Added: responsive modal styling for the storefront product gallery. */
+.product-gallery-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.65);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 30px 20px;
+    z-index: 1200;
+}
+
+.product-gallery-modal[aria-hidden="false"] {
+    display: flex;
+}
+
+.product-gallery-dialog {
+    background: #ffffff;
+    border-radius: 20px;
+    width: min(960px, 100%);
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    box-shadow: 0 30px 70px rgba(15, 23, 42, 0.3);
+    padding: 24px;
+}
+
+.product-gallery-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: transparent;
+    border: none;
+    color: #475569;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 6px;
+}
+
+.product-gallery-stage {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 18px;
+}
+
+.product-gallery-stage figure {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.product-gallery-stage img {
+    width: min(600px, 100%);
+    max-height: 60vh;
+    object-fit: contain;
+    border-radius: 18px;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+}
+
+.product-gallery-stage figcaption {
+    font-weight: 600;
+    color: #1f2937;
+    text-align: center;
+}
+
+.gallery-nav {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: none;
+    background: #e2e8f0;
+    color: #1f2937;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.gallery-nav:hover,
+.gallery-nav:focus {
+    background: #cbd5f5;
+}
+
+.product-gallery-thumbs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+    gap: 12px;
+    padding: 8px 0;
+}
+
+.product-gallery-thumbs button {
+    border: 2px solid transparent;
+    border-radius: 12px;
+    overflow: hidden;
+    padding: 0;
+    background: transparent;
+    cursor: pointer;
+    transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.product-gallery-thumbs button[aria-current="true"] {
+    border-color: #3b82f6;
+    transform: translateY(-2px);
+}
+
+.product-gallery-thumbs img {
+    width: 100%;
+    height: 90px;
+    object-fit: cover;
+}
+
+.product-gallery-status {
+    margin-top: 6px;
+    font-size: 13px;
+    color: #475569;
+    text-align: center;
+}
+
+@media (max-width: 768px) {
+    .product-gallery-stage {
+        grid-template-columns: 1fr;
+    }
+
+    .gallery-nav {
+        position: static;
+        order: -1;
+    }
 }
 /* Toast message styles */
 .toast-message {

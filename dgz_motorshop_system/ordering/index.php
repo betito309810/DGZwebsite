@@ -98,14 +98,18 @@ natcasesort($categories);
                     <?php
                         $categorySlug = strtolower(trim($category ?: 'Other'));
                     ?>
-                    <div class="product-card" data-category="<?= htmlspecialchars($categorySlug) ?>" data-brand="<?= htmlspecialchars(strtolower($brand)) ?>">
-                        <div class="product-header">
-                            <div class="product-avatar">
-                                <i class="fas fa-motorcycle"></i>
-                            </div>
-                            <div class="product-info">
-                                <h3><?=htmlspecialchars($p['name'])?></h3>
-                            </div>
+                    <?php
+                        // Added: resolve the primary photo that should appear on the grid.
+                        $rawImagePath = trim((string)($p['image'] ?? ''));
+                        $hasCustomImage = $rawImagePath !== '';
+                        $normalizedImagePath = $hasCustomImage ? '../' . ltrim($rawImagePath, '/') : '../assets/img/product-placeholder.svg';
+                    ?>
+                    <div class="product-card" data-category="<?= htmlspecialchars($categorySlug) ?>" data-brand="<?= htmlspecialchars(strtolower($brand)) ?>" data-product-id="<?= (int) $p['id'] ?>" data-product-name="<?= htmlspecialchars($p['name']) ?>">
+                        <button type="button" class="product-photo" data-product-gallery-trigger data-primary-image="<?= htmlspecialchars($hasCustomImage ? $normalizedImagePath : '../assets/img/product-placeholder.svg') ?>" aria-label="View photos for <?= htmlspecialchars($p['name']) ?>">
+                            <img src="<?= htmlspecialchars($normalizedImagePath) ?>" alt="<?= htmlspecialchars($p['name']) ?>" loading="lazy">
+                        </button>
+                        <div class="product-info">
+                            <h3><?=htmlspecialchars($p['name'])?></h3>
                         </div>
 
                         <p class="product-description"><?=htmlspecialchars($p['description'])?></p>
@@ -153,6 +157,10 @@ natcasesort($categories);
                             <?= $p['quantity'] == 0 ? 'disabled' : '' ?>>
                             <i class="fas fa-cart-plus"></i> Add to Cart
                         </button>
+                        <button type="button" class="view-gallery-btn" data-product-gallery-trigger data-primary-image="<?= htmlspecialchars($hasCustomImage ? $normalizedImagePath : '../assets/img/product-placeholder.svg') ?>">
+                            <i class="fas fa-images"></i>
+                            <span>View Photos</span>
+                        </button>
                     </div>
                     <?php endforeach; ?>
                 </div>
@@ -160,10 +168,34 @@ natcasesort($categories);
             <!-- Footer -->
 
     </div>
+    <!-- Added: Modal container that renders the enlarged product gallery for storefront visitors. -->
+    <div class="product-gallery-modal" id="productGalleryModal" aria-hidden="true" tabindex="-1">
+        <div class="product-gallery-dialog" role="dialog" aria-modal="true" aria-labelledby="productGalleryTitle">
+            <button type="button" class="product-gallery-close" id="productGalleryClose" aria-label="Close product gallery">
+                <i class="fas fa-times"></i>
+            </button>
+            <div class="product-gallery-stage">
+                <button type="button" class="gallery-nav gallery-nav--prev" id="productGalleryPrev" aria-label="View previous photo">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <figure>
+                    <img id="productGalleryMain" src="../assets/img/product-placeholder.svg" alt="Selected product photo">
+                    <figcaption id="productGalleryTitle"></figcaption>
+                </figure>
+                <button type="button" class="gallery-nav gallery-nav--next" id="productGalleryNext" aria-label="View next photo">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+            <div class="product-gallery-thumbs" id="productGalleryThumbs" role="list"></div>
+            <div class="product-gallery-status" id="productGalleryStatus"></div>
+        </div>
+    </div>
     <!-- Cart functionality -->
      <script src="../assets/js/public/cart.js"></script>
     <!-- Search functionality -->
      <script src="../assets/js/public/search.js"></script>
+    <!-- Added: storefront gallery controller that powers the modal defined above. -->
+     <script src="../assets/js/public/productGallery.js"></script>
     </div>
    <footer class="footer">
     <div class="footer-content">

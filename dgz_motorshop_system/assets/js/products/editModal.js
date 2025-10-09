@@ -1,11 +1,23 @@
-// Begin Edit modal image preview updater
-        function previewEditImage(event) {
-            const [file] = event.target.files;
-            if (file) {
-                document.getElementById('editImagePreview').src = URL.createObjectURL(file);
-            } else {
-                document.getElementById('editImagePreview').src = 'https://via.placeholder.com/120x120?text=No+Image';
+        const PRODUCT_IMAGE_PLACEHOLDER = '../assets/img/product-placeholder.svg';
+
+        // Added: preview helper for the add-product modal so admins instantly see their chosen file.
+        function previewAddImage(event) {
+            const [file] = event.target.files || [];
+            const preview = document.getElementById('addImagePreview');
+            if (!preview) {
+                return;
             }
+            preview.src = file ? URL.createObjectURL(file) : PRODUCT_IMAGE_PLACEHOLDER;
+        }
+
+        // Begin Edit modal image preview updater
+        function previewEditImage(event) {
+            const [file] = event.target.files || [];
+            const preview = document.getElementById('editImagePreview');
+            if (!preview) {
+                return;
+            }
+            preview.src = file ? URL.createObjectURL(file) : PRODUCT_IMAGE_PLACEHOLDER;
         }
         // End Edit modal image preview updater
 
