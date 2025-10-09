@@ -12,20 +12,20 @@
     align-items: center;
     justify-content: center;
     box-sizing: border-box;
+    overflow-y: auto; /* Added: allow scrolling if the modal exceeds the viewport height. */
 }
 
 /* Added: Make the modal body rectangular and horizontally spacious. */
 .modal-content-horizontal {
-    display: grid;
-    grid-template-columns: minmax(0, 2.2fr) minmax(240px, 1fr);
+    display: flex; /* Updated: use flex so the form and media column stay strictly horizontal. */
     gap: 32px;
-    width: min(1100px, 96vw);
+    width: min(1200px, 96vw); /* Updated: widen the canvas for the horizontal layout. */
     padding: 36px;
     border-radius: 18px;
     background: #ffffff;
     box-shadow: 0 32px 80px rgba(15, 23, 42, 0.22);
     position: relative;
-    align-items: flex-start;
+    align-items: stretch; /* Updated: stretch both columns so they align like a rectangular card. */
 }
 
 /* Added: Reset the close button so it aligns with the new rectangular frame. */
@@ -47,6 +47,7 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 18px 24px;
     width: 100%;
+    flex: 1.7; /* Updated: ensure the form claims the wider share of the horizontal modal. */
 }
 
 .product-modal__form h3 {
@@ -112,7 +113,8 @@
     align-items: center;
     justify-content: flex-start;
     gap: 18px;
-    min-width: 220px;
+    min-width: 240px; /* Updated: widen the media column to visually balance the form. */
+    flex: 1; /* Added: participate in the horizontal split beside the form. */
 }
 
 .modal-image-upload label {
@@ -144,17 +146,21 @@
 }
 
 /* Added: Responsive fallbacks to stack the layout on narrow viewports. */
-@media (max-width: 1024px) {
+@media (max-width: 1100px) {
     .modal-content-horizontal {
-        grid-template-columns: minmax(0, 1fr);
-        width: min(800px, 94vw);
+        flex-direction: column; /* Updated: stack on narrower screens without squeezing. */
+        width: min(900px, 94vw);
+    }
+
+    .product-modal__form {
+        flex: none;
     }
 
     .modal-image-upload {
+        width: 100%;
         flex-direction: row;
         align-items: center;
         justify-content: space-between;
-        width: 100%;
     }
 
     .modal-image-preview {
@@ -171,5 +177,6 @@
     .modal-image-upload {
         flex-direction: column;
         align-items: center;
+        gap: 12px;
     }
 }
