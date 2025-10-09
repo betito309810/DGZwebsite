@@ -210,6 +210,20 @@ natcasesort($categories);
                         <span id="productGalleryStock"></span>
                     </div>
                     <p class="product-gallery-description" id="productGalleryDescription"></p>
+                    <!-- Added: interactive purchase controls in the modal so shoppers can set a quantity and checkout directly. -->
+                    <div class="product-gallery-actions">
+                        <div class="product-gallery-quantity">
+                            <label for="productGalleryQuantity">Quantity</label>
+                            <input type="number" id="productGalleryQuantity" min="1" value="1">
+                        </div>
+                        <div class="product-gallery-buttons">
+                            <button type="button" id="productGalleryBuyButton" class="product-gallery-buy">Buy Now</button>
+                            <button type="button" id="productGalleryCartButton" class="product-gallery-cart">
+                                <i class="fas fa-cart-plus" aria-hidden="true"></i>
+                                <span>Add to Cart</span>
+                            </button>
+                        </div>
+                    </div>
                 </section>
             </div>
         </div>

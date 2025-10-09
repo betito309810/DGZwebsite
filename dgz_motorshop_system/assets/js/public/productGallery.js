@@ -18,6 +18,10 @@
     const categoryField = document.getElementById('productGalleryCategory');
     const stockField = document.getElementById('productGalleryStock');
     const descriptionField = document.getElementById('productGalleryDescription');
+    // Added: references to the modal's quantity and CTA controls so we can mirror cart behaviour.
+    const quantityInput = document.getElementById('productGalleryQuantity');
+    const buyButton = document.getElementById('productGalleryBuyButton');
+    const cartButton = document.getElementById('productGalleryCartButton');
     const productsGrid = document.querySelector('.products-grid');
 
     if (!modal || !mainImage || !imageCaption || !thumbs || !closeButton) {
@@ -54,6 +58,54 @@
         return value;
     }
 
+    function normaliseQuantityField() {
+        if (!quantityInput || quantityInput.disabled) {
+            return 0;
+        }
+
+        const hasKnownStock = typeof state.quantity === 'number';
+        const maxQuantity = hasKnownStock ? Math.max(1, state.quantity) : Number.POSITIVE_INFINITY;
+        let desired = Number.parseInt(quantityInput.value, 10);
+
+        if (Number.isNaN(desired) || desired < 1) {
+            desired = 1;
+        }
+
+        if (hasKnownStock) {
+            desired = Math.min(desired, maxQuantity);
+        }
+
+        quantityInput.value = String(desired);
+        return desired;
+    }
+
+    function updatePurchaseControls() {
+        if (!quantityInput || !buyButton || !cartButton) {
+            return;
+        }
+
+        const hasKnownStock = typeof state.quantity === 'number';
+        const canPurchase = !hasKnownStock || state.quantity > 0;
+
+        buyButton.disabled = !canPurchase;
+        cartButton.disabled = !canPurchase;
+
+        if (canPurchase) {
+            quantityInput.disabled = false;
+            quantityInput.min = '1';
+            if (hasKnownStock) {
+                quantityInput.max = String(Math.max(1, state.quantity));
+            } else {
+                quantityInput.removeAttribute('max');
+            }
+            normaliseQuantityField();
+        } else {
+            quantityInput.value = '0';
+            quantityInput.setAttribute('disabled', 'disabled');
+            quantityInput.removeAttribute('max');
+        }
+    }
+
     function updateDetails() {
         const brandLabel = (state.brand || '').trim();
         brandField.textContent = brandLabel ? `Brand: ${brandLabel}` : 'Brand: Unspecified';
@@ -76,6 +128,8 @@
 
         const descriptionCopy = (state.description || '').trim();
         descriptionField.textContent = descriptionCopy || 'No description provided yet.';
+
+        updatePurchaseControls();
     }
 
     function updateStage() {
@@ -206,6 +260,20 @@
         status.textContent = '';
         thumbs.innerHTML = '';
 
+        if (quantityInput) {
+            quantityInput.value = '1';
+            quantityInput.disabled = false;
+            quantityInput.removeAttribute('max');
+        }
+
+        if (buyButton) {
+            buyButton.disabled = false;
+        }
+
+        if (cartButton) {
+            cartButton.disabled = false;
+        }
+
         if (lastActiveElement) {
             lastActiveElement.focus({ preventScroll: true });
         }
@@ -278,5 +346,44 @@
         }
         state.index = (state.index + 1) % state.images.length;
         updateStage();
+    });
+
+    quantityInput?.addEventListener('input', normaliseQuantityField);
+
+    // Added: mirror the card-level Buy Now/Add to Cart behaviour within the modal controls.
+    buyButton?.addEventListener('click', () => {
+        if (buyButton.disabled) {
+            return;
+        }
+
+        const productId = Number.parseInt(state.productId, 10);
+        if (!Number.isInteger(productId) || productId <= 0) {
+            return;
+        }
+
+        const qty = normaliseQuantityField();
+        const price = Number(state.price || 0);
+
+        if (typeof window.buyNow === 'function') {
+            window.buyNow(productId, state.productName, price, qty);
+        }
+    });
+
+    cartButton?.addEventListener('click', () => {
+        if (cartButton.disabled) {
+            return;
+        }
+
+        const productId = Number.parseInt(state.productId, 10);
+        if (!Number.isInteger(productId) || productId <= 0) {
+            return;
+        }
+
+        const qty = normaliseQuantityField();
+        const price = Number(state.price || 0);
+
+        if (typeof window.addToCart === 'function') {
+            window.addToCart(productId, state.productName, price, qty);
+        }
     });
 })();

@@ -737,6 +737,81 @@ body.modal-open {
     color: #334155;
 }
 
+/* Added: layout/states for the modal's embedded purchase controls. */
+.product-gallery-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-top: 6px;
+}
+
+.product-gallery-quantity {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.product-gallery-quantity label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.product-gallery-quantity input {
+    width: 120px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid #cbd5f5;
+    font-size: 15px;
+}
+
+.product-gallery-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.product-gallery-buttons button {
+    flex: 1;
+    min-width: 160px;
+    border-radius: 999px;
+    border: none;
+    padding: 12px 20px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.product-gallery-buy {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: #ffffff;
+    box-shadow: 0 10px 20px rgba(16, 185, 129, 0.25);
+}
+
+.product-gallery-cart {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: #ffffff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    box-shadow: 0 10px 20px rgba(59, 130, 246, 0.25);
+}
+
+.product-gallery-buttons button:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+    box-shadow: none;
+}
+
+.product-gallery-buttons button:not(:disabled):hover,
+.product-gallery-buttons button:not(:disabled):focus {
+    transform: translateY(-2px);
+}
+
 @media (max-width: 1024px) {
     .product-gallery-content {
         grid-template-columns: 1fr;
