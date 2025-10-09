@@ -858,6 +858,7 @@ if ($currentSort === 'name') {
 <link rel="stylesheet" href="../assets/css/sales/sales.css">
     <link rel="stylesheet" href="../assets/css/products/products.css">
     <link rel="stylesheet" href="../assets/css/products/variants.css"> <!-- Added: styles for the variant editor grid. -->
+    <link rel="stylesheet" href="../assets/css/products/product_modals.css"> <!-- Added: widened horizontal modal layout. -->
 
 </head>
 
@@ -924,23 +925,20 @@ if ($currentSort === 'name') {
        <script src="../assets/js/dashboard/userMenu.js"></script>
 
         <!-- Add Product Modal -->
-        <div id="addModal"
-            style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.3); z-index:9999; align-items:center; justify-content:center;">
-            <div class="modal-content-horizontal"
-                style="display:grid; grid-template-columns: 2fr 1fr; gap:40px; max-width:820px; width:95vw; padding:36px 36px 28px 36px; border-radius:16px; background:#fff; box-shadow:0 8px 32px rgba(0,0,0,0.18); position:relative; align-items:start;">
-                <button type="button" id="closeAddModal"
-                    style="position:absolute; top:14px; right:18px; background:none; border:none; font-size:24px; color:#888;">&times;</button>
-                <form method="post" id="addProductForm" enctype="multipart/form-data"
-                    style="display:grid; grid-template-columns: 1fr 1fr; gap:18px 24px; width:100%; align-items:start; background:none; box-shadow:none; border:none; padding:0; margin:0;">
-                    <h3 style="margin-bottom:8px; grid-column:1/3;">Add Product</h3>
+        <!-- Added: Modal overlay uses reusable class to inherit horizontal layout styles. -->
+        <div id="addModal" class="modal-portal">
+            <div class="modal-content-horizontal">
+                <button type="button" id="closeAddModal" class="modal-close-button">&times;</button>
+                <form method="post" id="addProductForm" enctype="multipart/form-data" class="product-modal__form">
+                    <h3>Add Product</h3>
                     <input type="hidden" name="id" value="0">
-                    <label style="grid-column:1;">Product Code:
+                    <label>Product Code:
                         <input name="code" required placeholder="Enter product code">
                     </label>
-                    <label style="grid-column:2;">Name:
+                    <label>Name:
                         <input name="name" required placeholder="Enter product name">
                     </label>
-                    <label style="grid-column:1;">Brand:
+                    <label>Brand:
                         <select name="brand" id="brandSelect" onchange="toggleBrandInput(this)">
                             <option value="">Select brand</option>
                             <?php foreach($brands as $b): ?>
@@ -951,7 +949,7 @@ if ($currentSort === 'name') {
                         <input name="brand_new" id="brandNewInput" placeholder="Enter new brand"
                             style="display:none; margin-top:6px;">
                     </label>
-                    <label style="grid-column:2;">Category:
+                    <label>Category:
                         <select name="category" id="categorySelect" onchange="toggleCategoryInput(this)">
                             <option value="">Select category</option>
                             <?php foreach($categories as $c): ?>
@@ -962,16 +960,16 @@ if ($currentSort === 'name') {
                         <input name="category_new" id="categoryNewInput" placeholder="Enter new category"
                             style="display:none; margin-top:6px;">
                     </label>
-                    <label style="grid-column:1/3;">Description:
+                    <label class="product-modal__full">Description:
                         <textarea name="description" placeholder="Enter product description"></textarea>
                     </label>
-                    <label style="grid-column:1;">Quantity:
+                    <label>Quantity:
                         <input name="quantity" type="number" min="0" required placeholder="Auto-calculated" readonly data-variant-total-quantity>
                     </label>
-                    <label style="grid-column:2;">Price per unit:
+                    <label>Price per unit:
                         <input name="price" type="number" min="0" step="0.01" required placeholder="Auto-calculated" readonly data-variant-default-price>
                     </label>
-                    <div class="variant-editor" data-variant-editor data-context="create" data-initial-variants="[]" style="grid-column:1/3;">
+                    <div class="variant-editor product-modal__full" data-variant-editor data-context="create" data-initial-variants="[]">
                         <!-- Added: repeatable variant rows so staff can encode different sizes/SKUs. -->
                         <div class="variant-editor__header">
                             <h4>Variants / Sizes</h4>
@@ -1017,7 +1015,7 @@ if ($currentSort === 'name') {
                         </template>
                         <input type="hidden" name="variants_payload" data-variants-payload>
                     </div>
-                    <label style="grid-column:1;">Supplier:
+                    <label>Supplier:
                         <select name="supplier" id="supplierSelect" onchange="toggleSupplierInput(this)">
                             <option value="">Select supplier</option>
                             <?php foreach($suppliers as $s): ?>
@@ -1028,21 +1026,20 @@ if ($currentSort === 'name') {
                         <input name="supplier_new" id="supplierNewInput" placeholder="Enter new supplier"
                             style="display:none; margin-top:6px;">
                     </label>
-                    <label style="grid-column:2;">Low Stock Threshold:
+                    <label>Low Stock Threshold:
                         <input name="low_stock_threshold" value="5" type="number" min="0" required>
                     </label>
-                    <button name="save_product" type="submit" style="margin-top:10px; grid-column:1/3;">Add</button>
+                    <button name="save_product" type="submit">Add</button>
                 </form>
-                <div class="modal-image-upload"
-                    style="display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:18px; min-width:180px; max-width:220px;">
-                    <label style="width:100%;text-align:center;">Product Image:
+                <div class="modal-image-upload">
+                    <label>Product Image:
                         <input name="image" type="file" accept="image/*" form="addProductForm" onchange="previewAddImage(event)">
                     </label>
-                    <p style="font-size:12px; color:#4b5563; text-align:center; margin:0;">
+                    <p>
                         <!-- Added: brief guidance so staff know the target dimensions and storage path. -->
                         Upload square photos (~600×600px). Files are stored under <code>/uploads/products</code>.
                     </p>
-                    <label style="width:100%;text-align:center;">Additional Gallery Images:
+                    <label>Additional Gallery Images:
                         <input name="gallery_images[]" type="file" accept="image/*" multiple form="addProductForm">
                     </label>
                     <img id="addImagePreview" class="modal-image-preview"
@@ -1227,23 +1224,20 @@ if ($currentSort === 'name') {
             <?php endif; ?>
         </div>
         <!-- Edit Product Modal -->
-        <div id="editModal"
-            style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.3); z-index:9999; align-items:center; justify-content:center;">
-            <div class="modal-content-horizontal"
-                style="display:grid; grid-template-columns: 2fr 1fr; gap:40px; max-width:820px; width:95vw; padding:36px 36px 28px 36px; border-radius:16px; background:#fff; box-shadow:0 8px 32px rgba(0,0,0,0.18); position:relative; align-items:start;">
-                <button type="button" id="closeEditModal"
-                    style="position:absolute; top:14px; right:18px; background:none; border:none; font-size:24px; color:#888;">&times;</button>
-                <form method="post" id="editProductForm" enctype="multipart/form-data"
-                    style="display:grid; grid-template-columns: 1fr 1fr; gap:18px 24px; width:100%; align-items:start; background:none; box-shadow:none; border:none; padding:0; margin:0;">
-                    <h3 style="margin-bottom:8px; grid-column:1/3;">Edit Product</h3>
+        <!-- Added: Reuse the horizontal modal overlay for the edit form. -->
+        <div id="editModal" class="modal-portal">
+            <div class="modal-content-horizontal">
+                <button type="button" id="closeEditModal" class="modal-close-button">&times;</button>
+                <form method="post" id="editProductForm" enctype="multipart/form-data" class="product-modal__form">
+                    <h3>Edit Product</h3>
                     <input type="hidden" name="id" id="edit_id">
-                    <label style="grid-column:1;">Product Code:
+                    <label>Product Code:
                         <input name="code" id="edit_code" required placeholder="Enter product code">
                     </label>
-                    <label style="grid-column:2;">Name:
+                    <label>Name:
                         <input name="name" id="edit_name" required placeholder="Enter product name">
                     </label>
-                    <label style="grid-column:1;">Brand:
+                    <label>Brand:
                         <select name="brand" id="edit_brand" onchange="toggleBrandInputEdit(this)">
                             <option value="">Select brand</option>
                             <?php foreach($brands as $b): ?>
@@ -1254,7 +1248,7 @@ if ($currentSort === 'name') {
                         <input name="brand_new" id="edit_brand_new" placeholder="Enter new brand"
                             style="display:none; margin-top:6px;">
                     </label>
-                    <label style="grid-column:2;">Category:
+                    <label>Category:
                         <select name="category" id="edit_category" onchange="toggleCategoryInputEdit(this)">
                             <option value="">Select category</option>
                             <?php foreach($categories as $c): ?>
@@ -1265,19 +1259,19 @@ if ($currentSort === 'name') {
                         <input name="category_new" id="edit_category_new" placeholder="Enter new category"
                             style="display:none; margin-top:6px;">
                     </label>
-                    <label style="grid-column:1/3;">Description:
+                    <label class="product-modal__full">Description:
                         <textarea name="description" id="edit_description"
                             placeholder="Enter product description"></textarea>
                     </label>
-                    <label style="grid-column:1;">Quantity:
+                    <label>Quantity:
                         <input name="quantity" id="edit_quantity" type="number" min="0" required
                             placeholder="Auto-calculated" readonly data-variant-total-quantity>
                     </label>
-                    <label style="grid-column:2;">Price per unit:
+                    <label>Price per unit:
                         <input name="price" id="edit_price" type="number" min="0" step="0.01" required
                             placeholder="Auto-calculated" readonly data-variant-default-price>
                     </label>
-                    <div class="variant-editor" data-variant-editor data-context="edit" data-initial-variants="[]" style="grid-column:1/3;">
+                    <div class="variant-editor product-modal__full" data-variant-editor data-context="edit" data-initial-variants="[]">
                         <!-- Added: editable variant grid for existing products. -->
                         <div class="variant-editor__header">
                             <h4>Variants / Sizes</h4>
@@ -1323,7 +1317,7 @@ if ($currentSort === 'name') {
                         </template>
                         <input type="hidden" name="variants_payload" data-variants-payload>
                     </div>
-                    <label style="grid-column:1;">Supplier:
+                    <label>Supplier:
                         <select name="supplier" id="edit_supplier" onchange="toggleSupplierInputEdit(this)">
                             <option value="">Select supplier</option>
                             <?php foreach($suppliers as $s): ?>
@@ -1334,23 +1328,22 @@ if ($currentSort === 'name') {
                         <input name="supplier_new" id="edit_supplier_new" placeholder="Enter new supplier"
                             style="display:none; margin-top:6px;">
                     </label>
-                    <label style="grid-column:2;">Low Stock Threshold:
+                    <label>Low Stock Threshold:
                         <input name="low_stock_threshold" id="edit_low" value="5" type="number" min="0" required>
                     </label>
-                    <button name="save_product" type="submit" style="margin-top:10px; grid-column:1/3;">Save
+                    <button name="save_product" type="submit">Save
                         Changes</button>
                 </form>
-                <div class="modal-image-upload"
-                    style="display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:18px; min-width:180px; max-width:220px;">
-                    <label style="width:100%;text-align:center;">Product Image:
+                <div class="modal-image-upload">
+                    <label>Product Image:
                         <input name="image" id="edit_image" type="file" accept="image/*" form="editProductForm"
                             onchange="previewEditImage(event)">
                     </label>
-                    <p style="font-size:12px; color:#4b5563; text-align:center; margin:0;">
+                    <p>
                         <!-- Added: mirror guidance for edit flow. -->
                         Upload square photos (~600×600px). Files are stored under <code>/uploads/products</code>.
                     </p>
-                    <label style="width:100%;text-align:center;">Additional Gallery Images:
+                    <label>Additional Gallery Images:
                         <input name="gallery_images[]" id="edit_gallery_images" type="file" accept="image/*" multiple form="editProductForm">
                     </label>
                     <img id="editImagePreview" class="modal-image-preview"
