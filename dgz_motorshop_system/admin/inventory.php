@@ -230,7 +230,7 @@ $brandFilter = trim($_GET['brand'] ?? '');
 $categoryFilter = trim($_GET['category'] ?? '');
 $page = isset($_GET['page']) ? (int) $_GET['page'] : 1;
 $page = max(1, $page);
-$limit = 15;
+$limit = 20;
 $offset = ($page - 1) * $limit;
 
 $sort = $_GET['sort'] ?? '';
@@ -1059,16 +1059,10 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                 <input type="hidden" name="page" value="1">
                 <input type="hidden" name="sort" value="<?= htmlspecialchars($currentSort) ?>">
                 <input type="hidden" name="direction" value="<?= htmlspecialchars($currentDirection ?: 'asc') ?>">
-                <div class="filter-row filter-row--toolbar">
+                <div class="filter-row">
                     <div class="filter-search-group">
                         <input type="text" name="search" aria-label="Search inventory" placeholder="Search product by name or code..." value="<?= htmlspecialchars($search) ?>" class="filter-search-input">
                         <button type="button" class="filter-clear" aria-label="Clear search" data-filter-clear>&times;</button>
-                    </div>
-                    <div class="inventory-toolbar-actions">
-                        <?php if ($role === 'admin' || $role === 'staff'): ?>
-                        <a href="stockEntry.php" class="btn-action add-stock-btn">Add Stock</a>
-                        <?php endif; ?>
-                        <a href="<?= htmlspecialchars($exportUrl) ?>" class="btn-action export-btn">Export CSV</a>
                     </div>
                 </div>
                 <div class="filter-row filter-row--selects">
@@ -1088,8 +1082,15 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                 </div>
             </form>
 
+            <div class="inventory-toolbar-actions">
+                <?php if ($role === 'admin' || $role === 'staff'): ?>
+                <a href="stockEntry.php" class="btn-action add-stock-btn">Add Stock</a>
+                <?php endif; ?>
+                <a href="<?= htmlspecialchars($exportUrl) ?>" class="btn-action export-btn">Export CSV</a>
+            </div>
+
             <div class="table-wrapper">
-                <table class="inventory-table">
+                <table class="inventory-table manual-inventory-table">
                     <thead>
                         <tr>
                             <th scope="col">Code</th>
@@ -1100,9 +1101,9 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                                 </a>
                             </th>
                             <th scope="col">Qty</th>
-                            <th scope="col">Low Stock Threshold</th>
+                            <th scope="col">Price</th>
                             <?php if ($canManualAdjust): ?>
-                            <th scope="col">Manual Adjust</th>
+                            <th scope="col">Action</th>
                             <?php endif; ?>
                         </tr>
                     </thead>
@@ -1117,19 +1118,52 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                         <?php else: ?>
                         <?php foreach ($inventoryProducts as $p):
                             $low = $p['quantity'] <= $p['low_stock_threshold'];
+                            $productPrice = isset($p['price']) ? (float) $p['price'] : 0;
+                            $brandLabel = trim((string) ($p['brand'] ?? ''));
+                            $categoryLabel = trim((string) ($p['category'] ?? ''));
                         ?>
                         <tr<?= $low ? ' class="low-stock"' : '' ?> data-product-id="<?= (int) $p['id'] ?>">
                             <td><?= htmlspecialchars($p['code']) ?></td>
-                            <td><?= htmlspecialchars($p['name']) ?></td>
+                            <td>
+                                <div class="product-info">
+                                    <span class="product-name"><?= htmlspecialchars($p['name']) ?></span>
+                                    <?php if ($brandLabel !== '' || $categoryLabel !== '' || !$canManualAdjust): ?>
+                                    <div class="product-meta">
+                                        <?php if ($brandLabel !== ''): ?>
+                                        <span class="product-meta__badge"><?= htmlspecialchars($brandLabel) ?></span>
+                                        <?php endif; ?>
+                                        <?php if ($categoryLabel !== ''): ?>
+                                        <span class="product-meta__badge product-meta__badge--muted"><?= htmlspecialchars($categoryLabel) ?></span>
+                                        <?php endif; ?>
+                                        <?php if (!$canManualAdjust): ?>
+                                        <span class="product-meta__note">Low stock threshold: <span class="product-meta__value"><?= intval($p['low_stock_threshold']) ?></span></span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <?php endif; ?>
+                                </div>
+                            </td>
                             <td><?= intval($p['quantity']) ?></td>
-                            <td><?= intval($p['low_stock_threshold']) ?></td>
+                            <td>₱<?= number_format($productPrice, 2) ?></td>
                             <?php if ($canManualAdjust): ?>
                             <td>
-                                <form method="post">
-                                    <input type="hidden" name="id" value="<?= (int) $p['id'] ?>">
-                                    <input type="number" name="change" value="0" step="1">
-                                    <button type="submit" name="update_stock">Manual Adjust</button>
-                                </form>
+                                <div class="manual-adjust">
+                                    <form method="post" class="manual-adjust-form">
+                                        <input type="hidden" name="id" value="<?= (int) $p['id'] ?>">
+                                        <input
+                                            type="number"
+                                            id="manualAdjust<?= (int) $p['id'] ?>"
+                                            name="change"
+                                            value="0"
+                                            step="1"
+                                            class="manual-adjust-input"
+                                            aria-label="Adjust quantity for <?= htmlspecialchars($p['name']) ?>"
+                                        >
+                                        <button type="submit" name="update_stock" class="manual-adjust-button">Manual Adjust</button>
+                                    </form>
+                                    <div class="manual-adjust-meta">
+                                        Low stock threshold: <span class="manual-adjust-meta__value"><?= intval($p['low_stock_threshold']) ?></span>
+                                    </div>
+                                </div>
                             </td>
                             <?php endif; ?>
                         </tr>
