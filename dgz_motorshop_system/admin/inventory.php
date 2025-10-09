@@ -297,6 +297,12 @@ if ($currentSort === 'name') {
     $nameSortIndicator = '↕';
 }
 
+$exportParams = $_GET;
+unset($exportParams['export'], $exportParams['page']);
+$exportParams['export'] = 'csv';
+$exportQuery = http_build_query($exportParams);
+$exportUrl = 'inventory.php' . ($exportQuery ? '?' . $exportQuery : '?export=csv');
+
 // Restock requests overview data
 $restockRequests = $pdo->query('
     SELECT rr.*, p.name AS product_name, p.code AS product_code,
@@ -1062,7 +1068,7 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                         <?php if ($role === 'admin' || $role === 'staff'): ?>
                         <a href="stockEntry.php" class="btn-action add-stock-btn">Add Stock</a>
                         <?php endif; ?>
-                        <a href="inventory.php?export=csv" class="btn-action export-btn">Export CSV</a>
+                        <a href="<?= htmlspecialchars($exportUrl) ?>" class="btn-action export-btn">Export CSV</a>
                     </div>
                 </div>
                 <div class="filter-row filter-row--selects">
