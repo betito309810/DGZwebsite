@@ -22,6 +22,8 @@
     const quantityInput = document.getElementById('productGalleryQuantity');
     const buyButton = document.getElementById('productGalleryBuyButton');
     const cartButton = document.getElementById('productGalleryCartButton');
+    const variantContainer = document.getElementById('productGalleryVariants');
+    const variantList = document.getElementById('productGalleryVariantList');
     const productsGrid = document.querySelector('.products-grid');
 
     if (!modal || !mainImage || !imageCaption || !thumbs || !closeButton) {
@@ -38,6 +40,8 @@
         description: '',
         images: [],
         index: 0,
+        variants: [],
+        selectedVariant: null,
     };
 
     let lastActiveElement = null;
@@ -85,7 +89,9 @@
         }
 
         const hasKnownStock = typeof state.quantity === 'number';
-        const canPurchase = !hasKnownStock || state.quantity > 0;
+        const requiresVariant = Array.isArray(state.variants) && state.variants.length > 0;
+        const hasVariantSelected = !requiresVariant || !!state.selectedVariant;
+        const canPurchase = hasVariantSelected && (!hasKnownStock || state.quantity > 0);
 
         buyButton.disabled = !canPurchase;
         cartButton.disabled = !canPurchase;
@@ -174,6 +180,74 @@
         });
     }
 
+    function renderVariantOptions() {
+        if (!variantContainer || !variantList) {
+            return;
+        }
+
+        variantList.innerHTML = '';
+        const variants = Array.isArray(state.variants) ? state.variants : [];
+        if (!variants.length) {
+            variantContainer.hidden = true;
+            return;
+        }
+
+        variantContainer.hidden = false;
+
+        variants.forEach((variant) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'product-gallery-variant-option';
+
+            const priceText = Number.isFinite(Number(variant.price)) ? `₱${formatCurrency(variant.price)}` : '';
+            let stockText = '';
+            if (typeof variant.quantity === 'number') {
+                stockText = variant.quantity > 0 ? `${variant.quantity} in stock` : 'Out of stock';
+            }
+
+            const labelParts = [variant.label];
+            if (priceText) {
+                labelParts.push(priceText);
+            }
+            if (stockText) {
+                labelParts.push(stockText);
+            }
+            button.textContent = labelParts.join(' • ');
+
+            const isSelected = state.selectedVariant && Number(state.selectedVariant.id) === Number(variant.id);
+            button.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+
+            if (typeof variant.quantity === 'number' && variant.quantity <= 0) {
+                button.disabled = true;
+            }
+
+            button.addEventListener('click', () => {
+                if (button.disabled) {
+                    return;
+                }
+                selectVariant(variant);
+            });
+
+            variantList.appendChild(button);
+        });
+    }
+
+    function selectVariant(variant) {
+        state.selectedVariant = variant || null;
+        if (variant) {
+            if (variant.price !== undefined && variant.price !== null) {
+                state.price = Number(variant.price);
+            }
+            if (variant.quantity !== undefined && variant.quantity !== null) {
+                state.quantity = Number(variant.quantity);
+            } else {
+                state.quantity = null;
+            }
+        }
+        renderVariantOptions();
+        updateDetails();
+    }
+
     function normaliseImages(productName, payloadImages, primaryImage) {
         const seen = new Set();
         const result = [];
@@ -203,6 +277,74 @@
         }
 
         return result;
+    }
+
+    function parseVariantsPayload(raw) {
+        if (!raw) {
+            return [];
+        }
+
+        let parsed;
+        try {
+            parsed = JSON.parse(raw);
+        } catch (error) {
+            return [];
+        }
+
+        if (!Array.isArray(parsed)) {
+            return [];
+        }
+
+        return parsed
+            .map((variant) => {
+                const id = variant && variant.id !== undefined ? Number(variant.id) : null;
+                const label = variant && typeof variant.label === 'string' ? variant.label.trim() : '';
+                if (!label) {
+                    return null;
+                }
+
+                return {
+                    id: Number.isFinite(id) ? id : null,
+                    label,
+                    price: variant && variant.price !== undefined ? Number(variant.price) : 0,
+                    quantity: variant && variant.quantity !== undefined && variant.quantity !== null
+                        ? Number(variant.quantity)
+                        : null,
+                    is_default: Boolean(variant && variant.is_default),
+                };
+            })
+            .filter(Boolean);
+    }
+
+    function pickInitialVariant(variants, defaultId) {
+        if (!Array.isArray(variants) || !variants.length) {
+            return null;
+        }
+
+        if (defaultId !== undefined && defaultId !== null) {
+            const numericId = Number(defaultId);
+            const byId = variants.find((variant) => Number(variant.id) === numericId);
+            if (byId) {
+                return byId;
+            }
+        }
+
+        const flaggedDefault = variants.find((variant) => variant.is_default);
+        if (flaggedDefault) {
+            return flaggedDefault;
+        }
+
+        const availableVariant = variants.find((variant) => {
+            if (variant.quantity === null || variant.quantity === undefined) {
+                return true;
+            }
+            return Number(variant.quantity) > 0;
+        });
+        if (availableVariant) {
+            return availableVariant;
+        }
+
+        return variants[0];
     }
 
     function fetchGallery(productId, productName, primaryImage) {
@@ -235,12 +377,29 @@
         state.productName = productName.trim() || 'Product photo';
         state.brand = (card.dataset.productBrand || '').trim();
         state.categoryLabel = (card.dataset.productCategoryLabel || '').trim();
-        state.price = card.dataset.productPrice || '';
+        state.price = Number(card.dataset.productPrice || 0);
         const parsedQuantity = Number.parseInt(card.dataset.productQuantity, 10);
         state.quantity = Number.isNaN(parsedQuantity) ? null : parsedQuantity;
         state.description = card.dataset.productDescription || '';
         state.index = 0;
         state.images = normaliseImages(productName, [], primaryImage);
+        state.variants = parseVariantsPayload(card.dataset.productVariants || '[]');
+        const defaultVariantIdAttr = card.dataset.productDefaultVariantId;
+        const defaultVariantId = defaultVariantIdAttr !== undefined && defaultVariantIdAttr !== ''
+            ? Number(defaultVariantIdAttr)
+            : null;
+        state.selectedVariant = pickInitialVariant(state.variants, defaultVariantId);
+        if (state.selectedVariant) {
+            if (state.selectedVariant.price !== undefined && state.selectedVariant.price !== null) {
+                state.price = Number(state.selectedVariant.price);
+            }
+            if (state.selectedVariant.quantity !== undefined && state.selectedVariant.quantity !== null) {
+                state.quantity = Number(state.selectedVariant.quantity);
+            } else {
+                state.quantity = null;
+            }
+        }
+        renderVariantOptions();
 
         updateDetails();
         renderThumbnails();
@@ -259,6 +418,14 @@
         state.index = 0;
         status.textContent = '';
         thumbs.innerHTML = '';
+        state.variants = [];
+        state.selectedVariant = null;
+        if (variantList) {
+            variantList.innerHTML = '';
+        }
+        if (variantContainer) {
+            variantContainer.hidden = true;
+        }
 
         if (quantityInput) {
             quantityInput.value = '1';
@@ -363,9 +530,14 @@
 
         const qty = normaliseQuantityField();
         const price = Number(state.price || 0);
+        const variantId = state.selectedVariant ? state.selectedVariant.id : null;
+        const variantLabel = state.selectedVariant ? state.selectedVariant.label : '';
+        const variantPrice = state.selectedVariant && state.selectedVariant.price !== undefined
+            ? Number(state.selectedVariant.price)
+            : price;
 
         if (typeof window.buyNow === 'function') {
-            window.buyNow(productId, state.productName, price, qty);
+            window.buyNow(productId, state.productName, price, qty, variantId, variantLabel, variantPrice);
         }
     });
 
@@ -381,9 +553,14 @@
 
         const qty = normaliseQuantityField();
         const price = Number(state.price || 0);
+        const variantId = state.selectedVariant ? state.selectedVariant.id : null;
+        const variantLabel = state.selectedVariant ? state.selectedVariant.label : '';
+        const variantPrice = state.selectedVariant && state.selectedVariant.price !== undefined
+            ? Number(state.selectedVariant.price)
+            : price;
 
         if (typeof window.addToCart === 'function') {
-            window.addToCart(productId, state.productName, price, qty);
+            window.addToCart(productId, state.productName, price, qty, variantId, variantLabel, variantPrice);
         }
     });
 })();

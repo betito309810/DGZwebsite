@@ -1,5 +1,6 @@
 <?php
 require __DIR__ . '/../config/config.php';
+require_once __DIR__ . '/../includes/product_variants.php'; // Added: variant helpers for checkout validation.
 $pdo = db();
 $errors = [];
 $referenceInput = '';
@@ -89,6 +90,15 @@ if (!function_exists('normaliseCartItems')) {
             $quantity = isset($item['quantity']) ? (int) $item['quantity'] : 0;
             $price = isset($item['price']) ? (float) $item['price'] : 0.0;
             $name = isset($item['name']) ? trim((string) $item['name']) : '';
+            $variantId = $item['variantId'] ?? $item['variant_id'] ?? null;
+            $variantLabel = isset($item['variantLabel']) ? trim((string) $item['variantLabel']) : '';
+            if ($variantLabel === '' && isset($item['variant_label'])) {
+                $variantLabel = trim((string) $item['variant_label']);
+            }
+            $variantPrice = $item['variantPrice'] ?? $item['variant_price'] ?? null;
+            if ($variantPrice !== null) {
+                $price = (float) $variantPrice;
+            }
 
             if ($id <= 0 || $quantity <= 0) {
                 continue;
@@ -99,6 +109,9 @@ if (!function_exists('normaliseCartItems')) {
                 'name' => $name !== '' ? $name : 'Product',
                 'price' => $price,
                 'quantity' => $quantity,
+                'variant_id' => $variantId !== null ? (int) $variantId : null,
+                'variant_label' => $variantLabel,
+                'variant_price' => $variantPrice !== null ? (float) $variantPrice : $price,
             ];
         }
 
@@ -129,14 +142,35 @@ if ($product_id > 0 && empty($cartItems)) {
     $product = $pdo->prepare('SELECT * FROM products WHERE id=?');
     $product->execute([$product_id]);
     $p = $product->fetch();
-    
+
     if ($p) {
+        $variants = fetchProductVariants($pdo, (int) $p['id']);
+        $defaultVariant = null;
+        foreach ($variants as $variantRow) {
+            if (!empty($variantRow['is_default'])) {
+                $defaultVariant = $variantRow;
+                break;
+            }
+        }
+        if ($defaultVariant === null && !empty($variants)) {
+            $defaultVariant = $variants[0];
+        }
+        $unitPrice = $defaultVariant ? (float) $defaultVariant['price'] : (float) $p['price'];
+        $unitStock = null;
+        if ($defaultVariant) {
+            $unitStock = $defaultVariant['quantity'] !== null ? (int) $defaultVariant['quantity'] : null;
+        } else {
+            $unitStock = isset($p['quantity']) ? (int) $p['quantity'] : null;
+        }
         $cartItems = [[
             'id' => $p['id'],
             'name' => $p['name'],
-            'price' => $p['price'],
+            'price' => $unitPrice,
             'quantity' => $qty,
-            'stock' => $p['quantity'] ?? null,
+            'stock' => $unitStock,
+            'variant_id' => $defaultVariant['id'] ?? null,
+            'variant_label' => $defaultVariant['label'] ?? '',
+            'variant_price' => $defaultVariant ? (float) $defaultVariant['price'] : (float) $p['price'],
         ]];
     }
 }
@@ -151,10 +185,18 @@ if (isset($_POST['cart'])) {
 
     // Fetch stock quantity for each cart item from database and add to cartItems
     foreach ($cartItems as &$item) {
-        $stmt = $pdo->prepare('SELECT quantity FROM products WHERE id = ?');
-        $stmt->execute([$item['id']]);
-        $product = $stmt->fetch();
-        $item['stock'] = $product ? (int)$product['quantity'] : null;
+        $variantId = $item['variant_id'] ?? $item['variantId'] ?? null;
+        if ($variantId) {
+            $stmt = $pdo->prepare('SELECT quantity FROM product_variants WHERE id = ?');
+            $stmt->execute([(int) $variantId]);
+            $variantRow = $stmt->fetch();
+            $item['stock'] = $variantRow ? (int) $variantRow['quantity'] : null;
+        } else {
+            $stmt = $pdo->prepare('SELECT quantity FROM products WHERE id = ?');
+            $stmt->execute([$item['id']]);
+            $product = $stmt->fetch();
+            $item['stock'] = $product ? (int)$product['quantity'] : null;
+        }
     }
     unset($item);
 
@@ -276,14 +318,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
 
     // Validate stock quantity for each cart item
     foreach ($cartItems as $item) {
-        $stmt = $pdo->prepare('SELECT quantity FROM products WHERE id = ?');
-        $stmt->execute([$item['id']]);
-        $product = $stmt->fetch();
-
-        if (!$product || $item['quantity'] > $product['quantity']) {
+        $available = null;
+        if (!empty($item['variant_id'])) {
+            $variantStmt = $pdo->prepare('SELECT quantity FROM product_variants WHERE id = ?');
+            $variantStmt->execute([(int) $item['variant_id']]);
+            $variantRow = $variantStmt->fetch();
+            $available = $variantRow ? (int) $variantRow['quantity'] : 0;
+        } else {
+            $stmt = $pdo->prepare('SELECT quantity FROM products WHERE id = ?');
+            $stmt->execute([$item['id']]);
+            $product = $stmt->fetch();
             $available = $product ? (int)$product['quantity'] : 0;
-            $errors[] = "The quantity for product '{$item['name']}' exceeds available stock. Stock: {$available} left.";
-            $errors[] = "Stock: {$available} left.";
+        }
+
+        if ($available !== null && $item['quantity'] > $available) {
+            $label = $item['variant_label'] ?? '';
+            $displayName = $label !== '' ? $item['name'] . ' (' . $label . ')' : $item['name'];
+            $errors[] = "The quantity for product '{$displayName}' exceeds available stock. Stock: {$available} left.";
         }
     }
 
@@ -322,16 +373,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
 
         // Insert order items and update stock
         foreach ($cartItems as $item) {
-            $product = $pdo->prepare('SELECT * FROM products WHERE id = ?');
-            $product->execute([$item['id']]);
-            $p = $product->fetch();
+            $variantId = $item['variant_id'] ?? null;
+            if ($variantId) {
+                $variantStmt = $pdo->prepare('SELECT id, product_id, quantity, label FROM product_variants WHERE id = ?');
+                $variantStmt->execute([(int) $variantId]);
+                $variantRow = $variantStmt->fetch();
 
-            if ($p && $item['quantity'] <= $p['quantity']) {
-                $stmt2 = $pdo->prepare('INSERT INTO order_items (order_id, product_id, qty, price) VALUES (?, ?, ?, ?)');
-                $stmt2->execute([$order_id, $item['id'], $item['quantity'], $item['price']]);
+                if ($variantRow && $item['quantity'] <= (int) $variantRow['quantity']) {
+                    $stmt2 = $pdo->prepare('INSERT INTO order_items (order_id, product_id, variant_id, variant_label, qty, price) VALUES (?, ?, ?, ?, ?, ?)');
+                    $stmt2->execute([
+                        $order_id,
+                        (int) $variantRow['product_id'],
+                        (int) $variantRow['id'],
+                        $item['variant_label'] ?? ($variantRow['label'] ?? null),
+                        $item['quantity'],
+                        $item['price'],
+                    ]);
 
-                // Decrease stock
-                $pdo->prepare('UPDATE products SET quantity = quantity - ? WHERE id = ?')->execute([$item['quantity'], $item['id']]);
+                    $pdo->prepare('UPDATE product_variants SET quantity = quantity - ? WHERE id = ?')->execute([$item['quantity'], (int) $variantRow['id']]);
+                    $pdo->prepare('UPDATE products SET quantity = quantity - ? WHERE id = ?')->execute([$item['quantity'], (int) $variantRow['product_id']]);
+                }
+            } else {
+                $product = $pdo->prepare('SELECT * FROM products WHERE id = ?');
+                $product->execute([$item['id']]);
+                $p = $product->fetch();
+
+                if ($p && $item['quantity'] <= $p['quantity']) {
+                    $stmt2 = $pdo->prepare('INSERT INTO order_items (order_id, product_id, variant_id, variant_label, qty, price) VALUES (?, ?, ?, ?, ?, ?)');
+                    $stmt2->execute([$order_id, $item['id'], null, null, $item['quantity'], $item['price']]);
+
+                    $pdo->prepare('UPDATE products SET quantity = quantity - ? WHERE id = ?')->execute([$item['quantity'], $item['id']]);
+                }
             }
         }
 
@@ -497,13 +569,15 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                     <div class="item-image">
                         <i class="fas fa-box"></i>
                     </div>
-                    <div class="item-details">
-                        <div class="item-header">
-                            <span class="item-name"><?= htmlspecialchars($item['name']) ?></span>
-                            <span class="item-price">₱ <?= number_format($item['price'], 2) ?></span>
+                        <div class="item-details">
+                            <div class="item-header">
+                                <span class="item-name"><?= htmlspecialchars($item['name']) ?></span>
+                                <span class="item-price">₱ <?= number_format($item['price'], 2) ?></span>
+                            </div>
+                        <div class="item-category">
+                            <?= htmlspecialchars($item['variant_label'] !== '' ? 'Variant: ' . $item['variant_label'] : 'Product') ?>
                         </div>
-                        <div class="item-category">Product</div>
-                    </div>
+                        </div>
                     <div class="item-meta">
                         <!-- Quantity input remains editable so buyers can adjust before checkout -->
                         <input type="number" class="quantity-input" min="1" value="<?= $item['quantity'] ?>" data-index="<?= $index ?>" style="width: 50px; margin-right: 10px;">
@@ -604,14 +678,22 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
         });
 
         function normaliseItem(rawItem = {}) {
-            const price = Number(rawItem.price);
+            const basePrice = rawItem.price ?? rawItem.variant_price;
+            const price = Number(basePrice);
             const quantity = Number(rawItem.quantity);
+            const variantId = rawItem.variantId ?? rawItem.variant_id ?? null;
+            const variantLabelRaw = rawItem.variantLabel ?? rawItem.variant_label ?? '';
+            const stockValue = rawItem.stock ?? null;
 
             return {
                 id: rawItem.id ?? null,
                 name: rawItem.name ?? 'Product',
                 price: Number.isFinite(price) ? price : 0,
                 quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1,
+                variantId: variantId !== null ? Number(variantId) : null,
+                variantLabel: variantLabelRaw ? String(variantLabelRaw) : '',
+                variantPrice: Number.isFinite(price) ? price : 0,
+                stock: stockValue !== undefined ? stockValue : null,
             };
         }
 
@@ -689,7 +771,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
 
             const category = document.createElement('div');
             category.className = 'item-category';
-            category.textContent = 'Product';
+            category.textContent = item.variantLabel ? `Variant: ${item.variantLabel}` : 'Product';
             details.appendChild(category);
 
             row.appendChild(details);

@@ -25,7 +25,26 @@
 
             if (savedCart) {
                 try {
-                    cartItems = JSON.parse(savedCart);
+                    const parsed = JSON.parse(savedCart);
+                    if (Array.isArray(parsed)) {
+                        cartItems = parsed.map((item) => {
+                            const normalised = {
+                                id: Number(item.id),
+                                name: typeof item.name === 'string' ? item.name : 'Product',
+                                price: Number(item.price) || 0,
+                                quantity: Number(item.quantity) || 0,
+                                variantId: item.variantId !== undefined && item.variantId !== null ? Number(item.variantId) : null,
+                                variantLabel: typeof item.variantLabel === 'string' ? item.variantLabel : '',
+                                variantPrice: item.variantPrice !== undefined && item.variantPrice !== null ? Number(item.variantPrice) : Number(item.price) || 0,
+                            };
+                            if (!Number.isFinite(normalised.price) || normalised.price <= 0) {
+                                normalised.price = Number(item.variantPrice) || Number(item.price) || 0;
+                            }
+                            return normalised;
+                        });
+                    } else {
+                        cartItems = [];
+                    }
                 } catch (e) {
                     cartItems = [];
                     console.error('Error parsing cart items:', e);
@@ -57,18 +76,27 @@
         // End handleCartClick
 
         // Start addToCart: merge items into the cart, sync badge/localStorage, and notify the user
-        function addToCart(productId, productName, price, quantity = 1) {
-            // Check if product already in cart
-            const existingItem = cartItems.find(item => item.id === productId);
+        function addToCart(productId, productName, price, quantity = 1, variantId = null, variantLabel = '', variantPrice = null) {
+            const normalisedVariantId = variantId !== undefined && variantId !== null ? Number(variantId) : null;
+            const effectivePrice = variantPrice !== null && variantPrice !== undefined ? Number(variantPrice) : Number(price);
+
+            const existingItem = cartItems.find(item => item.id === productId && (item.variantId ?? null) === normalisedVariantId);
 
             if (existingItem) {
                 existingItem.quantity += quantity;
+                existingItem.price = effectivePrice;
+                existingItem.variantLabel = variantLabel || '';
+                existingItem.variantId = normalisedVariantId;
+                existingItem.variantPrice = effectivePrice;
             } else {
                 cartItems.push({
                     id: productId,
                     name: productName,
-                    price: price,
-                    quantity: quantity
+                    price: effectivePrice,
+                    quantity: quantity,
+                    variantId: normalisedVariantId,
+                    variantLabel: variantLabel || '',
+                    variantPrice: effectivePrice
                 });
             }
 
@@ -84,8 +112,8 @@
         // End addToCart
 
         // Start buyNow: reuse cart merging then jump straight to checkout with the composed cart contents
-        function buyNow(productId, productName, price, quantity = 1) {
-            addToCart(productId, productName, price, quantity);
+        function buyNow(productId, productName, price, quantity = 1, variantId = null, variantLabel = '', variantPrice = null) {
+            addToCart(productId, productName, price, quantity, variantId, variantLabel, variantPrice);
 
             const cartData = encodeURIComponent(JSON.stringify(cartItems));
             window.location.href = 'checkout.php?cart=' + cartData;

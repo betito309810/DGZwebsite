@@ -1,0 +1,131 @@
+/* Added: layout and utility styles for the product variant editor. */
+.variant-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 16px;
+    border: 1px solid #d1d5db;
+    border-radius: 12px;
+    background-color: #f8fafc;
+}
+
+.variant-editor__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.variant-editor__header h4 {
+    margin: 0;
+    font-size: 16px;
+    color: #1f2937;
+}
+
+.variant-editor__add {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: none;
+    border-radius: 6px;
+    background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+    color: #fff;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.variant-editor__add i {
+    font-size: 12px;
+}
+
+.variant-editor__hint {
+    margin: 0;
+    font-size: 13px;
+    color: #4b5563;
+}
+
+.variant-editor__rows {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.variant-row {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    background-color: #fff;
+}
+
+.variant-row__field label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    color: #111827;
+}
+
+.variant-row__field input[type="text"],
+.variant-row__field input[type="number"] {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background-color: #f9fafb;
+    font-size: 13px;
+}
+
+.variant-row__field input[type="number"]:read-only,
+.variant-row__field input[type="text"]:read-only {
+    background-color: #e5e7eb;
+}
+
+.variant-row__field--default {
+    display: flex;
+    align-items: center;
+}
+
+.variant-default-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+    font-size: 13px;
+    color: #1f2937;
+}
+
+.variant-row__remove {
+    align-self: center;
+    justify-self: end;
+    border: none;
+    background: none;
+    color: #dc2626;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+.variant-row__remove i {
+    pointer-events: none;
+}
+
+.variant-editor--empty .variant-editor__rows::before {
+    content: 'Add at least one variant to enable checkout sizing options.';
+    display: block;
+    padding: 12px;
+    border: 1px dashed #94a3b8;
+    border-radius: 8px;
+    background-color: #f1f5f9;
+    color: #475569;
+    font-size: 13px;
+    text-align: center;
+}
+
+@media (max-width: 720px) {
+    .variant-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}

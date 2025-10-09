@@ -36,6 +36,23 @@ CREATE TABLE IF NOT EXISTS product_images (
   FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
 );
 
+-- Added: table that stores per-product variants/sizes (e.g., 50ml vs 100ml bottles).
+CREATE TABLE IF NOT EXISTS product_variants (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  product_id INT NOT NULL,
+  label VARCHAR(100) NOT NULL,
+  sku VARCHAR(100) DEFAULT NULL,
+  price DECIMAL(10,2) NOT NULL,
+  quantity INT NOT NULL DEFAULT 0,
+  is_default TINYINT(1) NOT NULL DEFAULT 0,
+  sort_order INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_product_variants_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+  INDEX idx_product_variants_product (product_id),
+  INDEX idx_product_variants_sort (product_id, sort_order)
+);
+
 -- stock entries table
 CREATE TABLE IF NOT EXISTS stock_entries (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -67,11 +84,14 @@ CREATE TABLE IF NOT EXISTS order_items (
   id INT AUTO_INCREMENT PRIMARY KEY,
   order_id INT,
   product_id INT,
+  variant_id INT DEFAULT NULL,
   qty INT,
   price DECIMAL(10,2),
+  variant_label VARCHAR(100) DEFAULT NULL,
   description VARCHAR(255) DEFAULT NULL,
   FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
-  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL
+  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL,
+  FOREIGN KEY (variant_id) REFERENCES product_variants(id) ON DELETE SET NULL
 );
 
 -- sample admin user (password: password123)

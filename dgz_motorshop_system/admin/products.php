@@ -1,5 +1,6 @@
 <?php
 require __DIR__. '/../config/config.php';
+require_once __DIR__ . '/../includes/product_variants.php'; // Added: helper that manages product variant lookups and payloads.
 if(empty($_SESSION['user_id'])){ header('Location: login.php'); exit; }
 $pdo = db();
 $role = $_SESSION['role'] ?? '';
@@ -173,6 +174,99 @@ if (!function_exists('persistGalleryUploads')) {
             $sortOrder++;
             $insertStmt->execute([$productId, $path, $sortOrder]);
         }
+    }
+}
+
+if (!function_exists('syncProductVariants')) {
+    /**
+     * Added: persist variant rows (insert/update/delete) and capture a diff summary for history logging.
+     */
+    function syncProductVariants(PDO $pdo, int $productId, array $variants): array
+    {
+        $existing = fetchProductVariants($pdo, $productId);
+        $existingById = [];
+        foreach ($existing as $variant) {
+            $existingById[$variant['id']] = $variant;
+        }
+
+        $processedIds = [];
+        $added = [];
+        $updated = [];
+
+        $insertStmt = $pdo->prepare('INSERT INTO product_variants (product_id, label, sku, price, quantity, is_default, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)');
+        $updateStmt = $pdo->prepare('UPDATE product_variants SET label = ?, sku = ?, price = ?, quantity = ?, is_default = ?, sort_order = ? WHERE id = ? AND product_id = ?');
+
+        foreach ($variants as $variant) {
+            $variantId = isset($variant['id']) && $variant['id'] ? (int) $variant['id'] : null;
+            $label = $variant['label'];
+            $sku = $variant['sku'] ?? null;
+            $price = (float) $variant['price'];
+            $quantity = (int) $variant['quantity'];
+            $isDefault = !empty($variant['is_default']) ? 1 : 0;
+            $sortOrder = (int) $variant['sort_order'];
+
+            if ($variantId !== null && isset($existingById[$variantId])) {
+                $original = $existingById[$variantId];
+                $needsUpdate = (
+                    $label !== $original['label'] ||
+                    $sku !== ($original['sku'] ?? null) ||
+                    $price !== (float) $original['price'] ||
+                    $quantity !== (int) $original['quantity'] ||
+                    $isDefault !== (int) $original['is_default'] ||
+                    $sortOrder !== (int) $original['sort_order']
+                );
+
+                if ($needsUpdate) {
+                    $updateStmt->execute([$label, $sku, $price, $quantity, $isDefault, $sortOrder, $variantId, $productId]);
+                    $updated[] = [
+                        'id' => $variantId,
+                        'label' => $label,
+                        'before' => $original,
+                        'after' => array_merge($original, [
+                            'label' => $label,
+                            'sku' => $sku,
+                            'price' => $price,
+                            'quantity' => $quantity,
+                            'is_default' => $isDefault,
+                            'sort_order' => $sortOrder,
+                        ]),
+                    ];
+                }
+
+                $processedIds[] = $variantId;
+            } else {
+                $insertStmt->execute([$productId, $label, $sku, $price, $quantity, $isDefault, $sortOrder]);
+                $newId = (int) $pdo->lastInsertId();
+                $processedIds[] = $newId;
+                $added[] = [
+                    'id' => $newId,
+                    'label' => $label,
+                    'price' => $price,
+                    'quantity' => $quantity,
+                    'is_default' => $isDefault,
+                ];
+            }
+        }
+
+        $deleted = [];
+        foreach ($existing as $variant) {
+            if (!in_array($variant['id'], $processedIds, true)) {
+                $deleted[] = $variant;
+            }
+        }
+
+        if (!empty($deleted)) {
+            $deleteIds = array_column($deleted, 'id');
+            $placeholders = implode(',', array_fill(0, count($deleteIds), '?'));
+            $deleteStmt = $pdo->prepare("DELETE FROM product_variants WHERE product_id = ? AND id IN ($placeholders)");
+            $deleteStmt->execute(array_merge([$productId], $deleteIds));
+        }
+
+        return [
+            'added' => $added,
+            'updated' => $updated,
+            'deleted' => $deleted,
+        ];
     }
 }
 
@@ -445,6 +539,25 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_product'])){
 
     $mainImageFile = $_FILES['image'] ?? null;
     $galleryImageFiles = $_FILES['gallery_images'] ?? null;
+
+    $variantsPayloadJson = $_POST['variants_payload'] ?? '';
+    $variantRecords = normaliseVariantPayload($variantsPayloadJson);
+    if (empty($variantRecords)) {
+        // Added: fallback so legacy submissions still create at least one sellable variant.
+        $variantRecords = [[
+            'id' => null,
+            'label' => $name !== '' ? $name : 'Standard',
+            'sku' => null,
+            'price' => $price,
+            'quantity' => $qty,
+            'is_default' => 1,
+            'sort_order' => 1,
+        ]];
+    }
+    atLeastOneVariantIsDefault($variantRecords);
+    $variantSummary = summariseVariantStock($variantRecords);
+    $qty = (int) ($variantSummary['quantity'] ?? $qty);
+    $price = (float) ($variantSummary['price'] ?? $price);
     
     // Handle brand and category
     $brand = trim($_POST['brand'] ?? '');
@@ -483,6 +596,7 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_product'])){
         'category' => $category,
         'supplier' => $supplier,
         'image' => null,
+        'variants' => $variantRecords,
     ];
 
     $user_id = $_SESSION['user_id'];
@@ -492,6 +606,7 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_product'])){
         $stmt = $pdo->prepare("SELECT * FROM products WHERE id = ?");
         $stmt->execute([$id]);
         $old_product = $stmt->fetch();
+        $previousVariants = fetchProductVariants($pdo, $id); // Added: capture variant snapshot before modifications.
 
         $existingImagePath = $old_product['image'] ?? null;
         $newImagePath = null;
@@ -510,6 +625,8 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_product'])){
         $stmt->execute([$code, $name, $desc, $price, $qty, $low, $brand, $category, $supplier, $imagePathForUpdate, $id]);
 
         persistGalleryUploads($pdo, $galleryImageFiles, $id);
+        $variantSyncSummary = syncProductVariants($pdo, $id, $variantRecords); // Added: store variant rows alongside the product.
+        $currentSnapshot['variants'] = fetchProductVariants($pdo, $id); // Added: refresh snapshot with persisted variant IDs.
 
         // Record edit in history
         $changes = [];
@@ -524,6 +641,7 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_product'])){
             'category' => $old_product['category'] ?? null,
             'supplier' => $old_product['supplier'] ?? null,
             'image' => $old_product['image'] ?? null,
+            'variants' => $previousVariants,
         ];
 
         // Added: build structured change list so history modal can render exact edits.
@@ -554,11 +672,37 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_product'])){
             }
         }
 
+        if (!empty($variantSyncSummary['added']) || !empty($variantSyncSummary['updated']) || !empty($variantSyncSummary['deleted'])) {
+            // Added: highlight variant activity in the history feed so staff can audit stock per size.
+            $variantChangeFragments = [];
+            if (!empty($variantSyncSummary['added'])) {
+                $labels = array_map(static fn($row) => $row['label'], $variantSyncSummary['added']);
+                $variantChangeFragments[] = 'Added ' . implode(', ', $labels);
+            }
+            if (!empty($variantSyncSummary['updated'])) {
+                $labels = array_map(static fn($row) => $row['label'], $variantSyncSummary['updated']);
+                $variantChangeFragments[] = 'Updated ' . implode(', ', $labels);
+            }
+            if (!empty($variantSyncSummary['deleted'])) {
+                $labels = array_map(static fn($row) => $row['label'], $variantSyncSummary['deleted']);
+                $variantChangeFragments[] = 'Removed ' . implode(', ', $labels);
+            }
+
+            $changes[] = [
+                'field' => 'variants',
+                'label' => 'Variants',
+                'type' => 'text',
+                'from' => '',
+                'to' => implode('; ', $variantChangeFragments),
+            ];
+        }
+
         $historyPayload = [
             'summary' => sprintf('Updated product information (%d change%s).', count($changes), count($changes) === 1 ? '' : 's'),
             'changes' => $changes,
             'snapshot' => $currentSnapshot,
             'previous' => $previousSnapshot,
+            'variant_changes' => $variantSyncSummary,
         ];
 
         $pdo->prepare('INSERT INTO product_add_history (product_id, user_id, action, details) VALUES (?, ?, ?, ?)')
@@ -582,6 +726,8 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_product'])){
 
         $currentSnapshot['image'] = $storedImagePath;
         persistGalleryUploads($pdo, $galleryImageFiles, (int) $product_id);
+        $variantSyncSummary = syncProductVariants($pdo, (int) $product_id, $variantRecords); // Added: seed variants for the new product.
+        $currentSnapshot['variants'] = fetchProductVariants($pdo, (int) $product_id); // Added: snapshot uses stored variant rows.
 
         // Record addition in history
         $historyPayload = [
@@ -597,6 +743,7 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_product'])){
                 $storedImagePath ? ' • Photo uploaded' : ''
             ),
             'snapshot' => $currentSnapshot,
+            'variant_changes' => $variantSyncSummary,
         ];
 
         $pdo->prepare('INSERT INTO product_add_history (product_id, user_id, action, details) VALUES (?, ?, ?, ?)')
@@ -677,6 +824,7 @@ $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
 $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
 $stmt->execute();
 $products = $stmt->fetchAll();
+$productVariantMap = fetchVariantsForProducts($pdo, array_column($products, 'id')); // Added: preload variants for listing/actions.
 
 // Calculate showing info (like sales.php)
 $start_record = $offset + 1;
@@ -709,6 +857,7 @@ if ($currentSort === 'name') {
     <link rel="stylesheet" href="../assets/css/style.css">
 <link rel="stylesheet" href="../assets/css/sales/sales.css">
     <link rel="stylesheet" href="../assets/css/products/products.css">
+    <link rel="stylesheet" href="../assets/css/products/variants.css"> <!-- Added: styles for the variant editor grid. -->
 
 </head>
 
@@ -817,11 +966,57 @@ if ($currentSort === 'name') {
                         <textarea name="description" placeholder="Enter product description"></textarea>
                     </label>
                     <label style="grid-column:1;">Quantity:
-                        <input name="quantity" type="number" min="0" required placeholder="Enter quantity">
+                        <input name="quantity" type="number" min="0" required placeholder="Auto-calculated" readonly data-variant-total-quantity>
                     </label>
                     <label style="grid-column:2;">Price per unit:
-                        <input name="price" type="number" min="0" step="0.01" required placeholder="Enter price">
+                        <input name="price" type="number" min="0" step="0.01" required placeholder="Auto-calculated" readonly data-variant-default-price>
                     </label>
+                    <div class="variant-editor" data-variant-editor data-context="create" data-initial-variants="[]" style="grid-column:1/3;">
+                        <!-- Added: repeatable variant rows so staff can encode different sizes/SKUs. -->
+                        <div class="variant-editor__header">
+                            <h4>Variants / Sizes</h4>
+                            <button type="button" class="variant-editor__add" data-variant-add>
+                                <i class="fas fa-plus"></i> Add Variant
+                            </button>
+                        </div>
+                        <p class="variant-editor__hint">Each variant may represent a size (e.g., 50ml, 100ml) or configuration.</p>
+                        <div class="variant-editor__rows" data-variant-rows></div>
+                        <template data-variant-template>
+                            <div class="variant-row" data-variant-row>
+                                <input type="hidden" data-variant-id>
+                                <div class="variant-row__field">
+                                    <label>Label / Size
+                                        <input type="text" data-variant-label required placeholder="e.g., 100ml">
+                                    </label>
+                                </div>
+                                <div class="variant-row__field">
+                                    <label>SKU (optional)
+                                        <input type="text" data-variant-sku placeholder="Custom SKU">
+                                    </label>
+                                </div>
+                                <div class="variant-row__field">
+                                    <label>Price
+                                        <input type="number" min="0" step="0.01" data-variant-price required>
+                                    </label>
+                                </div>
+                                <div class="variant-row__field">
+                                    <label>Quantity
+                                        <input type="number" min="0" data-variant-quantity required>
+                                    </label>
+                                </div>
+                                <div class="variant-row__field variant-row__field--default">
+                                    <label class="variant-default-toggle">
+                                        <input type="radio" name="create_variant_default" data-variant-default>
+                                        Default
+                                    </label>
+                                </div>
+                                <button type="button" class="variant-row__remove" data-variant-remove aria-label="Remove variant">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </template>
+                        <input type="hidden" name="variants_payload" data-variants-payload>
+                    </div>
                     <label style="grid-column:1;">Supplier:
                         <select name="supplier" id="supplierSelect" onchange="toggleSupplierInput(this)">
                             <option value="">Select supplier</option>
@@ -920,6 +1115,18 @@ if ($currentSort === 'name') {
                         </tr>
                     <?php else: ?>
                     <?php foreach($products as $p): ?>
+                    <?php
+                        // Added: embed variant JSON so the modal can hydrate the new variant editor.
+                        $variantsForProduct = $productVariantMap[$p['id']] ?? [];
+                        $variantsJson = htmlspecialchars(json_encode($variantsForProduct, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+                        $defaultVariantLabel = '';
+                        foreach ($variantsForProduct as $variantRow) {
+                            if (!empty($variantRow['is_default'])) {
+                                $defaultVariantLabel = $variantRow['label'];
+                                break;
+                            }
+                        }
+                    ?>
                         <tr>
                             <td><?=htmlspecialchars($p['code'])?></td>
                             <td><?=htmlspecialchars($p['name'])?></td>
@@ -936,7 +1143,9 @@ if ($currentSort === 'name') {
                                     data-category="<?=htmlspecialchars($p['category'] ?? '')?>"
                                     data-supplier="<?=htmlspecialchars($p['supplier'] ?? '')?>"
                                     data-image="<?=htmlspecialchars($p['image'] ?? '')?>"
-                                    data-image-url="<?=htmlspecialchars(($p['image'] ?? '') !== '' ? '../' . ltrim($p['image'], '/') : '../assets/img/product-placeholder.svg')?>"><i class="fas fa-edit"></i>Edit</a>
+                                    data-image-url="<?=htmlspecialchars(($p['image'] ?? '') !== '' ? '../' . ltrim($p['image'], '/') : '../assets/img/product-placeholder.svg')?>"
+                                    data-variants="<?=$variantsJson?>"
+                                    data-default-variant="<?=htmlspecialchars($defaultVariantLabel)?>"><i class="fas fa-edit"></i>Edit</a>
                                 <a href="products.php?delete=<?=$p['id']?>" class="delete-btn action-btn"
                                     onclick="return confirm('Delete?')"> <i class="fas fa-trash"></i>Delete</a>
                             </td>
@@ -1062,12 +1271,58 @@ if ($currentSort === 'name') {
                     </label>
                     <label style="grid-column:1;">Quantity:
                         <input name="quantity" id="edit_quantity" type="number" min="0" required
-                            placeholder="Enter quantity">
+                            placeholder="Auto-calculated" readonly data-variant-total-quantity>
                     </label>
                     <label style="grid-column:2;">Price per unit:
                         <input name="price" id="edit_price" type="number" min="0" step="0.01" required
-                            placeholder="Enter price">
+                            placeholder="Auto-calculated" readonly data-variant-default-price>
                     </label>
+                    <div class="variant-editor" data-variant-editor data-context="edit" data-initial-variants="[]" style="grid-column:1/3;">
+                        <!-- Added: editable variant grid for existing products. -->
+                        <div class="variant-editor__header">
+                            <h4>Variants / Sizes</h4>
+                            <button type="button" class="variant-editor__add" data-variant-add>
+                                <i class="fas fa-plus"></i> Add Variant
+                            </button>
+                        </div>
+                        <p class="variant-editor__hint">Update stock and pricing for each size below.</p>
+                        <div class="variant-editor__rows" data-variant-rows></div>
+                        <template data-variant-template>
+                            <div class="variant-row" data-variant-row>
+                                <input type="hidden" data-variant-id>
+                                <div class="variant-row__field">
+                                    <label>Label / Size
+                                        <input type="text" data-variant-label required placeholder="e.g., 90/90-14">
+                                    </label>
+                                </div>
+                                <div class="variant-row__field">
+                                    <label>SKU (optional)
+                                        <input type="text" data-variant-sku placeholder="Custom SKU">
+                                    </label>
+                                </div>
+                                <div class="variant-row__field">
+                                    <label>Price
+                                        <input type="number" min="0" step="0.01" data-variant-price required>
+                                    </label>
+                                </div>
+                                <div class="variant-row__field">
+                                    <label>Quantity
+                                        <input type="number" min="0" data-variant-quantity required>
+                                    </label>
+                                </div>
+                                <div class="variant-row__field variant-row__field--default">
+                                    <label class="variant-default-toggle">
+                                        <input type="radio" name="edit_variant_default" data-variant-default>
+                                        Default
+                                    </label>
+                                </div>
+                                <button type="button" class="variant-row__remove" data-variant-remove aria-label="Remove variant">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </template>
+                        <input type="hidden" name="variants_payload" data-variants-payload>
+                    </div>
                     <label style="grid-column:1;">Supplier:
                         <select name="supplier" id="edit_supplier" onchange="toggleSupplierInputEdit(this)">
                             <option value="">Select supplier</option>
@@ -1127,6 +1382,7 @@ if ($currentSort === 'name') {
         </div>
     </div>
     <!-- Edit modal fallback toggles -->
+    <script src="../assets/js/products/variantsForm.js"></script> <!-- Added: drives the variant add/edit UI. -->
     <script src="../assets/js/products/editModal.js"></script>
     <!-- History Modal -->
      <script src="../assets/js/products/historyDOM.js"></script>

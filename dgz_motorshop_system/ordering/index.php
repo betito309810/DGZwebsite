@@ -1,7 +1,9 @@
 <?php
 require __DIR__ . '/../config/config.php';
+require_once __DIR__ . '/../includes/product_variants.php'; // Added: load helpers for variant-aware storefront rendering.
 $pdo = db();
 $products = $pdo->query('SELECT * FROM products ORDER BY name')->fetchAll();
+$productVariantMap = fetchVariantsForProducts($pdo, array_column($products, 'id')); // Added: preload variant rows for customer UI.
 
 $categories = [];
 foreach ($products as $product) {
@@ -94,6 +96,33 @@ natcasesort($categories);
                     <?php foreach($products as $p):
                         $category = isset($p['category']) ? $p['category'] : '';
                         $brand = isset($p['brand']) ? $p['brand'] : '';
+                        $variantsForProduct = $productVariantMap[$p['id']] ?? [];
+                        $variantSummary = summariseVariantStock($variantsForProduct);
+                        $displayPrice = isset($variantSummary['price']) ? $variantSummary['price'] : $p['price'];
+                        $displayQuantity = isset($variantSummary['quantity']) ? $variantSummary['quantity'] : $p['quantity'];
+                        $defaultVariant = null;
+                        foreach ($variantsForProduct as $variantRow) {
+                            if (!empty($variantRow['is_default'])) {
+                                $defaultVariant = $variantRow;
+                                break;
+                            }
+                        }
+                        if ($defaultVariant === null && !empty($variantsForProduct)) {
+                            $defaultVariant = $variantsForProduct[0];
+                        }
+                        if ($defaultVariant !== null) {
+                            $defaultQty = isset($defaultVariant['quantity']) ? (int) $defaultVariant['quantity'] : null;
+                            if ($defaultQty !== null && $defaultQty <= 0) {
+                                foreach ($variantsForProduct as $variantRow) {
+                                    $candidateQty = isset($variantRow['quantity']) ? (int) $variantRow['quantity'] : null;
+                                    if ($candidateQty === null || $candidateQty > 0) {
+                                        $defaultVariant = $variantRow;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        $variantsJson = htmlspecialchars(json_encode($variantsForProduct, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
                     ?>
                     <?php
                         $categorySlug = strtolower(trim($category ?: 'Other'));
@@ -112,8 +141,13 @@ natcasesort($categories);
                         data-product-brand="<?= htmlspecialchars($brand) ?>"
                         data-product-category-label="<?= htmlspecialchars($category) ?>"
                         data-product-description="<?= htmlspecialchars($p['description'], ENT_QUOTES) ?>"
-                        data-product-price="<?= htmlspecialchars(number_format((float)$p['price'], 2, '.', '')) ?>"
-                        data-product-quantity="<?= (int) $p['quantity'] ?>"
+                        data-product-price="<?= htmlspecialchars(number_format((float)$displayPrice, 2, '.', '')) ?>"
+                        data-product-quantity="<?= (int) $displayQuantity ?>"
+                        data-product-variants="<?= $variantsJson ?>"
+                        data-product-default-variant-id="<?= htmlspecialchars($defaultVariant['id'] ?? '') ?>"
+                        data-product-default-variant-label="<?= htmlspecialchars($defaultVariant['label'] ?? '') ?>"
+                        data-product-default-variant-price="<?= htmlspecialchars(isset($defaultVariant['price']) ? number_format((float)$defaultVariant['price'], 2, '.', '') : '') ?>"
+                        data-product-default-variant-quantity="<?= htmlspecialchars(isset($defaultVariant['quantity']) ? (int)$defaultVariant['quantity'] : '') ?>"
                         data-primary-image="<?= htmlspecialchars($hasCustomImage ? $normalizedImagePath : '../assets/img/product-placeholder.svg') ?>"
                         tabindex="0"
                         aria-label="View <?= htmlspecialchars($p['name']) ?> details">
@@ -131,17 +165,17 @@ natcasesort($categories);
                         </p>
 
                         <div class="product-footer">
-                            <div class="price">₱<?=number_format($p['price'],2)?></div>
-                            <div class="stock <?= $p['quantity'] <= 5 ? ($p['quantity'] == 0 ? 'out' : 'low') : '' ?>">
-                                <?= $p['quantity'] == 0 ? 'Out of Stock' : $p['quantity'] . ' in stock' ?>
+                            <div class="price">₱<?=number_format($displayPrice,2)?></div>
+                            <div class="stock <?= $displayQuantity <= 5 ? ($displayQuantity == 0 ? 'out' : 'low') : '' ?>">
+                                <?= $displayQuantity == 0 ? 'Out of Stock' : $displayQuantity . ' in stock' ?>
                             </div>
                         </div>
 
                         <!-- Buy Now area now feeds into the shared cart flow -->
                         <div class="buy-form">
-                            <input type="number" name="qty" value="1" min="1" max="<?=max(1,$p['quantity'])?>"
-                                class="qty-input" <?= $p['quantity'] == 0 ? 'disabled' : '' ?> data-gallery-ignore="true">
-                            <button type="button" class="buy-btn" <?= $p['quantity'] == 0 ? 'disabled' : '' ?>
+                            <input type="number" name="qty" value="1" min="1" max="<?=max(1,$displayQuantity)?>"
+                                class="qty-input" <?= $displayQuantity == 0 ? 'disabled' : '' ?> data-gallery-ignore="true">
+                            <button type="button" class="buy-btn" <?= $displayQuantity == 0 ? 'disabled' : '' ?>
                                 data-gallery-ignore="true"
                                 onclick="(function(button) {
                                     const qtyInput = button.parentElement.querySelector('.qty-input');
@@ -150,9 +184,9 @@ natcasesort($categories);
                                         return;
                                     }
                                     const qty = qtyInput ? parseInt(qtyInput.value) || 1 : 1;
-                                    buyNow(<?= $p['id'] ?>, '<?= htmlspecialchars(addslashes($p['name'])) ?>', <?= $p['price'] ?>, qty);
+                                    buyNow(<?= $p['id'] ?>, '<?= htmlspecialchars(addslashes($p['name'])) ?>', <?= $displayPrice ?>, qty, <?= isset($defaultVariant['id']) ? (int)$defaultVariant['id'] : 'null' ?>, '<?= htmlspecialchars(addslashes($defaultVariant['label'] ?? '')) ?>', <?= isset($defaultVariant['price']) ? $defaultVariant['price'] : $displayPrice ?>);
                                 })(this)">
-                                <?= $p['quantity'] == 0 ? 'Out of Stock' : 'Buy Now' ?>
+                                <?= $displayQuantity == 0 ? 'Out of Stock' : 'Buy Now' ?>
                             </button>
                         </div>
 
@@ -161,14 +195,14 @@ natcasesort($categories);
                             onclick="(function(button) {
                                 const qtyInput = button.parentElement.querySelector('.qty-input');
                                 const qty = qtyInput ? parseInt(qtyInput.value) || 1 : 1;
-                                const stock = <?= $p['quantity'] ?>;
+                                const stock = <?= $displayQuantity ?>;
                                 if (qtyInput && !qtyInput.checkValidity()) {
                                     qtyInput.reportValidity();
                                     return false;
                                 }
-                                addToCart(<?= $p['id'] ?>, '<?= htmlspecialchars(addslashes($p['name'])) ?>', <?= $p['price'] ?>, qty);
+                                addToCart(<?= $p['id'] ?>, '<?= htmlspecialchars(addslashes($p['name'])) ?>', <?= $displayPrice ?>, qty, <?= isset($defaultVariant['id']) ? (int)$defaultVariant['id'] : 'null' ?>, '<?= htmlspecialchars(addslashes($defaultVariant['label'] ?? '')) ?>', <?= isset($defaultVariant['price']) ? $defaultVariant['price'] : $displayPrice ?>);
                             })(this)"
-                            <?= $p['quantity'] == 0 ? 'disabled' : '' ?>>
+                            <?= $displayQuantity == 0 ? 'disabled' : '' ?>>
                             <i class="fas fa-cart-plus"></i> Add to Cart
                         </button>
                     </div>
@@ -205,6 +239,11 @@ natcasesort($categories);
                     <p class="product-gallery-brand" id="productGalleryBrand"></p>
                     <h2 class="product-gallery-heading" id="productGalleryTitle"></h2>
                     <div class="product-gallery-price" id="productGalleryPrice"></div>
+                    <div class="product-gallery-variants" id="productGalleryVariants" hidden>
+                        <!-- Added: variant selector so buyers can choose size before adding to cart. -->
+                        <span class="product-gallery-variants__label">Select variant</span>
+                        <div class="product-gallery-variants__list" id="productGalleryVariantList"></div>
+                    </div>
                     <div class="product-gallery-meta">
                         <span id="productGalleryCategory"></span>
                         <span id="productGalleryStock"></span>
