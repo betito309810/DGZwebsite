@@ -817,3 +817,190 @@
         width: 100%;
     }
 }
+
+.inventory-table-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.inventory-filter-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 18px;
+}
+
+.inventory-filter-form .filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.inventory-filter-form .filter-search-group {
+    position: relative;
+    flex: 1 1 320px;
+    display: flex;
+    align-items: center;
+    border: 1px solid #d1d5db;
+    border-radius: 999px;
+    padding: 4px 14px;
+    background: #ffffff;
+}
+
+.inventory-filter-form .filter-search-input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    padding: 8px 6px;
+    font-size: 14px;
+    color: #0f172a;
+}
+
+.inventory-filter-form .filter-search-input:focus {
+    outline: none;
+}
+
+.inventory-filter-form .filter-clear {
+    border: none;
+    background: none;
+    color: #9ca3af;
+    font-size: 20px;
+    line-height: 1;
+    padding: 4px 6px;
+    cursor: pointer;
+    transition: color 0.2s ease;
+}
+
+.inventory-filter-form .filter-clear:hover {
+    color: #ef4444;
+}
+
+.filter-row--selects {
+    align-items: center;
+}
+
+.filter-select {
+    min-width: 160px;
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    background: #ffffff;
+    color: #1f2937;
+}
+
+.filter-select:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.filter-submit {
+    background: #2563eb;
+    color: #ffffff;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 18px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.filter-submit:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 16px rgba(37, 99, 235, 0.28);
+}
+
+.filter-reset {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 16px;
+    border-radius: 10px;
+    border: 1px solid #d1d5db;
+    color: #1f2937;
+    text-decoration: none;
+    font-weight: 600;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.filter-reset:hover {
+    background: #e5ebf5;
+}
+
+.inventory-table th,
+.inventory-table td {
+    white-space: nowrap;
+}
+
+.inventory-table th {
+    text-transform: uppercase;
+    font-size: 12px;
+    letter-spacing: 0.03em;
+}
+
+.inventory-table td {
+    font-size: 14px;
+}
+
+.pagination-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+.pagination-info {
+    font-size: 13px;
+    color: #6b7280;
+}
+
+.pagination {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.pagination a,
+.pagination span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #d1d5db;
+    font-size: 13px;
+    text-decoration: none;
+    color: #1f2937;
+    min-width: 36px;
+    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.pagination a:hover {
+    background: #2563eb;
+    color: #ffffff;
+    border-color: #2563eb;
+}
+
+.pagination .current {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.pagination .disabled {
+    color: #9ca3af;
+    border-color: #e5e7eb;
+    background: #f3f4f6;
+    cursor: default;
+}
+
+.pagination .disabled i {
+    color: inherit;
+}

@@ -82,6 +82,7 @@ $stockReceiptStatusOptions = getStockReceiptStatusOptions();
 $productLookup = [];
 $brandOptions = [];
 $categoryOptions = [];
+$supplierFilterOptions = [];
 foreach ($products as $productMeta) {
     $productLookup[(int)$productMeta['id']] = $productMeta['name'];
     if (!empty($productMeta['brand'])) {
@@ -90,12 +91,87 @@ foreach ($products as $productMeta) {
     if (!empty($productMeta['category'])) {
         $categoryOptions[] = $productMeta['category'];
     }
+    if (!empty($productMeta['supplier'])) {
+        $supplierFilterOptions[] = $productMeta['supplier'];
+    }
 }
 $brandOptions = array_values(array_unique($brandOptions));
 $categoryOptions = array_values(array_unique($categoryOptions));
+$supplierFilterOptions = array_values(array_unique($supplierFilterOptions));
+
+sort($brandOptions, SORT_NATURAL | SORT_FLAG_CASE);
+sort($categoryOptions, SORT_NATURAL | SORT_FLAG_CASE);
+sort($supplierFilterOptions, SORT_NATURAL | SORT_FLAG_CASE);
 $reportFilters = parseStockInReportFilters($_GET ?? [], $stockReceiptStatusOptions, $productLookup, $brandOptions, $categoryOptions);
+
+$inventorySearchTerm = trim((string)($_GET['inv_search'] ?? ''));
+$inventoryBrandFilter = trim((string)($_GET['inv_brand'] ?? ''));
+$inventoryCategoryFilter = trim((string)($_GET['inv_category'] ?? ''));
+$inventorySupplierFilter = trim((string)($_GET['inv_supplier'] ?? ''));
+$inventoryPage = isset($_GET['inv_page']) ? (int)$_GET['inv_page'] : 1;
+$inventoryPage = max(1, $inventoryPage);
+$inventoryLimit = 20;
+
+$inventoryFilters = [
+    'search' => $inventorySearchTerm,
+    'brand' => $inventoryBrandFilter,
+    'category' => $inventoryCategoryFilter,
+    'supplier' => $inventorySupplierFilter,
+];
+
+$inventoryPreservedParams = [];
+if ($requestedReceiptId > 0) {
+    $inventoryPreservedParams['receipt'] = $requestedReceiptId;
+}
+if ($requestedReceiptCode !== '') {
+    $inventoryPreservedParams['code'] = $requestedReceiptCode;
+}
+if (isset($_GET['mode']) && $_GET['mode'] !== '') {
+    $inventoryPreservedParams['mode'] = $_GET['mode'];
+}
+foreach (($_GET ?? []) as $paramKey => $paramValue) {
+    if (strpos($paramKey, 'report_') === 0) {
+        $inventoryPreservedParams[$paramKey] = $paramValue;
+    }
+}
+
+$inventoryFilterParams = $inventoryPreservedParams;
+if ($inventorySearchTerm !== '') {
+    $inventoryFilterParams['inv_search'] = $inventorySearchTerm;
+}
+if ($inventoryBrandFilter !== '') {
+    $inventoryFilterParams['inv_brand'] = $inventoryBrandFilter;
+}
+if ($inventoryCategoryFilter !== '') {
+    $inventoryFilterParams['inv_category'] = $inventoryCategoryFilter;
+}
+if ($inventorySupplierFilter !== '') {
+    $inventoryFilterParams['inv_supplier'] = $inventorySupplierFilter;
+}
+
+$inventoryTotalCount = countCurrentInventoryRecords($pdo, $inventoryFilters);
+$inventoryTotalPages = $inventoryTotalCount > 0 ? (int)ceil($inventoryTotalCount / $inventoryLimit) : 0;
+if ($inventoryTotalPages > 0 && $inventoryPage > $inventoryTotalPages) {
+    $inventoryPage = $inventoryTotalPages;
+}
+$inventoryPage = max(1, $inventoryPage);
+$inventoryOffset = ($inventoryPage - 1) * $inventoryLimit;
+if ($inventoryOffset < 0) {
+    $inventoryOffset = 0;
+}
+
+$currentInventorySnapshot = fetchCurrentInventorySnapshot($pdo, $inventoryFilters, $inventoryLimit, $inventoryOffset);
+$inventoryStartRecord = $inventoryTotalCount === 0 ? 0 : $inventoryOffset + 1;
+$inventoryEndRecord = $inventoryTotalCount === 0 ? 0 : min($inventoryOffset + $inventoryLimit, $inventoryTotalCount);
+
+$inventoryBaseQuery = http_build_query($inventoryFilterParams);
+$inventoryQuerySeparator = $inventoryBaseQuery !== '' ? '&' : '?';
+$inventoryBaseUrl = 'stockEntry.php' . ($inventoryBaseQuery !== '' ? '?' . $inventoryBaseQuery : '');
+
+$inventoryResetQuery = http_build_query($inventoryPreservedParams);
+$inventoryResetUrl = 'stockEntry.php' . ($inventoryResetQuery !== '' ? '?' . $inventoryResetQuery : '');
+
 $stockInReportRows = [];
-$currentInventorySnapshot = [];
 
 if ($moduleReady) {
     if (!empty($_GET['stock_in_export'])) {
@@ -107,7 +183,6 @@ if ($moduleReady) {
     }
 
     $stockInReportRows = fetchStockInReport($pdo, $reportFilters, 50);
-    $currentInventorySnapshot = fetchCurrentInventorySnapshot($pdo, 12);
 }
 
 $formSupplier = $activeReceipt['header']['supplier_name'] ?? '';
@@ -244,6 +319,161 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                 <div class="alert alert-success"><?= htmlspecialchars($successMessage) ?></div>
             <?php endif; ?>
 
+            <!-- Current inventory snapshot derived from latest stock-in posts -->
+            <section class="panel" aria-labelledby="inventorySnapshotTitle" id="inventorySnapshot">
+                <div class="panel-header">
+                    <div>
+                        <h3 id="inventorySnapshotTitle">Current Inventory</h3>
+                        <p class="panel-subtitle">Quickly review on-hand counts with filters and pagination.</p>
+                    </div>
+                </div>
+                <div class="panel-content inventory-table-container">
+                    <form method="get" class="inventory-filter-form" id="inventoryFilterForm" aria-label="Inventory filters">
+                        <input type="hidden" name="inv_page" value="1">
+                        <?php foreach ($inventoryPreservedParams as $paramKey => $paramValue): ?>
+                            <input type="hidden" name="<?= htmlspecialchars($paramKey) ?>" value="<?= htmlspecialchars((string)$paramValue) ?>">
+                        <?php endforeach; ?>
+                        <div class="filter-row">
+                            <div class="filter-search-group">
+                                <input
+                                    type="text"
+                                    name="inv_search"
+                                    value="<?= htmlspecialchars($inventorySearchTerm) ?>"
+                                    placeholder="Search product by name or code..."
+                                    class="filter-search-input"
+                                    aria-label="Search inventory products"
+                                >
+                                <button type="button" class="filter-clear" aria-label="Clear search" data-filter-clear>&times;</button>
+                            </div>
+                        </div>
+                        <div class="filter-row filter-row--selects">
+                            <select name="inv_brand" class="filter-select" aria-label="Filter by brand">
+                                <option value="">All Brands</option>
+                                <?php foreach ($brandOptions as $brandOption): ?>
+                                    <option value="<?= htmlspecialchars($brandOption) ?>" <?= $inventoryBrandFilter === $brandOption ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars($brandOption) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <select name="inv_category" class="filter-select" aria-label="Filter by category">
+                                <option value="">All Categories</option>
+                                <?php foreach ($categoryOptions as $categoryOption): ?>
+                                    <option value="<?= htmlspecialchars($categoryOption) ?>" <?= $inventoryCategoryFilter === $categoryOption ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars($categoryOption) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <select name="inv_supplier" class="filter-select" aria-label="Filter by supplier">
+                                <option value="">All Suppliers</option>
+                                <?php foreach ($supplierFilterOptions as $supplierOption): ?>
+                                    <option value="<?= htmlspecialchars($supplierOption) ?>" <?= $inventorySupplierFilter === $supplierOption ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars($supplierOption) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <button type="submit" class="filter-submit" data-filter-submit>Filter</button>
+                            <a class="filter-reset" href="<?= htmlspecialchars($inventoryResetUrl) ?>">Reset</a>
+                        </div>
+                    </form>
+
+                    <?php if (!empty($currentInventorySnapshot)): ?>
+                        <div class="table-wrapper">
+                            <table class="data-table data-table--compact inventory-table">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Code</th>
+                                        <th scope="col">Name</th>
+                                        <th scope="col">Brand</th>
+                                        <th scope="col">Category</th>
+                                        <th scope="col">On-hand</th>
+                                        <th scope="col">Last Received</th>
+                                        <th scope="col">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($currentInventorySnapshot as $inventoryRow): ?>
+                                        <tr>
+                                            <td><?= htmlspecialchars($inventoryRow['product_code'] ?? $inventoryRow['code'] ?? '') ?></td>
+                                            <td><?= htmlspecialchars($inventoryRow['product_name'] ?? $inventoryRow['name'] ?? '') ?></td>
+                                            <td><?= htmlspecialchars($inventoryRow['brand'] ?? '') ?></td>
+                                            <td><?= htmlspecialchars($inventoryRow['category'] ?? '') ?></td>
+                                            <td><?= htmlspecialchars($inventoryRow['on_hand_display'] ?? '') ?></td>
+                                            <td><?= htmlspecialchars($inventoryRow['last_received_display'] ?? '—') ?></td>
+                                            <td>
+                                                <?php if (!empty($inventoryRow['is_low_stock'])): ?>
+                                                    <span class="status-badge status-with_discrepancy">Low</span>
+                                                <?php else: ?>
+                                                    <span class="status-badge status-posted">OK</span>
+                                                <?php endif; ?>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                        <?php if ($inventoryTotalCount > 0): ?>
+                            <div class="pagination-container">
+                                <div class="pagination-info">
+                                    Showing <?= $inventoryStartRecord ?> to <?= $inventoryEndRecord ?> of <?= $inventoryTotalCount ?> entries
+                                </div>
+                                <?php if ($inventoryTotalPages > 1): ?>
+                                    <div class="pagination">
+                                        <?php if ($inventoryPage > 1): ?>
+                                            <a href="<?= htmlspecialchars($inventoryBaseUrl . $inventoryQuerySeparator . 'inv_page=' . ($inventoryPage - 1)) ?>" class="prev">
+                                                <i class="fas fa-chevron-left"></i> Prev
+                                            </a>
+                                        <?php else: ?>
+                                            <span class="prev disabled">
+                                                <i class="fas fa-chevron-left"></i> Prev
+                                            </span>
+                                        <?php endif; ?>
+
+                                        <?php
+                                            $inventoryStartPage = max(1, $inventoryPage - 2);
+                                            $inventoryEndPage = min($inventoryTotalPages, $inventoryPage + 2);
+                                        ?>
+
+                                        <?php if ($inventoryStartPage > 1): ?>
+                                            <a href="<?= htmlspecialchars($inventoryBaseUrl . $inventoryQuerySeparator . 'inv_page=1') ?>">1</a>
+                                            <?php if ($inventoryStartPage > 2): ?>
+                                                <span>...</span>
+                                            <?php endif; ?>
+                                        <?php endif; ?>
+
+                                        <?php for ($i = $inventoryStartPage; $i <= $inventoryEndPage; $i++): ?>
+                                            <?php if ($i === $inventoryPage): ?>
+                                                <span class="current"><?= $i ?></span>
+                                            <?php else: ?>
+                                                <a href="<?= htmlspecialchars($inventoryBaseUrl . $inventoryQuerySeparator . 'inv_page=' . $i) ?>"><?= $i ?></a>
+                                            <?php endif; ?>
+                                        <?php endfor; ?>
+
+                                        <?php if ($inventoryEndPage < $inventoryTotalPages): ?>
+                                            <?php if ($inventoryEndPage < $inventoryTotalPages - 1): ?>
+                                                <span>...</span>
+                                            <?php endif; ?>
+                                            <a href="<?= htmlspecialchars($inventoryBaseUrl . $inventoryQuerySeparator . 'inv_page=' . $inventoryTotalPages) ?>"><?= $inventoryTotalPages ?></a>
+                                        <?php endif; ?>
+
+                                        <?php if ($inventoryPage < $inventoryTotalPages): ?>
+                                            <a href="<?= htmlspecialchars($inventoryBaseUrl . $inventoryQuerySeparator . 'inv_page=' . ($inventoryPage + 1)) ?>" class="next">
+                                                Next <i class="fas fa-chevron-right"></i>
+                                            </a>
+                                        <?php else: ?>
+                                            <span class="next disabled">
+                                                Next <i class="fas fa-chevron-right"></i>
+                                            </span>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        <?php endif; ?>
+                    <?php else: ?>
+                        <p class="empty-state">No inventory records match the selected filters.</p>
+                    <?php endif; ?>
+                </div>
+            </section>
+
             <section class="panel" aria-labelledby="stockInFormTitle">
                 <div class="panel-header">
                     <div>
@@ -265,7 +495,8 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                             data-toggle-target="stockInFormContainer"
                             data-expanded-text="Hide Form"
                             data-collapsed-text="Show Form"
-                            aria-expanded="true"
+                            data-start-collapsed="true"
+                            aria-expanded="false"
                         >
                             <i class="fas fa-chevron-up panel-toggle__icon" aria-hidden="true"></i>
                             <span class="panel-toggle__label">Hide Form</span>
@@ -454,7 +685,8 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                             data-toggle-target="stockInReportContent"
                             data-expanded-text="Hide Report"
                             data-collapsed-text="Show Report"
-                            aria-expanded="true"
+                            data-start-collapsed="true"
+                            aria-expanded="false"
                         >
                             <i class="fas fa-chevron-up panel-toggle__icon" aria-hidden="true"></i>
                             <span class="panel-toggle__label">Hide Report</span>
@@ -564,48 +796,6 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                 </div>
             </section>
 
-            <!-- Current inventory snapshot derived from latest stock-in posts -->
-            <section class="panel" aria-labelledby="inventorySnapshotTitle">
-                <div class="panel-header">
-                    <div>
-                        <h3 id="inventorySnapshotTitle">Current Inventory</h3>
-                        <p class="panel-subtitle">On-hand counts with the last received date and low-stock indicator.</p>
-                    </div>
-                </div>
-                <?php if (!empty($currentInventorySnapshot)): ?>
-                    <div class="table-wrapper">
-                        <table class="data-table data-table--compact">
-                            <thead>
-                                <tr>
-                                    <th>Product</th>
-                                    <th>On-hand</th>
-                                    <th>Last Received Date</th>
-                                    <th>Low Stock?</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($currentInventorySnapshot as $inventoryRow): ?>
-                                    <tr>
-                                        <td><?= htmlspecialchars($inventoryRow['product_name']) ?></td>
-                                        <td><?= htmlspecialchars($inventoryRow['on_hand_display']) ?></td>
-                                        <td><?= htmlspecialchars($inventoryRow['last_received_display']) ?></td>
-                                        <td>
-                                            <?php if ($inventoryRow['is_low_stock']): ?>
-                                                <span class="status-badge status-with_discrepancy">Low</span>
-                                            <?php else: ?>
-                                                <span class="status-badge status-posted">OK</span>
-                                            <?php endif; ?>
-                                        </td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                <?php else: ?>
-                    <p class="empty-state">Inventory data is unavailable until stock receipts are recorded.</p>
-                <?php endif; ?>
-            </section>
-
             <section class="panel" aria-labelledby="recentReceiptsTitle">
                 <div class="panel-header">
                     <div>
@@ -619,7 +809,8 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                             data-toggle-target="recentReceiptsContent"
                             data-expanded-text="Hide Activity"
                             data-collapsed-text="Show Activity"
-                            aria-expanded="true"
+                            data-start-collapsed="true"
+                            aria-expanded="false"
                         >
                             <i class="fas fa-chevron-up panel-toggle__icon" aria-hidden="true"></i>
                             <span class="panel-toggle__label">Hide Activity</span>
@@ -764,7 +955,7 @@ function ensureStockReceiptTablesExist(PDO $pdo): bool
  */
 function fetchProductCatalog(PDO $pdo): array
 {
-    $stmt = $pdo->query('SELECT id, name, code, brand, category FROM products ORDER BY name');
+    $stmt = $pdo->query('SELECT id, name, code, brand, category, supplier FROM products ORDER BY name');
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
@@ -1471,63 +1662,156 @@ function fetchStockInReport(PDO $pdo, array $filters, ?int $limit = 50): array
 }
 
 /**
- * Build a lightweight inventory snapshot with last received date for each product.
+ * Build reusable WHERE clause pieces for inventory filters.
  */
-function fetchCurrentInventorySnapshot(PDO $pdo, int $limit = 12): array
+function buildInventoryWhereClause(array $filters, array &$params): string
 {
-    $productsSql = '
+    $clauses = ['1=1'];
+
+    if (!empty($filters['search'])) {
+        $clauses[] = '(p.name LIKE :inv_search_name OR p.code LIKE :inv_search_code)';
+        $params[':inv_search_name'] = '%' . $filters['search'] . '%';
+        $params[':inv_search_code'] = '%' . $filters['search'] . '%';
+    }
+
+    if (!empty($filters['brand'])) {
+        $clauses[] = 'p.brand = :inv_brand';
+        $params[':inv_brand'] = $filters['brand'];
+    }
+
+    if (!empty($filters['category'])) {
+        $clauses[] = 'p.category = :inv_category';
+        $params[':inv_category'] = $filters['category'];
+    }
+
+    if (!empty($filters['supplier'])) {
+        $clauses[] = 'p.supplier = :inv_supplier';
+        $params[':inv_supplier'] = $filters['supplier'];
+    }
+
+    return implode(' AND ', $clauses);
+}
+
+/**
+ * Count total inventory records matching the active filters.
+ */
+function countCurrentInventoryRecords(PDO $pdo, array $filters): int
+{
+    $params = [];
+    $whereClause = buildInventoryWhereClause($filters, $params);
+    $sql = 'SELECT COUNT(*) FROM products p WHERE ' . $whereClause;
+
+    $stmt = $pdo->prepare($sql);
+    foreach ($params as $placeholder => $value) {
+        $stmt->bindValue($placeholder, $value);
+    }
+    $stmt->execute();
+
+    return (int)$stmt->fetchColumn();
+}
+
+/**
+ * Retrieve a paginated inventory snapshot with optional receipt join for last received date.
+ */
+function fetchCurrentInventorySnapshot(PDO $pdo, array $filters, int $limit, int $offset): array
+{
+    $params = [];
+    $whereClause = buildInventoryWhereClause($filters, $params);
+
+    $sql = '
         SELECT
             p.id,
+            p.code,
             p.name,
+            p.brand,
+            p.category,
+            p.supplier,
             p.quantity,
-            p.low_stock_threshold
+            p.low_stock_threshold,
+            last.last_received_date
         FROM products p
+        LEFT JOIN (
+            SELECT
+                sri.product_id,
+                MAX(sr.date_received) AS last_received_date
+            FROM stock_receipt_items sri
+            INNER JOIN stock_receipts sr ON sr.id = sri.receipt_id
+            WHERE sr.status IN (\'posted\', \'with_discrepancy\')
+            GROUP BY sri.product_id
+        ) last ON last.product_id = p.id
+        WHERE ' . $whereClause . '
         ORDER BY p.name ASC
-        LIMIT :limit
+        LIMIT :limit OFFSET :offset
     ';
 
-    $stmt = $pdo->prepare($productsSql);
-    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
-    $stmt->execute();
-    $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    try {
+        $stmt = $pdo->prepare($sql);
+        foreach ($params as $placeholder => $value) {
+            $stmt->bindValue($placeholder, $value);
+        }
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+        $stmt->execute();
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        error_log('Inventory snapshot join failed: ' . $e->getMessage());
 
-    if (empty($products)) {
-        return [];
+        $fallbackSql = '
+            SELECT
+                p.id,
+                p.code,
+                p.name,
+                p.brand,
+                p.category,
+                p.supplier,
+                p.quantity,
+                p.low_stock_threshold
+            FROM products p
+            WHERE ' . $whereClause . '
+            ORDER BY p.name ASC
+            LIMIT :limit OFFSET :offset
+        ';
+
+        $stmt = $pdo->prepare($fallbackSql);
+        foreach ($params as $placeholder => $value) {
+            $stmt->bindValue($placeholder, $value);
+        }
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+        $stmt->execute();
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        foreach ($rows as &$fallbackRow) {
+            $fallbackRow['last_received_date'] = null;
+        }
+        unset($fallbackRow);
     }
 
-    $productIds = array_map(static fn($row) => (int)$row['id'], $products);
-
-    $placeholders = implode(',', array_fill(0, count($productIds), '?'));
-    $lastReceivedSql = '
-        SELECT
-            sri.product_id,
-            MAX(sr.date_received) AS last_received_date
-        FROM stock_receipt_items sri
-        JOIN stock_receipts sr ON sr.id = sri.receipt_id
-        WHERE sri.product_id IN (' . $placeholders . ')
-            AND sr.status IN (\'posted\', \'with_discrepancy\')
-        GROUP BY sri.product_id
-    ';
-    $lastStmt = $pdo->prepare($lastReceivedSql);
-    $lastStmt->execute($productIds);
-    $lastReceivedMap = [];
-    foreach ($lastStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-        $lastReceivedMap[(int)$row['product_id']] = $row['last_received_date'];
-    }
-
-    foreach ($products as &$row) {
-        $productId = (int)$row['id'];
+    foreach ($rows as &$row) {
+        $productId = (int)($row['id'] ?? 0);
         $quantity = (float)($row['quantity'] ?? 0);
-        $threshold = isset($row['low_stock_threshold']) ? (float)$row['low_stock_threshold'] : 0;
-        $lastReceivedRaw = $lastReceivedMap[$productId] ?? null;
+        $threshold = isset($row['low_stock_threshold']) ? (float)$row['low_stock_threshold'] : 0.0;
+        $lastReceivedRaw = $row['last_received_date'] ?? null;
 
-        $row['product_name'] = $row['name'] ?? ('Product #' . $productId);
+        $row['product_name'] = $row['name'] ?? ($productId > 0 ? 'Product #' . $productId : 'N/A');
+        $row['product_code'] = $row['code'] ?? '';
+        $row['brand'] = $row['brand'] ?? '';
+        $row['category'] = $row['category'] ?? '';
+        $row['supplier'] = $row['supplier'] ?? '';
         $row['on_hand_display'] = number_format($quantity, 0);
-        $row['last_received_display'] = $lastReceivedRaw ? date('M d, Y', strtotime($lastReceivedRaw)) : '—';
+
+        if ($lastReceivedRaw) {
+            $timestamp = strtotime($lastReceivedRaw);
+            $row['last_received_display'] = $timestamp ? date('M d, Y', $timestamp) : '—';
+        } else {
+            $row['last_received_display'] = '—';
+        }
+
         $row['is_low_stock'] = $threshold > 0 ? $quantity <= $threshold : $quantity <= 0;
     }
+    unset($row);
 
-    return $products;
+    return $rows;
 }
 
 /**

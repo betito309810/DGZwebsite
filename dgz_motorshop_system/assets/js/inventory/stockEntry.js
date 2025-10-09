@@ -708,4 +708,27 @@ document.addEventListener('DOMContentLoaded', () => {
         updateDiscrepancyState();
         markDirty();
     });
+
+    const inventoryFilterForm = document.getElementById('inventoryFilterForm');
+    if (inventoryFilterForm) {
+        const searchInput = inventoryFilterForm.querySelector('.filter-search-input');
+        const clearButton = inventoryFilterForm.querySelector('[data-filter-clear]');
+        const pageField = inventoryFilterForm.querySelector('input[name="inv_page"]');
+
+        inventoryFilterForm.addEventListener('submit', () => {
+            if (pageField) {
+                pageField.value = '1';
+            }
+        });
+
+        if (clearButton && searchInput) {
+            clearButton.addEventListener('click', () => {
+                searchInput.value = '';
+                if (pageField) {
+                    pageField.value = '1';
+                }
+                inventoryFilterForm.submit();
+            });
+        }
+    }
 });
