@@ -216,16 +216,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_stock'])) {
 
 }
 
-// Get recent stock entries with user information
-$recent_entries = $pdo->query("
-    SELECT se.*, p.name as product_name, COALESCE(u.name, se.stock_in_by_name) as user_name 
-    FROM stock_entries se 
-    JOIN products p ON p.id = se.product_id 
-    LEFT JOIN users u ON u.id = se.stock_in_by 
-    ORDER BY se.created_at DESC 
-    LIMIT 10
-")->fetchAll();
-
 // Get all products for auxiliary lookups (restock form, exports, etc.)
 $allProducts = $pdo->query('SELECT * FROM products ORDER BY created_at DESC')->fetchAll();
 
@@ -387,11 +377,19 @@ if (!function_exists('getStatusClass')) {
 
 // Handle export to CSV
 if(isset($_GET['export']) && $_GET['export'] == 'csv') {
+    $exportSql = 'SELECT code, name, quantity, low_stock_threshold, created_at FROM products ' . $whereSql . ' ' . $orderBySql;
+    $exportStmt = $pdo->prepare($exportSql);
+    foreach ($filterParams as $placeholder => $value) {
+        $exportStmt->bindValue($placeholder, $value);
+    }
+    $exportStmt->execute();
+    $exportProducts = $exportStmt->fetchAll(PDO::FETCH_ASSOC);
+
     header('Content-Type: text/csv');
     header('Content-Disposition: attachment; filename="inventory.csv"');
     $out = fopen('php://output', 'w');
     fputcsv($out, ['Product Code','Name','Quantity','Low Stock Threshold','Date Added']);
-    foreach($allProducts as $p) {
+    foreach($exportProducts as $p) {
         fputcsv($out, [$p['code'],$p['name'],$p['quantity'],$p['low_stock_threshold'],$p['created_at']]);
     }
     fclose($out);
@@ -472,46 +470,6 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
             top: 15px;
             font-size: 24px;
             cursor: pointer;
-        }
-
-        /* Recent Entries Styles */
-        .recent-entries {
-            margin-top: 30px;
-            background-color: white;
-            border-radius: 8px;
-            padding: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
-        .recent-entries h3 {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid #eee;
-        }
-
-        .toggle-btn {
-            background: none;
-            border: none;
-            cursor: pointer;
-            font-size: 18px;
-        }
-
-        .entries-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .entries-table th, .entries-table td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid #eee;
-        }
-
-        .entries-table th {
-            background-color: #f8f9fa;
         }
 
         .inventory-table th .sort-link {
@@ -1147,7 +1105,7 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                         <tr>
                             <td colspan="<?= $canManualAdjust ? 5 : 4 ?>" class="empty-state">
                                 <i class="fas fa-inbox"></i>
-                                No inventory items found matching the criteria.
+                                No inventory items found matching the criteria
                             </td>
                         </tr>
                         <?php else: ?>
@@ -1238,48 +1196,6 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
             <?php endif; ?>
         </div>
 
-        <!-- Recent Stock Entries Section -->
-        <div class="recent-entries">
-            <h3>
-                <i class="fas fa-history"></i> Recent Stock Entries
-                <button class="toggle-btn" onclick="toggleRecentEntries()">
-                    <i class="fas fa-chevron-down" id="toggleIcon"></i>
-                </button>
-            </h3>
-            <div id="recentEntriesContent" class="hidden">
-                <table class="entries-table">
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Product</th>
-                            <th>Quantity Added</th>
-                            <th>Cost (per unit)</th>
-                            <th>Supplier</th>
-                            <th>Stock in by</th>
-                            <th>Notes</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($recent_entries as $entry): ?>
-                            <tr>
-                                <td><?php echo date('M d, Y H:i', strtotime($entry['created_at'])); ?></td>
-                                <td><?php echo htmlspecialchars($entry['product_name']); ?></td>
-                                <td><?php echo $entry['quantity_added']; ?></td>
-                                <td>₱<?php echo number_format($entry['purchase_price'], 2); ?></td>
-                                <td><?php echo htmlspecialchars($entry['supplier']); ?></td>
-                                <td><?php echo htmlspecialchars($entry['user_name'] ?? 'Unknown'); ?></td>
-                                <td><?php echo htmlspecialchars($entry['notes']); ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                        <?php if (empty($recent_entries)): ?>
-                            <tr>
-                                <td colspan="7" style="text-align: center;">No recent stock entries</td>
-                            </tr>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
     </main>
 
     <div class="modal-overlay" id="profileModal" aria-hidden="true">

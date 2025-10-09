@@ -171,17 +171,6 @@
             }
         }
 
-        function toggleRecentEntries() {
-            const content = document.getElementById('recentEntriesContent');
-            const icon = document.getElementById('toggleIcon');
-            if (!content || !icon) {
-                return;
-            }
-
-            const isHidden = content.classList.toggle('hidden');
-            icon.className = isHidden ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
-        }
-
         document.addEventListener('DOMContentLoaded', () => {
             // file 2 continue – inventory page behavior bundle (safe to extract)
             const profileButton = document.getElementById('profileTrigger');
