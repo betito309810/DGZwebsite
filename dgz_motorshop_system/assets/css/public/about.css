@@ -1,14 +1,13 @@
 /*
  * About page styles
  * -----------------
- * Shared elements (header, navigation, footer) inherit from shared.css.
- * This file only handles layout unique to the About page such as the
- * store location panel and FAQ accordion.
+ * Layout treatments unique to the About screen. Shared chrome, colours,
+ * and typography are handled in shared.css.
  */
 
 .about-container {
     max-width: 1100px;
-    margin: 80px auto 96px;
+    margin: 48px auto 88px;
     padding: 0 20px;
     display: grid;
     gap: 32px;
@@ -17,30 +16,33 @@
 .location-section {
     background: var(--color-surface);
     border-radius: var(--radius-large);
-    padding: 44px;
+    padding: 36px 32px;
     box-shadow: var(--shadow-soft);
     border: 1px solid var(--color-border);
     text-align: center;
 }
 
 .location-section h2 {
-    font-size: 32px;
+    font-size: 30px;
     margin-bottom: 16px;
     color: var(--color-text);
 }
 
 .location-section p {
     color: var(--color-muted);
-    margin-bottom: 28px;
+    margin-bottom: 24px;
+    max-width: 680px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 .map-container {
     position: relative;
     width: 100%;
-    overflow: hidden;
     border-radius: var(--radius-large);
-    box-shadow: var(--shadow-soft);
+    overflow: hidden;
     border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-soft);
     aspect-ratio: 16 / 9;
 }
 
@@ -52,7 +54,6 @@
     border: 0;
 }
 
-/* FAQ section tweaks live in faq.css; we only adjust spacing here. */
 .faq-section {
     margin-bottom: 0;
 }
@@ -60,11 +61,11 @@
 /* Responsive adjustments */
 @media (max-width: 900px) {
     .location-section {
-        padding: 36px 28px;
+        padding: 32px 26px;
     }
 }
 
-@media (max-width: 600px) {
+@media (max-width: 640px) {
     .about-container {
         margin: 36px auto 72px;
         gap: 24px;
