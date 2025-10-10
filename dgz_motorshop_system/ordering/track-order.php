@@ -15,14 +15,16 @@
     <!-- Header: mirrors the home page layout so the experience feels seamless -->
     <header class="header">
         <div class="header-content">
-            <div class="logo">
+            <a href="index.php" class="logo" aria-label="DGZ Motorshop home">
                 <img src="../assets/logo.png" alt="DGZ Motorshop Logo">
-            </div>
-            <a href="#" class="cart-btn" id="cartButton">
-                <i class="fas fa-shopping-cart"></i>
-                <span>Cart</span>
-                <div class="cart-count" id="cartCount">0</div>
             </a>
+            <div class="header-actions">
+                <a href="#" class="cart-btn" id="cartButton">
+                    <i class="fas fa-shopping-cart"></i>
+                    <span>Cart</span>
+                    <div class="cart-count" id="cartCount">0</div>
+                </a>
+            </div>
         </div>
     </header>
 
@@ -36,7 +38,7 @@
     </nav>
 
     <!-- Main tracker module -->
-    <main class="tracker-wrapper">
+    <main class="tracker-page">
         <section class="tracker-card">
             <h1>Track Your Order</h1>
             <p>Enter the tracking code from your confirmation message to see the latest status and important details.</p>

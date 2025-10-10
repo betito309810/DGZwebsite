@@ -1,198 +1,188 @@
 /*
  * Track order page styles
  * -----------------------
- * Shared colours and typography inherit from shared.css. This file focuses
- * on the tracker card layout and responsive behaviour for smaller screens.
+ * Card layout for the order tracking experience. Shared chrome comes from
+ * shared.css.
  */
 
-main {
-    flex: 1 0 auto;
-}
-
-.tracker-wrapper {
-    max-width: 860px;
-    margin: 48px auto 88px;
-    padding: 0 20px;
+.tracker-page {
+    max-width: min(720px, var(--container-width));
+    margin: 0 auto;
+    padding: clamp(2.4rem, 6vw, 3.6rem) clamp(1.25rem, 4vw, 2.4rem) clamp(4rem, 6vw, 5rem);
 }
 
 .tracker-card {
     background: var(--color-surface);
-    border-radius: var(--radius-large);
-    padding: 36px 32px;
-    box-shadow: var(--shadow-soft);
+    border-radius: var(--radius-lg);
     border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-sm);
+    padding: clamp(1.8rem, 4vw, 2.6rem);
+    display: grid;
+    gap: 1.5rem;
 }
 
 .tracker-card h1 {
-    font-size: 30px;
-    margin-bottom: 12px;
+    font-size: clamp(1.9rem, 3vw, 2.4rem);
+    margin: 0;
     color: var(--color-text);
 }
 
-.tracker-card p {
+.tracker-card > p {
+    margin: 0;
     color: var(--color-muted);
-    margin-bottom: 28px;
 }
 
 .tracker-form {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 16px;
-    margin-bottom: 28px;
+    display: grid;
+    gap: 0.85rem;
 }
 
 .tracker-form label {
-    width: 100%;
     font-weight: 600;
     color: var(--color-text);
 }
 
 .tracker-input {
-    flex: 1 1 260px;
-    padding: 14px 18px;
-    border-radius: var(--radius-medium);
+    width: 100%;
+    padding: 0.85rem 1rem;
+    border-radius: var(--radius-md);
     border: 1px solid var(--color-border);
     background: var(--color-surface-soft);
-    font-size: 16px;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    font-size: 1rem;
+    transition: border-color var(--transition-base), box-shadow var(--transition-base), background var(--transition-base);
 }
 
 .tracker-input:focus {
     outline: none;
-    border-color: rgba(28, 100, 242, 0.65);
-    box-shadow: 0 0 0 3px rgba(28, 100, 242, 0.15);
+    border-color: rgba(15, 98, 254, 0.55);
+    box-shadow: 0 0 0 3px rgba(15, 98, 254, 0.15);
     background: var(--color-surface);
 }
 
 .tracker-button {
-    background: var(--color-primary);
-    color: #ffffff;
+    justify-self: flex-start;
     border: none;
     border-radius: var(--radius-pill);
-    padding: 14px 26px;
-    font-size: 16px;
+    padding: 0.85rem 1.6rem;
     font-weight: 600;
+    background: var(--color-primary);
+    color: #ffffff;
     cursor: pointer;
-    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-    box-shadow: 0 12px 24px rgba(28, 100, 242, 0.22);
+    box-shadow: 0 14px 32px rgba(15, 98, 254, 0.22);
+    transition: transform var(--transition-base), box-shadow var(--transition-base), background var(--transition-base);
 }
 
-.tracker-button:hover {
+.tracker-button:hover,
+.tracker-button:focus {
     background: var(--color-primary-dark);
     transform: translateY(-1px);
-    box-shadow: 0 16px 30px rgba(28, 100, 242, 0.28);
+    box-shadow: 0 18px 38px rgba(11, 76, 209, 0.28);
 }
 
 .tracker-button:disabled {
     opacity: 0.6;
     cursor: not-allowed;
-    box-shadow: none;
     transform: none;
+    box-shadow: none;
 }
 
 .feedback-message {
-    border-radius: var(--radius-medium);
-    padding: 14px 18px;
-    margin-bottom: 22px;
-    font-weight: 500;
+    border-radius: var(--radius-md);
+    padding: 0.85rem 1rem;
+    font-weight: 600;
 }
 
 .feedback-message.success {
-    background: rgba(34, 197, 94, 0.18);
+    background: rgba(34, 197, 94, 0.16);
     color: #047857;
 }
 
 .feedback-message.error {
-    background: rgba(248, 113, 113, 0.2);
+    background: rgba(248, 113, 113, 0.18);
     color: #b91c1c;
 }
 
 .status-panel {
-    border-radius: var(--radius-large);
+    border-radius: var(--radius-lg);
     border: 1px solid var(--color-border);
-    padding: 28px;
     background: var(--color-surface-soft);
+    padding: 1.6rem;
+    display: grid;
+    gap: 1.4rem;
 }
 
 .status-header {
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
     flex-wrap: wrap;
-    gap: 12px;
-    margin-bottom: 20px;
 }
 
 .status-pill {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 16px;
-    border-radius: 999px;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-pill);
     font-weight: 600;
     text-transform: capitalize;
 }
 
 .status-pill[data-status="pending"] {
-    background: rgba(249, 115, 22, 0.18);
+    background: rgba(249, 115, 22, 0.16);
     color: #c2410c;
 }
 
 .status-pill[data-status="approved"] {
-    background: rgba(34, 197, 94, 0.2);
+    background: rgba(34, 197, 94, 0.18);
     color: #047857;
 }
 
 .status-pill[data-status="completed"] {
-    background: rgba(28, 100, 242, 0.18);
+    background: rgba(15, 98, 254, 0.16);
     color: var(--color-primary-dark);
 }
 
 .status-pill[data-status="disapproved"],
 .status-pill[data-status="cancelled"],
 .status-pill[data-status="canceled"] {
-    background: rgba(248, 113, 113, 0.22);
+    background: rgba(248, 113, 113, 0.18);
     color: #b91c1c;
 }
 
 .status-details {
     display: grid;
-    gap: 16px;
+    gap: 1rem;
     grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
 }
 
 .status-detail span {
     display: block;
-    font-size: 13px;
+    font-size: 0.85rem;
     color: var(--color-muted);
 }
 
 .status-detail strong {
-    font-size: 16px;
+    display: block;
     color: var(--color-text);
+    font-size: 1rem;
 }
 
-/* Responsive layout */
-@media (max-width: 720px) {
-    .tracker-card {
-        padding: 32px 24px;
-    }
-
-    .tracker-card h1 {
-        font-size: 26px;
-    }
-
+@media (max-width: 640px) {
     .tracker-button {
         width: 100%;
+        justify-self: stretch;
+        text-align: center;
+    }
+
+    .status-header {
+        flex-direction: column;
+        align-items: flex-start;
     }
 }
 
 @media (max-width: 520px) {
-    .tracker-wrapper {
-        margin: 36px auto 72px;
-    }
-
-    .status-details {
-        grid-template-columns: 1fr;
+    .tracker-page {
+        padding-inline: 1.1rem;
     }
 }

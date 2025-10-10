@@ -668,15 +668,19 @@ HTML;
 <body>
     <header class="header">
         <div class="header-content">
-            <div class="logo">
-                <img src="../assets/logo.png" alt="Company Logo">
+            <a href="index.php" class="logo" aria-label="DGZ Motorshop home">
+                <img src="../assets/logo.png" alt="DGZ Motorshop Logo">
+            </a>
+            <div class="header-actions">
+                <a href="index.php" class="continue-shopping-btn">
+                    <i class="fas fa-arrow-left"></i>
+                    Continue Shopping
+                </a>
             </div>
-            <a href="index.php" class="continue-shopping-btn">
-            <i class="fas fa-arrow-left"></i> Continue Shopping
-        </a>
         </div>
     </header>
 
+    <main class="checkout-page">
     <div class="checkout-layout">
         <!-- Left Column - Checkout Form -->
         <div class="checkout-form">
@@ -838,6 +842,7 @@ HTML;
             </div>
         </div>
     </div>
+    </main>
 
     <script>
         // File upload feedback

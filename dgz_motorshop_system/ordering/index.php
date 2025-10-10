@@ -35,25 +35,26 @@ natcasesort($categories);
     <!-- Header: shared across storefront pages -->
     <header class="header">
         <div class="header-content">
-            <div class="logo">
-                <img src="../assets/logo.png" alt="Company Logo">
-            </div>
-
-            <div class="search-container">
-                <label for="globalSearch" class="visually-hidden">Search by Category, Part, Brand</label>
-                <input id="globalSearch" type="text" class="search-bar" placeholder="Search by Category, Part, Brand...">
-                <button class="search-btn">
-                    <i class="fas fa-search"></i>
-                    <span class="visually-hidden">Search</span>
-                </button>
-
-            </div>
-
-            <a href="#" class="cart-btn" id="cartButton">
-                <i class="fas fa-shopping-cart"></i>
-                <span>Cart</span>
-                <div class="cart-count" id="cartCount">0</div>
+            <a href="index.php" class="logo" aria-label="DGZ Motorshop home">
+                <img src="../assets/logo.png" alt="DGZ Motorshop Logo">
             </a>
+
+            <div class="header-actions">
+                <div class="search-container">
+                    <label for="globalSearch" class="visually-hidden">Search by Category, Part, Brand</label>
+                    <input id="globalSearch" type="text" class="search-bar" placeholder="Search by Category, Part, Brand...">
+                    <button class="search-btn">
+                        <i class="fas fa-search"></i>
+                        <span class="visually-hidden">Search</span>
+                    </button>
+                </div>
+
+                <a href="#" class="cart-btn" id="cartButton">
+                    <i class="fas fa-shopping-cart"></i>
+                    <span>Cart</span>
+                    <div class="cart-count" id="cartCount">0</div>
+                </a>
+            </div>
         </div>
     </header>
 
@@ -67,30 +68,34 @@ natcasesort($categories);
         </div>
     </nav>
 
-    <div class="container">
+    <div class="catalog-layout">
         <!-- Sidebar: category filters populated from PHP above -->
-        <aside class="sidebar">
-            <h3 class="sidebar-title">Shop by Category</h3>
-            <ul class="category-list">
-                <li class="category-item"><a href="#" class="category-link active" data-category="all">All Products</a></li>
-                <?php foreach ($categories as $slug => $categoryLabel):
-                ?>
-                <li class="category-item">
-                    <a href="#" class="category-link" data-category="<?= htmlspecialchars($slug) ?>">
-                        <?= htmlspecialchars($categoryLabel) ?>
-                    </a>
-                </li>
-                <?php endforeach; ?>
-            </ul>
+        <aside class="catalog-sidebar">
+            <details class="category-panel" open>
+                <summary class="sidebar-title">Shop by Category</summary>
+                <ul class="category-list">
+                    <li class="category-item"><a href="#" class="category-link active" data-category="all">All Products</a></li>
+                    <?php foreach ($categories as $slug => $categoryLabel):
+                    ?>
+                    <li class="category-item">
+                        <a href="#" class="category-link" data-category="<?= htmlspecialchars($slug) ?>">
+                            <?= htmlspecialchars($categoryLabel) ?>
+                        </a>
+                    </li>
+                    <?php endforeach; ?>
+                </ul>
+            </details>
+            <p class="sidebar-footnote">Tip: Filter by category or use the search bar to quickly find the parts you need.</p>
         </aside>
 
         <!-- Main Content -->
-        <main class="main-content">
-
-
-            <!-- All Products -->
-            <div id="all-products">
-                <h2 id="productSectionTitle" class="section-title">All Products</h2>
+        <main class="catalog-main">
+            <section id="all-products" class="catalog-section">
+                <div class="catalog-header">
+                    <span class="catalog-eyebrow">DGZ Motorshop Catalog</span>
+                    <h2 id="productSectionTitle" class="catalog-title">All Products</h2>
+                    <p class="catalog-subtitle">Browse our latest inventory, pick a category, or search by brand to tailor the list for your ride.</p>
+                </div>
                 <div class="products-grid">
                     <?php foreach($products as $p):
                         $category = isset($p['category']) ? $p['category'] : '';
@@ -208,10 +213,11 @@ natcasesort($categories);
                     </div>
                     <?php endforeach; ?>
                 </div>
-            </div>
+            </section>
+        </main>
+    </div>
             <!-- Footer -->
 
-    </div>
     <div class="terms-overlay" id="termsOverlay" role="dialog" aria-modal="true" aria-labelledby="termsTitle" hidden>
         <div class="terms-overlay__backdrop" aria-hidden="true"></div>
         <div class="terms-overlay__dialog" role="document">
