@@ -361,10 +361,11 @@ if (!function_exists('normalizePaymentProofPath')) {
         $normalized = str_replace('\\', '/', $trimmed);
 
         // Allow fully-qualified URLs or data URIs to pass through untouched.
-        if (preg_match('#^https?://#i', $normalized) === 1 || strncmp($normalized, 'data:', 5) === 0) {
+        if (preg_match('#^(?:[a-z][a-z0-9+.-]*:)?//#i', $normalized) === 1 || strncmp($normalized, 'data:', 5) === 0) {
             return $normalized;
         }
 
+<<<<<<< HEAD
         // Preserve absolute paths as-is.
         if ($normalized[0] === '/') {
             return $normalized;
@@ -382,6 +383,56 @@ if (!function_exists('normalizePaymentProofPath')) {
         }
 
         return $defaultPrefix . ltrim($normalized, '/');
+=======
+        // Preserve absolute or already-relative web paths.
+        if ($normalized[0] === '/' || strncmp($normalized, '../', 3) === 0 || strncmp($normalized, './', 2) === 0) {
+            return $normalized;
+        }
+
+        $relative = ltrim($normalized, '/');
+
+        // If the string contains an uploads directory anywhere (e.g. full filesystem path),
+        // trim everything before it so we end up with a web-accessible fragment.
+        $lowerRelative = strtolower($relative);
+        $uploadsPos = strpos($lowerRelative, 'uploads/');
+        if ($uploadsPos !== false) {
+            $relative = substr($relative, $uploadsPos);
+        }
+
+        // Strip known system folder prefixes that may have been persisted by older installs.
+        $knownPrefixes = [
+            'dgz_motorshop_system/uploads/',
+            'dgz_motorshop_system/',
+            'dgz-motorshop_system/uploads/',
+            'dgz-motorshop_system/',
+        ];
+
+        foreach ($knownPrefixes as $prefix) {
+            if (stripos($relative, $prefix) === 0) {
+                $relative = substr($relative, strlen($prefix));
+                break;
+            }
+        }
+
+        $relative = ltrim($relative, '/');
+
+        if ($relative === '') {
+            return '';
+        }
+
+        // Historic records sometimes omitted the uploads directory; patch it back in so
+        // links resolve next to the admin uploads folder.
+        if (strpos($relative, 'uploads/') !== 0 && strpos($relative, 'payment-proofs/') === 0) {
+            $relative = 'uploads/' . $relative;
+        }
+
+        $prefix = rtrim($defaultPrefix, '/');
+        if ($prefix === '') {
+            return $relative;
+        }
+
+        return $prefix . '/' . ltrim($relative, '/');
+>>>>>>> bd01588f30dcdc1eae95d86fed32311a99456ddb
     }
 }
 
