@@ -932,13 +932,13 @@ if ($currentSort === 'name') {
                 <form method="post" id="addProductForm" enctype="multipart/form-data" class="product-modal__form">
                     <h3>Add Product</h3>
                     <input type="hidden" name="id" value="0">
-                    <label>Product Code:
+                    <label class="product-modal__field">Product Code:
                         <input name="code" required placeholder="Enter product code">
                     </label>
-                    <label>Name:
+                    <label class="product-modal__field">Name:
                         <input name="name" required placeholder="Enter product name">
                     </label>
-                    <label>Brand:
+                    <label class="product-modal__field">Brand:
                         <select name="brand" id="brandSelect" onchange="toggleBrandInput(this)">
                             <option value="">Select brand</option>
                             <?php foreach($brands as $b): ?>
@@ -949,7 +949,7 @@ if ($currentSort === 'name') {
                         <input name="brand_new" id="brandNewInput" placeholder="Enter new brand"
                             style="display:none; margin-top:6px;">
                     </label>
-                    <label>Category:
+                    <label class="product-modal__field">Category:
                         <select name="category" id="categorySelect" onchange="toggleCategoryInput(this)">
                             <option value="">Select category</option>
                             <?php foreach($categories as $c): ?>
@@ -960,13 +960,13 @@ if ($currentSort === 'name') {
                         <input name="category_new" id="categoryNewInput" placeholder="Enter new category"
                             style="display:none; margin-top:6px;">
                     </label>
-                    <label class="product-modal__full">Description:
+                    <label class="product-modal__field product-modal__full">Description:
                         <textarea name="description" placeholder="Enter product description"></textarea>
                     </label>
-                    <label>Quantity:
+                    <label class="product-modal__field">Quantity:
                         <input name="quantity" type="number" min="0" required placeholder="Auto-calculated" readonly data-variant-total-quantity>
                     </label>
-                    <label>Price per unit:
+                    <label class="product-modal__field">Price per unit:
                         <input name="price" type="number" min="0" step="0.01" required placeholder="Auto-calculated" readonly data-variant-default-price>
                     </label>
                     <div class="variant-editor product-modal__full" data-variant-editor data-context="create" data-initial-variants="[]">
@@ -1015,7 +1015,7 @@ if ($currentSort === 'name') {
                         </template>
                         <input type="hidden" name="variants_payload" data-variants-payload>
                     </div>
-                    <label>Supplier:
+                    <label class="product-modal__field">Supplier:
                         <select name="supplier" id="supplierSelect" onchange="toggleSupplierInput(this)">
                             <option value="">Select supplier</option>
                             <?php foreach($suppliers as $s): ?>
@@ -1026,7 +1026,7 @@ if ($currentSort === 'name') {
                         <input name="supplier_new" id="supplierNewInput" placeholder="Enter new supplier"
                             style="display:none; margin-top:6px;">
                     </label>
-                    <label>Low Stock Threshold:
+                    <label class="product-modal__field">Low Stock Threshold:
                         <input name="low_stock_threshold" value="5" type="number" min="0" required>
                     </label>
                     <button name="save_product" type="submit">Add</button>
@@ -1231,13 +1231,13 @@ if ($currentSort === 'name') {
                 <form method="post" id="editProductForm" enctype="multipart/form-data" class="product-modal__form">
                     <h3>Edit Product</h3>
                     <input type="hidden" name="id" id="edit_id">
-                    <label>Product Code:
+                    <label class="product-modal__field">Product Code:
                         <input name="code" id="edit_code" required placeholder="Enter product code">
                     </label>
-                    <label>Name:
+                    <label class="product-modal__field">Name:
                         <input name="name" id="edit_name" required placeholder="Enter product name">
                     </label>
-                    <label>Brand:
+                    <label class="product-modal__field">Brand:
                         <select name="brand" id="edit_brand" onchange="toggleBrandInputEdit(this)">
                             <option value="">Select brand</option>
                             <?php foreach($brands as $b): ?>
@@ -1248,7 +1248,7 @@ if ($currentSort === 'name') {
                         <input name="brand_new" id="edit_brand_new" placeholder="Enter new brand"
                             style="display:none; margin-top:6px;">
                     </label>
-                    <label>Category:
+                    <label class="product-modal__field">Category:
                         <select name="category" id="edit_category" onchange="toggleCategoryInputEdit(this)">
                             <option value="">Select category</option>
                             <?php foreach($categories as $c): ?>
@@ -1259,15 +1259,15 @@ if ($currentSort === 'name') {
                         <input name="category_new" id="edit_category_new" placeholder="Enter new category"
                             style="display:none; margin-top:6px;">
                     </label>
-                    <label class="product-modal__full">Description:
+                    <label class="product-modal__field product-modal__full">Description:
                         <textarea name="description" id="edit_description"
                             placeholder="Enter product description"></textarea>
                     </label>
-                    <label>Quantity:
+                    <label class="product-modal__field">Quantity:
                         <input name="quantity" id="edit_quantity" type="number" min="0" required
                             placeholder="Auto-calculated" readonly data-variant-total-quantity>
                     </label>
-                    <label>Price per unit:
+                    <label class="product-modal__field">Price per unit:
                         <input name="price" id="edit_price" type="number" min="0" step="0.01" required
                             placeholder="Auto-calculated" readonly data-variant-default-price>
                     </label>
@@ -1317,7 +1317,7 @@ if ($currentSort === 'name') {
                         </template>
                         <input type="hidden" name="variants_payload" data-variants-payload>
                     </div>
-                    <label>Supplier:
+                    <label class="product-modal__field">Supplier:
                         <select name="supplier" id="edit_supplier" onchange="toggleSupplierInputEdit(this)">
                             <option value="">Select supplier</option>
                             <?php foreach($suppliers as $s): ?>
@@ -1328,7 +1328,7 @@ if ($currentSort === 'name') {
                         <input name="supplier_new" id="edit_supplier_new" placeholder="Enter new supplier"
                             style="display:none; margin-top:6px;">
                     </label>
-                    <label>Low Stock Threshold:
+                    <label class="product-modal__field">Low Stock Threshold:
                         <input name="low_stock_threshold" id="edit_low" value="5" type="number" min="0" required>
                     </label>
                     <button name="save_product" type="submit">Save

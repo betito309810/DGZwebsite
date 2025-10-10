@@ -55,19 +55,20 @@
     grid-column: 1 / -1;
 }
 
-.product-modal__form label,
 .product-modal__form textarea,
 .product-modal__form input,
 .product-modal__form select {
     width: 100%;
 }
 
-.product-modal__form label {
+/* Added: shared field styling so each label/input pair aligns consistently. */
+.product-modal__field {
     display: flex;
     flex-direction: column;
     gap: 6px;
     font-weight: 500;
     color: #1f2937;
+    width: 100%;
 }
 
 .product-modal__form textarea {
@@ -146,7 +147,7 @@
 }
 
 /* Added: Responsive fallbacks to stack the layout on narrow viewports. */
-@media (max-width: 1100px) {
+@media (max-width: 1023px) {
     .modal-content-horizontal {
         flex-direction: column; /* Updated: stack on narrower screens without squeezing. */
         width: min(900px, 94vw);
