@@ -33,12 +33,12 @@
     <main class="tracker-wrapper">
         <section class="tracker-card">
             <h1>Track Your Order</h1>
-            <p>Enter the order ID from your confirmation message to see the latest status and important details.</p>
+            <p>Enter the tracking code from your confirmation message to see the latest status and important details.</p>
 
             <!-- Order lookup form -->
             <form id="orderTrackerForm" class="tracker-form">
-                <label for="orderIdInput">Order ID</label>
-                <input type="number" id="orderIdInput" name="order_id" class="tracker-input" placeholder="e.g. 1024" min="1" required>
+                <label for="trackingCodeInput">Tracking Code</label>
+                <input type="text" id="trackingCodeInput" name="tracking_code" class="tracker-input" placeholder="e.g. DGZ-ABCD-1234" autocomplete="off" required>
                 <button type="submit" class="tracker-button">Track Order</button>
             </form>
 

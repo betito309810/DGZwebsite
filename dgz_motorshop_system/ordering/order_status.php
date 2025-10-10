@@ -4,6 +4,47 @@ header('Content-Type: application/json');
 
 require_once __DIR__ . '/../config/config.php';
 
+if (!function_exists('ordersSupportsTrackingCodes')) {
+    function ordersSupportsTrackingCodes(PDO $pdo): bool
+    {
+        static $hasColumn = null;
+        if ($hasColumn !== null) {
+            return $hasColumn;
+        }
+
+        try {
+            $stmt = $pdo->query("SHOW COLUMNS FROM orders LIKE 'tracking_code'");
+            $hasColumn = $stmt !== false && $stmt->fetch() !== false;
+        } catch (Exception $exception) {
+            error_log('Unable to detect orders.tracking_code column: ' . $exception->getMessage());
+            $hasColumn = false;
+        }
+
+        return $hasColumn;
+    }
+}
+
+if (!function_exists('ordersHasColumn')) {
+    function ordersHasColumn(PDO $pdo, string $column): bool
+    {
+        static $cache = [];
+        if (array_key_exists($column, $cache)) {
+            return $cache[$column];
+        }
+
+        try {
+            $stmt = $pdo->prepare('SHOW COLUMNS FROM orders LIKE ?');
+            $stmt->execute([$column]);
+            $cache[$column] = $stmt !== false && $stmt->fetch() !== false;
+        } catch (Exception $exception) {
+            error_log('Unable to detect orders.' . $column . ' column: ' . $exception->getMessage());
+            $cache[$column] = false;
+        }
+
+        return $cache[$column];
+    }
+}
+
 // Only accept POST requests to keep the endpoint predictable.
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
@@ -18,40 +59,112 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $rawBody = file_get_contents('php://input');
 $decoded = json_decode($rawBody, true);
 
-$orderIdInput = null;
+$trackingCodeInput = null;
 if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
-    $orderIdInput = $decoded['orderId'] ?? null;
+    $trackingCodeInput = $decoded['trackingCode']
+        ?? $decoded['tracking_code']
+        ?? $decoded['orderId']
+        ?? $decoded['order_id']
+        ?? null;
 }
 
-if ($orderIdInput === null) {
-    $orderIdInput = $_POST['orderId'] ?? $_POST['order_id'] ?? null;
+if ($trackingCodeInput === null) {
+    $trackingCodeInput = $_POST['trackingCode']
+        ?? $_POST['tracking_code']
+        ?? $_POST['orderId']
+        ?? $_POST['order_id']
+        ?? null;
 }
 
-$orderId = filter_var($orderIdInput, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
-if ($orderId === false) {
+$trackingCodeInput = is_string($trackingCodeInput) ? trim($trackingCodeInput) : '';
+$normalizedTrackingCode = strtoupper(preg_replace('/[^A-Z0-9]/', '', $trackingCodeInput));
+
+// Tracking codes follow the DGZ-XXXX-XXXX pattern (11 significant characters without hyphens).
+if (strlen($normalizedTrackingCode) !== 11 || strpos($normalizedTrackingCode, 'DGZ') !== 0) {
     http_response_code(422);
     echo json_encode([
         'success' => false,
-        'message' => 'Please provide a valid numeric order ID.',
+        'message' => 'Please provide a valid tracking code (e.g. DGZ-ABCD-1234).',
     ]);
     exit;
 }
 
+$normalizedTrackingCode = 'DGZ-' . substr($normalizedTrackingCode, 3, 4) . '-' . substr($normalizedTrackingCode, 7, 4);
+
 try {
     $pdo = db();
 
+    if (!ordersSupportsTrackingCodes($pdo)) {
+        http_response_code(503);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Order tracking is temporarily unavailable. Please try again later.',
+        ]);
+        exit;
+    }
+
+    $columns = [
+        'id',
+        'tracking_code',
+        'customer_name',
+        'status',
+        'created_at',
+        'total',
+        'payment_method',
+    ];
+
+    $hasOrderTypeColumn = ordersHasColumn($pdo, 'order_type');
+    if ($hasOrderTypeColumn) {
+        $columns[] = 'order_type';
+    }
+
     // Fetch a small, focused subset of the order information to share with customers.
-    $stmt = $pdo->prepare('SELECT id, customer_name, status, created_at, total, payment_method FROM orders WHERE id = ?');
-    $stmt->execute([$orderId]);
+    $sql = 'SELECT ' . implode(', ', $columns) . ' FROM orders WHERE tracking_code = ? LIMIT 1';
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([$normalizedTrackingCode]);
     $order = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$order) {
         http_response_code(404);
         echo json_encode([
             'success' => false,
-            'message' => 'We could not find an order with that ID. Please double check and try again.',
+            'message' => 'We could not find an order with that tracking code. Please double check and try again.',
         ]);
         exit;
+    }
+
+    $trackingCode = (string) ($order['tracking_code'] ?? '');
+    if ($trackingCode === '') {
+        http_response_code(404);
+        echo json_encode([
+            'success' => false,
+            'message' => 'We could not find an order with that tracking code. Please double check and try again.',
+        ]);
+        exit;
+    }
+
+    $customerName = (string) ($order['customer_name'] ?? '');
+    $normalizedCustomerName = strtolower(preg_replace('/[^a-z]/', '', $customerName));
+
+    if ($normalizedCustomerName !== '' && strpos($normalizedCustomerName, 'walkin') !== false) {
+        http_response_code(404);
+        echo json_encode([
+            'success' => false,
+            'message' => 'In-store purchases are not available for online tracking. Please contact the store directly for updates.',
+        ]);
+        exit;
+    }
+
+    if ($hasOrderTypeColumn) {
+        $orderType = strtolower((string) ($order['order_type'] ?? ''));
+        if ($orderType !== '' && $orderType !== 'online') {
+            http_response_code(404);
+            echo json_encode([
+                'success' => false,
+                'message' => 'We could not find an order with that tracking code. Please double check and try again.',
+            ]);
+            exit;
+        }
     }
 
     // Normalise values for consistent display in the UI.
@@ -78,7 +191,8 @@ try {
     echo json_encode([
         'success' => true,
         'order' => [
-            'id' => (int) $order['id'],
+            'trackingCode' => $trackingCode,
+            'internalId' => (int) $order['id'],
             'customerName' => $order['customer_name'] !== '' ? $order['customer_name'] : 'Customer',
             'status' => $status,
             'statusMessage' => $statusMessages[$status] ?? 'We found your order. Stay tuned for updates!',

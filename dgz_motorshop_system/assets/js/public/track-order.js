@@ -1,21 +1,21 @@
 // Track order page interactions
 // ------------------------------
 // This script handles the lightweight order tracking flow:
-// 1. Capture the submitted order ID.
+// 1. Capture the submitted tracking code.
 // 2. Send it to the PHP endpoint for validation + lookup.
 // 3. Render the status or show an error message.
 
 (() => {
     // Cache DOM references once the browser has parsed the markup.
     const form = document.getElementById('orderTrackerForm');
-    const orderIdInput = document.getElementById('orderIdInput');
+    const trackingCodeInput = document.getElementById('trackingCodeInput');
     const feedbackContainer = document.getElementById('trackerFeedback');
     const statusPanel = document.getElementById('trackerStatusPanel');
     const statusPill = document.getElementById('trackerStatusPill');
     const statusMessage = document.getElementById('trackerStatusMessage');
     const statusDetails = document.getElementById('trackerStatusDetails');
 
-    if (!form || !orderIdInput) {
+    if (!form || !trackingCodeInput) {
         return; // Bail out if critical elements are missing.
     }
 
@@ -61,28 +61,49 @@
         statusMessage.textContent = order.statusMessage || 'We found your order. Stay tuned for updates!';
 
         // Populate the breakdown grid using template literals for clarity.
-        statusDetails.innerHTML = `
-            <div class="status-detail">
-                <span>Order ID</span>
-                <strong>#${order.id}</strong>
-            </div>
-            <div class="status-detail">
-                <span>Placed On</span>
-                <strong>${order.createdAt}</strong>
-            </div>
-            <div class="status-detail">
-                <span>Customer</span>
-                <strong>${order.customerName}</strong>
-            </div>
-            <div class="status-detail">
-                <span>Payment Method</span>
-                <strong>${order.paymentMethod}</strong>
-            </div>
-            <div class="status-detail">
-                <span>Order Total</span>
-                <strong>${order.total}</strong>
-            </div>
-        `;
+        const detailRows = [
+            `
+                <div class="status-detail">
+                    <span>Tracking Code</span>
+                    <strong>${order.trackingCode}</strong>
+                </div>
+            `,
+            `
+                <div class="status-detail">
+                    <span>Placed On</span>
+                    <strong>${order.createdAt}</strong>
+                </div>
+            `,
+            `
+                <div class="status-detail">
+                    <span>Customer</span>
+                    <strong>${order.customerName}</strong>
+                </div>
+            `,
+            `
+                <div class="status-detail">
+                    <span>Payment Method</span>
+                    <strong>${order.paymentMethod}</strong>
+                </div>
+            `,
+            `
+                <div class="status-detail">
+                    <span>Order Total</span>
+                    <strong>${order.total}</strong>
+                </div>
+            `,
+        ];
+
+        if (order.internalId) {
+            detailRows.unshift(`
+                <div class="status-detail">
+                    <span>Order #</span>
+                    <strong>#${order.internalId}</strong>
+                </div>
+            `);
+        }
+
+        statusDetails.innerHTML = detailRows.join('');
 
         statusPanel.hidden = false;
     };
@@ -101,10 +122,10 @@
         hideFeedback();
         hideStatus();
 
-        const rawOrderId = orderIdInput.value.trim();
-        if (rawOrderId === '') {
-            showFeedback('Please enter your order ID to continue.', 'error');
-            orderIdInput.focus();
+        const rawTrackingCode = trackingCodeInput.value.trim();
+        if (rawTrackingCode === '') {
+            showFeedback('Please enter your tracking code to continue.', 'error');
+            trackingCodeInput.focus();
             return;
         }
 
@@ -122,14 +143,14 @@
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    orderId: rawOrderId,
+                    trackingCode: rawTrackingCode,
                 }),
             });
 
             const data = await response.json();
 
             if (!response.ok || !data.success) {
-                const errorMessage = data && data.message ? data.message : 'Unable to locate that order ID.';
+                const errorMessage = data && data.message ? data.message : 'Unable to locate that tracking code.';
                 showFeedback(errorMessage, 'error');
                 return;
             }

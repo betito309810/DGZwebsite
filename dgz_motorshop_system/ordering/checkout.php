@@ -4,6 +4,8 @@ require_once __DIR__ . '/../includes/product_variants.php'; // Added: variant he
 $pdo = db();
 $errors = [];
 $referenceInput = '';
+$supportsTrackingCodes = ordersSupportsTrackingCodes($pdo);
+$trackingCodeForRedirect = null;
 
 
 if (!function_exists('ordersHasReferenceColumn')) {
@@ -40,6 +42,59 @@ if (!function_exists('ordersHasColumn')) {
             $cache[$column] = false;
         }
         return $cache[$column];
+    }
+}
+
+if (!function_exists('ordersSupportsTrackingCodes')) {
+    function ordersSupportsTrackingCodes(PDO $pdo): bool
+    {
+        static $hasColumn = null;
+        if ($hasColumn !== null) {
+            return $hasColumn;
+        }
+
+        try {
+            $stmt = $pdo->query("SHOW COLUMNS FROM orders LIKE 'tracking_code'");
+            $hasColumn = $stmt !== false && $stmt->fetch() !== false;
+        } catch (Exception $e) {
+            error_log('Unable to detect orders.tracking_code column: ' . $e->getMessage());
+            $hasColumn = false;
+        }
+
+        return $hasColumn;
+    }
+}
+
+if (!function_exists('generateTrackingCodeCandidate')) {
+    function generateTrackingCodeCandidate(): string
+    {
+        $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        $segment = static function () use ($alphabet): string {
+            $characters = '';
+            for ($i = 0; $i < 4; $i++) {
+                $characters .= $alphabet[random_int(0, strlen($alphabet) - 1)];
+            }
+
+            return $characters;
+        };
+
+        return 'DGZ-' . $segment() . '-' . $segment();
+    }
+}
+
+if (!function_exists('generateUniqueTrackingCode')) {
+    function generateUniqueTrackingCode(PDO $pdo, int $maxAttempts = 5): string
+    {
+        for ($attempt = 0; $attempt < $maxAttempts; $attempt++) {
+            $code = generateTrackingCodeCandidate();
+            $stmt = $pdo->prepare('SELECT 1 FROM orders WHERE tracking_code = ? LIMIT 1');
+            $stmt->execute([$code]);
+            if ($stmt->fetchColumn() === false) {
+                return $code;
+            }
+        }
+
+        throw new RuntimeException('Unable to generate a unique tracking code.');
     }
 }
 
@@ -338,6 +393,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
         }
     }
 
+    if (empty($errors) && $supportsTrackingCodes) {
+        try {
+            $trackingCodeForRedirect = generateUniqueTrackingCode($pdo);
+        } catch (Throwable $exception) {
+            error_log('Failed to generate tracking code: ' . $exception->getMessage());
+            $errors[] = 'We ran into a problem while generating your tracking code. Please try again.';
+        }
+    }
+
     if (empty($errors)) {
 
         $hasReferenceColumn = ordersHasReferenceColumn($pdo);
@@ -357,8 +421,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
         if ($hasLegacyContact) { $columns[] = 'contact'; $values[] = $email; }
 
         if ($hasReferenceColumn) { $columns[] = 'reference_no'; $values[] = $referenceNumber; }
+        if ($supportsTrackingCodes && $trackingCodeForRedirect !== null) { $columns[] = 'tracking_code'; $values[] = $trackingCodeForRedirect; }
         if ($hasCustomerNoteColumn) { $columns[] = 'customer_note'; $values[] = $customerNote !== '' ? $customerNote : null; } // Added storage for cashier notes when column exists
         elseif ($hasLegacyNotesColumn) { $columns[] = 'notes'; $values[] = $customerNote !== '' ? $customerNote : null; } // Added fallback storage for systems that already expose a generic notes column
+
+        if (ordersHasColumn($pdo, 'order_type')) {
+            $columns[] = 'order_type';
+            $values[] = 'online';
+        }
 
         $columns[] = 'status';
         $values[]  = 'pending';
@@ -408,7 +478,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
         }
 
         // Redirect (PRG) to avoid resubmission
-        header('Location: checkout.php?success=1&order_id=' . urlencode((string) $order_id));
+        $query = ['success' => '1'];
+        if ($trackingCodeForRedirect !== null) {
+            $query['tracking_code'] = $trackingCodeForRedirect;
+        }
+
+        if ($order_id > 0) {
+            $query['order_id'] = (string) $order_id;
+        }
+
+        header('Location: checkout.php?' . http_build_query($query));
         exit;
     }
 }
@@ -416,10 +495,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
 // Success page via GET (PRG target)
 if (isset($_GET['success']) && $_GET['success'] === '1') {
     $order_id = (int) ($_GET['order_id'] ?? 0);
+    $trackingCodeDisplay = '';
+    if (isset($_GET['tracking_code'])) {
+        $trackingCodeDisplay = strtoupper(preg_replace('/[^A-Z0-9\-]/', '', (string) $_GET['tracking_code']));
+    }
+
     echo '<div style="max-width: 600px; margin: 50px auto; background: white; padding: 40px; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); text-align: center;">';
     echo '<i class="fas fa-check-circle" style="font-size: 48px; color: #00b894; margin-bottom: 20px;"></i>';
     echo '<h2 style="color: #2d3436; margin-bottom: 20px;">Order Placed Successfully!</h2>';
-    echo '<p style="color: #636e72; margin-bottom: 10px;">Order ID: <strong>' . $order_id . '</strong></p>';
+    if ($trackingCodeDisplay !== '') {
+        echo '<p style="color: #636e72; margin-bottom: 10px;">Tracking Code: <strong>' . htmlspecialchars($trackingCodeDisplay, ENT_QUOTES, 'UTF-8') . '</strong></p>';
+        echo '<p style="color: #636e72; margin-bottom: 10px;">Keep this code handy to check your order status on the Track Order page.</p>';
+    } elseif ($order_id > 0) {
+        echo '<p style="color: #636e72; margin-bottom: 10px;">Order ID: <strong>' . $order_id . '</strong></p>';
+    }
     echo '<p style="color: #636e72; margin-bottom: 30px;">Status: <span style="background: #fdcb6e; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">Pending</span></p>';
     echo '<a href="index.php" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; padding: 15px 30px; border-radius: 8px; font-weight: 600;">Back to Shop</a>';
     echo '<script>try{localStorage.removeItem("cartItems");localStorage.removeItem("cartCount");}catch(e){}</script>';
