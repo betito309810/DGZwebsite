@@ -6,8 +6,8 @@
     <title>Track Your DGZ Motorshop Order</title>
     <!-- Font Awesome for consistent iconography across the storefront -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <!-- Shared index stylesheet for consistent footer and other styles -->
-    <link rel="stylesheet" href="../assets/css/public/index.css">
+    <!-- Shared structural styles -->
+    <link rel="stylesheet" href="../assets/css/public/shared.css">
     <!-- Page specific stylesheet lives alongside the other public assets -->
     <link rel="stylesheet" href="../assets/css/public/track-order.css">
 </head>
@@ -15,9 +15,17 @@
     <!-- Header: mirrors the home page layout so the experience feels seamless -->
     <header class="header">
         <div class="header-content">
-            <div class="logo">
+            <a href="index.php" class="logo" aria-label="DGZ Motorshop home">
                 <img src="../assets/logo.png" alt="DGZ Motorshop Logo">
-            
+            </a>
+            <div class="header-actions">
+                <a href="#" class="cart-btn" id="cartButton">
+                    <i class="fas fa-shopping-cart"></i>
+                    <span>Cart</span>
+                    <div class="cart-count" id="cartCount">0</div>
+                </a>
+            </div>
+        </div>
     </header>
 
     <!-- Navigation: adds the Track Order entry while keeping existing links -->
@@ -30,7 +38,7 @@
     </nav>
 
     <!-- Main tracker module -->
-    <main class="tracker-wrapper">
+    <main class="tracker-page">
         <section class="tracker-card">
             <h1>Track Your Order</h1>
             <p>Enter the tracking code from your confirmation message to see the latest status and important details.</p>

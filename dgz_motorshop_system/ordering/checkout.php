@@ -325,12 +325,30 @@ $cartItems = normaliseCartItems($cartItems);
 
 // If no cart items, show error (unless success page)
 if (empty($cartItems) && !(isset($_GET['success']) && $_GET['success'] === '1')) {
-    echo '<div style="max-width: 400px; margin: 50px auto; background: white; padding: 40px; border-radius: 20px; text-align: center;">';
-    echo '<i class="fas fa-shopping-cart" style="font-size: 48px; color: #636e72; margin-bottom: 20px;"></i>';
-    echo '<h2 style="color: #2d3436; margin-bottom: 15px;">Your Cart is Empty</h2>';
-    echo '<p style="color: #636e72; margin-bottom: 25px;">Add some products to your cart before proceeding to checkout.</p>';
-    echo '<a href="index.php" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; padding: 15px 30px; border-radius: 8px; font-weight: 600; margin-right: 10px;">Continue Shopping</a>';
-    echo '</div>';
+    echo <<<'HTML'
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Your Cart is Empty - DGZ Motorshop</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="../assets/css/public/shared.css">
+    <link rel="stylesheet" href="../assets/css/public/checkout.css">
+</head>
+<body>
+    <div class="checkout-message">
+        <i class="fas fa-shopping-cart checkout-empty__icon" aria-hidden="true"></i>
+        <h2 class="checkout-message__title">Your Cart is Empty</h2>
+        <p class="checkout-message__text">Add some products to your cart before proceeding to checkout.</p>
+        <a class="checkout-empty__button" href="index.php">
+            <i class="fas fa-arrow-left" aria-hidden="true"></i>
+            <span>Continue Shopping</span>
+        </a>
+    </div>
+</body>
+</html>
+HTML;
     exit;
 }
 
@@ -587,27 +605,51 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
         $trackingCodeDisplay = strtoupper(preg_replace('/[^A-Z0-9\-]/', '', (string) $_GET['tracking_code']));
     }
 
-    echo '<div style="max-width: 600px; margin: 50px auto; background: white; padding: 40px; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); text-align: center;">';
-    echo '<i class="fas fa-check-circle" style="font-size: 48px; color: #00b894; margin-bottom: 20px;"></i>';
-    echo '<h2 style="color: #2d3436; margin-bottom: 20px;">Order Placed Successfully!</h2>';
+    $trackingMarkup = '';
     if ($trackingCodeDisplay !== '') {
         $trackOrderUrl = resolveTrackOrderUrl();
         $safeTrackOrderUrl = htmlspecialchars($trackOrderUrl, ENT_QUOTES, 'UTF-8');
-        echo '<div style="display: inline-block; padding: 16px 28px; margin-bottom: 18px; background: linear-gradient(135deg, #74b9ff 0%, #a29bfe 100%); color: white; font-size: 24px; font-weight: 700; letter-spacing: 2px; border-radius: 12px;">'
-            . htmlspecialchars($trackingCodeDisplay, ENT_QUOTES, 'UTF-8')
-            . '</div>';
-        echo '<p style="color: #2d3436; margin-bottom: 10px; font-weight: 600;">Here is your tracking code. Keep it safe to check your order status.</p>';
-        echo '<p style="color: #636e72; margin-bottom: 10px;">We received your order, we will review your order and wait for your order to approve.</p>';
-        echo '<p style="color: #636e72; margin-bottom: 10px;">We also sent this code to your email so you can track the status anytime.</p>';
-        echo '<p style="color: #2d3436; margin-bottom: 20px; font-weight: 500;">Use this code on the <a style="color: #0984e3; text-decoration: underline;" href="' . $safeTrackOrderUrl . '">Track Order page</a> to follow your order.</p>';
+        $safeTrackingCode = htmlspecialchars($trackingCodeDisplay, ENT_QUOTES, 'UTF-8');
+        $trackingMarkup = <<<HTML
+        <div class="checkout-message__code">{$safeTrackingCode}</div>
+        <p class="checkout-message__text checkout-message__text--emphasis">Here is your tracking code. Keep it safe to check your order status.</p>
+        <p class="checkout-message__text">We received your order, we will review your order and wait for your order to approve.</p>
+        <p class="checkout-message__text">We also sent this code to your email so you can track the status anytime.</p>
+        <p class="checkout-message__text">Use this code on the <a class="checkout-message__link" href="{$safeTrackOrderUrl}">Track Order page</a> to follow your order.</p>
+        HTML;
     } else {
-        echo '<p style="color: #636e72; margin-bottom: 10px;">We received your order, we will review your order and wait for your order to approve.</p>';
-        echo '<p style="color: #636e72; margin-bottom: 10px;">Please check your email for your tracking code.</p>';
+        $trackingMarkup = <<<HTML
+        <p class="checkout-message__text">We received your order, we will review your order and wait for your order to approve.</p>
+        <p class="checkout-message__text">Please check your email for your tracking code.</p>
+        HTML;
     }
-    echo '<p style="color: #636e72; margin-bottom: 30px;">Status: <span style="background: #fdcb6e; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">Pending</span></p>';
-    echo '<a href="index.php" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; padding: 15px 30px; border-radius: 8px; font-weight: 600;">Back to Shop</a>';
-    echo '<script>try{localStorage.removeItem("cartItems");localStorage.removeItem("cartCount");}catch(e){}</script>';
-    echo '</div>';
+
+    echo <<<HTML
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Order Placed - DGZ Motorshop</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="../assets/css/public/shared.css">
+    <link rel="stylesheet" href="../assets/css/public/checkout.css">
+</head>
+<body>
+    <div class="checkout-message">
+        <i class="fas fa-check-circle checkout-message__icon checkout-message__icon--success" aria-hidden="true"></i>
+        <h2 class="checkout-message__title">Order Placed Successfully!</h2>
+        {$trackingMarkup}
+        <p class="checkout-message__status">Status:<span class="checkout-message__status-pill">Pending</span></p>
+        <a class="checkout-message__button" href="index.php">
+            <i class="fas fa-arrow-left" aria-hidden="true"></i>
+            <span>Back to Shop</span>
+        </a>
+    </div>
+    <script>try{localStorage.removeItem('cartItems');localStorage.removeItem('cartCount');}catch(e){}</script>
+</body>
+</html>
+HTML;
     exit;
 }
 
@@ -620,21 +662,26 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Checkout - DGZ Motorshop</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="../assets/css/public/shared.css">
     <link rel="stylesheet" href="../assets/css/public/checkout.css">
 </head>
 <body>
     <header class="header">
         <div class="header-content">
-            <div class="logo">
-                <img src="../assets/logo.png" alt="Company Logo">
+            <a href="index.php" class="logo" aria-label="DGZ Motorshop home">
+                <img src="../assets/logo.png" alt="DGZ Motorshop Logo">
+            </a>
+            <div class="header-actions">
+                <a href="index.php" class="continue-shopping-btn">
+                    <i class="fas fa-arrow-left"></i>
+                    Continue Shopping
+                </a>
             </div>
-            <a href="index.php" class="continue-shopping-btn">
-            <i class="fas fa-arrow-left"></i> Continue Shopping
-        </a>
         </div>
     </header>
 
-    <div class="container">
+    <main class="checkout-page">
+    <div class="checkout-layout">
         <!-- Left Column - Checkout Form -->
         <div class="checkout-form">
             <?php if (!empty($errors)): ?>
@@ -720,7 +767,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                     </div>
                     
                     <div class="qr-code">
-                        <img src="../assets/QR.png" alt="">
+                        <img src="../assets/QR.png" alt="DGZ Motorshop GCash QR code">
                     </div>
 
                     <div class="form-group">
@@ -746,7 +793,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
         <!-- Right Column - Order Summary -->
         <div class="order-summary">
             <!-- Clear cart button keeps summary synchronized with local storage -->
-            <button type="button" id="clearCartButton" class="clear-cart-btn" style="<?= empty($cartItems) ? 'display:none;' : '' ?>">Clear Cart</button>
+            <button type="button" id="clearCartButton" class="clear-cart-btn <?= empty($cartItems) ? 'is-hidden' : '' ?>">Clear Cart</button>
             <div id="orderItemsContainer" class="order-items">
                 <?php foreach ($cartItems as $index => $item): ?>
                 <div class="order-item" data-index="<?= $index ?>">
@@ -764,14 +811,14 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                         </div>
                     <div class="item-meta">
                         <!-- Quantity input remains editable so buyers can adjust before checkout -->
-                        <input type="number" class="quantity-input" min="1" value="<?= $item['quantity'] ?>" data-index="<?= $index ?>" style="width: 50px; margin-right: 10px;">
+                        <input type="number" class="quantity-input" min="1" value="<?= $item['quantity'] ?>" data-index="<?= $index ?>">
                         <button type="button" class="item-remove" data-index="<?= $index ?>">Remove</button>
                     </div>
                 </div>
                 <?php endforeach; ?>
             </div>
 
-            <div id="orderEmptyState" class="order-empty" style="<?= empty($cartItems) ? '' : 'display:none;' ?>">
+            <div id="orderEmptyState" class="order-empty <?= empty($cartItems) ? '' : 'is-hidden' ?>">
                 <i class="fas fa-shopping-basket"></i>
                 <p>Your cart is empty.</p>
                 <a href="index.php" class="order-empty-link">Continue shopping</a>
@@ -795,6 +842,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             </div>
         </div>
     </div>
+    </main>
 
     <script>
         // File upload feedback

@@ -1,54 +1,45 @@
+/*
+ * FAQ shared styles
+ * -----------------
+ * Lightweight helpers for FAQ blocks that can be reused across pages.
+ */
+
 .faq-section {
-    background: white;
-    padding: 40px;
-    border-radius: 20px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
-    margin-bottom: 60px;
+    display: grid;
+    gap: 1.5rem;
 }
 
 .faq-section h2 {
-    font-size: 32px;
-    color: #2d3436;
-    margin-bottom: 24px;
-    text-align: center;
-}
-
-.faq-item {
-    padding: 20px 0;
-    border-bottom: 1px solid #e6ecf0;
-}
-
-.faq-item:last-of-type {
-    border-bottom: none;
-}
-
-.faq-question {
-    font-size: 20px;
-    color: #2d3436;
-    margin-bottom: 12px;
-}
-
-.faq-answer {
-    font-size: 16px;
-    color: #636e72;
-    line-height: 1.7;
     margin: 0;
 }
 
-@media (max-width: 768px) {
+.faq-list {
+    display: grid;
+    gap: 1.1rem;
+}
+
+.faq-item {
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(216, 226, 243, 0.8);
+    background: var(--color-surface-soft);
+    padding: 1.1rem 1.2rem;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+}
+
+.faq-question {
+    margin: 0 0 0.5rem;
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.faq-answer {
+    margin: 0;
+    color: var(--color-muted);
+    line-height: 1.6;
+}
+
+@media (max-width: 640px) {
     .faq-section {
-        padding: 28px;
-    }
-
-    .faq-section h2 {
-        font-size: 28px;
-    }
-
-    .faq-question {
-        font-size: 18px;
-    }
-
-    .faq-answer {
-        font-size: 15px;
+        gap: 1.25rem;
     }
 }
