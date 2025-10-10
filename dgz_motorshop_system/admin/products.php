@@ -1024,7 +1024,8 @@ if ($currentSort === 'name') {
                                         <input type="hidden" data-variant-id>
                                         <div class="variant-row__field">
                                             <label>Label / Size
-                                                <input type="text" data-variant-label required placeholder="e.g., 100ml">
+                                                <!-- Updated: allow blank variant rows so base price/qty can be used without validation blocking. -->
+                                                <input type="text" data-variant-label placeholder="e.g., 100ml">
                                             </label>
                                         </div>
                                         <div class="variant-row__field">
@@ -1034,12 +1035,12 @@ if ($currentSort === 'name') {
                                         </div>
                                         <div class="variant-row__field">
                                             <label>Price
-                                                <input type="number" min="0" step="0.01" data-variant-price required>
+                                                <input type="number" min="0" step="0.01" data-variant-price>
                                             </label>
                                         </div>
                                         <div class="variant-row__field">
                                             <label>Quantity
-                                                <input type="number" min="0" data-variant-quantity required>
+                                                <input type="number" min="0" data-variant-quantity>
                                             </label>
                                         </div>
                                         <div class="variant-row__field variant-row__field--default">
@@ -1337,7 +1338,8 @@ if ($currentSort === 'name') {
                                         <input type="hidden" data-variant-id>
                                         <div class="variant-row__field">
                                             <label>Label / Size
-                                                <input type="text" data-variant-label required placeholder="e.g., 90/90-14">
+                                                <!-- Updated: variant label no longer required so admins can skip variant setup. -->
+                                                <input type="text" data-variant-label placeholder="e.g., 90/90-14">
                                             </label>
                                         </div>
                                         <div class="variant-row__field">
@@ -1347,12 +1349,12 @@ if ($currentSort === 'name') {
                                         </div>
                                         <div class="variant-row__field">
                                             <label>Price
-                                                <input type="number" min="0" step="0.01" data-variant-price required>
+                                                <input type="number" min="0" step="0.01" data-variant-price>
                                             </label>
                                         </div>
                                         <div class="variant-row__field">
                                             <label>Quantity
-                                                <input type="number" min="0" data-variant-quantity required>
+                                                <input type="number" min="0" data-variant-quantity>
                                             </label>
                                         </div>
                                         <div class="variant-row__field variant-row__field--default">
