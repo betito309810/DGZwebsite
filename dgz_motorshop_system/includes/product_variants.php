@@ -71,6 +71,10 @@ if (!function_exists('summariseVariantStock')) {
      */
     function summariseVariantStock(array $variants): array
     {
+        if (empty($variants)) {
+            return [];
+        }
+
         $totalQuantity = 0;
         $defaultPrice = null;
         $fallbackPrice = null;
