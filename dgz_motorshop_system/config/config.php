@@ -5,6 +5,9 @@ $DB_NAME = 'u776610364_dgzstonino';
 $DB_USER = 'u776610364_dgzadmin';
 $DB_PASS = 'Dgzstonino123';
 
+// Ensure all pages consistently render dates in Philippine time.
+date_default_timezone_set('Asia/Manila');
+
 // Resolve the project's public and system base paths so generated links work
 // regardless of where the project is deployed inside the web root. The
 // storefront PHP files live alongside this directory, so we compute both the
@@ -17,6 +20,7 @@ $documentRoot = isset($_SERVER['DOCUMENT_ROOT'])
 
 $APP_BASE_PATH = '';
 $SYSTEM_BASE_PATH = '';
+$SYSTEM_BASE_URL = '';
 $systemFolderName = $systemRoot !== false ? basename($systemRoot) : 'dgz_motorshop_system';
 
 if ($projectRoot !== false && $documentRoot !== false && strpos($projectRoot, $documentRoot) === 0) {
@@ -55,8 +59,10 @@ $host = $_SERVER['HTTP_HOST'] ?? '';
 if ($host !== '') {
     $scheme = $isSecure ? 'https://' : 'http://';
     $APP_BASE_URL = rtrim($scheme . $host . $APP_BASE_PATH, '/');
+    $SYSTEM_BASE_URL = rtrim($scheme . $host . $SYSTEM_BASE_PATH, '/');
 } else {
     $APP_BASE_URL = $APP_BASE_PATH;
+    $SYSTEM_BASE_URL = $SYSTEM_BASE_PATH;
 }
 
 /**
@@ -107,6 +113,14 @@ if (!function_exists('systemBasePath')) {
     {
         global $SYSTEM_BASE_PATH;
         return $SYSTEM_BASE_PATH ?: '';
+    }
+}
+
+if (!function_exists('systemBaseUrl')) {
+    function systemBaseUrl(): string
+    {
+        global $SYSTEM_BASE_URL;
+        return $SYSTEM_BASE_URL ?: '';
     }
 }
 
@@ -366,7 +380,9 @@ if (!function_exists('normalizePaymentProofPath')) {
             return $normalized;
         }
 
-        $systemBase = rtrim(systemBasePath(), '/');
+        $systemBasePath = systemBasePath();
+        $systemBaseUrl = systemBaseUrl();
+        $systemBase = rtrim($systemBasePath, '/');
         if ($systemBase === '') {
             $systemBase = '/dgz_motorshop_system';
         }
@@ -397,6 +413,31 @@ if (!function_exists('normalizePaymentProofPath')) {
 
         $relative = ltrim($normalized, '/');
 
+        // Strip any local filesystem prefixes so we end up with a web path.
+        if ($relative !== '') {
+            $uploadsPos = stripos($relative, 'uploads/');
+            if ($uploadsPos !== false) {
+                $relative = substr($relative, $uploadsPos);
+            }
+
+            if ($relative !== '') {
+                $systemFolderNeedle = $systemFolder !== '' ? $systemFolder . '/' : '';
+                $legacyFolderNeedle = 'dgz_motorshop_system/';
+
+                foreach ([$systemFolderNeedle, $legacyFolderNeedle] as $needle) {
+                    if ($needle === '') {
+                        continue;
+                    }
+
+                    $needlePos = strpos($relative, $needle);
+                    if ($needlePos !== false) {
+                        $relative = substr($relative, $needlePos + strlen($needle));
+                        break;
+                    }
+                }
+            }
+        }
+
         if ($systemFolder !== '' && strpos($relative, $systemFolder . '/') === 0) {
             $relative = substr($relative, strlen($systemFolder) + 1);
         } elseif (strpos($relative, 'dgz_motorshop_system/') === 0) {
@@ -404,14 +445,42 @@ if (!function_exists('normalizePaymentProofPath')) {
         }
 
         if ($relative === '') {
-            return $systemBase;
+            if ($systemBaseUrl !== '') {
+                return rtrim($systemBaseUrl, '/');
+            }
+
+            if ($systemBasePath !== '') {
+                $trimmedBasePath = rtrim($systemBasePath, '/');
+                return $trimmedBasePath === '' ? '/' : $trimmedBasePath;
+            }
+
+            $prefix = rtrim($defaultPrefix, '/');
+            if ($prefix === '') {
+                return '';
+            }
+
+            return $prefix . '/';
         }
 
-        if ($systemBase !== '') {
-            return rtrim($systemBase, '/') . '/' . ltrim($relative, '/');
+        if ($systemBaseUrl !== '') {
+            return rtrim($systemBaseUrl, '/') . '/' . ltrim($relative, '/');
         }
 
-        return $defaultPrefix . ltrim($relative, '/');
+        if ($systemBasePath !== '') {
+            $normalizedBasePath = rtrim($systemBasePath, '/');
+            if ($normalizedBasePath === '') {
+                return '/' . ltrim($relative, '/');
+            }
+
+            return $normalizedBasePath . '/' . ltrim($relative, '/');
+        }
+
+        $prefix = rtrim($defaultPrefix, '/');
+        if ($prefix === '') {
+            return ltrim($relative, '/');
+        }
+
+        return $prefix . '/' . ltrim($relative, '/');
     }
 }
 
