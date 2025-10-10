@@ -136,6 +136,28 @@ if (!function_exists('generateUniqueTrackingCode')) {
     }
 }
 
+if (!function_exists('resolveTrackOrderUrl')) {
+    function resolveTrackOrderUrl(): string
+    {
+        $isSecure = !empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off';
+        $scheme = $isSecure ? 'https' : 'http';
+        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+
+        $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
+        $directory = rtrim(str_replace('\\', '/', dirname($scriptName)), '/');
+        if ($directory === '' || $directory === '.') {
+            $path = '/track-order.php';
+        } else {
+            $path = $directory . '/track-order.php';
+            if ($path[0] !== '/') {
+                $path = '/' . $path;
+            }
+        }
+
+        return $scheme . '://' . $host . $path;
+    }
+}
+
 ensureOrdersTrackingCodeColumn($pdo);
 $supportsTrackingCodes = ordersSupportsTrackingCodes($pdo);
 
@@ -530,12 +552,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
             $displayName = !empty($nameParts) ? implode(' ', $nameParts) : 'there';
             $safeName = htmlspecialchars($displayName, ENT_QUOTES, 'UTF-8');
             $safeTrackingCode = htmlspecialchars($trackingCodeForRedirect, ENT_QUOTES, 'UTF-8');
+            $trackOrderUrl = resolveTrackOrderUrl();
+            $safeTrackOrderUrl = htmlspecialchars($trackOrderUrl, ENT_QUOTES, 'UTF-8');
 
             $emailSubject = 'Your DGZ Motorshop Tracking Code';
             $emailBody = '<p>Hi ' . $safeName . ',</p>'
                 . '<p>We received your order, we will review your order and wait for your order to approve.</p>'
                 . '<p>Your tracking code is <strong>' . $safeTrackingCode . '</strong>.</p>'
-                . '<p>You can use this code on the Track Order page to follow the progress of your purchase.</p>'
+                . '<p>You can use this code on the <a href="' . $safeTrackOrderUrl . '">Track Order page</a> to follow the progress of your purchase.</p>'
                 . '<p>Thank you,<br>DGZ Motorshop</p>';
 
             try {
@@ -567,12 +591,15 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
     echo '<i class="fas fa-check-circle" style="font-size: 48px; color: #00b894; margin-bottom: 20px;"></i>';
     echo '<h2 style="color: #2d3436; margin-bottom: 20px;">Order Placed Successfully!</h2>';
     if ($trackingCodeDisplay !== '') {
+        $trackOrderUrl = resolveTrackOrderUrl();
+        $safeTrackOrderUrl = htmlspecialchars($trackOrderUrl, ENT_QUOTES, 'UTF-8');
         echo '<div style="display: inline-block; padding: 16px 28px; margin-bottom: 18px; background: linear-gradient(135deg, #74b9ff 0%, #a29bfe 100%); color: white; font-size: 24px; font-weight: 700; letter-spacing: 2px; border-radius: 12px;">'
             . htmlspecialchars($trackingCodeDisplay, ENT_QUOTES, 'UTF-8')
             . '</div>';
         echo '<p style="color: #2d3436; margin-bottom: 10px; font-weight: 600;">Here is your tracking code. Keep it safe to check your order status.</p>';
         echo '<p style="color: #636e72; margin-bottom: 10px;">We received your order, we will review your order and wait for your order to approve.</p>';
         echo '<p style="color: #636e72; margin-bottom: 10px;">We also sent this code to your email so you can track the status anytime.</p>';
+        echo '<p style="color: #2d3436; margin-bottom: 20px; font-weight: 500;">Use this code on the <a style="color: #0984e3; text-decoration: underline;" href="' . $safeTrackOrderUrl . '">Track Order page</a> to follow your order.</p>';
     } else {
         echo '<p style="color: #636e72; margin-bottom: 10px;">We received your order, we will review your order and wait for your order to approve.</p>';
         echo '<p style="color: #636e72; margin-bottom: 10px;">Please check your email for your tracking code.</p>';
