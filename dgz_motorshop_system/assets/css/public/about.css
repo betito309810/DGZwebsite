@@ -8,7 +8,7 @@
 
 .about-container {
     max-width: 1100px;
-    margin: 40px auto 80px;
+    margin: 80px auto 96px;
     padding: 0 20px;
     display: grid;
     gap: 32px;
@@ -17,8 +17,9 @@
 .location-section {
     background: var(--color-surface);
     border-radius: var(--radius-large);
-    padding: 40px;
+    padding: 44px;
     box-shadow: var(--shadow-soft);
+    border: 1px solid var(--color-border);
     text-align: center;
 }
 
@@ -39,6 +40,7 @@
     overflow: hidden;
     border-radius: var(--radius-large);
     box-shadow: var(--shadow-soft);
+    border: 1px solid var(--color-border);
     aspect-ratio: 16 / 9;
 }
 
@@ -58,13 +60,13 @@
 /* Responsive adjustments */
 @media (max-width: 900px) {
     .location-section {
-        padding: 32px 24px;
+        padding: 36px 28px;
     }
 }
 
 @media (max-width: 600px) {
     .about-container {
-        margin: 28px auto 60px;
+        margin: 36px auto 72px;
         gap: 24px;
     }
 
