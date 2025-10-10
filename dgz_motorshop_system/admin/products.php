@@ -932,126 +932,131 @@ if ($currentSort === 'name') {
                 <form method="post" id="addProductForm" enctype="multipart/form-data" class="product-modal__form">
                     <h3>Add Product</h3>
                     <input type="hidden" name="id" value="0">
-                    <!-- Updated: Field wrapper ensures grid columns display two inputs per row on desktop. -->
-                    <div class="product-modal__field">
-                        <label for="addProductCode">Product Code</label>
-                        <input id="addProductCode" name="code" required placeholder="Enter product code">
-                    </div>
-                    <div class="product-modal__field">
-                        <label for="addProductName">Name</label>
-                        <input id="addProductName" name="name" required placeholder="Enter product name">
-                    </div>
-                    <div class="product-modal__field">
-                        <label for="brandSelect">Brand</label>
-                        <select name="brand" id="brandSelect" onchange="toggleBrandInput(this)">
-                            <option value="">Select brand</option>
-                            <?php foreach($brands as $b): ?>
-                            <option value="<?= htmlspecialchars($b) ?>"><?= htmlspecialchars($b) ?></option>
-                            <?php endforeach; ?>
-                            <option value="__addnew__">Add new brand...</option>
-                        </select>
-                        <input name="brand_new" id="brandNewInput" placeholder="Enter new brand" style="display:none; margin-top:6px;">
-                    </div>
-                    <div class="product-modal__field">
-                        <label for="categorySelect">Category</label>
-                        <select name="category" id="categorySelect" onchange="toggleCategoryInput(this)">
-                            <option value="">Select category</option>
-                            <?php foreach($categories as $c): ?>
-                            <option value="<?= htmlspecialchars($c) ?>"><?= htmlspecialchars($c) ?></option>
-                            <?php endforeach; ?>
-                            <option value="__addnew__">Add new category...</option>
-                        </select>
-                        <input name="category_new" id="categoryNewInput" placeholder="Enter new category" style="display:none; margin-top:6px;">
-                    </div>
-                    <div class="product-modal__field product-modal__full">
-                        <label for="addProductDescription">Description</label>
-                        <textarea id="addProductDescription" name="description" placeholder="Enter product description"></textarea>
-                    </div>
-                    <div class="product-modal__field">
-                        <label for="addProductQuantity">Quantity</label>
-                        <input id="addProductQuantity" name="quantity" type="number" min="0" required placeholder="Auto-calculated" readonly data-variant-total-quantity>
-                    </div>
-                    <div class="product-modal__field">
-                        <label for="addProductPrice">Price per unit</label>
-                        <input id="addProductPrice" name="price" type="number" min="0" step="0.01" required placeholder="Auto-calculated" readonly data-variant-default-price>
-                    </div>
-                    <div class="variant-editor product-modal__full" data-variant-editor data-context="create" data-initial-variants="[]">
-                        <!-- Added: repeatable variant rows so staff can encode different sizes/SKUs. -->
-                        <div class="variant-editor__header">
-                            <h4>Variants / Sizes</h4>
-                            <button type="button" class="variant-editor__add" data-variant-add>
-                                <i class="fas fa-plus"></i> Add Variant
-                            </button>
-                        </div>
-                        <p class="variant-editor__hint">Each variant may represent a size (e.g., 50ml, 100ml) or configuration.</p>
-                        <div class="variant-editor__rows" data-variant-rows></div>
-                        <template data-variant-template>
-                            <div class="variant-row" data-variant-row>
-                                <input type="hidden" data-variant-id>
-                                <div class="variant-row__field">
-                                    <label>Label / Size
-                                        <input type="text" data-variant-label required placeholder="e.g., 100ml">
-                                    </label>
+                    <div class="product-modal__layout">
+                        <div class="product-modal__panel product-modal__details">
+                            <div class="product-modal__grid">
+                                <!-- Updated: Field wrapper keeps inputs aligned within the new grid layout. -->
+                                <div class="product-modal__field">
+                                    <label for="addProductCode">Product Code</label>
+                                    <input id="addProductCode" name="code" required placeholder="Enter product code">
                                 </div>
-                                <div class="variant-row__field">
-                                    <label>SKU (optional)
-                                        <input type="text" data-variant-sku placeholder="Custom SKU">
-                                    </label>
+                                <div class="product-modal__field">
+                                    <label for="addProductName">Name</label>
+                                    <input id="addProductName" name="name" required placeholder="Enter product name">
                                 </div>
-                                <div class="variant-row__field">
-                                    <label>Price
-                                        <input type="number" min="0" step="0.01" data-variant-price required>
-                                    </label>
+                                <div class="product-modal__field">
+                                    <label for="brandSelect">Brand</label>
+                                    <select name="brand" id="brandSelect" onchange="toggleBrandInput(this)">
+                                        <option value="">Select brand</option>
+                                        <?php foreach($brands as $b): ?>
+                                        <option value="<?= htmlspecialchars($b) ?>"><?= htmlspecialchars($b) ?></option>
+                                        <?php endforeach; ?>
+                                        <option value="__addnew__">Add new brand...</option>
+                                    </select>
+                                    <input name="brand_new" id="brandNewInput" placeholder="Enter new brand" style="display:none; margin-top:6px;">
                                 </div>
-                                <div class="variant-row__field">
-                                    <label>Quantity
-                                        <input type="number" min="0" data-variant-quantity required>
-                                    </label>
+                                <div class="product-modal__field">
+                                    <label for="categorySelect">Category</label>
+                                    <select name="category" id="categorySelect" onchange="toggleCategoryInput(this)">
+                                        <option value="">Select category</option>
+                                        <?php foreach($categories as $c): ?>
+                                        <option value="<?= htmlspecialchars($c) ?>"><?= htmlspecialchars($c) ?></option>
+                                        <?php endforeach; ?>
+                                        <option value="__addnew__">Add new category...</option>
+                                    </select>
+                                    <input name="category_new" id="categoryNewInput" placeholder="Enter new category" style="display:none; margin-top:6px;">
                                 </div>
-                                <div class="variant-row__field variant-row__field--default">
-                                    <label class="variant-default-toggle">
-                                        <input type="radio" name="create_variant_default" data-variant-default>
-                                        Default
-                                    </label>
+                                <div class="product-modal__field product-modal__full">
+                                    <label for="addProductDescription">Description</label>
+                                    <textarea id="addProductDescription" name="description" placeholder="Enter product description"></textarea>
                                 </div>
-                                <button type="button" class="variant-row__remove" data-variant-remove aria-label="Remove variant">
-                                    <i class="fas fa-trash"></i>
-                                </button>
+                                <div class="product-modal__field">
+                                    <label for="addProductQuantity">Quantity</label>
+                                    <input id="addProductQuantity" name="quantity" type="number" min="0" required placeholder="Auto-calculated" readonly data-variant-total-quantity>
+                                </div>
+                                <div class="product-modal__field">
+                                    <label for="addProductPrice">Price per unit</label>
+                                    <input id="addProductPrice" name="price" type="number" min="0" step="0.01" required placeholder="Auto-calculated" readonly data-variant-default-price>
+                                </div>
+                                <div class="product-modal__field">
+                                    <label for="supplierSelect">Supplier</label>
+                                    <select id="supplierSelect" name="supplier" onchange="toggleSupplierInput(this)">
+                                        <option value="">Select supplier</option>
+                                        <?php foreach($suppliers as $s): ?>
+                                        <option value="<?= htmlspecialchars($s) ?>"><?= htmlspecialchars($s) ?></option>
+                                        <?php endforeach; ?>
+                                        <option value="__addnew__">Add new supplier...</option>
+                                    </select>
+                                    <input name="supplier_new" id="supplierNewInput" placeholder="Enter new supplier" style="display:none; margin-top:6px;">
+                                </div>
+                                <div class="product-modal__field">
+                                    <label for="addProductLowStock">Low Stock Threshold</label>
+                                    <input id="addProductLowStock" name="low_stock_threshold" value="5" type="number" min="0" required>
+                                </div>
                             </div>
-                        </template>
-                        <input type="hidden" name="variants_payload" data-variants-payload>
-                    </div>
-                    <div class="product-modal__field">
-                        <label for="supplierSelect">Supplier</label>
-                        <select name="supplier" id="supplierSelect" onchange="toggleSupplierInput(this)">
-                            <option value="">Select supplier</option>
-                            <?php foreach($suppliers as $s): ?>
-                            <option value="<?= htmlspecialchars($s) ?>"><?= htmlspecialchars($s) ?></option>
-                            <?php endforeach; ?>
-                            <option value="__addnew__">Add new supplier...</option>
-                        </select>
-                        <input name="supplier_new" id="supplierNewInput" placeholder="Enter new supplier" style="display:none; margin-top:6px;">
-                    </div>
-                    <div class="product-modal__field">
-                        <label for="addProductLowStock">Low Stock Threshold</label>
-                        <input id="addProductLowStock" name="low_stock_threshold" value="5" type="number" min="0" required>
+                        </div>
+                        <div class="product-modal__panel product-modal__media">
+                            <!-- Added: Media panel now sits beside the detail grid but above the variants section. -->
+                            <label>Product Image:
+                                <input name="image" type="file" accept="image/*" onchange="previewAddImage(event)">
+                            </label>
+                            <p>Upload square photos (~600×600px). Files are stored under <code>/uploads/products</code>.</p>
+                            <label>Additional Gallery Images:
+                                <input name="gallery_images[]" type="file" accept="image/*" multiple>
+                            </label>
+                            <img id="addImagePreview" class="modal-image-preview" src="../assets/img/product-placeholder.svg" alt="Preview">
+                        </div>
+                        <div class="product-modal__panel product-modal__variants">
+                            <div class="variant-editor" data-variant-editor data-context="create" data-initial-variants="[]">
+                                <!-- Added: repeatable variant rows now anchored beneath the media section for clarity. -->
+                                <div class="variant-editor__header">
+                                    <h4>Variants / Sizes</h4>
+                                    <button type="button" class="variant-editor__add" data-variant-add>
+                                        <i class="fas fa-plus"></i> Add Variant
+                                    </button>
+                                </div>
+                                <p class="variant-editor__hint">Each variant may represent a size (e.g., 50ml, 100ml) or configuration.</p>
+                                <div class="variant-editor__rows" data-variant-rows></div>
+                                <template data-variant-template>
+                                    <div class="variant-row" data-variant-row>
+                                        <input type="hidden" data-variant-id>
+                                        <div class="variant-row__field">
+                                            <label>Label / Size
+                                                <input type="text" data-variant-label required placeholder="e.g., 100ml">
+                                            </label>
+                                        </div>
+                                        <div class="variant-row__field">
+                                            <label>SKU (optional)
+                                                <input type="text" data-variant-sku placeholder="Custom SKU">
+                                            </label>
+                                        </div>
+                                        <div class="variant-row__field">
+                                            <label>Price
+                                                <input type="number" min="0" step="0.01" data-variant-price required>
+                                            </label>
+                                        </div>
+                                        <div class="variant-row__field">
+                                            <label>Quantity
+                                                <input type="number" min="0" data-variant-quantity required>
+                                            </label>
+                                        </div>
+                                        <div class="variant-row__field variant-row__field--default">
+                                            <label class="variant-default-toggle">
+                                                <input type="radio" name="create_variant_default" data-variant-default>
+                                                Default
+                                            </label>
+                                        </div>
+                                        <button type="button" class="variant-row__remove" data-variant-remove aria-label="Remove variant">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </template>
+                                <input type="hidden" name="variants_payload" data-variants-payload>
+                            </div>
+                        </div>
                     </div>
                     <button name="save_product" type="submit">Add</button>
                 </form>
-                <div class="modal-image-upload">
-                    <label>Product Image:
-                        <input name="image" type="file" accept="image/*" form="addProductForm" onchange="previewAddImage(event)">
-                    </label>
-                    <p>
-                        <!-- Added: brief guidance so staff know the target dimensions and storage path. -->
-                        Upload square photos (~600×600px). Files are stored under <code>/uploads/products</code>.
-                    </p>
-                    <label>Additional Gallery Images:
-                        <input name="gallery_images[]" type="file" accept="image/*" multiple form="addProductForm">
-                    </label>
-                    <img id="addImagePreview" class="modal-image-preview"
-                        src="../assets/img/product-placeholder.svg" alt="Preview">
-                </div>
             </div>
         </div>
         <!-- Fallback Synchroniser -->
@@ -1238,128 +1243,131 @@ if ($currentSort === 'name') {
                 <form method="post" id="editProductForm" enctype="multipart/form-data" class="product-modal__form">
                     <h3>Edit Product</h3>
                     <input type="hidden" name="id" id="edit_id">
-                    <!-- Updated: Mirrored grid wrappers keep edit fields aligned with the add modal. -->
-                    <div class="product-modal__field">
-                        <label for="edit_code">Product Code</label>
-                        <input name="code" id="edit_code" required placeholder="Enter product code">
-                    </div>
-                    <div class="product-modal__field">
-                        <label for="edit_name">Name</label>
-                        <input name="name" id="edit_name" required placeholder="Enter product name">
-                    </div>
-                    <div class="product-modal__field">
-                        <label for="edit_brand">Brand</label>
-                        <select name="brand" id="edit_brand" onchange="toggleBrandInputEdit(this)">
-                            <option value="">Select brand</option>
-                            <?php foreach($brands as $b): ?>
-                            <option value="<?= htmlspecialchars($b) ?>"><?= htmlspecialchars($b) ?></option>
-                            <?php endforeach; ?>
-                            <option value="__addnew__">Add new brand...</option>
-                        </select>
-                        <input name="brand_new" id="edit_brand_new" placeholder="Enter new brand" style="display:none; margin-top:6px;">
-                    </div>
-                    <div class="product-modal__field">
-                        <label for="edit_category">Category</label>
-                        <select name="category" id="edit_category" onchange="toggleCategoryInputEdit(this)">
-                            <option value="">Select category</option>
-                            <?php foreach($categories as $c): ?>
-                            <option value="<?= htmlspecialchars($c) ?>"><?= htmlspecialchars($c) ?></option>
-                            <?php endforeach; ?>
-                            <option value="__addnew__">Add new category...</option>
-                        </select>
-                        <input name="category_new" id="edit_category_new" placeholder="Enter new category" style="display:none; margin-top:6px;">
-                    </div>
-                    <div class="product-modal__field product-modal__full">
-                        <label for="edit_description">Description</label>
-                        <textarea name="description" id="edit_description" placeholder="Enter product description"></textarea>
-                    </div>
-                    <div class="product-modal__field">
-                        <label for="edit_quantity">Quantity</label>
-                        <input name="quantity" id="edit_quantity" type="number" min="0" required placeholder="Auto-calculated" readonly data-variant-total-quantity>
-                    </div>
-                    <div class="product-modal__field">
-                        <label for="edit_price">Price per unit</label>
-                        <input name="price" id="edit_price" type="number" min="0" step="0.01" required placeholder="Auto-calculated" readonly data-variant-default-price>
-                    </div>
-                    <div class="variant-editor product-modal__full" data-variant-editor data-context="edit" data-initial-variants="[]">
-                        <!-- Added: editable variant grid for existing products. -->
-                        <div class="variant-editor__header">
-                            <h4>Variants / Sizes</h4>
-                            <button type="button" class="variant-editor__add" data-variant-add>
-                                <i class="fas fa-plus"></i> Add Variant
-                            </button>
-                        </div>
-                        <p class="variant-editor__hint">Update stock and pricing for each size below.</p>
-                        <div class="variant-editor__rows" data-variant-rows></div>
-                        <template data-variant-template>
-                            <div class="variant-row" data-variant-row>
-                                <input type="hidden" data-variant-id>
-                                <div class="variant-row__field">
-                                    <label>Label / Size
-                                        <input type="text" data-variant-label required placeholder="e.g., 90/90-14">
-                                    </label>
+                    <div class="product-modal__layout">
+                        <div class="product-modal__panel product-modal__details">
+                            <div class="product-modal__grid">
+                                <!-- Added: Layout mirrors the add modal so both dialogs remain consistent. -->
+                                <div class="product-modal__field">
+                                    <label for="edit_code">Product Code</label>
+                                    <input name="code" id="edit_code" required placeholder="Enter product code">
                                 </div>
-                                <div class="variant-row__field">
-                                    <label>SKU (optional)
-                                        <input type="text" data-variant-sku placeholder="Custom SKU">
-                                    </label>
+                                <div class="product-modal__field">
+                                    <label for="edit_name">Name</label>
+                                    <input name="name" id="edit_name" required placeholder="Enter product name">
                                 </div>
-                                <div class="variant-row__field">
-                                    <label>Price
-                                        <input type="number" min="0" step="0.01" data-variant-price required>
-                                    </label>
+                                <div class="product-modal__field">
+                                    <label for="edit_brand">Brand</label>
+                                    <select name="brand" id="edit_brand" onchange="toggleBrandInputEdit(this)">
+                                        <option value="">Select brand</option>
+                                        <?php foreach($brands as $b): ?>
+                                        <option value="<?= htmlspecialchars($b) ?>"><?= htmlspecialchars($b) ?></option>
+                                        <?php endforeach; ?>
+                                        <option value="__addnew__">Add new brand...</option>
+                                    </select>
+                                    <input name="brand_new" id="edit_brand_new" placeholder="Enter new brand" style="display:none; margin-top:6px;">
                                 </div>
-                                <div class="variant-row__field">
-                                    <label>Quantity
-                                        <input type="number" min="0" data-variant-quantity required>
-                                    </label>
+                                <div class="product-modal__field">
+                                    <label for="edit_category">Category</label>
+                                    <select name="category" id="edit_category" onchange="toggleCategoryInputEdit(this)">
+                                        <option value="">Select category</option>
+                                        <?php foreach($categories as $c): ?>
+                                        <option value="<?= htmlspecialchars($c) ?>"><?= htmlspecialchars($c) ?></option>
+                                        <?php endforeach; ?>
+                                        <option value="__addnew__">Add new category...</option>
+                                    </select>
+                                    <input name="category_new" id="edit_category_new" placeholder="Enter new category" style="display:none; margin-top:6px;">
                                 </div>
-                                <div class="variant-row__field variant-row__field--default">
-                                    <label class="variant-default-toggle">
-                                        <input type="radio" name="edit_variant_default" data-variant-default>
-                                        Default
-                                    </label>
+                                <div class="product-modal__field product-modal__full">
+                                    <label for="edit_description">Description</label>
+                                    <textarea name="description" id="edit_description" placeholder="Enter product description"></textarea>
                                 </div>
-                                <button type="button" class="variant-row__remove" data-variant-remove aria-label="Remove variant">
-                                    <i class="fas fa-trash"></i>
-                                </button>
+                                <div class="product-modal__field">
+                                    <label for="edit_quantity">Quantity</label>
+                                    <input name="quantity" id="edit_quantity" type="number" min="0" required placeholder="Auto-calculated" readonly data-variant-total-quantity>
+                                </div>
+                                <div class="product-modal__field">
+                                    <label for="edit_price">Price per unit</label>
+                                    <input name="price" id="edit_price" type="number" min="0" step="0.01" required placeholder="Auto-calculated" readonly data-variant-default-price>
+                                </div>
+                                <div class="product-modal__field">
+                                    <label for="edit_supplier">Supplier</label>
+                                    <select name="supplier" id="edit_supplier" onchange="toggleSupplierInputEdit(this)">
+                                        <option value="">Select supplier</option>
+                                        <?php foreach($suppliers as $s): ?>
+                                        <option value="<?= htmlspecialchars($s) ?>"><?= htmlspecialchars($s) ?></option>
+                                        <?php endforeach; ?>
+                                        <option value="__addnew__">Add new supplier...</option>
+                                    </select>
+                                    <input name="supplier_new" id="edit_supplier_new" placeholder="Enter new supplier" style="display:none; margin-top:6px;">
+                                </div>
+                                <div class="product-modal__field">
+                                    <label for="edit_low">Low Stock Threshold</label>
+                                    <input name="low_stock_threshold" id="edit_low" value="5" type="number" min="0" required>
+                                </div>
                             </div>
-                        </template>
-                        <input type="hidden" name="variants_payload" data-variants-payload>
+                        </div>
+                        <div class="product-modal__panel product-modal__media">
+                            <!-- Added: Media panel mirrors add modal so imagery stays aligned. -->
+                            <label>Product Image:
+                                <input name="image" id="edit_image" type="file" accept="image/*" onchange="previewEditImage(event)">
+                            </label>
+                            <p>Upload square photos (~600×600px). Files are stored under <code>/uploads/products</code>.</p>
+                            <label>Additional Gallery Images:
+                                <input name="gallery_images[]" id="edit_gallery_images" type="file" accept="image/*" multiple>
+                            </label>
+                            <img id="editImagePreview" class="modal-image-preview" src="../assets/img/product-placeholder.svg" alt="Preview">
+                        </div>
+                        <div class="product-modal__panel product-modal__variants">
+                            <div class="variant-editor" data-variant-editor data-context="edit" data-initial-variants="[]">
+                                <!-- Added: Editable variant grid spans the full width under the media column. -->
+                                <div class="variant-editor__header">
+                                    <h4>Variants / Sizes</h4>
+                                    <button type="button" class="variant-editor__add" data-variant-add>
+                                        <i class="fas fa-plus"></i> Add Variant
+                                    </button>
+                                </div>
+                                <p class="variant-editor__hint">Update stock and pricing for each size below.</p>
+                                <div class="variant-editor__rows" data-variant-rows></div>
+                                <template data-variant-template>
+                                    <div class="variant-row" data-variant-row>
+                                        <input type="hidden" data-variant-id>
+                                        <div class="variant-row__field">
+                                            <label>Label / Size
+                                                <input type="text" data-variant-label required placeholder="e.g., 90/90-14">
+                                            </label>
+                                        </div>
+                                        <div class="variant-row__field">
+                                            <label>SKU (optional)
+                                                <input type="text" data-variant-sku placeholder="Custom SKU">
+                                            </label>
+                                        </div>
+                                        <div class="variant-row__field">
+                                            <label>Price
+                                                <input type="number" min="0" step="0.01" data-variant-price required>
+                                            </label>
+                                        </div>
+                                        <div class="variant-row__field">
+                                            <label>Quantity
+                                                <input type="number" min="0" data-variant-quantity required>
+                                            </label>
+                                        </div>
+                                        <div class="variant-row__field variant-row__field--default">
+                                            <label class="variant-default-toggle">
+                                                <input type="radio" name="edit_variant_default" data-variant-default>
+                                                Default
+                                            </label>
+                                        </div>
+                                        <button type="button" class="variant-row__remove" data-variant-remove aria-label="Remove variant">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </template>
+                                <input type="hidden" name="variants_payload" data-variants-payload>
+                            </div>
+                        </div>
                     </div>
-                    <div class="product-modal__field">
-                        <label for="edit_supplier">Supplier</label>
-                        <select name="supplier" id="edit_supplier" onchange="toggleSupplierInputEdit(this)">
-                            <option value="">Select supplier</option>
-                            <?php foreach($suppliers as $s): ?>
-                            <option value="<?= htmlspecialchars($s) ?>"><?= htmlspecialchars($s) ?></option>
-                            <?php endforeach; ?>
-                            <option value="__addnew__">Add new supplier...</option>
-                        </select>
-                        <input name="supplier_new" id="edit_supplier_new" placeholder="Enter new supplier" style="display:none; margin-top:6px;">
-                    </div>
-                    <div class="product-modal__field">
-                        <label for="edit_low">Low Stock Threshold</label>
-                        <input name="low_stock_threshold" id="edit_low" value="5" type="number" min="0" required>
-                    </div>
-                    <button name="save_product" type="submit">Save
-                        Changes</button>
+                    <button name="save_product" type="submit">Save Changes</button>
                 </form>
-                <div class="modal-image-upload">
-                    <label>Product Image:
-                        <input name="image" id="edit_image" type="file" accept="image/*" form="editProductForm"
-                            onchange="previewEditImage(event)">
-                    </label>
-                    <p>
-                        <!-- Added: mirror guidance for edit flow. -->
-                        Upload square photos (~600×600px). Files are stored under <code>/uploads/products</code>.
-                    </p>
-                    <label>Additional Gallery Images:
-                        <input name="gallery_images[]" id="edit_gallery_images" type="file" accept="image/*" multiple form="editProductForm">
-                    </label>
-                    <img id="editImagePreview" class="modal-image-preview"
-                        src="../assets/img/product-placeholder.svg" alt="Preview">
-                </div>
             </div>
         </div>
     </main>
