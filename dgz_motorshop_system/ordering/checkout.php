@@ -4,7 +4,7 @@ require_once __DIR__ . '/../includes/product_variants.php'; // Added: variant he
 $pdo = db();
 $errors = [];
 $referenceInput = '';
-$supportsTrackingCodes = ordersSupportsTrackingCodes($pdo);
+$supportsTrackingCodes = false;
 $trackingCodeForRedirect = null;
 
 
@@ -97,6 +97,8 @@ if (!function_exists('generateUniqueTrackingCode')) {
         throw new RuntimeException('Unable to generate a unique tracking code.');
     }
 }
+
+$supportsTrackingCodes = ordersSupportsTrackingCodes($pdo);
 
 if (!function_exists('ensureOrdersCustomerNoteColumn')) {
     /**
