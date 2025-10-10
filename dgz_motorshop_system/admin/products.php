@@ -974,11 +974,11 @@ if ($currentSort === 'name') {
                                 </div>
                                 <div class="product-modal__field">
                                     <label for="addProductQuantity">Quantity</label>
-                                    <input id="addProductQuantity" name="quantity" type="number" min="0" required placeholder="Auto-calculated" readonly data-variant-total-quantity>
+                                    <input id="addProductQuantity" name="quantity" type="number" min="0" required placeholder="Enter quantity or leave for variants" data-variant-total-quantity>
                                 </div>
                                 <div class="product-modal__field">
                                     <label for="addProductPrice">Price per unit</label>
-                                    <input id="addProductPrice" name="price" type="number" min="0" step="0.01" required placeholder="Auto-calculated" readonly data-variant-default-price>
+                                    <input id="addProductPrice" name="price" type="number" min="0" step="0.01" required placeholder="Enter price or use variant default" data-variant-default-price>
                                 </div>
                                 <div class="product-modal__field">
                                     <label for="supplierSelect">Supplier</label>
@@ -1287,11 +1287,11 @@ if ($currentSort === 'name') {
                                 </div>
                                 <div class="product-modal__field">
                                     <label for="edit_quantity">Quantity</label>
-                                    <input name="quantity" id="edit_quantity" type="number" min="0" required placeholder="Auto-calculated" readonly data-variant-total-quantity>
+                                    <input name="quantity" id="edit_quantity" type="number" min="0" required placeholder="Enter quantity or leave for variants" data-variant-total-quantity>
                                 </div>
                                 <div class="product-modal__field">
                                     <label for="edit_price">Price per unit</label>
-                                    <input name="price" id="edit_price" type="number" min="0" step="0.01" required placeholder="Auto-calculated" readonly data-variant-default-price>
+                                    <input name="price" id="edit_price" type="number" min="0" step="0.01" required placeholder="Enter price or use variant default" data-variant-default-price>
                                 </div>
                                 <div class="product-modal__field">
                                     <label for="edit_supplier">Supplier</label>

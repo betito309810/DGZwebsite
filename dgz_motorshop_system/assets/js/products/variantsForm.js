@@ -34,11 +34,28 @@
             let totalQty = 0;
             let defaultPrice = 0;
             let defaultFound = false;
+            const activeRows = []; // Added: track rows with actual labels so blank placeholders do not affect totals.
 
-            rows.forEach((row, index) => {
+            rows.forEach((row) => {
+                const labelField = row.querySelector('[data-variant-label]');
                 const qtyField = row.querySelector('[data-variant-quantity]');
                 const priceField = row.querySelector('[data-variant-price]');
                 const defaultRadio = row.querySelector('[data-variant-default]');
+
+                if (defaultRadio) {
+                    defaultRadio.name = defaultRadioName;
+                }
+
+                const label = labelField ? labelField.value.trim() : '';
+                if (label === '') {
+                    if (defaultRadio) {
+                        defaultRadio.checked = false;
+                    }
+                    return;
+                }
+
+                activeRows.push({ priceField, qtyField, defaultRadio }); // Added: remember usable row metadata for later fallbacks.
+
                 const qty = qtyField ? parseInt(qtyField.value, 10) || 0 : 0;
                 const price = priceField ? parseFloat(priceField.value) || 0 : 0;
 
@@ -47,25 +64,30 @@
                     defaultPrice = price;
                     defaultFound = true;
                 }
-                if (defaultRadio) {
-                    defaultRadio.name = defaultRadioName;
-                }
             });
 
-            if (!defaultFound && rows.length > 0) {
-                const firstRadio = rows[0].querySelector('[data-variant-default]');
-                if (firstRadio) {
-                    firstRadio.checked = true;
-                    const firstPrice = rows[0].querySelector('[data-variant-price]');
-                    defaultPrice = firstPrice ? parseFloat(firstPrice.value) || 0 : 0;
+            if (!defaultFound && activeRows.length > 0) {
+                const firstRow = activeRows[0];
+                if (firstRow.defaultRadio) {
+                    firstRow.defaultRadio.checked = true;
                 }
+                const fallbackPrice = firstRow.priceField ? parseFloat(firstRow.priceField.value) || 0 : 0;
+                defaultPrice = fallbackPrice;
             }
 
+            const hasVariants = activeRows.length > 0; // Added: only lock the main fields when at least one variant is defined.
+
             if (quantityInput) {
-                quantityInput.value = String(totalQty);
+                quantityInput.readOnly = hasVariants;
+                if (hasVariants) {
+                    quantityInput.value = String(totalQty);
+                }
             }
             if (priceInput) {
-                priceInput.value = defaultPrice.toFixed(2);
+                priceInput.readOnly = hasVariants;
+                if (hasVariants) {
+                    priceInput.value = Number.isFinite(defaultPrice) ? defaultPrice.toFixed(2) : '0.00';
+                }
             }
         }
 
