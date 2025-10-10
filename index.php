@@ -1,9 +1,22 @@
 <?php
-require __DIR__ . '/../config/config.php';
-require_once __DIR__ . '/../includes/product_variants.php'; // Added: load helpers for variant-aware storefront rendering.
+require __DIR__ . '/dgz_motorshop_system/config/config.php';
+require_once __DIR__ . '/dgz_motorshop_system/includes/product_variants.php'; // Added: load helpers for variant-aware storefront rendering.
 $pdo = db();
 $products = $pdo->query('SELECT * FROM products ORDER BY name')->fetchAll();
 $productVariantMap = fetchVariantsForProducts($pdo, array_column($products, 'id')); // Added: preload variant rows for customer UI.
+
+$logoAsset = assetUrl('assets/logo.png');
+$indexStylesheet = assetUrl('assets/css/public/index.css');
+$productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
+$cartScript = assetUrl('assets/js/public/cart.js');
+$searchScript = assetUrl('assets/js/public/search.js');
+$galleryScript = assetUrl('assets/js/public/productGallery.js');
+$termsScript = assetUrl('assets/js/public/termsNotice.js');
+$homeUrl = orderingUrl('index.php');
+$aboutUrl = orderingUrl('about.php');
+$trackOrderUrl = orderingUrl('track-order.php');
+$checkoutUrl = orderingUrl('checkout.php');
+$productImagesEndpoint = orderingUrl('api/product-images.php');
 
 $categories = [];
 foreach ($products as $product) {
@@ -27,7 +40,7 @@ natcasesort($categories);
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>DGZ Motorshop - Motorcycle Parts & Accessories</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="../assets/css/public/index.css">
+    <link rel="stylesheet" href="<?= htmlspecialchars($indexStylesheet) ?>">
     <style>
 
     </style>
@@ -38,7 +51,7 @@ natcasesort($categories);
     <header class="header">
         <div class="header-content">
             <div class="logo">
-                <img src="../assets/logo.png" alt="Company Logo">
+                <img src="<?= htmlspecialchars($logoAsset) ?>" alt="Company Logo">
             </div>
 
             <div class="search-container">
@@ -60,9 +73,9 @@ natcasesort($categories);
     <!-- Navigation -->
     <nav class="nav">
         <div class="nav-content">
-            <a href="index.php" class="nav-link active">HOME</a>
-            <a href="about.php" class="nav-link">ABOUT</a>
-            <a href="track-order.php" class="nav-link">TRACK ORDER</a>
+            <a href="<?= htmlspecialchars($homeUrl) ?>" class="nav-link active">HOME</a>
+            <a href="<?= htmlspecialchars($aboutUrl) ?>" class="nav-link">ABOUT</a>
+            <a href="<?= htmlspecialchars($trackOrderUrl) ?>" class="nav-link">TRACK ORDER</a>
 
         </div>
     </nav>
@@ -131,7 +144,7 @@ natcasesort($categories);
                         // Added: resolve the primary photo that should appear on the grid.
                         $rawImagePath = trim((string)($p['image'] ?? ''));
                         $hasCustomImage = $rawImagePath !== '';
-                        $normalizedImagePath = $hasCustomImage ? '../' . ltrim($rawImagePath, '/') : '../assets/img/product-placeholder.svg';
+                        $normalizedImagePath = $hasCustomImage ? publicAsset($rawImagePath) : $productPlaceholder;
                     ?>
                     <div class="product-card"
                         data-category="<?= htmlspecialchars($categorySlug) ?>"
@@ -148,7 +161,7 @@ natcasesort($categories);
                         data-product-default-variant-label="<?= htmlspecialchars($defaultVariant['label'] ?? '') ?>"
                         data-product-default-variant-price="<?= htmlspecialchars(isset($defaultVariant['price']) ? number_format((float)$defaultVariant['price'], 2, '.', '') : '') ?>"
                         data-product-default-variant-quantity="<?= htmlspecialchars(isset($defaultVariant['quantity']) ? (int)$defaultVariant['quantity'] : '') ?>"
-                        data-primary-image="<?= htmlspecialchars($hasCustomImage ? $normalizedImagePath : '../assets/img/product-placeholder.svg') ?>"
+                        data-primary-image="<?= htmlspecialchars($hasCustomImage ? $normalizedImagePath : $productPlaceholder) ?>"
                         tabindex="0"
                         aria-label="View <?= htmlspecialchars($p['name']) ?> details">
                         <!-- Updated: the hero thumbnail now acts as the primary trigger for the richer detail modal. -->
@@ -239,7 +252,7 @@ natcasesort($categories);
                             <i class="fas fa-chevron-left"></i>
                         </button>
                         <figure>
-                            <img id="productGalleryMain" src="../assets/img/product-placeholder.svg" alt="Selected product photo">
+                            <img id="productGalleryMain" src="<?= htmlspecialchars($productPlaceholder) ?>" alt="Selected product photo">
                             <figcaption id="productGalleryImageCaption"></figcaption>
                         </figure>
                         <button type="button" class="gallery-nav gallery-nav--next" id="productGalleryNext" aria-label="View next photo">
@@ -282,13 +295,20 @@ natcasesort($categories);
         </div>
     </div>
     <!-- Cart functionality -->
-     <script src="../assets/js/public/cart.js"></script>
+    <script>
+        window.dgzPaths = Object.assign({}, window.dgzPaths || {}, {
+            checkout: <?= json_encode($checkoutUrl) ?>,
+            productImages: <?= json_encode($productImagesEndpoint) ?>,
+            productPlaceholder: <?= json_encode($productPlaceholder) ?>
+        });
+    </script>
+    <script src="<?= htmlspecialchars($cartScript) ?>"></script>
     <!-- Search functionality -->
-     <script src="../assets/js/public/search.js"></script>
+    <script src="<?= htmlspecialchars($searchScript) ?>"></script>
     <!-- Added: storefront gallery controller that powers the modal defined above. -->
-     <script src="../assets/js/public/productGallery.js"></script>
+    <script src="<?= htmlspecialchars($galleryScript) ?>"></script>
     <!-- Terms acknowledgement overlay -->
-     <script src="../assets/js/public/termsNotice.js"></script>
+    <script src="<?= htmlspecialchars($termsScript) ?>"></script>
     </div>
    <footer class="footer">
     <div class="footer-content">

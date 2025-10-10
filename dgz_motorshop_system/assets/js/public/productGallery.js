@@ -25,6 +25,13 @@
     const variantContainer = document.getElementById('productGalleryVariants');
     const variantList = document.getElementById('productGalleryVariantList');
     const productsGrid = document.querySelector('.products-grid');
+    const pathConfig = window.dgzPaths || {};
+    const productImagesEndpoint = (typeof pathConfig.productImages === 'string' && pathConfig.productImages !== '')
+        ? pathConfig.productImages
+        : 'api/product-images.php';
+    const productPlaceholder = (typeof pathConfig.productPlaceholder === 'string' && pathConfig.productPlaceholder !== '')
+        ? pathConfig.productPlaceholder
+        : '../assets/img/product-placeholder.svg';
 
     if (!modal || !mainImage || !imageCaption || !thumbs || !closeButton) {
         return;
@@ -273,7 +280,7 @@
         }
 
         if (!result.length) {
-            addImage('../assets/img/product-placeholder.svg');
+            addImage(productPlaceholder);
         }
 
         return result;
@@ -348,7 +355,8 @@
     }
 
     function fetchGallery(productId, productName, primaryImage) {
-        fetch(`api/product-images.php?product_id=${encodeURIComponent(productId)}`)
+        const separator = productImagesEndpoint.includes('?') ? '&' : '?';
+        fetch(`${productImagesEndpoint}${separator}product_id=${encodeURIComponent(productId)}`)
             .then((response) => (response.ok ? response.json() : Promise.reject(new Error('Unable to load images'))))
             .then((data) => {
                 const payloadImages = Array.isArray(data?.images) ? data.images : [];
@@ -365,7 +373,7 @@
     function openModalFromCard(card) {
         const productId = card.dataset.productId;
         const productName = card.dataset.productName || 'Product photo';
-        const primaryImage = card.dataset.primaryImage || '../assets/img/product-placeholder.svg';
+        const primaryImage = card.dataset.primaryImage || productPlaceholder;
 
         if (!productId) {
             return;

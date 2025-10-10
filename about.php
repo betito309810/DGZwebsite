@@ -1,3 +1,16 @@
+<?php
+require __DIR__ . '/dgz_motorshop_system/config/config.php';
+
+$logoAsset = assetUrl('assets/logo.png');
+$aboutStylesheet = assetUrl('assets/css/public/about.css');
+$faqStylesheet = assetUrl('assets/css/public/faq.css');
+$cartScript = assetUrl('assets/js/public/cart.js');
+$homeUrl = orderingUrl('index.php');
+$aboutUrl = orderingUrl('about.php');
+$trackOrderUrl = orderingUrl('track-order.php');
+$checkoutUrl = orderingUrl('checkout.php');
+$productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,15 +18,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>About DGZ Motorshop</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="../assets/css/public/about.css">
-    <link rel="stylesheet" href="../assets/css/public/faq.css">
+    <link rel="stylesheet" href="<?= htmlspecialchars($aboutStylesheet) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars($faqStylesheet) ?>">
 </head>
 <body>
     <!-- Header -->
     <header class="header">
         <div class="header-content">
             <div class="logo">
-                <img src="../assets/logo.png" alt="DGZ Motorshop Logo">
+                <img src="<?= htmlspecialchars($logoAsset) ?>" alt="DGZ Motorshop Logo">
             </div>
             <a href="#" class="cart-btn" id="cartButton">
                 <i class="fas fa-shopping-cart"></i>
@@ -26,9 +39,9 @@
     <!-- Navigation -->
        <nav class="nav">
         <div class="nav-content">
-            <a href="index.php" class="nav-link">HOME</a>
-            <a href="about.php" class="nav-link active">ABOUT</a>
-            <a href="track-order.php" class="nav-link">TRACK ORDER</a>
+            <a href="<?= htmlspecialchars($homeUrl) ?>" class="nav-link">HOME</a>
+            <a href="<?= htmlspecialchars($aboutUrl) ?>" class="nav-link active">ABOUT</a>
+            <a href="<?= htmlspecialchars($trackOrderUrl) ?>" class="nav-link">TRACK ORDER</a>
 
         </div>
     </nav>
@@ -95,6 +108,12 @@
     </div>
 </footer>
     <!-- Cart functionality -->
-        <script src="../assets/js/public/cart.js"></script>
+    <script>
+        window.dgzPaths = Object.assign({}, window.dgzPaths || {}, {
+            checkout: <?= json_encode($checkoutUrl) ?>,
+            productPlaceholder: <?= json_encode($productPlaceholder) ?>
+        });
+    </script>
+    <script src="<?= htmlspecialchars($cartScript) ?>"></script>
 </body>
 </html>
