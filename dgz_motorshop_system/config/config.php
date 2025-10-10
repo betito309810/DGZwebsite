@@ -114,7 +114,7 @@ if (!function_exists('orderingUrl')) {
     function orderingUrl(string $path = ''): string
     {
         $normalized = ltrim($path, '/');
-        return routeUrl('ordering/' . $normalized);
+        return routeUrl('dgz-motorshop/' . $normalized);
     }
 }
 

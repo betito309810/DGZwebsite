@@ -143,7 +143,7 @@ if (!function_exists('generateUniqueTrackingCode')) {
 if (!function_exists('resolveTrackOrderUrl')) {
     function resolveTrackOrderUrl(): string
     {
-        return absoluteUrl('ordering/track-order.php');
+        return absoluteUrl('dgz-motorshop/track-order.php');
     }
 }
 
