@@ -376,108 +376,55 @@ if (!function_exists('normalizePaymentProofPath')) {
         $normalized = preg_replace('#/+#', '/', $normalized);
 
         // Allow fully-qualified URLs or data URIs to pass through untouched.
-        if (preg_match('#^https?://#i', $normalized) === 1 || strncmp($normalized, 'data:', 5) === 0) {
+        if (preg_match('#^(?:[a-z][a-z0-9+.-]*:)?//#i', $normalized) === 1 || strncmp($normalized, 'data:', 5) === 0) {
             return $normalized;
         }
 
-        $systemBasePath = systemBasePath();
-        $systemBaseUrl = systemBaseUrl();
-        $systemBase = rtrim($systemBasePath, '/');
-        if ($systemBase === '') {
-            $systemBase = '/dgz_motorshop_system';
-        }
-
-        $systemFolder = trim($systemBase, '/');
-
-        // Preserve absolute paths, but align ones that miss the computed base folder.
-        if ($normalized[0] === '/') {
-            if ($systemFolder !== '') {
-                $withoutLeadingSlash = ltrim($normalized, '/');
-
-                if (strpos($withoutLeadingSlash, $systemFolder . '/') === 0) {
-                    return $systemBase . '/' . substr($withoutLeadingSlash, strlen($systemFolder) + 1);
-                }
-
-                if (strpos($withoutLeadingSlash, 'dgz_motorshop_system/') === 0) {
-                    return $systemBase . '/' . substr($withoutLeadingSlash, strlen('dgz_motorshop_system/'));
-                }
-            }
-
-            return $normalized;
-        }
-
-        // Already relative to the admin root; leave unchanged.
-        if (strncmp($normalized, '../', 3) === 0 || strncmp($normalized, './', 2) === 0) {
+        // Preserve absolute or already-relative web paths.
+        if ($normalized[0] === '/' || strncmp($normalized, '../', 3) === 0 || strncmp($normalized, './', 2) === 0) {
             return $normalized;
         }
 
         $relative = ltrim($normalized, '/');
 
-        // Strip any local filesystem prefixes so we end up with a web path.
-        if ($relative !== '') {
-            $uploadsPos = stripos($relative, 'uploads/');
-            if ($uploadsPos !== false) {
-                $relative = substr($relative, $uploadsPos);
-            }
+        // If the string contains an uploads directory anywhere (e.g. full filesystem path),
+        // trim everything before it so we end up with a web-accessible fragment.
+        $lowerRelative = strtolower($relative);
+        $uploadsPos = strpos($lowerRelative, 'uploads/');
+        if ($uploadsPos !== false) {
+            $relative = substr($relative, $uploadsPos);
+        }
 
-            if ($relative !== '') {
-                $systemFolderNeedle = $systemFolder !== '' ? $systemFolder . '/' : '';
-                $legacyFolderNeedle = 'dgz_motorshop_system/';
+        // Strip known system folder prefixes that may have been persisted by older installs.
+        $knownPrefixes = [
+            'dgz_motorshop_system/uploads/',
+            'dgz_motorshop_system/',
+            'dgz-motorshop_system/uploads/',
+            'dgz-motorshop_system/',
+        ];
 
-                foreach ([$systemFolderNeedle, $legacyFolderNeedle] as $needle) {
-                    if ($needle === '') {
-                        continue;
-                    }
-
-                    $needlePos = strpos($relative, $needle);
-                    if ($needlePos !== false) {
-                        $relative = substr($relative, $needlePos + strlen($needle));
-                        break;
-                    }
-                }
+        foreach ($knownPrefixes as $prefix) {
+            if (stripos($relative, $prefix) === 0) {
+                $relative = substr($relative, strlen($prefix));
+                break;
             }
         }
 
-        if ($systemFolder !== '' && strpos($relative, $systemFolder . '/') === 0) {
-            $relative = substr($relative, strlen($systemFolder) + 1);
-        } elseif (strpos($relative, 'dgz_motorshop_system/') === 0) {
-            $relative = substr($relative, strlen('dgz_motorshop_system/'));
-        }
+        $relative = ltrim($relative, '/');
 
         if ($relative === '') {
-            if ($systemBaseUrl !== '') {
-                return rtrim($systemBaseUrl, '/');
-            }
-
-            if ($systemBasePath !== '') {
-                $trimmedBasePath = rtrim($systemBasePath, '/');
-                return $trimmedBasePath === '' ? '/' : $trimmedBasePath;
-            }
-
-            $prefix = rtrim($defaultPrefix, '/');
-            if ($prefix === '') {
-                return '';
-            }
-
-            return $prefix . '/';
+            return '';
         }
 
-        if ($systemBaseUrl !== '') {
-            return rtrim($systemBaseUrl, '/') . '/' . ltrim($relative, '/');
-        }
-
-        if ($systemBasePath !== '') {
-            $normalizedBasePath = rtrim($systemBasePath, '/');
-            if ($normalizedBasePath === '') {
-                return '/' . ltrim($relative, '/');
-            }
-
-            return $normalizedBasePath . '/' . ltrim($relative, '/');
+        // Historic records sometimes omitted the uploads directory; patch it back in so
+        // links resolve next to the admin uploads folder.
+        if (strpos($relative, 'uploads/') !== 0 && strpos($relative, 'payment-proofs/') === 0) {
+            $relative = 'uploads/' . $relative;
         }
 
         $prefix = rtrim($defaultPrefix, '/');
         if ($prefix === '') {
-            return ltrim($relative, '/');
+            return $relative;
         }
 
         return $prefix . '/' . ltrim($relative, '/');
