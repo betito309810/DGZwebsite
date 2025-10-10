@@ -27,7 +27,18 @@
             return;
         }
 
-        if (window.localStorage && window.localStorage.getItem(storageKey) === 'accepted') {
+        var hasAcceptedTerms = false;
+
+        try {
+            if (window.localStorage) {
+                hasAcceptedTerms = window.localStorage.getItem(storageKey) === 'accepted';
+            }
+        } catch (error) {
+            // Accessing localStorage can throw in privacy modes. Treat as not yet accepted.
+            hasAcceptedTerms = false;
+        }
+
+        if (hasAcceptedTerms) {
             return;
         }
 
