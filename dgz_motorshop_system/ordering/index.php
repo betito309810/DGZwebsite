@@ -212,6 +212,20 @@ natcasesort($categories);
             <!-- Footer -->
 
     </div>
+    <div class="terms-overlay" id="termsOverlay" role="dialog" aria-modal="true" aria-labelledby="termsTitle" hidden>
+        <div class="terms-overlay__backdrop" aria-hidden="true"></div>
+        <div class="terms-overlay__dialog" role="document">
+            <h2 class="terms-overlay__title" id="termsTitle">Before you continue</h2>
+            <p class="terms-overlay__description">
+                By placing an order with DGZ Motorshop, you agree that:
+            </p>
+            <ol class="terms-overlay__list">
+                <li>The customer who confirms the booking will arrange the courier and shoulder the delivery fee.</li>
+                <li>Once the items are handed over to the courier, the shop is not responsible for any damages during transit.</li>
+            </ol>
+            <button type="button" class="terms-overlay__button" id="termsAcceptButton">I Understand and Accept</button>
+        </div>
+    </div>
     <!-- Updated: Modal container now mirrors a marketplace-style product detail layout for richer previews. -->
     <div class="product-gallery-modal" id="productGalleryModal" aria-hidden="true" tabindex="-1">
         <div class="product-gallery-dialog" role="dialog" aria-modal="true" aria-labelledby="productGalleryTitle">
@@ -273,6 +287,8 @@ natcasesort($categories);
      <script src="../assets/js/public/search.js"></script>
     <!-- Added: storefront gallery controller that powers the modal defined above. -->
      <script src="../assets/js/public/productGallery.js"></script>
+    <!-- Terms acknowledgement overlay -->
+     <script src="../assets/js/public/termsNotice.js"></script>
     </div>
    <footer class="footer">
     <div class="footer-content">
