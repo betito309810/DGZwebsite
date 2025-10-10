@@ -110,11 +110,48 @@ if (!function_exists('routeUrl')) {
     }
 }
 
+if (!function_exists('appDocumentRootPath')) {
+    function appDocumentRootPath(): string
+    {
+        $basePath = appBasePath();
+
+        if ($basePath === '' || $basePath === '/') {
+            return '';
+        }
+
+        $trimmed = rtrim($basePath, '/');
+        if ($trimmed === '') {
+            return '';
+        }
+
+        $docPath = dirname($trimmed);
+
+        if ($docPath === '.' || $docPath === DIRECTORY_SEPARATOR) {
+            return '';
+        }
+
+        if ($docPath === '\\' || $docPath === '/') {
+            return '';
+        }
+
+        return $docPath;
+    }
+}
+
 if (!function_exists('orderingUrl')) {
     function orderingUrl(string $path = ''): string
     {
         $normalized = ltrim($path, '/');
-        return routeUrl('dgz-motorshop/' . $normalized);
+        $docBase = appDocumentRootPath();
+
+        $orderingBase = ($docBase === '' ? '' : rtrim($docBase, '/')) . '/dgz-motorshop';
+        $orderingBase = '/' . ltrim($orderingBase, '/');
+
+        if ($normalized === '') {
+            return $orderingBase;
+        }
+
+        return rtrim($orderingBase, '/') . '/' . $normalized;
     }
 }
 
@@ -129,7 +166,18 @@ if (!function_exists('adminUrl')) {
 if (!function_exists('absoluteUrl')) {
     function absoluteUrl(string $path = ''): string
     {
-        $relative = routeUrl($path);
+        $trimmed = trim($path);
+
+        if ($trimmed === '') {
+            $relative = routeUrl('');
+        } elseif (preg_match('#^(?:[a-z][a-z0-9+.-]*:)?//#i', $trimmed) === 1) {
+            return $trimmed;
+        } elseif ($trimmed[0] === '/') {
+            $relative = $trimmed;
+        } else {
+            $relative = routeUrl($trimmed);
+        }
+
         $baseUrl = appBaseUrl();
 
         if ($baseUrl !== '' && preg_match('#^https?://#i', $baseUrl) === 1) {

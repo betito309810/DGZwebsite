@@ -1,6 +1,6 @@
 <?php
-require __DIR__ . '/../config/config.php';
-require_once __DIR__ . '/../includes/product_variants.php'; // Added: load helpers for variant-aware storefront rendering.
+require __DIR__ . '/../dgz_motorshop_system/config/config.php';
+require_once __DIR__ . '/../dgz_motorshop_system/includes/product_variants.php'; // Added: load helpers for variant-aware storefront rendering.
 $pdo = db();
 $products = $pdo->query('SELECT * FROM products ORDER BY name')->fetchAll();
 $productVariantMap = fetchVariantsForProducts($pdo, array_column($products, 'id')); // Added: preload variant rows for customer UI.

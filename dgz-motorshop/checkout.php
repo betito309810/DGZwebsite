@@ -1,7 +1,7 @@
 <?php
-require __DIR__ . '/../config/config.php';
-require_once __DIR__ . '/../includes/product_variants.php'; // Added: variant helpers for checkout validation.
-require_once __DIR__ . '/../includes/email.php';
+require __DIR__ . '/../dgz_motorshop_system/config/config.php';
+require_once __DIR__ . '/../dgz_motorshop_system/includes/product_variants.php'; // Added: variant helpers for checkout validation.
+require_once __DIR__ . '/../dgz_motorshop_system/includes/email.php';
 $pdo = db();
 $errors = [];
 $referenceInput = '';
@@ -143,7 +143,7 @@ if (!function_exists('generateUniqueTrackingCode')) {
 if (!function_exists('resolveTrackOrderUrl')) {
     function resolveTrackOrderUrl(): string
     {
-        return absoluteUrl('dgz-motorshop/track-order.php');
+        return absoluteUrl(orderingUrl('track-order.php'));
     }
 }
 

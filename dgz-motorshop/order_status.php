@@ -2,7 +2,7 @@
 // Allow the public order tracker to query order details securely.
 header('Content-Type: application/json');
 
-require_once __DIR__ . '/../config/config.php';
+require_once __DIR__ . '/../dgz_motorshop_system/config/config.php';
 
 if (!function_exists('ordersSupportsTrackingCodes')) {
     function ordersSupportsTrackingCodes(PDO $pdo): bool
