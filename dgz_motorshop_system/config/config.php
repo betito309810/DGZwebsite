@@ -358,22 +358,30 @@ if (!function_exists('normalizePaymentProofPath')) {
             return '';
         }
 
+        $normalized = str_replace('\\', '/', $trimmed);
+
         // Allow fully-qualified URLs or data URIs to pass through untouched.
-        if (preg_match('#^https?://#i', $trimmed) === 1 || strncmp($trimmed, 'data:', 5) === 0) {
-            return $trimmed;
+        if (preg_match('#^https?://#i', $normalized) === 1 || strncmp($normalized, 'data:', 5) === 0) {
+            return $normalized;
         }
 
         // Preserve absolute paths as-is.
-        if ($trimmed[0] === '/') {
-            return $trimmed;
+        if ($normalized[0] === '/') {
+            return $normalized;
         }
 
         // Already relative to the admin root; leave unchanged.
-        if (strncmp($trimmed, '../', 3) === 0 || strncmp($trimmed, './', 2) === 0) {
-            return $trimmed;
+        if (strncmp($normalized, '../', 3) === 0 || strncmp($normalized, './', 2) === 0) {
+            return $normalized;
         }
 
-        return $defaultPrefix . ltrim($trimmed, '/');
+        $adminRootPrefix = 'dgz_motorshop_system/';
+        if (strncmp($normalized, $adminRootPrefix, strlen($adminRootPrefix)) === 0) {
+            $normalized = substr($normalized, strlen($adminRootPrefix));
+            $normalized = ltrim($normalized, '/');
+        }
+
+        return $defaultPrefix . ltrim($normalized, '/');
     }
 }
 
