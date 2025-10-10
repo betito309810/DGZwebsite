@@ -5,22 +5,44 @@ $DB_NAME = 'u776610364_dgzstonino';
 $DB_USER = 'u776610364_dgzadmin';
 $DB_PASS = 'Dgzstonino123';
 
-// Resolve the application's base path so generated links work regardless of
-// where the project is deployed inside the web root.
-$appRoot = str_replace('\\', '/', realpath(__DIR__ . '/..'));
+// Resolve the project's public and system base paths so generated links work
+// regardless of where the project is deployed inside the web root. The
+// storefront PHP files live alongside this directory, so we compute both the
+// project root (public) and the `dgz_motorshop_system` path for shared assets.
+$systemRoot = str_replace('\\', '/', realpath(__DIR__ . '/..'));
+$projectRoot = $systemRoot !== false ? str_replace('\\', '/', dirname($systemRoot)) : false;
 $documentRoot = isset($_SERVER['DOCUMENT_ROOT'])
     ? str_replace('\\', '/', realpath($_SERVER['DOCUMENT_ROOT']))
     : false;
 
 $APP_BASE_PATH = '';
+$SYSTEM_BASE_PATH = '';
+$systemFolderName = $systemRoot !== false ? basename($systemRoot) : 'dgz_motorshop_system';
 
-if ($appRoot !== false && $documentRoot !== false && strpos($appRoot, $documentRoot) === 0) {
-    $relativePath = substr($appRoot, strlen($documentRoot));
+if ($projectRoot !== false && $documentRoot !== false && strpos($projectRoot, $documentRoot) === 0) {
+    $relativePath = substr($projectRoot, strlen($documentRoot));
     $APP_BASE_PATH = $relativePath === '' ? '' : '/' . ltrim($relativePath, '/');
+}
+
+if ($systemRoot !== false && $documentRoot !== false && strpos($systemRoot, $documentRoot) === 0) {
+    $relativePath = substr($systemRoot, strlen($documentRoot));
+    $SYSTEM_BASE_PATH = $relativePath === '' ? '' : '/' . ltrim($relativePath, '/');
 }
 
 if ($APP_BASE_PATH === '/') {
     $APP_BASE_PATH = '';
+}
+
+if ($SYSTEM_BASE_PATH === '/') {
+    $SYSTEM_BASE_PATH = '';
+}
+
+if ($SYSTEM_BASE_PATH === '') {
+    if ($APP_BASE_PATH !== '') {
+        $SYSTEM_BASE_PATH = rtrim($APP_BASE_PATH, '/') . '/' . $systemFolderName;
+    } else {
+        $SYSTEM_BASE_PATH = '/' . ltrim($systemFolderName, '/');
+    }
 }
 
 $isSecure = (
@@ -80,16 +102,39 @@ if (!function_exists('appBaseUrl')) {
     }
 }
 
+if (!function_exists('systemBasePath')) {
+    function systemBasePath(): string
+    {
+        global $SYSTEM_BASE_PATH;
+        return $SYSTEM_BASE_PATH ?: '';
+    }
+}
+
 if (!function_exists('assetUrl')) {
     function assetUrl(string $path): string
     {
-        $normalized = ltrim($path, '/');
+        $trimmed = trim($path);
 
-        if ($normalized === '') {
-            return appBasePath() === '' ? '/' : appBasePath();
+        if ($trimmed === '') {
+            $base = systemBasePath();
+            return $base === '' ? '/' : $base;
         }
 
-        $basePath = appBasePath();
+        if (preg_match('#^(?:[a-z][a-z0-9+.-]*:)?//#i', $trimmed) === 1) {
+            return $trimmed;
+        }
+
+        if ($trimmed[0] === '/') {
+            return $trimmed;
+        }
+
+        if (strncmp($trimmed, './', 2) === 0 || strncmp($trimmed, '../', 3) === 0) {
+            return $trimmed;
+        }
+
+        $normalized = ltrim($trimmed, '/');
+        $basePath = systemBasePath();
+
         if ($basePath === '' || $basePath === '/') {
             return '/' . $normalized;
         }
@@ -101,12 +146,33 @@ if (!function_exists('assetUrl')) {
 if (!function_exists('routeUrl')) {
     function routeUrl(string $path = ''): string
     {
-        $normalized = ltrim($path, '/');
-        if ($normalized === '') {
-            return assetUrl('');
+        $trimmed = trim($path);
+
+        if ($trimmed === '') {
+            $base = appBasePath();
+            return $base === '' ? '/' : $base;
         }
 
-        return assetUrl($normalized);
+        if (preg_match('#^(?:[a-z][a-z0-9+.-]*:)?//#i', $trimmed) === 1) {
+            return $trimmed;
+        }
+
+        if ($trimmed[0] === '/') {
+            return $trimmed;
+        }
+
+        if (strncmp($trimmed, './', 2) === 0 || strncmp($trimmed, '../', 3) === 0) {
+            return $trimmed;
+        }
+
+        $normalized = ltrim($trimmed, '/');
+        $basePath = appBasePath();
+
+        if ($basePath === '' || $basePath === '/') {
+            return '/' . $normalized;
+        }
+
+        return rtrim($basePath, '/') . '/' . $normalized;
     }
 }
 
