@@ -48,11 +48,24 @@
     gap: 18px; /* Added: keep consistent spacing between stacked fields. */
     width: 100%;
     flex: 1.7; /* Updated: ensure the form claims the wider share of the horizontal modal. */
+    background: transparent; /* Updated: reset global form background so the grid aligns edge-to-edge. */
+    padding: 0; /* Updated: remove inherited padding that previously collapsed the grid columns. */
+    border: none; /* Updated: clear border styles coming from the global form rule. */
+    box-shadow: none; /* Updated: avoid double shadows inside the modal shell. */
+    margin: 0; /* Updated: keep the grid flush with the modal container. */
 }
 
 .product-modal__form h3 {
     margin: 0 0 8px 0;
     grid-column: 1 / -1;
+}
+
+.product-modal__form > * {
+    margin: 0; /* Added: neutralise legacy margins applied to form children in the base stylesheet. */
+}
+
+.product-modal__form label {
+    margin: 0; /* Added: keep labels tight to their inputs inside the grid layout. */
 }
 
 .product-modal__form textarea,
@@ -66,9 +79,12 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
-    font-weight: 500;
-    color: #1f2937;
     width: 100%;
+}
+
+.product-modal__field label {
+    font-weight: 600; /* Added: emphasise field labels while keeping inputs aligned. */
+    color: #1f2937;
 }
 
 .product-modal__form textarea {

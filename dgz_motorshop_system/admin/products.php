@@ -932,13 +932,17 @@ if ($currentSort === 'name') {
                 <form method="post" id="addProductForm" enctype="multipart/form-data" class="product-modal__form">
                     <h3>Add Product</h3>
                     <input type="hidden" name="id" value="0">
-                    <label class="product-modal__field">Product Code:
-                        <input name="code" required placeholder="Enter product code">
-                    </label>
-                    <label class="product-modal__field">Name:
-                        <input name="name" required placeholder="Enter product name">
-                    </label>
-                    <label class="product-modal__field">Brand:
+                    <!-- Updated: Field wrapper ensures grid columns display two inputs per row on desktop. -->
+                    <div class="product-modal__field">
+                        <label for="addProductCode">Product Code</label>
+                        <input id="addProductCode" name="code" required placeholder="Enter product code">
+                    </div>
+                    <div class="product-modal__field">
+                        <label for="addProductName">Name</label>
+                        <input id="addProductName" name="name" required placeholder="Enter product name">
+                    </div>
+                    <div class="product-modal__field">
+                        <label for="brandSelect">Brand</label>
                         <select name="brand" id="brandSelect" onchange="toggleBrandInput(this)">
                             <option value="">Select brand</option>
                             <?php foreach($brands as $b): ?>
@@ -946,10 +950,10 @@ if ($currentSort === 'name') {
                             <?php endforeach; ?>
                             <option value="__addnew__">Add new brand...</option>
                         </select>
-                        <input name="brand_new" id="brandNewInput" placeholder="Enter new brand"
-                            style="display:none; margin-top:6px;">
-                    </label>
-                    <label class="product-modal__field">Category:
+                        <input name="brand_new" id="brandNewInput" placeholder="Enter new brand" style="display:none; margin-top:6px;">
+                    </div>
+                    <div class="product-modal__field">
+                        <label for="categorySelect">Category</label>
                         <select name="category" id="categorySelect" onchange="toggleCategoryInput(this)">
                             <option value="">Select category</option>
                             <?php foreach($categories as $c): ?>
@@ -957,18 +961,20 @@ if ($currentSort === 'name') {
                             <?php endforeach; ?>
                             <option value="__addnew__">Add new category...</option>
                         </select>
-                        <input name="category_new" id="categoryNewInput" placeholder="Enter new category"
-                            style="display:none; margin-top:6px;">
-                    </label>
-                    <label class="product-modal__field product-modal__full">Description:
-                        <textarea name="description" placeholder="Enter product description"></textarea>
-                    </label>
-                    <label class="product-modal__field">Quantity:
-                        <input name="quantity" type="number" min="0" required placeholder="Auto-calculated" readonly data-variant-total-quantity>
-                    </label>
-                    <label class="product-modal__field">Price per unit:
-                        <input name="price" type="number" min="0" step="0.01" required placeholder="Auto-calculated" readonly data-variant-default-price>
-                    </label>
+                        <input name="category_new" id="categoryNewInput" placeholder="Enter new category" style="display:none; margin-top:6px;">
+                    </div>
+                    <div class="product-modal__field product-modal__full">
+                        <label for="addProductDescription">Description</label>
+                        <textarea id="addProductDescription" name="description" placeholder="Enter product description"></textarea>
+                    </div>
+                    <div class="product-modal__field">
+                        <label for="addProductQuantity">Quantity</label>
+                        <input id="addProductQuantity" name="quantity" type="number" min="0" required placeholder="Auto-calculated" readonly data-variant-total-quantity>
+                    </div>
+                    <div class="product-modal__field">
+                        <label for="addProductPrice">Price per unit</label>
+                        <input id="addProductPrice" name="price" type="number" min="0" step="0.01" required placeholder="Auto-calculated" readonly data-variant-default-price>
+                    </div>
                     <div class="variant-editor product-modal__full" data-variant-editor data-context="create" data-initial-variants="[]">
                         <!-- Added: repeatable variant rows so staff can encode different sizes/SKUs. -->
                         <div class="variant-editor__header">
@@ -1015,7 +1021,8 @@ if ($currentSort === 'name') {
                         </template>
                         <input type="hidden" name="variants_payload" data-variants-payload>
                     </div>
-                    <label class="product-modal__field">Supplier:
+                    <div class="product-modal__field">
+                        <label for="supplierSelect">Supplier</label>
                         <select name="supplier" id="supplierSelect" onchange="toggleSupplierInput(this)">
                             <option value="">Select supplier</option>
                             <?php foreach($suppliers as $s): ?>
@@ -1023,12 +1030,12 @@ if ($currentSort === 'name') {
                             <?php endforeach; ?>
                             <option value="__addnew__">Add new supplier...</option>
                         </select>
-                        <input name="supplier_new" id="supplierNewInput" placeholder="Enter new supplier"
-                            style="display:none; margin-top:6px;">
-                    </label>
-                    <label class="product-modal__field">Low Stock Threshold:
-                        <input name="low_stock_threshold" value="5" type="number" min="0" required>
-                    </label>
+                        <input name="supplier_new" id="supplierNewInput" placeholder="Enter new supplier" style="display:none; margin-top:6px;">
+                    </div>
+                    <div class="product-modal__field">
+                        <label for="addProductLowStock">Low Stock Threshold</label>
+                        <input id="addProductLowStock" name="low_stock_threshold" value="5" type="number" min="0" required>
+                    </div>
                     <button name="save_product" type="submit">Add</button>
                 </form>
                 <div class="modal-image-upload">
@@ -1231,13 +1238,17 @@ if ($currentSort === 'name') {
                 <form method="post" id="editProductForm" enctype="multipart/form-data" class="product-modal__form">
                     <h3>Edit Product</h3>
                     <input type="hidden" name="id" id="edit_id">
-                    <label class="product-modal__field">Product Code:
+                    <!-- Updated: Mirrored grid wrappers keep edit fields aligned with the add modal. -->
+                    <div class="product-modal__field">
+                        <label for="edit_code">Product Code</label>
                         <input name="code" id="edit_code" required placeholder="Enter product code">
-                    </label>
-                    <label class="product-modal__field">Name:
+                    </div>
+                    <div class="product-modal__field">
+                        <label for="edit_name">Name</label>
                         <input name="name" id="edit_name" required placeholder="Enter product name">
-                    </label>
-                    <label class="product-modal__field">Brand:
+                    </div>
+                    <div class="product-modal__field">
+                        <label for="edit_brand">Brand</label>
                         <select name="brand" id="edit_brand" onchange="toggleBrandInputEdit(this)">
                             <option value="">Select brand</option>
                             <?php foreach($brands as $b): ?>
@@ -1245,10 +1256,10 @@ if ($currentSort === 'name') {
                             <?php endforeach; ?>
                             <option value="__addnew__">Add new brand...</option>
                         </select>
-                        <input name="brand_new" id="edit_brand_new" placeholder="Enter new brand"
-                            style="display:none; margin-top:6px;">
-                    </label>
-                    <label class="product-modal__field">Category:
+                        <input name="brand_new" id="edit_brand_new" placeholder="Enter new brand" style="display:none; margin-top:6px;">
+                    </div>
+                    <div class="product-modal__field">
+                        <label for="edit_category">Category</label>
                         <select name="category" id="edit_category" onchange="toggleCategoryInputEdit(this)">
                             <option value="">Select category</option>
                             <?php foreach($categories as $c): ?>
@@ -1256,21 +1267,20 @@ if ($currentSort === 'name') {
                             <?php endforeach; ?>
                             <option value="__addnew__">Add new category...</option>
                         </select>
-                        <input name="category_new" id="edit_category_new" placeholder="Enter new category"
-                            style="display:none; margin-top:6px;">
-                    </label>
-                    <label class="product-modal__field product-modal__full">Description:
-                        <textarea name="description" id="edit_description"
-                            placeholder="Enter product description"></textarea>
-                    </label>
-                    <label class="product-modal__field">Quantity:
-                        <input name="quantity" id="edit_quantity" type="number" min="0" required
-                            placeholder="Auto-calculated" readonly data-variant-total-quantity>
-                    </label>
-                    <label class="product-modal__field">Price per unit:
-                        <input name="price" id="edit_price" type="number" min="0" step="0.01" required
-                            placeholder="Auto-calculated" readonly data-variant-default-price>
-                    </label>
+                        <input name="category_new" id="edit_category_new" placeholder="Enter new category" style="display:none; margin-top:6px;">
+                    </div>
+                    <div class="product-modal__field product-modal__full">
+                        <label for="edit_description">Description</label>
+                        <textarea name="description" id="edit_description" placeholder="Enter product description"></textarea>
+                    </div>
+                    <div class="product-modal__field">
+                        <label for="edit_quantity">Quantity</label>
+                        <input name="quantity" id="edit_quantity" type="number" min="0" required placeholder="Auto-calculated" readonly data-variant-total-quantity>
+                    </div>
+                    <div class="product-modal__field">
+                        <label for="edit_price">Price per unit</label>
+                        <input name="price" id="edit_price" type="number" min="0" step="0.01" required placeholder="Auto-calculated" readonly data-variant-default-price>
+                    </div>
                     <div class="variant-editor product-modal__full" data-variant-editor data-context="edit" data-initial-variants="[]">
                         <!-- Added: editable variant grid for existing products. -->
                         <div class="variant-editor__header">
@@ -1317,7 +1327,8 @@ if ($currentSort === 'name') {
                         </template>
                         <input type="hidden" name="variants_payload" data-variants-payload>
                     </div>
-                    <label class="product-modal__field">Supplier:
+                    <div class="product-modal__field">
+                        <label for="edit_supplier">Supplier</label>
                         <select name="supplier" id="edit_supplier" onchange="toggleSupplierInputEdit(this)">
                             <option value="">Select supplier</option>
                             <?php foreach($suppliers as $s): ?>
@@ -1325,12 +1336,12 @@ if ($currentSort === 'name') {
                             <?php endforeach; ?>
                             <option value="__addnew__">Add new supplier...</option>
                         </select>
-                        <input name="supplier_new" id="edit_supplier_new" placeholder="Enter new supplier"
-                            style="display:none; margin-top:6px;">
-                    </label>
-                    <label class="product-modal__field">Low Stock Threshold:
+                        <input name="supplier_new" id="edit_supplier_new" placeholder="Enter new supplier" style="display:none; margin-top:6px;">
+                    </div>
+                    <div class="product-modal__field">
+                        <label for="edit_low">Low Stock Threshold</label>
                         <input name="low_stock_threshold" id="edit_low" value="5" type="number" min="0" required>
-                    </label>
+                    </div>
                     <button name="save_product" type="submit">Save
                         Changes</button>
                 </form>
