@@ -9,11 +9,10 @@
     padding: 32px;
     background: rgba(15, 23, 42, 0.32);
     z-index: 9999;
-    align-items: center;
-    justify-content: center;
+    align-items: center; /* Updated: Center the modal canvas horizontally within the portal overlay. */
+    justify-content: center; /* Updated: Ensure the modal body stays centered even when the portal scrolls. */
     box-sizing: border-box;
     overflow-y: auto; /* Added: allow scrolling if the modal exceeds the viewport height. */
-    flex-direction: column; /* Updated: stack portal children so the close button can sit above the modal. */
 }
 
 /* Added: Make the modal body rectangular and use CSS Grid for the new two-column canvas. */
@@ -32,17 +31,16 @@
 /* Added: Sticky close bar aligns the control with the modal width while staying visible when scrolling. */
 .modal-close-bar {
     position: sticky;
-    top: 16px;
-    align-self: center;
-    width: min(1320px, 98vw);
-    max-width: 1320px;
+    top: -28px; /* Updated: Keep the close button tucked against the modal padding while remaining visible on scroll. */
+    width: 100%; /* Updated: Match the modal body width now that the close control sits inside the canvas. */
     display: flex;
     justify-content: flex-end;
     margin-bottom: 12px;
     z-index: 2;
+    padding-bottom: 8px; /* Added: Provide breathing room between the close button and the form content. */
 }
 
-/* Added: Portal-level close button styling matches the updated sticky bar layout. */
+/* Updated: Modal-level close button styling matches the updated sticky bar layout. */
 .modal-close-button {
     width: 42px;
     height: 42px;
@@ -202,10 +200,6 @@
 
 /* Added: Responsive fallbacks to stack the layout on narrow viewports. */
 @media (max-width: 1023px) {
-    .modal-close-bar {
-        width: min(900px, 94vw); /* Added: keep close button aligned with the modal on tablet widths. */
-    }
-
     .modal-content-horizontal {
         width: min(900px, 94vw);
         padding: 24px 20px; /* Added: scale the shell padding down on compact layouts. */
@@ -231,10 +225,6 @@
 }
 
 @media (max-width: 720px) {
-    .modal-close-bar {
-        width: min(520px, 94vw); /* Added: tighten the bar width for narrow mobile screens. */
-    }
-
     .product-modal__grid {
         grid-template-columns: minmax(0, 1fr);
     }

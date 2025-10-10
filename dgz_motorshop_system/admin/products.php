@@ -927,10 +927,10 @@ if ($currentSort === 'name') {
         <!-- Add Product Modal -->
         <!-- Added: Modal overlay uses reusable class to inherit horizontal layout styles. -->
         <div id="addModal" class="modal-portal">
-            <div class="modal-close-bar"> <!-- Added: Sticky container keeps the close button aligned with the modal width. -->
-                <button type="button" id="closeAddModal" class="modal-close-button">&times;</button> <!-- Added: Portal-level close button stays visible when scrolling. -->
-            </div>
             <div class="modal-content-horizontal">
+                <div class="modal-close-bar"> <!-- Updated: Close control now lives inside the modal canvas so it stays anchored while scrolling. -->
+                    <button type="button" id="closeAddModal" class="modal-close-button">&times;</button> <!-- Updated: Modal-level close button stays visible when scrolling. -->
+                </div>
                 <form method="post" id="addProductForm" enctype="multipart/form-data" class="product-modal__form">
                     <h3>Add Product</h3>
                     <input type="hidden" name="id" value="0">
@@ -1240,10 +1240,10 @@ if ($currentSort === 'name') {
         <!-- Edit Product Modal -->
         <!-- Added: Reuse the horizontal modal overlay for the edit form. -->
         <div id="editModal" class="modal-portal">
-            <div class="modal-close-bar"> <!-- Added: Sticky container keeps the close button aligned with the modal width. -->
-                <button type="button" id="closeEditModal" class="modal-close-button">&times;</button> <!-- Added: Portal-level close button stays visible when scrolling. -->
-            </div>
             <div class="modal-content-horizontal">
+                <div class="modal-close-bar"> <!-- Updated: Close control now lives inside the modal canvas so it stays anchored while scrolling. -->
+                    <button type="button" id="closeEditModal" class="modal-close-button">&times;</button> <!-- Updated: Modal-level close button stays visible when scrolling. -->
+                </div>
                 <form method="post" id="editProductForm" enctype="multipart/form-data" class="product-modal__form">
                     <h3>Edit Product</h3>
                     <input type="hidden" name="id" id="edit_id">
