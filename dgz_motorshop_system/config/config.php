@@ -359,14 +359,34 @@ if (!function_exists('normalizePaymentProofPath')) {
         }
 
         $normalized = str_replace('\\', '/', $trimmed);
+        $normalized = preg_replace('#/+#', '/', $normalized);
 
         // Allow fully-qualified URLs or data URIs to pass through untouched.
         if (preg_match('#^https?://#i', $normalized) === 1 || strncmp($normalized, 'data:', 5) === 0) {
             return $normalized;
         }
 
-        // Preserve absolute paths as-is.
+        $systemBase = rtrim(systemBasePath(), '/');
+        if ($systemBase === '') {
+            $systemBase = '/dgz_motorshop_system';
+        }
+
+        $systemFolder = trim($systemBase, '/');
+
+        // Preserve absolute paths, but align ones that miss the computed base folder.
         if ($normalized[0] === '/') {
+            if ($systemFolder !== '') {
+                $withoutLeadingSlash = ltrim($normalized, '/');
+
+                if (strpos($withoutLeadingSlash, $systemFolder . '/') === 0) {
+                    return $systemBase . '/' . substr($withoutLeadingSlash, strlen($systemFolder) + 1);
+                }
+
+                if (strpos($withoutLeadingSlash, 'dgz_motorshop_system/') === 0) {
+                    return $systemBase . '/' . substr($withoutLeadingSlash, strlen('dgz_motorshop_system/'));
+                }
+            }
+
             return $normalized;
         }
 
@@ -375,13 +395,23 @@ if (!function_exists('normalizePaymentProofPath')) {
             return $normalized;
         }
 
-        $adminRootPrefix = 'dgz_motorshop_system/';
-        if (strncmp($normalized, $adminRootPrefix, strlen($adminRootPrefix)) === 0) {
-            $normalized = substr($normalized, strlen($adminRootPrefix));
-            $normalized = ltrim($normalized, '/');
+        $relative = ltrim($normalized, '/');
+
+        if ($systemFolder !== '' && strpos($relative, $systemFolder . '/') === 0) {
+            $relative = substr($relative, strlen($systemFolder) + 1);
+        } elseif (strpos($relative, 'dgz_motorshop_system/') === 0) {
+            $relative = substr($relative, strlen('dgz_motorshop_system/'));
         }
 
-        return $defaultPrefix . ltrim($normalized, '/');
+        if ($relative === '') {
+            return $systemBase;
+        }
+
+        if ($systemBase !== '') {
+            return rtrim($systemBase, '/') . '/' . ltrim($relative, '/');
+        }
+
+        return $defaultPrefix . ltrim($relative, '/');
     }
 }
 
