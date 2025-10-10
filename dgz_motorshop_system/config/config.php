@@ -1,9 +1,9 @@
 <?php
 // Database configuration
-$DB_HOST = 'auth-db2052.hostgtr.io';
-$DB_NAME = 'u776610364_dgzstonino';
-$DB_USER = 'u776610364_dgzadmin';
-$DB_PASS = 'Dgzstonino123';
+$DB_HOST = 'localhost';
+$DB_NAME = 'dgz_db';
+$DB_USER = 'root';
+$DB_PASS = '';
 
 // Resolve the project's public and system base paths so generated links work
 // regardless of where the project is deployed inside the web root. The
@@ -365,7 +365,7 @@ if (!function_exists('normalizePaymentProofPath')) {
             return $normalized;
         }
 
-<<<<<<< HEAD
+
         // Preserve absolute paths as-is.
         if ($normalized[0] === '/') {
             return $normalized;
@@ -383,7 +383,7 @@ if (!function_exists('normalizePaymentProofPath')) {
         }
 
         return $defaultPrefix . ltrim($normalized, '/');
-=======
+
         // Preserve absolute or already-relative web paths.
         if ($normalized[0] === '/' || strncmp($normalized, '../', 3) === 0 || strncmp($normalized, './', 2) === 0) {
             return $normalized;
@@ -432,7 +432,7 @@ if (!function_exists('normalizePaymentProofPath')) {
         }
 
         return $prefix . '/' . ltrim($relative, '/');
->>>>>>> bd01588f30dcdc1eae95d86fed32311a99456ddb
+
     }
 }
 
