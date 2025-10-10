@@ -9,6 +9,43 @@ $supportsTrackingCodes = false;
 $trackingCodeForRedirect = null;
 
 
+if (!function_exists('ensureOrdersTrackingCodeColumn')) {
+    /**
+     * Added helper to opportunistically provision the tracking_code column when it is missing.
+     */
+    function ensureOrdersTrackingCodeColumn(PDO $pdo): void
+    {
+        static $ensured = false;
+        if ($ensured) {
+            return;
+        }
+
+        $ensured = true;
+
+        try {
+            $stmt = $pdo->query("SHOW COLUMNS FROM orders LIKE 'tracking_code'");
+            $hasColumn = $stmt !== false && $stmt->fetch() !== false;
+            if ($hasColumn) {
+                return;
+            }
+
+            $pdo->exec("ALTER TABLE orders ADD COLUMN tracking_code VARCHAR(20) NULL");
+
+            try {
+                $pdo->exec("ALTER TABLE orders ADD UNIQUE KEY idx_tracking_code (tracking_code)");
+            } catch (Exception $e) {
+                // Ignore duplicate key errors and log everything else for diagnostics.
+                if (stripos($e->getMessage(), 'duplicate') === false) {
+                    error_log('Unable to add unique index for tracking_code: ' . $e->getMessage());
+                }
+            }
+        } catch (Exception $e) {
+            error_log('Unable to ensure tracking_code column exists: ' . $e->getMessage());
+        }
+    }
+}
+
+
 if (!function_exists('ordersHasReferenceColumn')) {
     function ordersHasReferenceColumn(PDO $pdo) {
         static $hasColumn = null;
@@ -99,6 +136,7 @@ if (!function_exists('generateUniqueTrackingCode')) {
     }
 }
 
+ensureOrdersTrackingCodeColumn($pdo);
 $supportsTrackingCodes = ordersSupportsTrackingCodes($pdo);
 
 if (!function_exists('ensureOrdersCustomerNoteColumn')) {
@@ -529,7 +567,10 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
     echo '<i class="fas fa-check-circle" style="font-size: 48px; color: #00b894; margin-bottom: 20px;"></i>';
     echo '<h2 style="color: #2d3436; margin-bottom: 20px;">Order Placed Successfully!</h2>';
     if ($trackingCodeDisplay !== '') {
-        echo '<p style="color: #636e72; margin-bottom: 10px;">Tracking Code: <strong>' . htmlspecialchars($trackingCodeDisplay, ENT_QUOTES, 'UTF-8') . '</strong></p>';
+        echo '<div style="display: inline-block; padding: 16px 28px; margin-bottom: 18px; background: linear-gradient(135deg, #74b9ff 0%, #a29bfe 100%); color: white; font-size: 24px; font-weight: 700; letter-spacing: 2px; border-radius: 12px;">'
+            . htmlspecialchars($trackingCodeDisplay, ENT_QUOTES, 'UTF-8')
+            . '</div>';
+        echo '<p style="color: #2d3436; margin-bottom: 10px; font-weight: 600;">Here is your tracking code. Keep it safe to check your order status.</p>';
         echo '<p style="color: #636e72; margin-bottom: 10px;">We received your order, we will review your order and wait for your order to approve.</p>';
         echo '<p style="color: #636e72; margin-bottom: 10px;">We also sent this code to your email so you can track the status anytime.</p>';
     } else {
