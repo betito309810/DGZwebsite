@@ -29,12 +29,21 @@
     overflow-y: auto; /* Added: allow the body to scroll if content exceeds the capped height. */
 }
 
-/* Added: Portal-level close button stays visible even when the modal body scrolls. */
-.modal-portal > .modal-close-button {
+/* Added: Sticky close bar aligns the control with the modal width while staying visible when scrolling. */
+.modal-close-bar {
     position: sticky;
     top: 16px;
-    align-self: flex-end;
+    align-self: center;
+    width: min(1320px, 98vw);
+    max-width: 1320px;
+    display: flex;
+    justify-content: flex-end;
     margin-bottom: 12px;
+    z-index: 2;
+}
+
+/* Added: Portal-level close button styling matches the updated sticky bar layout. */
+.modal-close-button {
     width: 42px;
     height: 42px;
     display: grid;
@@ -47,12 +56,11 @@
     cursor: pointer;
     line-height: 1;
     transition: background 0.2s ease, color 0.2s ease;
-    z-index: 1; /* Added: keep the control above the modal surface when overlapping. */
 }
 
 /* Added: Hover/focus styling so the close affordance is unmistakable. */
-.modal-portal > .modal-close-button:hover,
-.modal-portal > .modal-close-button:focus-visible {
+.modal-close-button:hover,
+.modal-close-button:focus-visible {
     background: rgba(15, 23, 42, 0.16);
     color: #1e293b;
 }
@@ -194,6 +202,10 @@
 
 /* Added: Responsive fallbacks to stack the layout on narrow viewports. */
 @media (max-width: 1023px) {
+    .modal-close-bar {
+        width: min(900px, 94vw); /* Added: keep close button aligned with the modal on tablet widths. */
+    }
+
     .modal-content-horizontal {
         width: min(900px, 94vw);
         padding: 24px 20px; /* Added: scale the shell padding down on compact layouts. */
@@ -219,6 +231,10 @@
 }
 
 @media (max-width: 720px) {
+    .modal-close-bar {
+        width: min(520px, 94vw); /* Added: tighten the bar width for narrow mobile screens. */
+    }
+
     .product-modal__grid {
         grid-template-columns: minmax(0, 1fr);
     }
