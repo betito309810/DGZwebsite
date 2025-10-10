@@ -13,6 +13,7 @@
     justify-content: center;
     box-sizing: border-box;
     overflow-y: auto; /* Added: allow scrolling if the modal exceeds the viewport height. */
+    flex-direction: column; /* Updated: stack portal children so the close button can sit above the modal. */
 }
 
 /* Added: Make the modal body rectangular and use CSS Grid for the new two-column canvas. */
@@ -28,28 +29,30 @@
     overflow-y: auto; /* Added: allow the body to scroll if content exceeds the capped height. */
 }
 
-/* Added: Restyle the close button so it stays visible against the refreshed background. */
-.modal-content-horizontal .modal-close-button {
-    position: absolute;
-    top: 22px;
-    right: 24px;
-    width: 40px;
-    height: 40px;
+/* Added: Portal-level close button stays visible even when the modal body scrolls. */
+.modal-portal > .modal-close-button {
+    position: sticky;
+    top: 16px;
+    align-self: flex-end;
+    margin-bottom: 12px;
+    width: 42px;
+    height: 42px;
     display: grid;
     place-items: center;
     background: rgba(15, 23, 42, 0.08);
     border: none;
     border-radius: 50%;
-    font-size: 24px;
+    font-size: 26px;
     color: #0f172a;
     cursor: pointer;
     line-height: 1;
     transition: background 0.2s ease, color 0.2s ease;
+    z-index: 1; /* Added: keep the control above the modal surface when overlapping. */
 }
 
 /* Added: Hover/focus styling so the close affordance is unmistakable. */
-.modal-content-horizontal .modal-close-button:hover,
-.modal-content-horizontal .modal-close-button:focus-visible {
+.modal-portal > .modal-close-button:hover,
+.modal-portal > .modal-close-button:focus-visible {
     background: rgba(15, 23, 42, 0.16);
     color: #1e293b;
 }
