@@ -51,14 +51,22 @@
     gap: 12px;
 }
 
+/* Updated: Flex layout keeps the variant fields in a horizontal row with natural wrapping. */
 .variant-row {
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
+    display: flex;
+    flex-wrap: wrap; /* Added: allow the row to wrap on narrow screens. */
+    align-items: flex-end; /* Added: align inputs to a common baseline. */
     gap: 12px;
     padding: 12px;
     border: 1px solid #e5e7eb;
     border-radius: 10px;
     background-color: #fff;
+}
+
+/* Added: Provide flexible widths so the horizontal layout stays balanced. */
+.variant-row__field {
+    flex: 1 1 150px;
+    min-width: 140px;
 }
 
 .variant-row__field label {
@@ -87,6 +95,7 @@
 .variant-row__field--default {
     display: flex;
     align-items: center;
+    flex: 0 0 auto; /* Added: keep the default toggle compact in the row. */
 }
 
 .variant-default-toggle {
@@ -99,8 +108,10 @@
 }
 
 .variant-row__remove {
+    margin-left: auto; /* Added: push the delete control to the far edge of the row. */
     align-self: center;
-    justify-self: end;
+    display: inline-flex; /* Added: keep the icon vertically centred. */
+    align-items: center;
     border: none;
     background: none;
     color: #dc2626;
@@ -125,7 +136,15 @@
 }
 
 @media (max-width: 720px) {
-    .variant-row {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+    /* Added: Allow each field to take full width when space is constrained. */
+    .variant-row__field {
+        flex: 1 1 100%;
+    }
+
+    .variant-row__remove {
+        width: 100%;
+        margin-left: 0;
+        display: flex; /* Added: expand to full width for touch targets on mobile. */
+        justify-content: flex-start;
     }
 }

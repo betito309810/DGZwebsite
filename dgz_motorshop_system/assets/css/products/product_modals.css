@@ -41,11 +41,11 @@
     line-height: 1;
 }
 
-/* Added: Arrange the form inputs in a two-column grid for better scanning. */
+/* Updated: Start the form as a single-column grid so mobile screens stay readable. */
 .product-modal__form {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 18px 24px;
+    grid-template-columns: minmax(0, 1fr); /* Added: default to one column on narrow viewports. */
+    gap: 18px; /* Added: keep consistent spacing between stacked fields. */
     width: 100%;
     flex: 1.7; /* Updated: ensure the form claims the wider share of the horizontal modal. */
 }
@@ -170,13 +170,18 @@
 }
 
 @media (max-width: 720px) {
-    .product-modal__form {
-        grid-template-columns: minmax(0, 1fr);
-    }
-
     .modal-image-upload {
         flex-direction: column;
         align-items: center;
         gap: 12px;
+    }
+}
+
+/* Added: Switch to a two-column grid with the requested spacing on wider screens. */
+@media (min-width: 1024px) {
+    .product-modal__form {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        row-gap: 18px;
+        column-gap: 24px; /* Added: honour the 24px gutter between columns. */
     }
 }
