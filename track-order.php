@@ -1,5 +1,5 @@
 <?php
-require __DIR__ . '/../dgz_motorshop_system/config/config.php';
+require __DIR__ . '/dgz_motorshop_system/config/config.php';
 
 $logoAsset = assetUrl('assets/logo.png');
 $indexStylesheet = assetUrl('assets/css/public/index.css');

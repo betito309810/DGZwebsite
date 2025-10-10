@@ -141,17 +141,7 @@ if (!function_exists('appDocumentRootPath')) {
 if (!function_exists('orderingUrl')) {
     function orderingUrl(string $path = ''): string
     {
-        $normalized = ltrim($path, '/');
-        $docBase = appDocumentRootPath();
-
-        $orderingBase = ($docBase === '' ? '' : rtrim($docBase, '/')) . '/dgz-motorshop';
-        $orderingBase = '/' . ltrim($orderingBase, '/');
-
-        if ($normalized === '') {
-            return $orderingBase;
-        }
-
-        return rtrim($orderingBase, '/') . '/' . $normalized;
+        return routeUrl($path);
     }
 }
 
