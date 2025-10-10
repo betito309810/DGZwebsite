@@ -14,6 +14,10 @@
     const statusPill = document.getElementById('trackerStatusPill');
     const statusMessage = document.getElementById('trackerStatusMessage');
     const statusDetails = document.getElementById('trackerStatusDetails');
+    const pathConfig = window.dgzPaths || {};
+    const orderStatusEndpoint = (typeof pathConfig.orderStatus === 'string' && pathConfig.orderStatus !== '')
+        ? pathConfig.orderStatus
+        : 'order_status.php';
 
     if (!form || !trackingCodeInput) {
         return; // Bail out if critical elements are missing.
@@ -137,7 +141,7 @@
         }
 
         try {
-            const response = await fetch('order_status.php', {
+            const response = await fetch(orderStatusEndpoint, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

@@ -33,7 +33,7 @@ try {
     $primaryImage = trim((string) ($product['image'] ?? ''));
     if ($primaryImage !== '') {
         $imageResults[] = [
-            'url' => '../' . ltrim($primaryImage, '/'),
+            'url' => publicAsset($primaryImage),
             'label' => $product['name'] ?? 'Product image',
         ];
     }
@@ -47,7 +47,7 @@ try {
             continue;
         }
         $imageResults[] = [
-            'url' => '../' . ltrim($path, '/'),
+            'url' => publicAsset($path),
             'label' => $product['name'] ?? 'Product image',
         ];
     }
