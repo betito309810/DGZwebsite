@@ -1,12 +1,16 @@
 <?php
-require __DIR__ . '/../config/config.php';
-require_once __DIR__ . '/../includes/product_variants.php'; // Added: variant helpers for checkout validation.
-require_once __DIR__ . '/../includes/email.php';
+require __DIR__ . '/dgz_motorshop_system/config/config.php';
+require_once __DIR__ . '/dgz_motorshop_system/includes/product_variants.php'; // Added: variant helpers for checkout validation.
+require_once __DIR__ . '/dgz_motorshop_system/includes/email.php';
 $pdo = db();
 $errors = [];
 $referenceInput = '';
 $supportsTrackingCodes = false;
 $trackingCodeForRedirect = null;
+$checkoutStylesheet = assetUrl('assets/css/public/checkout.css');
+$logoAsset = assetUrl('assets/logo.png');
+$qrAsset = assetUrl('assets/QR.png');
+$shopUrl = orderingUrl('index.php');
 
 
 if (!function_exists('ensureOrdersTrackingCodeColumn')) {
@@ -139,22 +143,7 @@ if (!function_exists('generateUniqueTrackingCode')) {
 if (!function_exists('resolveTrackOrderUrl')) {
     function resolveTrackOrderUrl(): string
     {
-        $isSecure = !empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off';
-        $scheme = $isSecure ? 'https' : 'http';
-        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-
-        $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
-        $directory = rtrim(str_replace('\\', '/', dirname($scriptName)), '/');
-        if ($directory === '' || $directory === '.') {
-            $path = '/track-order.php';
-        } else {
-            $path = $directory . '/track-order.php';
-            if ($path[0] !== '/') {
-                $path = '/' . $path;
-            }
-        }
-
-        return $scheme . '://' . $host . $path;
+        return absoluteUrl(orderingUrl('track-order.php'));
     }
 }
 
@@ -329,7 +318,7 @@ if (empty($cartItems) && !(isset($_GET['success']) && $_GET['success'] === '1'))
     echo '<i class="fas fa-shopping-cart" style="font-size: 48px; color: #636e72; margin-bottom: 20px;"></i>';
     echo '<h2 style="color: #2d3436; margin-bottom: 15px;">Your Cart is Empty</h2>';
     echo '<p style="color: #636e72; margin-bottom: 25px;">Add some products to your cart before proceeding to checkout.</p>';
-    echo '<a href="index.php" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; padding: 15px 30px; border-radius: 8px; font-weight: 600; margin-right: 10px;">Continue Shopping</a>';
+    echo '<a href="' . htmlspecialchars($shopUrl, ENT_QUOTES, 'UTF-8') . '" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; padding: 15px 30px; border-radius: 8px; font-weight: 600; margin-right: 10px;">Continue Shopping</a>';
     echo '</div>';
     exit;
 }
@@ -605,7 +594,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
         echo '<p style="color: #636e72; margin-bottom: 10px;">Please check your email for your tracking code.</p>';
     }
     echo '<p style="color: #636e72; margin-bottom: 30px;">Status: <span style="background: #fdcb6e; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">Pending</span></p>';
-    echo '<a href="index.php" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; padding: 15px 30px; border-radius: 8px; font-weight: 600;">Back to Shop</a>';
+    echo '<a href="' . htmlspecialchars($shopUrl, ENT_QUOTES, 'UTF-8') . '" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; padding: 15px 30px; border-radius: 8px; font-weight: 600;">Back to Shop</a>';
     echo '<script>try{localStorage.removeItem("cartItems");localStorage.removeItem("cartCount");}catch(e){}</script>';
     echo '</div>';
     exit;
@@ -620,15 +609,15 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Checkout - DGZ Motorshop</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="../assets/css/public/checkout.css">
+    <link rel="stylesheet" href="<?= htmlspecialchars($checkoutStylesheet) ?>">
 </head>
 <body>
     <header class="header">
         <div class="header-content">
             <div class="logo">
-                <img src="../assets/logo.png" alt="Company Logo">
+                <img src="<?= htmlspecialchars($logoAsset) ?>" alt="Company Logo">
             </div>
-            <a href="index.php" class="continue-shopping-btn">
+            <a href="<?= htmlspecialchars($shopUrl) ?>" class="continue-shopping-btn">
             <i class="fas fa-arrow-left"></i> Continue Shopping
         </a>
         </div>
@@ -720,7 +709,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                     </div>
                     
                     <div class="qr-code">
-                        <img src="../assets/QR.png" alt="">
+                        <img src="<?= htmlspecialchars($qrAsset) ?>" alt="">
                     </div>
 
                     <div class="form-group">
@@ -774,7 +763,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             <div id="orderEmptyState" class="order-empty" style="<?= empty($cartItems) ? '' : 'display:none;' ?>">
                 <i class="fas fa-shopping-basket"></i>
                 <p>Your cart is empty.</p>
-                <a href="index.php" class="order-empty-link">Continue shopping</a>
+                <a href="<?= htmlspecialchars($shopUrl) ?>" class="order-empty-link">Continue shopping</a>
             </div>
 
             <?php

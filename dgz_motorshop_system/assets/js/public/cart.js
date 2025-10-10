@@ -1,6 +1,16 @@
 
         // ===== Start File 1: cartStateAndInteractions.js (cart state, persistence, cart UI hooks) =====
         // Cart functionality
+        const dgzPaths = window.dgzPaths || {};
+        const checkoutBaseUrl = (typeof dgzPaths.checkout === 'string' && dgzPaths.checkout !== '')
+            ? dgzPaths.checkout
+            : 'checkout.php';
+
+        function redirectToCheckout(cartData) {
+            const separator = checkoutBaseUrl.includes('?') ? '&' : '?';
+            window.location.href = `${checkoutBaseUrl}${separator}cart=${cartData}`;
+        }
+
         let cartCount = 0;
         let cartItems = [];
 
@@ -71,7 +81,7 @@
 
             // Redirect to checkout with cart data
             const cartData = encodeURIComponent(JSON.stringify(cartItems));
-            window.location.href = 'checkout.php?cart=' + cartData;
+            redirectToCheckout(cartData);
         }
         // End handleCartClick
 
@@ -116,7 +126,7 @@
             addToCart(productId, productName, price, quantity, variantId, variantLabel, variantPrice);
 
             const cartData = encodeURIComponent(JSON.stringify(cartItems));
-            window.location.href = 'checkout.php?cart=' + cartData;
+            redirectToCheckout(cartData);
         }
         // End buyNow
 
