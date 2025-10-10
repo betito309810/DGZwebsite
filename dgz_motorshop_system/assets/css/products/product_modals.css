@@ -15,43 +15,58 @@
     overflow-y: auto; /* Added: allow scrolling if the modal exceeds the viewport height. */
 }
 
-/* Added: Make the modal body rectangular and horizontally spacious. */
+/* Added: Make the modal body rectangular and use CSS Grid for the new two-column canvas. */
 .modal-content-horizontal {
-    display: flex; /* Updated: use flex so the form and media column stay strictly horizontal. */
+    display: grid; /* Updated: grid keeps both columns aligned from top to bottom. */
+    grid-template-columns: minmax(0, 1.7fr) minmax(280px, 1fr); /* Added: form column stays wider than media column. */
     gap: 32px;
-    width: min(1200px, 96vw); /* Updated: widen the canvas for the horizontal layout. */
-    padding: 36px;
-    border-radius: 18px;
-    background: #ffffff;
-    box-shadow: 0 32px 80px rgba(15, 23, 42, 0.22);
+    width: min(1180px, 96vw); /* Updated: tighten width so the entire layout remains visible on laptops. */
+    padding: 36px 40px 40px; /* Updated: give breathing room around the grid edges. */
+    border-radius: 22px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%); /* Added: subtle gradient for visual separation. */
+    box-shadow: 0 28px 70px rgba(15, 23, 42, 0.24);
     position: relative;
-    align-items: stretch; /* Updated: stretch both columns so they align like a rectangular card. */
+    align-items: start; /* Added: let columns align from the top rather than stretching unevenly. */
 }
 
-/* Added: Reset the close button so it aligns with the new rectangular frame. */
+/* Added: Restyle the close button so it stays visible against the refreshed background. */
 .modal-content-horizontal .modal-close-button {
     position: absolute;
-    top: 16px;
-    right: 20px;
-    background: none;
+    top: 22px;
+    right: 24px;
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    background: rgba(15, 23, 42, 0.08);
     border: none;
-    font-size: 26px;
-    color: #6b7280;
+    border-radius: 50%;
+    font-size: 24px;
+    color: #0f172a;
     cursor: pointer;
     line-height: 1;
+    transition: background 0.2s ease, color 0.2s ease;
 }
 
-/* Updated: Start the form as a single-column grid so mobile screens stay readable. */
+/* Added: Hover/focus styling so the close affordance is unmistakable. */
+.modal-content-horizontal .modal-close-button:hover,
+.modal-content-horizontal .modal-close-button:focus-visible {
+    background: rgba(15, 23, 42, 0.16);
+    color: #1e293b;
+}
+
+/* Updated: Default the form to the requested two-column layout and collapse on smaller screens via media query. */
 .product-modal__form {
     display: grid;
-    grid-template-columns: minmax(0, 1fr); /* Added: default to one column on narrow viewports. */
-    gap: 18px; /* Added: keep consistent spacing between stacked fields. */
+    grid-template-columns: repeat(2, minmax(0, 1fr)); /* Added: desktop two-column grid with equal fractions. */
+    row-gap: 18px;
+    column-gap: 24px; /* Added: 24px gutter between desktop columns. */
     width: 100%;
-    flex: 1.7; /* Updated: ensure the form claims the wider share of the horizontal modal. */
-    background: transparent; /* Updated: reset global form background so the grid aligns edge-to-edge. */
-    padding: 0; /* Updated: remove inherited padding that previously collapsed the grid columns. */
-    border: none; /* Updated: clear border styles coming from the global form rule. */
-    box-shadow: none; /* Updated: avoid double shadows inside the modal shell. */
+    background: rgba(255, 255, 255, 0.92); /* Added: soft card background to distinguish the form area. */
+    padding: 30px 32px; /* Added: internal padding so inputs do not touch the card edge. */
+    border-radius: 20px;
+    border: 1px solid rgba(148, 163, 184, 0.4);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
     margin: 0; /* Updated: keep the grid flush with the modal container. */
 }
 
@@ -129,9 +144,13 @@
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
-    gap: 18px;
-    min-width: 240px; /* Updated: widen the media column to visually balance the form. */
-    flex: 1; /* Added: participate in the horizontal split beside the form. */
+    gap: 20px;
+    min-width: 0; /* Updated: allow the grid to control column width without overflow. */
+    background: rgba(255, 255, 255, 0.9); /* Added: mirror the card treatment from the form column. */
+    border-radius: 20px;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    padding: 28px 24px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
 .modal-image-upload label {
@@ -165,12 +184,14 @@
 /* Added: Responsive fallbacks to stack the layout on narrow viewports. */
 @media (max-width: 1023px) {
     .modal-content-horizontal {
-        flex-direction: column; /* Updated: stack on narrower screens without squeezing. */
+        grid-template-columns: minmax(0, 1fr); /* Updated: collapse to a single column on tablets and below. */
         width: min(900px, 94vw);
+        padding: 28px 24px 32px; /* Added: tighten padding so the card fits smaller screens. */
     }
 
     .product-modal__form {
-        flex: none;
+        grid-template-columns: minmax(0, 1fr); /* Added: single-column form on smaller screens. */
+        padding: 24px 20px; /* Added: scale the card padding down on compact layouts. */
     }
 
     .modal-image-upload {
@@ -178,6 +199,8 @@
         flex-direction: row;
         align-items: center;
         justify-content: space-between;
+        gap: 16px;
+        padding: 20px 18px; /* Added: match the compact padding used on the form card. */
     }
 
     .modal-image-preview {
@@ -191,14 +214,5 @@
         flex-direction: column;
         align-items: center;
         gap: 12px;
-    }
-}
-
-/* Added: Switch to a two-column grid with the requested spacing on wider screens. */
-@media (min-width: 1024px) {
-    .product-modal__form {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        row-gap: 18px;
-        column-gap: 24px; /* Added: honour the 24px gutter between columns. */
     }
 }
