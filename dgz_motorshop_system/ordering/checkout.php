@@ -1,6 +1,7 @@
 <?php
 require __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../includes/product_variants.php'; // Added: variant helpers for checkout validation.
+require_once __DIR__ . '/../includes/email.php';
 $pdo = db();
 $errors = [];
 $referenceInput = '';
@@ -275,6 +276,7 @@ if (empty($cartItems) && !(isset($_GET['success']) && $_GET['success'] === '1'))
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
     $customer_name = trim($_POST['customer_name']);
+    $last_name = trim((string) ($_POST['last_name'] ?? ''));
     $email = trim($_POST['email'] ?? '');
     $phone = trim($_POST['phone'] ?? '');
     $address = trim($_POST['address']);
@@ -479,14 +481,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
             }
         }
 
+        if ($supportsTrackingCodes && $trackingCodeForRedirect !== null && filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $nameParts = array_filter([
+                trim($customer_name),
+                $last_name,
+            ], static function ($value) {
+                return $value !== '';
+            });
+
+            $displayName = !empty($nameParts) ? implode(' ', $nameParts) : 'there';
+            $safeName = htmlspecialchars($displayName, ENT_QUOTES, 'UTF-8');
+            $safeTrackingCode = htmlspecialchars($trackingCodeForRedirect, ENT_QUOTES, 'UTF-8');
+
+            $emailSubject = 'Your DGZ Motorshop Tracking Code';
+            $emailBody = '<p>Hi ' . $safeName . ',</p>'
+                . '<p>We received your order, we will review your order and wait for your order to approve.</p>'
+                . '<p>Your tracking code is <strong>' . $safeTrackingCode . '</strong>.</p>'
+                . '<p>You can use this code on the Track Order page to follow the progress of your purchase.</p>'
+                . '<p>Thank you,<br>DGZ Motorshop</p>';
+
+            try {
+                sendEmail($email, $emailSubject, $emailBody);
+            } catch (Throwable $exception) {
+                error_log('Failed to send order tracking code email: ' . $exception->getMessage());
+            }
+        }
+
         // Redirect (PRG) to avoid resubmission
         $query = ['success' => '1'];
         if ($trackingCodeForRedirect !== null) {
             $query['tracking_code'] = $trackingCodeForRedirect;
-        }
-
-        if ($order_id > 0) {
-            $query['order_id'] = (string) $order_id;
         }
 
         header('Location: checkout.php?' . http_build_query($query));
@@ -496,7 +520,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
 
 // Success page via GET (PRG target)
 if (isset($_GET['success']) && $_GET['success'] === '1') {
-    $order_id = (int) ($_GET['order_id'] ?? 0);
     $trackingCodeDisplay = '';
     if (isset($_GET['tracking_code'])) {
         $trackingCodeDisplay = strtoupper(preg_replace('/[^A-Z0-9\-]/', '', (string) $_GET['tracking_code']));
@@ -507,9 +530,11 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
     echo '<h2 style="color: #2d3436; margin-bottom: 20px;">Order Placed Successfully!</h2>';
     if ($trackingCodeDisplay !== '') {
         echo '<p style="color: #636e72; margin-bottom: 10px;">Tracking Code: <strong>' . htmlspecialchars($trackingCodeDisplay, ENT_QUOTES, 'UTF-8') . '</strong></p>';
-        echo '<p style="color: #636e72; margin-bottom: 10px;">Keep this code handy to check your order status on the Track Order page.</p>';
-    } elseif ($order_id > 0) {
-        echo '<p style="color: #636e72; margin-bottom: 10px;">Order ID: <strong>' . $order_id . '</strong></p>';
+        echo '<p style="color: #636e72; margin-bottom: 10px;">We received your order, we will review your order and wait for your order to approve.</p>';
+        echo '<p style="color: #636e72; margin-bottom: 10px;">We also sent this code to your email so you can track the status anytime.</p>';
+    } else {
+        echo '<p style="color: #636e72; margin-bottom: 10px;">We received your order, we will review your order and wait for your order to approve.</p>';
+        echo '<p style="color: #636e72; margin-bottom: 10px;">Please check your email for your tracking code.</p>';
     }
     echo '<p style="color: #636e72; margin-bottom: 30px;">Status: <span style="background: #fdcb6e; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">Pending</span></p>';
     echo '<a href="index.php" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; padding: 15px 30px; border-radius: 8px; font-weight: 600;">Back to Shop</a>';
