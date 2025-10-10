@@ -6,8 +6,8 @@
     <title>Track Your DGZ Motorshop Order</title>
     <!-- Font Awesome for consistent iconography across the storefront -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <!-- Shared index stylesheet for consistent footer and other styles -->
-    <link rel="stylesheet" href="../assets/css/public/index.css">
+    <!-- Shared structural styles -->
+    <link rel="stylesheet" href="../assets/css/public/shared.css">
     <!-- Page specific stylesheet lives alongside the other public assets -->
     <link rel="stylesheet" href="../assets/css/public/track-order.css">
 </head>
@@ -17,7 +17,13 @@
         <div class="header-content">
             <div class="logo">
                 <img src="../assets/logo.png" alt="DGZ Motorshop Logo">
-            
+            </div>
+            <a href="#" class="cart-btn" id="cartButton">
+                <i class="fas fa-shopping-cart"></i>
+                <span>Cart</span>
+                <div class="cart-count" id="cartCount">0</div>
+            </a>
+        </div>
     </header>
 
     <!-- Navigation: adds the Track Order entry while keeping existing links -->

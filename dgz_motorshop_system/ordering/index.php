@@ -27,14 +27,12 @@ natcasesort($categories);
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>DGZ Motorshop - Motorcycle Parts & Accessories</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="../assets/css/public/shared.css">
     <link rel="stylesheet" href="../assets/css/public/index.css">
-    <style>
-
-    </style>
 </head>
 
 <body>
-    <!-- Header -->
+    <!-- Header: shared across storefront pages -->
     <header class="header">
         <div class="header-content">
             <div class="logo">
@@ -42,11 +40,13 @@ natcasesort($categories);
             </div>
 
             <div class="search-container">
-                <input type="text" class="search-bar" placeholder="Search by Category, Part, Brand...">
+                <label for="globalSearch" class="visually-hidden">Search by Category, Part, Brand</label>
+                <input id="globalSearch" type="text" class="search-bar" placeholder="Search by Category, Part, Brand...">
                 <button class="search-btn">
                     <i class="fas fa-search"></i>
+                    <span class="visually-hidden">Search</span>
                 </button>
-                
+
             </div>
 
             <a href="#" class="cart-btn" id="cartButton">
@@ -68,7 +68,7 @@ natcasesort($categories);
     </nav>
 
     <div class="container">
-        <!-- Sidebar -->
+        <!-- Sidebar: category filters populated from PHP above -->
         <aside class="sidebar">
             <h3 class="sidebar-title">Shop by Category</h3>
             <ul class="category-list">
@@ -86,12 +86,11 @@ natcasesort($categories);
 
         <!-- Main Content -->
         <main class="main-content">
-          
+
 
             <!-- All Products -->
             <div id="all-products">
-                <h2 id="productSectionTitle" style="margin: 10px 0 30px 0; font-size: 28px; color: #2d3436; text-align: center;">All Products
-                </h2>
+                <h2 id="productSectionTitle" class="section-title">All Products</h2>
                 <div class="products-grid">
                     <?php foreach($products as $p):
                         $category = isset($p['category']) ? $p['category'] : '';
@@ -156,55 +155,56 @@ natcasesort($categories);
                             <img src="<?= htmlspecialchars($normalizedImagePath) ?>" alt="<?= htmlspecialchars($p['name']) ?>" loading="lazy">
                         </div>
                         <div class="product-info">
-                            <h3><?=htmlspecialchars($p['name'])?></h3>
-                        </div>
+                            <h3 class="product-title"><?=htmlspecialchars($p['name'])?></h3>
+                            <p class="product-description"><?=htmlspecialchars($p['description'])?></p>
+                            <div class="product-meta">
+                                <span class="product-meta-item">Category: <?= htmlspecialchars($category) ?></span>
+                                <span class="product-meta-item">Brand: <?= htmlspecialchars($brand) ?></span>
+                            </div>
 
-                        <p class="product-description"><?=htmlspecialchars($p['description'])?></p>
-                        <p class="product-meta" style="font-size:12px;color:#888;">
-                            Category: <?= htmlspecialchars($category) ?> | Brand: <?= htmlspecialchars($brand) ?>
-                        </p>
+                            <div class="price-row">
+                                <span class="price">₱<?=number_format($displayPrice,2)?></span>
+                                <span class="stock <?= $displayQuantity <= 5 ? ($displayQuantity == 0 ? 'out' : 'low') : '' ?>">
+                                    <?= $displayQuantity == 0 ? 'Out of Stock' : $displayQuantity . ' in stock' ?>
+                                </span>
+                            </div>
 
-                        <div class="product-footer">
-                            <div class="price">₱<?=number_format($displayPrice,2)?></div>
-                            <div class="stock <?= $displayQuantity <= 5 ? ($displayQuantity == 0 ? 'out' : 'low') : '' ?>">
-                                <?= $displayQuantity == 0 ? 'Out of Stock' : $displayQuantity . ' in stock' ?>
+                            <div class="product-quantity">
+                                <label class="visually-hidden" for="product-qty-<?= (int) $p['id'] ?>">Quantity for <?= htmlspecialchars($p['name']) ?></label>
+                                <input id="product-qty-<?= (int) $p['id'] ?>" type="number" name="qty" value="1" min="1" max="<?=max(1,$displayQuantity)?>"
+                                    class="qty-input" <?= $displayQuantity == 0 ? 'disabled' : '' ?> data-gallery-ignore="true">
+                            </div>
+
+                            <div class="product-actions">
+                                <button type="button" class="buy-btn" <?= $displayQuantity == 0 ? 'disabled' : '' ?>
+                                    data-gallery-ignore="true"
+                                    onclick="(function(button) {
+                                        const qtyInput = button.closest('.product-info').querySelector('.qty-input');
+                                        if (qtyInput && !qtyInput.checkValidity()) {
+                                            qtyInput.reportValidity();
+                                            return;
+                                        }
+                                        const qty = qtyInput ? parseInt(qtyInput.value) || 1 : 1;
+                                        buyNow(<?= $p['id'] ?>, '<?= htmlspecialchars(addslashes($p['name'])) ?>', <?= $displayPrice ?>, qty, <?= isset($defaultVariant['id']) ? (int)$defaultVariant['id'] : 'null' ?>, '<?= htmlspecialchars(addslashes($defaultVariant['label'] ?? '')) ?>', <?= isset($defaultVariant['price']) ? $defaultVariant['price'] : $displayPrice ?>);
+                                    })(this)">
+                                    <?= $displayQuantity == 0 ? 'Out of Stock' : 'Buy Now' ?>
+                                </button>
+
+                                <button type="button" class="add-cart-btn" data-gallery-ignore="true"
+                                    onclick="(function(button) {
+                                        const qtyInput = button.closest('.product-info').querySelector('.qty-input');
+                                        const qty = qtyInput ? parseInt(qtyInput.value) || 1 : 1;
+                                        if (qtyInput && !qtyInput.checkValidity()) {
+                                            qtyInput.reportValidity();
+                                            return false;
+                                        }
+                                        addToCart(<?= $p['id'] ?>, '<?= htmlspecialchars(addslashes($p['name'])) ?>', <?= $displayPrice?>, qty, <?= isset($defaultVariant['id']) ? (int)$defaultVariant['id'] : 'null' ?>, '<?= htmlspecialchars(addslashes($defaultVariant['label'] ?? '')) ?>', <?= isset($defaultVariant['price']) ? $defaultVariant['price'] : $displayPrice ?>);
+                                    })(this)"
+                                    <?= $displayQuantity == 0 ? 'disabled' : '' ?>>
+                                    <i class="fas fa-cart-plus"></i> Add to Cart
+                                </button>
                             </div>
                         </div>
-
-                        <!-- Buy Now area now feeds into the shared cart flow -->
-                        <div class="buy-form">
-                            <input type="number" name="qty" value="1" min="1" max="<?=max(1,$displayQuantity)?>"
-                                class="qty-input" <?= $displayQuantity == 0 ? 'disabled' : '' ?> data-gallery-ignore="true">
-                            <button type="button" class="buy-btn" <?= $displayQuantity == 0 ? 'disabled' : '' ?>
-                                data-gallery-ignore="true"
-                                onclick="(function(button) {
-                                    const qtyInput = button.parentElement.querySelector('.qty-input');
-                                    if (qtyInput && !qtyInput.checkValidity()) {
-                                        qtyInput.reportValidity();
-                                        return;
-                                    }
-                                    const qty = qtyInput ? parseInt(qtyInput.value) || 1 : 1;
-                                    buyNow(<?= $p['id'] ?>, '<?= htmlspecialchars(addslashes($p['name'])) ?>', <?= $displayPrice ?>, qty, <?= isset($defaultVariant['id']) ? (int)$defaultVariant['id'] : 'null' ?>, '<?= htmlspecialchars(addslashes($defaultVariant['label'] ?? '')) ?>', <?= isset($defaultVariant['price']) ? $defaultVariant['price'] : $displayPrice ?>);
-                                })(this)">
-                                <?= $displayQuantity == 0 ? 'Out of Stock' : 'Buy Now' ?>
-                            </button>
-                        </div>
-
-                        <!-- Add to Cart Button -->
-                        <button class="add-cart-btn" data-gallery-ignore="true"
-                            onclick="(function(button) {
-                                const qtyInput = button.parentElement.querySelector('.qty-input');
-                                const qty = qtyInput ? parseInt(qtyInput.value) || 1 : 1;
-                                const stock = <?= $displayQuantity ?>;
-                                if (qtyInput && !qtyInput.checkValidity()) {
-                                    qtyInput.reportValidity();
-                                    return false;
-                                }
-                                addToCart(<?= $p['id'] ?>, '<?= htmlspecialchars(addslashes($p['name'])) ?>', <?= $displayPrice ?>, qty, <?= isset($defaultVariant['id']) ? (int)$defaultVariant['id'] : 'null' ?>, '<?= htmlspecialchars(addslashes($defaultVariant['label'] ?? '')) ?>', <?= isset($defaultVariant['price']) ? $defaultVariant['price'] : $displayPrice ?>);
-                            })(this)"
-                            <?= $displayQuantity == 0 ? 'disabled' : '' ?>>
-                            <i class="fas fa-cart-plus"></i> Add to Cart
-                        </button>
                     </div>
                     <?php endforeach; ?>
                 </div>
