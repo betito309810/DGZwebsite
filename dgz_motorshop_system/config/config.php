@@ -1,9 +1,69 @@
 <?php
 // Database configuration
-$DB_HOST = 'localhost';
-$DB_NAME = 'dgz_db';
-$DB_USER = 'root';
-$DB_PASS = ''; // Set your MySQL root password if any
+$DB_HOST = 'auth-db2052.hostgtr.io';
+$DB_NAME = 'u776610364_dgzstonino';
+$DB_USER = 'u776610364_dgzadmin';
+$DB_PASS = 'Dgzstonino123';
+
+// Ensure all pages consistently render dates in Philippine time.
+date_default_timezone_set('Asia/Manila');
+
+// Resolve the project's public and system base paths so generated links work
+// regardless of where the project is deployed inside the web root. The
+// storefront PHP files live alongside this directory, so we compute both the
+// project root (public) and the `dgz_motorshop_system` path for shared assets.
+$systemRoot = str_replace('\\', '/', realpath(__DIR__ . '/..'));
+$projectRoot = $systemRoot !== false ? str_replace('\\', '/', dirname($systemRoot)) : false;
+$documentRoot = isset($_SERVER['DOCUMENT_ROOT'])
+    ? str_replace('\\', '/', realpath($_SERVER['DOCUMENT_ROOT']))
+    : false;
+
+$APP_BASE_PATH = '';
+$SYSTEM_BASE_PATH = '';
+$SYSTEM_BASE_URL = '';
+$systemFolderName = $systemRoot !== false ? basename($systemRoot) : 'dgz_motorshop_system';
+
+if ($projectRoot !== false && $documentRoot !== false && strpos($projectRoot, $documentRoot) === 0) {
+    $relativePath = substr($projectRoot, strlen($documentRoot));
+    $APP_BASE_PATH = $relativePath === '' ? '' : '/' . ltrim($relativePath, '/');
+}
+
+if ($systemRoot !== false && $documentRoot !== false && strpos($systemRoot, $documentRoot) === 0) {
+    $relativePath = substr($systemRoot, strlen($documentRoot));
+    $SYSTEM_BASE_PATH = $relativePath === '' ? '' : '/' . ltrim($relativePath, '/');
+}
+
+if ($APP_BASE_PATH === '/') {
+    $APP_BASE_PATH = '';
+}
+
+if ($SYSTEM_BASE_PATH === '/') {
+    $SYSTEM_BASE_PATH = '';
+}
+
+if ($SYSTEM_BASE_PATH === '') {
+    if ($APP_BASE_PATH !== '') {
+        $SYSTEM_BASE_PATH = rtrim($APP_BASE_PATH, '/') . '/' . $systemFolderName;
+    } else {
+        $SYSTEM_BASE_PATH = '/' . ltrim($systemFolderName, '/');
+    }
+}
+
+$isSecure = (
+    (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+    || (isset($_SERVER['REQUEST_SCHEME']) && $_SERVER['REQUEST_SCHEME'] === 'https')
+    || ((int) ($_SERVER['SERVER_PORT'] ?? 0) === 443)
+);
+
+$host = $_SERVER['HTTP_HOST'] ?? '';
+if ($host !== '') {
+    $scheme = $isSecure ? 'https://' : 'http://';
+    $APP_BASE_URL = rtrim($scheme . $host . $APP_BASE_PATH, '/');
+    $SYSTEM_BASE_URL = rtrim($scheme . $host . $SYSTEM_BASE_PATH, '/');
+} else {
+    $APP_BASE_URL = $APP_BASE_PATH;
+    $SYSTEM_BASE_URL = $SYSTEM_BASE_PATH;
+}
 
 /**
  * Create or reuse the PDO instance used throughout the application.
@@ -29,6 +89,209 @@ if (!function_exists('db')) {
         $pdo = new PDO($dsn, $DB_USER, $DB_PASS, $options);
 
         return $pdo;
+    }
+}
+
+if (!function_exists('appBasePath')) {
+    function appBasePath(): string
+    {
+        global $APP_BASE_PATH;
+        return $APP_BASE_PATH ?: '';
+    }
+}
+
+if (!function_exists('appBaseUrl')) {
+    function appBaseUrl(): string
+    {
+        global $APP_BASE_URL;
+        return $APP_BASE_URL ?: '';
+    }
+}
+
+if (!function_exists('systemBasePath')) {
+    function systemBasePath(): string
+    {
+        global $SYSTEM_BASE_PATH;
+        return $SYSTEM_BASE_PATH ?: '';
+    }
+}
+
+if (!function_exists('systemBaseUrl')) {
+    function systemBaseUrl(): string
+    {
+        global $SYSTEM_BASE_URL;
+        return $SYSTEM_BASE_URL ?: '';
+    }
+}
+
+if (!function_exists('assetUrl')) {
+    function assetUrl(string $path): string
+    {
+        $trimmed = trim($path);
+
+        if ($trimmed === '') {
+            $base = systemBasePath();
+            return $base === '' ? '/' : $base;
+        }
+
+        if (preg_match('#^(?:[a-z][a-z0-9+.-]*:)?//#i', $trimmed) === 1) {
+            return $trimmed;
+        }
+
+        if ($trimmed[0] === '/') {
+            return $trimmed;
+        }
+
+        if (strncmp($trimmed, './', 2) === 0 || strncmp($trimmed, '../', 3) === 0) {
+            return $trimmed;
+        }
+
+        $normalized = ltrim($trimmed, '/');
+        $basePath = systemBasePath();
+
+        if ($basePath === '' || $basePath === '/') {
+            return '/' . $normalized;
+        }
+
+        return rtrim($basePath, '/') . '/' . $normalized;
+    }
+}
+
+if (!function_exists('routeUrl')) {
+    function routeUrl(string $path = ''): string
+    {
+        $trimmed = trim($path);
+
+        if ($trimmed === '') {
+            $base = appBasePath();
+            return $base === '' ? '/' : $base;
+        }
+
+        if (preg_match('#^(?:[a-z][a-z0-9+.-]*:)?//#i', $trimmed) === 1) {
+            return $trimmed;
+        }
+
+        if ($trimmed[0] === '/') {
+            return $trimmed;
+        }
+
+        if (strncmp($trimmed, './', 2) === 0 || strncmp($trimmed, '../', 3) === 0) {
+            return $trimmed;
+        }
+
+        $normalized = ltrim($trimmed, '/');
+        $basePath = appBasePath();
+
+        if ($basePath === '' || $basePath === '/') {
+            return '/' . $normalized;
+        }
+
+        return rtrim($basePath, '/') . '/' . $normalized;
+    }
+}
+
+if (!function_exists('appDocumentRootPath')) {
+    function appDocumentRootPath(): string
+    {
+        $basePath = appBasePath();
+
+        if ($basePath === '' || $basePath === '/') {
+            return '';
+        }
+
+        $trimmed = rtrim($basePath, '/');
+        if ($trimmed === '') {
+            return '';
+        }
+
+        $docPath = dirname($trimmed);
+
+        if ($docPath === '.' || $docPath === DIRECTORY_SEPARATOR) {
+            return '';
+        }
+
+        if ($docPath === '\\' || $docPath === '/') {
+            return '';
+        }
+
+        return $docPath;
+    }
+}
+
+if (!function_exists('orderingUrl')) {
+    function orderingUrl(string $path = ''): string
+    {
+        return routeUrl($path);
+    }
+}
+
+if (!function_exists('adminUrl')) {
+    function adminUrl(string $path = ''): string
+    {
+        $normalized = ltrim($path, '/');
+        return routeUrl('admin/' . $normalized);
+    }
+}
+
+if (!function_exists('absoluteUrl')) {
+    function absoluteUrl(string $path = ''): string
+    {
+        $trimmed = trim($path);
+
+        if ($trimmed === '') {
+            $relative = routeUrl('');
+        } elseif (preg_match('#^(?:[a-z][a-z0-9+.-]*:)?//#i', $trimmed) === 1) {
+            return $trimmed;
+        } elseif ($trimmed[0] === '/') {
+            $relative = $trimmed;
+        } else {
+            $relative = routeUrl($trimmed);
+        }
+
+        $baseUrl = appBaseUrl();
+
+        if ($baseUrl !== '' && preg_match('#^https?://#i', $baseUrl) === 1) {
+            $basePath = appBasePath();
+            $relativePath = $relative;
+
+            if ($basePath !== '' && strpos($relative, $basePath) === 0) {
+                $relativePath = substr($relative, strlen($basePath));
+            }
+
+            $relativePath = '/' . ltrim($relativePath, '/');
+
+            return rtrim($baseUrl, '/') . $relativePath;
+        }
+
+        return $relative;
+    }
+}
+
+if (!function_exists('publicAsset')) {
+    function publicAsset(?string $path, ?string $fallback = null): string
+    {
+        $trimmed = trim((string) $path);
+        if ($trimmed === '') {
+            if ($fallback === null) {
+                return '';
+            }
+
+            return publicAsset($fallback);
+        }
+
+        if (preg_match('#^(?:[a-z][a-z0-9+.-]*:)?//#i', $trimmed) === 1) {
+            return $trimmed;
+        }
+
+        if ($trimmed[0] === '/') {
+            return $trimmed;
+        }
+
+        if (strncmp($trimmed, '../', 3) === 0 || strncmp($trimmed, './', 2) === 0) {
+            return $trimmed;
+        }
+
+        return assetUrl($trimmed);
     }
 }
 
@@ -109,22 +372,62 @@ if (!function_exists('normalizePaymentProofPath')) {
             return '';
         }
 
+        $normalized = str_replace('\\', '/', $trimmed);
+        $normalized = preg_replace('#/+#', '/', $normalized);
+
         // Allow fully-qualified URLs or data URIs to pass through untouched.
-        if (preg_match('#^https?://#i', $trimmed) === 1 || strncmp($trimmed, 'data:', 5) === 0) {
-            return $trimmed;
+        if (preg_match('#^(?:[a-z][a-z0-9+.-]*:)?//#i', $normalized) === 1 || strncmp($normalized, 'data:', 5) === 0) {
+            return $normalized;
         }
 
-        // Preserve absolute paths as-is.
-        if ($trimmed[0] === '/') {
-            return $trimmed;
+        // Preserve absolute or already-relative web paths.
+        if ($normalized[0] === '/' || strncmp($normalized, '../', 3) === 0 || strncmp($normalized, './', 2) === 0) {
+            return $normalized;
         }
 
-        // Already relative to the admin root; leave unchanged.
-        if (strncmp($trimmed, '../', 3) === 0 || strncmp($trimmed, './', 2) === 0) {
-            return $trimmed;
+        $relative = ltrim($normalized, '/');
+
+        // If the string contains an uploads directory anywhere (e.g. full filesystem path),
+        // trim everything before it so we end up with a web-accessible fragment.
+        $lowerRelative = strtolower($relative);
+        $uploadsPos = strpos($lowerRelative, 'uploads/');
+        if ($uploadsPos !== false) {
+            $relative = substr($relative, $uploadsPos);
         }
 
-        return $defaultPrefix . ltrim($trimmed, '/');
+        // Strip known system folder prefixes that may have been persisted by older installs.
+        $knownPrefixes = [
+            'dgz_motorshop_system/uploads/',
+            'dgz_motorshop_system/',
+            'dgz-motorshop_system/uploads/',
+            'dgz-motorshop_system/',
+        ];
+
+        foreach ($knownPrefixes as $prefix) {
+            if (stripos($relative, $prefix) === 0) {
+                $relative = substr($relative, strlen($prefix));
+                break;
+            }
+        }
+
+        $relative = ltrim($relative, '/');
+
+        if ($relative === '') {
+            return '';
+        }
+
+        // Historic records sometimes omitted the uploads directory; patch it back in so
+        // links resolve next to the admin uploads folder.
+        if (strpos($relative, 'uploads/') !== 0 && strpos($relative, 'payment-proofs/') === 0) {
+            $relative = 'uploads/' . $relative;
+        }
+
+        $prefix = rtrim($defaultPrefix, '/');
+        if ($prefix === '') {
+            return $relative;
+        }
+
+        return $prefix . '/' . ltrim($relative, '/');
     }
 }
 

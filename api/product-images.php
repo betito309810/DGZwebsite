@@ -1,6 +1,6 @@
 <?php
 // Added: JSON endpoint that supplies product gallery images to the public modal.
-require __DIR__ . '/../../config/config.php';
+require __DIR__ . '/../dgz_motorshop_system/config/config.php';
 
 header('Content-Type: application/json');
 
@@ -33,7 +33,7 @@ try {
     $primaryImage = trim((string) ($product['image'] ?? ''));
     if ($primaryImage !== '') {
         $imageResults[] = [
-            'url' => '../' . ltrim($primaryImage, '/'),
+            'url' => publicAsset($primaryImage),
             'label' => $product['name'] ?? 'Product image',
         ];
     }
@@ -47,7 +47,7 @@ try {
             continue;
         }
         $imageResults[] = [
-            'url' => '../' . ltrim($path, '/'),
+            'url' => publicAsset($path),
             'label' => $product['name'] ?? 'Product image',
         ];
     }

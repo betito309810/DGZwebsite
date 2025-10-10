@@ -1,3 +1,18 @@
+<?php
+require __DIR__ . '/dgz_motorshop_system/config/config.php';
+
+$logoAsset = assetUrl('assets/logo.png');
+$indexStylesheet = assetUrl('assets/css/public/index.css');
+$trackStylesheet = assetUrl('assets/css/public/track-order.css');
+$cartScript = assetUrl('assets/js/public/cart.js');
+$trackScript = assetUrl('assets/js/public/track-order.js');
+$homeUrl = orderingUrl('index.php');
+$aboutUrl = orderingUrl('about.php');
+$trackOrderUrl = orderingUrl('track-order.php');
+$checkoutUrl = orderingUrl('checkout.php');
+$orderStatusEndpoint = orderingUrl('order_status.php');
+$productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7,25 +22,25 @@
     <!-- Font Awesome for consistent iconography across the storefront -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <!-- Shared index stylesheet for consistent footer and other styles -->
-    <link rel="stylesheet" href="../assets/css/public/index.css">
+    <link rel="stylesheet" href="<?= htmlspecialchars($indexStylesheet) ?>">
     <!-- Page specific stylesheet lives alongside the other public assets -->
-    <link rel="stylesheet" href="../assets/css/public/track-order.css">
+    <link rel="stylesheet" href="<?= htmlspecialchars($trackStylesheet) ?>">
 </head>
 <body>
     <!-- Header: mirrors the home page layout so the experience feels seamless -->
     <header class="header">
         <div class="header-content">
             <div class="logo">
-                <img src="../assets/logo.png" alt="DGZ Motorshop Logo">
+                <img src="<?= htmlspecialchars($logoAsset) ?>" alt="DGZ Motorshop Logo">
             
     </header>
 
     <!-- Navigation: adds the Track Order entry while keeping existing links -->
     <nav class="nav">
         <div class="nav-content">
-            <a href="index.php" class="nav-link">HOME</a>
-            <a href="about.php" class="nav-link">ABOUT</a>
-            <a href="track-order.php" class="nav-link active">TRACK ORDER</a>
+            <a href="<?= htmlspecialchars($homeUrl) ?>" class="nav-link">HOME</a>
+            <a href="<?= htmlspecialchars($aboutUrl) ?>" class="nav-link">ABOUT</a>
+            <a href="<?= htmlspecialchars($trackOrderUrl) ?>" class="nav-link active">TRACK ORDER</a>
         </div>
     </nav>
 
@@ -76,8 +91,15 @@
 </footer>
 
     <!-- Shared cart functionality -->
-    <script src="../assets/js/public/cart.js"></script>
+    <script>
+        window.dgzPaths = Object.assign({}, window.dgzPaths || {}, {
+            checkout: <?= json_encode($checkoutUrl) ?>,
+            orderStatus: <?= json_encode($orderStatusEndpoint) ?>,
+            productPlaceholder: <?= json_encode($productPlaceholder) ?>
+        });
+    </script>
+    <script src="<?= htmlspecialchars($cartScript) ?>"></script>
     <!-- Page specific logic for handling status lookups -->
-    <script src="../assets/js/public/track-order.js"></script>
+    <script src="<?= htmlspecialchars($trackScript) ?>"></script>
 </body>
 </html>
