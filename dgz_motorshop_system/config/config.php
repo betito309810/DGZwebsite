@@ -430,6 +430,64 @@ if (!function_exists('normalizePaymentProofPath')) {
     }
 }
 
+if (!function_exists('getOnlineOrdersBaseCondition')) {
+    /**
+     * Base WHERE clause that determines whether an order should appear in the
+     * online orders feed. Mirrors the logic used across the admin POS views.
+     */
+    function getOnlineOrdersBaseCondition(): string
+    {
+        static $clause = null;
+        if ($clause !== null) {
+            return $clause;
+        }
+
+        $parts = [
+            "(payment_method IS NOT NULL AND payment_method <> '' AND LOWER(payment_method) = 'gcash')",
+            "(payment_proof IS NOT NULL AND payment_proof <> '')",
+            "status IN ('pending','payment_verification','approved','disapproved')",
+        ];
+
+        $clause = '(' . implode(' OR ', $parts) . ')';
+        return $clause;
+    }
+}
+
+if (!function_exists('countOnlineOrdersByStatus')) {
+    /**
+     * Count online orders that match the supplied statuses. Defaults to orders
+     * that need cashier attention (pending or payment verification).
+     */
+    function countOnlineOrdersByStatus(PDO $pdo, array $statuses = ['pending', 'payment_verification']): int
+    {
+        $normalized = [];
+        foreach ($statuses as $status) {
+            $status = strtolower(trim((string) $status));
+            if ($status !== '') {
+                $normalized[$status] = true;
+            }
+        }
+
+        if (empty($normalized)) {
+            return 0;
+        }
+
+        $statusList = array_keys($normalized);
+        $placeholders = implode(',', array_fill(0, count($statusList), '?'));
+
+        $sql = 'SELECT COUNT(*) FROM orders WHERE ' . getOnlineOrdersBaseCondition() . ' AND status IN (' . $placeholders . ')';
+
+        try {
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($statusList);
+            return (int) $stmt->fetchColumn();
+        } catch (Throwable $e) {
+            error_log('Unable to count online orders: ' . $e->getMessage());
+            return 0;
+        }
+    }
+}
+
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }

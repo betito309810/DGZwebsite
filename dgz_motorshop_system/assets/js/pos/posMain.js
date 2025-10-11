@@ -1,6 +1,12 @@
 // file 2 start – POS page behavior bundle (safe to extract)
 // Begin POS main interaction script
-const { productCatalog = [], initialActiveTab = 'walkin', checkoutReceipt = null } = window.dgzPosData || {};
+const {
+    productCatalog = [],
+    initialActiveTab = 'walkin',
+    checkoutReceipt = null,
+    declineReasons: declineReasonsBootstrap = [],
+    onlineOrders: onlineOrdersBootstrap = {},
+} = window.dgzPosData || {};
 
 document.addEventListener('DOMContentLoaded', () => {
             const posStateKey = 'posTable';
@@ -74,12 +80,47 @@ document.addEventListener('DOMContentLoaded', () => {
             const onlineOrderReference = document.getElementById('onlineOrderReference');
             const onlineOrderItemsBody = document.getElementById('onlineOrderItemsBody');
             const onlineOrderTotal = document.getElementById('onlineOrderTotal');
+            const onlineOrdersTableBody = document.querySelector('[data-online-orders-body]');
+            const onlineOrdersSummary = document.querySelector('[data-online-orders-summary]');
+            const onlineOrdersTabCount = document.querySelector('[data-online-orders-count]');
+            const sidebarPosCount = document.querySelector('[data-sidebar-pos-count]');
+            const onlineOrdersPaginationContainer = document.querySelector('[data-online-orders-pagination]');
+            const onlineOrdersPaginationBody = document.querySelector('[data-online-orders-pagination-body]');
+            const onlineOrdersContainer = document.querySelector('.online-orders-container');
 
             const tabButtons = document.querySelectorAll('.pos-tab-button');
             const tabPanels = {
                 walkin: document.getElementById('walkinTab'),
                 online: document.getElementById('onlineTab'),
             };
+
+            const ONLINE_ORDER_POLL_MS = 12000;
+            let onlineOrdersPollTimer = null;
+            let isFetchingOnlineOrders = false;
+
+            let onlineOrdersState = {
+                page: Number(onlineOrdersBootstrap.page) || 1,
+                perPage: Number(onlineOrdersBootstrap.perPage) || 15,
+                statusFilter: typeof onlineOrdersBootstrap.statusFilter === 'string' ? onlineOrdersBootstrap.statusFilter : '',
+                totalOrders: Number(onlineOrdersBootstrap.totalOrders) || 0,
+                totalPages: Number(onlineOrdersBootstrap.totalPages) || 1,
+                attentionCount: Number(onlineOrdersBootstrap.attentionCount) || 0,
+                orders: Array.isArray(onlineOrdersBootstrap.orders) ? onlineOrdersBootstrap.orders : [],
+            };
+
+            const escapeHtml = (value) => {
+                if (value === null || value === undefined) {
+                    return '';
+                }
+                return String(value)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            };
+
+            const escapeMultiline = (value) => escapeHtml(value).replace(/\r?\n/g, '<br>');
 
             // Begin POS profile modal opener (inline)
             const openProfileModal = () => {
@@ -231,6 +272,313 @@ document.addEventListener('DOMContentLoaded', () => {
                 onlineOrderTotal.textContent = formatPeso(totalAmount);
             };
             // End POS online order modal populator
+
+            const openProofModalFromButton = (button) => {
+                if (!button || !proofModal) {
+                    return;
+                }
+
+                const image = button.dataset.image || '';
+                const reference = button.dataset.reference || '';
+                const customer = button.dataset.customer || 'Customer';
+
+                proofReferenceValue.textContent = reference !== '' ? reference : 'Not provided';
+                proofCustomerName.textContent = customer;
+
+                if (image) {
+                    proofImage.src = image;
+                    proofImage.style.display = 'block';
+                    proofNoImage.style.display = 'none';
+                } else {
+                    proofImage.removeAttribute('src');
+                    proofImage.style.display = 'none';
+                    proofNoImage.style.display = 'flex';
+                }
+
+                proofModal.classList.add('show');
+                proofModal.setAttribute('aria-hidden', 'false');
+            };
+
+            const fetchOnlineOrderDetails = async (orderId) => {
+                if (!orderId) {
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`get_transaction_details.php?order_id=${encodeURIComponent(orderId)}`);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    populateOnlineOrderModal(data.order || {}, Array.isArray(data.items) ? data.items : []);
+                    openOnlineOrderModalOverlay();
+                } catch (error) {
+                    console.error('Unable to load online order details.', error);
+                    alert('Failed to load order details. Please try again.');
+                }
+            };
+
+            const buildOnlineOrdersUrl = (targetPage) => {
+                const params = new URLSearchParams();
+                params.set('tab', 'online');
+                params.set('page', String(targetPage));
+                if (onlineOrdersState.statusFilter) {
+                    params.set('status_filter', onlineOrdersState.statusFilter);
+                }
+                return `?${params.toString()}`;
+            };
+
+            const updateBadgeElement = (element, count) => {
+                if (!element) {
+                    return;
+                }
+
+                if (count > 0) {
+                    element.textContent = String(count);
+                    element.hidden = false;
+                } else {
+                    element.textContent = '0';
+                    element.hidden = true;
+                }
+            };
+
+            const updateOnlineOrderBadges = (count) => {
+                updateBadgeElement(onlineOrdersTabCount, count);
+                updateBadgeElement(sidebarPosCount, count);
+            };
+
+            const renderOnlineOrdersSummary = (onPage, total) => {
+                if (!onlineOrdersSummary) {
+                    return;
+                }
+                onlineOrdersSummary.textContent = `Showing ${onPage} of ${total} orders`;
+            };
+
+            const renderOnlineOrdersPagination = (meta) => {
+                if (!onlineOrdersPaginationContainer || !onlineOrdersPaginationBody) {
+                    return;
+                }
+
+                const totalPages = Number(meta.totalPages) || 1;
+                const currentPage = Number(meta.page) || 1;
+
+                if (totalPages <= 1) {
+                    onlineOrdersPaginationContainer.hidden = true;
+                    onlineOrdersPaginationBody.innerHTML = '';
+                    return;
+                }
+
+                onlineOrdersPaginationContainer.hidden = false;
+
+                const startPage = Math.max(1, currentPage - 2);
+                const endPage = Math.min(totalPages, currentPage + 2);
+
+                const fragments = [];
+
+                if (currentPage > 1) {
+                    fragments.push(
+                        `<a href="${buildOnlineOrdersUrl(currentPage - 1)}" class="pagination-btn"><i class="fas fa-chevron-left"></i> Previous</a>`
+                    );
+                }
+
+                if (startPage > 1) {
+                    fragments.push(`<a href="${buildOnlineOrdersUrl(1)}" class="pagination-btn">1</a>`);
+                    if (startPage > 2) {
+                        fragments.push('<span class="pagination-ellipsis">...</span>');
+                    }
+                }
+
+                for (let pageIndex = startPage; pageIndex <= endPage; pageIndex += 1) {
+                    const activeClass = pageIndex === currentPage ? ' active' : '';
+                    fragments.push(
+                        `<a href="${buildOnlineOrdersUrl(pageIndex)}" class="pagination-btn${activeClass}">${pageIndex}</a>`
+                    );
+                }
+
+                if (endPage < totalPages) {
+                    if (endPage < totalPages - 1) {
+                        fragments.push('<span class="pagination-ellipsis">...</span>');
+                    }
+                    fragments.push(
+                        `<a href="${buildOnlineOrdersUrl(totalPages)}" class="pagination-btn">${totalPages}</a>`
+                    );
+                }
+
+                if (currentPage < totalPages) {
+                    fragments.push(
+                        `<a href="${buildOnlineOrdersUrl(currentPage + 1)}" class="pagination-btn">Next <i class="fas fa-chevron-right"></i></a>`
+                    );
+                }
+
+                onlineOrdersPaginationBody.innerHTML = fragments.join('');
+            };
+
+            const buildOnlineOrderRow = (order) => {
+                const row = document.createElement('tr');
+                row.className = 'online-order-row';
+
+                const orderId = order && order.id !== undefined ? order.id : '';
+                const statusValue = (order && order.status_value) ? String(order.status_value) : 'pending';
+                const statusLabel = order && order.status_label ? String(order.status_label) : statusValue;
+                const badgeClass = order && order.status_badge_class ? String(order.status_badge_class) : `status-${statusValue}`;
+                const referenceNumber = order && order.reference_number ? String(order.reference_number) : '';
+                const contactDisplayRaw = order && order.contact_display ? String(order.contact_display) : '';
+                const contactDisplay = contactDisplayRaw.trim() !== '' ? contactDisplayRaw : '—';
+                const availableStatusChanges = Array.isArray(order?.available_status_changes)
+                    ? order.available_status_changes
+                    : [];
+                const statusFormDisabled = Boolean(order?.status_form_disabled) || availableStatusChanges.length === 0;
+                const declineReasonLabel = order && order.decline_reason_label ? String(order.decline_reason_label) : '';
+                const declineReasonNote = order && order.decline_reason_note ? String(order.decline_reason_note) : '';
+
+                row.dataset.orderId = String(orderId);
+                row.dataset.declineReasonId = String(order?.decline_reason_id ?? 0);
+                row.dataset.declineReasonLabel = declineReasonLabel;
+                row.dataset.declineReasonNote = declineReasonNote;
+
+                const statusOptionsHtml = statusFormDisabled
+                    ? `<option value="">${escapeHtml(statusLabel)}</option>`
+                    : availableStatusChanges
+                        .map((option) => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`)
+                        .join('');
+
+                const declineHtml = statusValue === 'disapproved' && declineReasonLabel !== ''
+                    ? `<div class="decline-reason-display">Reason: ${escapeHtml(declineReasonLabel)}${
+                        declineReasonNote !== ''
+                            ? `<br><span class="decline-reason-note">Details: ${escapeMultiline(declineReasonNote)}</span>`
+                            : ''
+                    }</div>`
+                    : '';
+
+                row.innerHTML = `
+                    <td>#${escapeHtml(orderId)}</td>
+                    <td>${escapeHtml(order?.customer_name || 'Customer')}</td>
+                    <td>${escapeHtml(contactDisplay)}</td>
+                    <td>${escapeHtml(order?.total_formatted || '₱0.00')}</td>
+                    <td>${referenceNumber !== ''
+                        ? `<span class="reference-badge">${escapeHtml(referenceNumber)}</span>`
+                        : '<span class="muted">Not provided</span>'}
+                    </td>
+                    <td>
+                        <button type="button" class="view-proof-btn"
+                            data-image="${escapeHtml(order?.proof_image_url || '')}"
+                            data-reference="${escapeHtml(referenceNumber)}"
+                            data-customer="${escapeHtml(order?.customer_name || 'Customer')}">
+                            <i class="fas fa-receipt"></i> View
+                        </button>
+                    </td>
+                    <td>
+                        <span class="status-badge ${escapeHtml(badgeClass)}">${escapeHtml(statusLabel)}</span>
+                        <form method="post" class="status-form">
+                            <input type="hidden" name="order_id" value="${escapeHtml(orderId)}">
+                            <input type="hidden" name="update_order_status" value="1">
+                            <input type="hidden" name="decline_reason_id" value="">
+                            <input type="hidden" name="decline_reason_note" value="">
+                            <select name="new_status" ${statusFormDisabled ? 'disabled' : ''}>
+                                ${statusOptionsHtml}
+                            </select>
+                            <button type="submit" class="status-save" ${statusFormDisabled ? 'disabled' : ''}>Update</button>
+                        </form>
+                        ${declineHtml}
+                    </td>
+                    <td>${escapeHtml(order?.created_at_formatted || 'N/A')}</td>
+                `;
+
+                return row;
+            };
+
+            const renderOnlineOrdersTable = (orders) => {
+                if (!onlineOrdersTableBody) {
+                    return;
+                }
+
+                onlineOrdersTableBody.innerHTML = '';
+
+                if (!Array.isArray(orders) || orders.length === 0) {
+                    const emptyRow = document.createElement('tr');
+                    const emptyCell = document.createElement('td');
+                    emptyCell.colSpan = 8;
+                    emptyCell.className = 'empty-cell';
+                    emptyCell.innerHTML = '<i class="fas fa-inbox"></i> No online orders yet.';
+                    emptyRow.appendChild(emptyCell);
+                    onlineOrdersTableBody.appendChild(emptyRow);
+                    return;
+                }
+
+                orders.forEach((order) => {
+                    onlineOrdersTableBody.appendChild(buildOnlineOrderRow(order));
+                });
+            };
+
+            const applyOnlineOrdersData = (data) => {
+                if (!data) {
+                    return;
+                }
+
+                onlineOrdersState = {
+                    page: Number(data.page) || onlineOrdersState.page,
+                    perPage: Number(data.per_page) || onlineOrdersState.perPage,
+                    statusFilter: typeof data.status_filter === 'string' ? data.status_filter : onlineOrdersState.statusFilter,
+                    totalOrders: Number(data.total_orders) || 0,
+                    totalPages: Number(data.total_pages) || 1,
+                    attentionCount: Number(data.attention_count) || 0,
+                    orders: Array.isArray(data.orders) ? data.orders : [],
+                };
+
+                renderOnlineOrdersTable(onlineOrdersState.orders);
+                renderOnlineOrdersSummary(onlineOrdersState.orders.length, onlineOrdersState.totalOrders);
+                renderOnlineOrdersPagination(onlineOrdersState);
+                updateOnlineOrderBadges(onlineOrdersState.attentionCount);
+            };
+
+            const fetchOnlineOrders = async () => {
+                if (isFetchingOnlineOrders || !onlineOrdersTableBody) {
+                    return;
+                }
+
+                isFetchingOnlineOrders = true;
+                try {
+                    const activeElement = document.activeElement;
+                    if (activeElement && typeof activeElement.closest === 'function' && activeElement.closest('.status-form')) {
+                        return;
+                    }
+
+                    const params = new URLSearchParams();
+                    params.set('page', String(onlineOrdersState.page));
+                    params.set('per_page', String(onlineOrdersState.perPage));
+                    if (onlineOrdersState.statusFilter) {
+                        params.set('status_filter', onlineOrdersState.statusFilter);
+                    }
+
+                    const response = await fetch(`onlineOrdersFeed.php?${params.toString()}`, {
+                        headers: { Accept: 'application/json' },
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+
+                    const payload = await response.json();
+                    if (!payload || payload.success !== true || !payload.data) {
+                        return;
+                    }
+
+                    applyOnlineOrdersData(payload.data);
+                } catch (error) {
+                    console.error('Unable to refresh online orders.', error);
+                } finally {
+                    isFetchingOnlineOrders = false;
+                }
+            };
+
+            const startOnlineOrdersPoll = () => {
+                if (onlineOrdersPollTimer) {
+                    window.clearInterval(onlineOrdersPollTimer);
+                }
+
+                onlineOrdersPollTimer = window.setInterval(fetchOnlineOrders, ONLINE_ORDER_POLL_MS);
+            };
 
             // Begin POS currency formatter
             function formatPeso(value) {
@@ -748,6 +1096,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 Object.entries(tabPanels).forEach(([name, panel]) => {
                     panel.classList.toggle('active', name === tabName);
                 });
+
+                if (tabName === 'online') {
+                    fetchOnlineOrders();
+                }
 
                 if (!skipPersistence) {
                     try {
@@ -1288,60 +1640,35 @@ document.addEventListener('DOMContentLoaded', () => {
                 window.history.replaceState({}, document.title, url.toString());
             }
 
-            document.querySelectorAll('.view-proof-btn').forEach((button) => {
-                button.addEventListener('click', () => {
-                    const image = button.dataset.image;
-                    const reference = button.dataset.reference || '';
-                    const customer = button.dataset.customer || 'Customer';
+            onlineOrdersContainer?.addEventListener('click', (event) => {
+                const proofButton = event.target.closest('.view-proof-btn');
+                if (proofButton) {
+                    event.preventDefault();
+                    openProofModalFromButton(proofButton);
+                    return;
+                }
 
-                    proofReferenceValue.textContent = reference !== '' ? reference : 'Not provided';
-                    proofCustomerName.textContent = customer;
+                const row = event.target.closest('.online-order-row');
+                if (!row) {
+                    return;
+                }
 
-                    if (image) {
-                        proofImage.src = image;
-                        proofImage.style.display = 'block';
-                        proofNoImage.style.display = 'none';
-                    } else {
-                        proofImage.removeAttribute('src');
-                        proofImage.style.display = 'none';
-                        proofNoImage.style.display = 'flex';
-                    }
+                if (
+                    event.target.closest('.status-form') ||
+                    event.target.closest('.status-save') ||
+                    event.target.closest('button') ||
+                    event.target.closest('select')
+                ) {
+                    return;
+                }
 
-                    proofModal.classList.add('show');
-                    proofModal.setAttribute('aria-hidden', 'false');
-                });
-            });
+                const orderId = row.dataset.orderId;
+                if (!orderId) {
+                    return;
+                }
 
-            document.querySelectorAll('.online-order-row').forEach((row) => {
-                row.addEventListener('click', async (event) => {
-                    if (
-                        event.target.closest('.status-form') ||
-                        event.target.closest('.view-proof-btn') ||
-                        event.target.tagName === 'BUTTON' ||
-                        event.target.tagName === 'SELECT'
-                    ) {
-                        return;
-                    }
-
-                    const orderId = row.dataset.orderId;
-                    if (!orderId) {
-                        return;
-                    }
-
-                    try {
-                        const response = await fetch(`get_transaction_details.php?order_id=${encodeURIComponent(orderId)}`);
-                        if (!response.ok) {
-                            throw new Error(`HTTP error! status: ${response.status}`);
-                        }
-
-                        const data = await response.json();
-                        populateOnlineOrderModal(data.order || {}, Array.isArray(data.items) ? data.items : []);
-                        openOnlineOrderModalOverlay();
-                    } catch (error) {
-                        console.error('Unable to load online order details.', error);
-                        alert('Failed to load order details. Please try again.');
-                    }
-                });
+                event.preventDefault();
+                fetchOnlineOrderDetails(orderId);
             });
 
             closeProofModalButton?.addEventListener('click', closeProofModal);
@@ -1385,9 +1712,22 @@ document.addEventListener('DOMContentLoaded', () => {
             printReceiptButton?.addEventListener('click', printReceipt);
 
             // Initialisation
+            renderOnlineOrdersTable(onlineOrdersState.orders);
+            renderOnlineOrdersSummary(onlineOrdersState.orders.length, onlineOrdersState.totalOrders);
+            renderOnlineOrdersPagination(onlineOrdersState);
+            updateOnlineOrderBadges(onlineOrdersState.attentionCount);
+            startOnlineOrdersPoll();
+            window.setTimeout(fetchOnlineOrders, 4000);
+
+            window.addEventListener('beforeunload', () => {
+                if (onlineOrdersPollTimer) {
+                    window.clearInterval(onlineOrdersPollTimer);
+                }
+            });
+
             updateSettleButtonState();
             const urlParams = new URLSearchParams(window.location.search);
-            const shouldRestoreTableState = !(
+            const shouldRestoreTableState = !( 
                 urlParams.get('ok') === '1' &&
                 checkoutReceipt &&
                 Array.isArray(checkoutReceipt.items) &&

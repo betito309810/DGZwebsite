@@ -3,6 +3,7 @@ require __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../includes/email.php';
 require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/includes/decline_reasons.php'; // Decline reason helpers
+require_once __DIR__ . '/includes/online_orders_helpers.php'; // Online order feed helpers
 
 use Dompdf\Dompdf;
 use Dompdf\Options;
@@ -1054,72 +1055,29 @@ if (!empty($_SESSION['pos_active_tab']) && in_array($_SESSION['pos_active_tab'],
 // Pagination and filtering for online orders
 $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
 $perPage = 15;
-$offset = ($page - 1) * $perPage;
 
-$statusFilter = '';
-if (isset($_GET['status_filter'])) {
-    $tmp = strtolower(trim((string) $_GET['status_filter']));
-    if (in_array($tmp, ['pending', 'payment_verification', 'approved', 'completed', 'disapproved'], true)) {
-        $statusFilter = $tmp;
-    }
+$statusFilter = isset($_GET['status_filter']) ? $_GET['status_filter'] : '';
+
+$onlineOrdersData = fetchOnlineOrdersData($pdo, [
+    'page' => $page,
+    'per_page' => $perPage,
+    'status' => $statusFilter,
+    'decline_reason_lookup' => $declineReasonLookup,
+]);
+
+$onlineOrders = $onlineOrdersData['orders'];
+$totalOrders = $onlineOrdersData['total_orders'];
+$totalPages = $onlineOrdersData['total_pages'];
+$page = $onlineOrdersData['page'];
+$statusFilter = $onlineOrdersData['status_filter'];
+$pendingOnlineOrdersCount = $onlineOrdersData['attention_count'];
+$onlineOrdersOnPage = count($onlineOrders);
+$onlineOrderBadgeCount = $pendingOnlineOrdersCount;
+
+$onlineOrdersJson = json_encode($onlineOrders, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
+if ($onlineOrdersJson === false) {
+    $onlineOrdersJson = '[]';
 }
-
-// Build the WHERE clause for online orders
-$whereConditions = [
-    "(payment_method IS NOT NULL AND payment_method <> '' AND LOWER(payment_method) = 'gcash')",
-    "(payment_proof IS NOT NULL AND payment_proof <> '')",
-    "status IN ('pending','payment_verification','approved','disapproved')"
-];
-$whereClause = "(" . implode(" OR ", $whereConditions) . ")";
-
-// Add status filter if specified
-$params = [];
-if ($statusFilter) {
-    $whereClause .= " AND status = ?";
-    $params[] = $statusFilter;
-}
-
-// Get total count for pagination
-$countParams = $params;
-$countStmt = $pdo->prepare("SELECT COUNT(*) FROM orders WHERE " . $whereClause);
-$countStmt->execute($countParams);
-$totalOrders = (int) $countStmt->fetchColumn();
-$totalPages = (int) ceil($totalOrders / $perPage);
-
-// Clamp current page to valid range
-if ($totalPages > 0 && $page > $totalPages) {
-    $page = $totalPages;
-    $offset = ($page - 1) * $perPage;
-}
-
-// Get orders for current page (inject safe integers for LIMIT/OFFSET)
-$sqlOnlineOrders = "SELECT * FROM orders
-     WHERE " . $whereClause . "
-     ORDER BY created_at DESC
-     LIMIT " . (int) $perPage . " OFFSET " . (int) $offset;
-$onlineOrdersStmt = $pdo->prepare($sqlOnlineOrders);
-$onlineOrdersStmt->execute($params);
-$onlineOrders = $onlineOrdersStmt->fetchAll();
-
-foreach ($onlineOrders as &$order) {
-    $details = parsePaymentProofValue($order['payment_proof'] ?? null, $order['reference_no'] ?? null);
-    $order['reference_number'] = $details['reference'];
-    $order['proof_image'] = $details['image'];
-    $order['status'] = strtolower((string) ($order['status'] ?? 'pending'));
-    $reasonId = (int) ($order['decline_reason_id'] ?? 0);
-    $order['decline_reason_label'] = $reasonId > 0 && isset($declineReasonLookup[$reasonId])
-        ? $declineReasonLookup[$reasonId]
-        : '';
-    $order['decline_reason_note'] = (string) ($order['decline_reason_note'] ?? '');
-}
-unset($order);
-
-$statusOptions = [
-    'payment_verification' => 'Payment Verification',
-    'approved' => 'Approved',
-    'disapproved' => 'Disapproved',
-    'completed' => 'Completed',
-];
 
 $productCatalogJson = json_encode($productCatalog, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
 if ($productCatalogJson === false) {
@@ -1258,7 +1216,8 @@ if ($receiptDataJson === false) {
             </button>
             <button type="button" class="pos-tab-button<?= $activeTab === 'online' ? ' active' : '' ?>" data-tab="online">
                 <i class="fas fa-shopping-bag"></i>
-                Online Orders
+                <span class="pos-tab-label">Online Orders</span>
+                <span class="pos-tab-count" data-online-orders-count <?= ($pendingOnlineOrdersCount ?? 0) > 0 ? '' : 'hidden' ?>><?= (int) ($pendingOnlineOrdersCount ?? 0) ?></span>
             </button>
         </div>
 
@@ -1378,7 +1337,7 @@ if ($receiptDataJson === false) {
                             <th>Placed</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody data-online-orders-body>
                         <?php if (empty($onlineOrders)): ?>
                             <tr>
                                 <td colspan="8" class="empty-cell">
@@ -1389,17 +1348,17 @@ if ($receiptDataJson === false) {
                         <?php else: ?>
                             <?php foreach ($onlineOrders as $order): ?>
                                 <?php
-                                $imagePath = normalizePaymentProofPath($order['proof_image'] ?? '');
-                                $statusValue = $order['status'] !== '' ? $order['status'] : 'pending';
-                                $createdAt = !empty($order['created_at']) ? date('M d, Y g:i A', strtotime($order['created_at'])) : 'N/A';
-                                $statusTransitions = [
-                                    'pending' => ['payment_verification', 'approved', 'disapproved', 'completed'],
-                                    'payment_verification' => ['approved', 'disapproved'],
-                                    'approved' => ['completed'],
-                                    'completed' => [],
-                                    'disapproved' => [],
-                                ];
-                                $availableStatusChanges = $statusTransitions[$statusValue] ?? [];
+                                    $referenceNumber = (string) ($order['reference_number'] ?? '');
+                                    $hasReference = $referenceNumber !== '';
+                                    $proofImageUrl = (string) ($order['proof_image_url'] ?? '');
+                                    $statusValue = (string) ($order['status_value'] ?? 'pending');
+                                    $contactDisplay = trim((string) ($order['contact_display'] ?? ''));
+                                    if ($contactDisplay === '') {
+                                        $contactDisplay = '—';
+                                    }
+                                    $statusBadgeClass = (string) ($order['status_badge_class'] ?? ('status-' . $statusValue));
+                                    $statusFormDisabled = !empty($order['status_form_disabled']);
+                                    $availableStatusChanges = $order['available_status_changes'] ?? [];
                                 ?>
                                 <tr class="online-order-row" data-order-id="<?= (int) $order['id'] ?>"
                                     data-decline-reason-id="<?= (int) ($order['decline_reason_id'] ?? 0) ?>"
@@ -1407,49 +1366,44 @@ if ($receiptDataJson === false) {
                                     data-decline-reason-note="<?= htmlspecialchars($order['decline_reason_note'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
                                     <td>#<?= (int) $order['id'] ?></td>
                                     <td><?= htmlspecialchars($order['customer_name'] ?? 'Customer', ENT_QUOTES, 'UTF-8') ?></td>
-                                    <td><?php 
-                                        $display = '';
-                                        if (!empty($order['email'])) { $display = $order['email']; }
-                                        elseif (!empty($order['phone'])) { $display = $order['phone']; }
-                                        echo htmlspecialchars($display, ENT_QUOTES, 'UTF-8');
-                                    ?></td>
-                                    <td>₱<?= number_format((float) $order['total'], 2) ?></td>
+                                    <td><?= htmlspecialchars($contactDisplay, ENT_QUOTES, 'UTF-8') ?></td>
+                                    <td><?= htmlspecialchars($order['total_formatted'] ?? '₱0.00', ENT_QUOTES, 'UTF-8') ?></td>
                                     <td>
-                                        <?php if (!empty($order['reference_number'])): ?>
-                                            <span class="reference-badge"><?= htmlspecialchars($order['reference_number'], ENT_QUOTES, 'UTF-8') ?></span>
+                                        <?php if ($hasReference): ?>
+                                            <span class="reference-badge"><?= htmlspecialchars($referenceNumber, ENT_QUOTES, 'UTF-8') ?></span>
                                         <?php else: ?>
                                             <span class="muted">Not provided</span>
                                         <?php endif; ?>
                                     </td>
                                     <td>
                                         <button type="button" class="view-proof-btn"
-                                            data-image="<?= htmlspecialchars($imagePath, ENT_QUOTES, 'UTF-8') ?>"
-                                            data-reference="<?= htmlspecialchars($order['reference_number'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+                                            data-image="<?= htmlspecialchars($proofImageUrl, ENT_QUOTES, 'UTF-8') ?>"
+                                            data-reference="<?= htmlspecialchars($referenceNumber, ENT_QUOTES, 'UTF-8') ?>"
                                             data-customer="<?= htmlspecialchars($order['customer_name'] ?? 'Customer', ENT_QUOTES, 'UTF-8') ?>">
                                             <i class="fas fa-receipt"></i> View
                                         </button>
                                     </td>
                                     <td>
-                                        <?php $statusLabel = $statusOptions[$statusValue] ?? ucfirst($statusValue); ?>
-                                        <span class="status-badge status-<?= htmlspecialchars($statusValue, ENT_QUOTES, 'UTF-8') ?>">
-                                            <?= htmlspecialchars($statusLabel, ENT_QUOTES, 'UTF-8') ?>
+                                        <span class="status-badge <?= htmlspecialchars($statusBadgeClass, ENT_QUOTES, 'UTF-8') ?>">
+                                            <?= htmlspecialchars($order['status_label'] ?? ucfirst($statusValue), ENT_QUOTES, 'UTF-8') ?>
                                         </span>
                                         <form method="post" class="status-form">
                                             <input type="hidden" name="order_id" value="<?= (int) $order['id'] ?>">
                                             <input type="hidden" name="update_order_status" value="1">
                                             <input type="hidden" name="decline_reason_id" value="">
                                             <input type="hidden" name="decline_reason_note" value="">
-                                            <select name="new_status" <?= empty($availableStatusChanges) ? 'disabled' : '' ?>>
-                                                <?php if (empty($availableStatusChanges)): ?>
-                                                    <?php $currentLabel = $statusOptions[$statusValue] ?? ucfirst($statusValue); ?>
-                                                    <option value=""><?= htmlspecialchars($currentLabel, ENT_QUOTES, 'UTF-8') ?></option>
+                                            <select name="new_status" <?= $statusFormDisabled ? 'disabled' : '' ?>>
+                                                <?php if ($statusFormDisabled): ?>
+                                                    <option value=""><?= htmlspecialchars($order['status_label'] ?? ucfirst($statusValue), ENT_QUOTES, 'UTF-8') ?></option>
                                                 <?php else: ?>
-                                                    <?php foreach ($availableStatusChanges as $value): ?>
-                                                        <option value="<?= $value ?>"><?= $statusOptions[$value] ?></option>
+                                                    <?php foreach ($availableStatusChanges as $option): ?>
+                                                        <option value="<?= htmlspecialchars($option['value'], ENT_QUOTES, 'UTF-8') ?>">
+                                                            <?= htmlspecialchars($option['label'], ENT_QUOTES, 'UTF-8') ?>
+                                                        </option>
                                                     <?php endforeach; ?>
                                                 <?php endif; ?>
                                             </select>
-                                            <button type="submit" class="status-save" <?= empty($availableStatusChanges) ? 'disabled' : '' ?>>Update</button>
+                                            <button type="submit" class="status-save" <?= $statusFormDisabled ? 'disabled' : '' ?>>Update</button>
                                         </form>
                                         <?php if ($statusValue === 'disapproved' && !empty($order['decline_reason_label'])): ?>
                                             <div class="decline-reason-display">
@@ -1460,7 +1414,7 @@ if ($receiptDataJson === false) {
                                             </div>
                                         <?php endif; ?>
                                     </td>
-                                    <td><?= htmlspecialchars($createdAt, ENT_QUOTES, 'UTF-8') ?></td>
+                                    <td><?= htmlspecialchars($order['created_at_formatted'] ?? 'N/A', ENT_QUOTES, 'UTF-8') ?></td>
                                 </tr>
                             <?php endforeach; ?>
                         <?php endif; ?>
@@ -1468,50 +1422,51 @@ if ($receiptDataJson === false) {
                 </table>
             </div>
 
-            <?php if ($totalPages > 1): ?>
-            <div class="pagination-container">
-                <div class="pagination">
-                    <?php if ($page > 1): ?>
-                        <a href="?tab=online&page=<?= $page - 1 ?><?= $statusFilter ? '&status_filter=' . urlencode($statusFilter) : '' ?>" class="pagination-btn">
-                            <i class="fas fa-chevron-left"></i> Previous
-                        </a>
-                    <?php endif; ?>
+            <div class="orders-info">
+                <span data-online-orders-summary>Showing <?= $onlineOrdersOnPage ?> of <?= $totalOrders ?> orders</span>
+            </div>
 
-                    <?php
-                    $startPage = max(1, $page - 2);
-                    $endPage = min($totalPages, $page + 2);
-                    
-                    if ($startPage > 1): ?>
-                        <a href="?tab=online&page=1<?= $statusFilter ? '&status_filter=' . urlencode($statusFilter) : '' ?>" class="pagination-btn">1</a>
-                        <?php if ($startPage > 2): ?>
-                            <span class="pagination-ellipsis">...</span>
+            <div class="pagination-container" data-online-orders-pagination <?= $totalPages > 1 ? '' : 'hidden' ?>>
+                <div class="pagination" data-online-orders-pagination-body>
+                    <?php if ($totalPages > 1): ?>
+                        <?php if ($page > 1): ?>
+                            <a href="?tab=online&page=<?= $page - 1 ?><?= $statusFilter ? '&status_filter=' . urlencode($statusFilter) : '' ?>" class="pagination-btn">
+                                <i class="fas fa-chevron-left"></i> Previous
+                            </a>
                         <?php endif; ?>
-                    <?php endif; ?>
 
-                    <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
-                        <a href="?tab=online&page=<?= $i ?><?= $statusFilter ? '&status_filter=' . urlencode($statusFilter) : '' ?>" 
-                           class="pagination-btn <?= $i === $page ? 'active' : '' ?>"><?= $i ?></a>
-                    <?php endfor; ?>
-
-                    <?php if ($endPage < $totalPages): ?>
-                        <?php if ($endPage < $totalPages - 1): ?>
-                            <span class="pagination-ellipsis">...</span>
+                        <?php
+                        $startPage = max(1, $page - 2);
+                        $endPage = min($totalPages, $page + 2);
+                        
+                        if ($startPage > 1): ?>
+                            <a href="?tab=online&page=1<?= $statusFilter ? '&status_filter=' . urlencode($statusFilter) : '' ?>" class="pagination-btn">1</a>
+                            <?php if ($startPage > 2): ?>
+                                <span class="pagination-ellipsis">...</span>
+                            <?php endif; ?>
                         <?php endif; ?>
-                        <a href="?tab=online&page=<?= $totalPages ?><?= $statusFilter ? '&status_filter=' . urlencode($statusFilter) : '' ?>" class="pagination-btn"><?= $totalPages ?></a>
-                    <?php endif; ?>
 
-                    <?php if ($page < $totalPages): ?>
-                        <a href="?tab=online&page=<?= $page + 1 ?><?= $statusFilter ? '&status_filter=' . urlencode($statusFilter) : '' ?>" class="pagination-btn">
-                            Next <i class="fas fa-chevron-right"></i>
-                        </a>
-                          <div class="orders-info">
-                    <span>Showing <?= count($onlineOrders) ?> of <?= $totalOrders ?> orders</span>
-                </div>
+                        <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
+                            <a href="?tab=online&page=<?= $i ?><?= $statusFilter ? '&status_filter=' . urlencode($statusFilter) : '' ?>" 
+                               class="pagination-btn <?= $i === $page ? 'active' : '' ?>"><?= $i ?></a>
+                        <?php endfor; ?>
+
+                        <?php if ($endPage < $totalPages): ?>
+                            <?php if ($endPage < $totalPages - 1): ?>
+                                <span class="pagination-ellipsis">...</span>
+                            <?php endif; ?>
+                            <a href="?tab=online&page=<?= $totalPages ?><?= $statusFilter ? '&status_filter=' . urlencode($statusFilter) : '' ?>" class="pagination-btn"><?= $totalPages ?></a>
+                        <?php endif; ?>
+
+                        <?php if ($page < $totalPages): ?>
+                            <a href="?tab=online&page=<?= $page + 1 ?><?= $statusFilter ? '&status_filter=' . urlencode($statusFilter) : '' ?>" class="pagination-btn">
+                                Next <i class="fas fa-chevron-right"></i>
+                            </a>
+                        <?php endif; ?>
                     <?php endif; ?>
                 </div>
             </div>
-            
-            <?php endif; ?>
+
         </div>
     </main>
 
@@ -1784,7 +1739,17 @@ if ($receiptDataJson === false) {
             productCatalog: <?= $productCatalogJson ?>,
             initialActiveTab: <?= json_encode($activeTab) ?>,
             checkoutReceipt: <?= $receiptDataJson ?>,
-            declineReasons: <?= $declineReasonsJson ?>
+            declineReasons: <?= $declineReasonsJson ?>,
+            onlineOrders: {
+                page: <?= (int) $page ?>,
+                perPage: <?= (int) $perPage ?>,
+                totalOrders: <?= (int) $totalOrders ?>,
+                totalPages: <?= (int) $totalPages ?>,
+                statusFilter: <?= json_encode($statusFilter) ?>,
+                attentionCount: <?= (int) ($pendingOnlineOrdersCount ?? 0) ?>,
+                onPage: <?= (int) $onlineOrdersOnPage ?>,
+                orders: <?= $onlineOrdersJson ?>
+            }
         };
     </script>
     <!--POS main script-->
