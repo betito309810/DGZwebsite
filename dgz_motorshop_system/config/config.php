@@ -1,10 +1,9 @@
 <?php
 // Database configuration
-$DB_HOST = 'auth-db2052.hostgtr.io';
-$DB_NAME = 'u776610364_dgzstonino';
-$DB_USER = 'u776610364_dgzadmin';
-$DB_PASS = 'Dgzstonino123';
-
+$DB_HOST = 'localhost';
+$DB_NAME = 'dgz_db';
+$DB_USER = 'root';
+$DB_PASS = '';
 // Ensure all pages consistently render dates in Philippine time.
 date_default_timezone_set('Asia/Manila');
 
