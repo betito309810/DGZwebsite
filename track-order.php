@@ -6,6 +6,7 @@ $indexStylesheet = assetUrl('assets/css/public/index.css');
 $trackStylesheet = assetUrl('assets/css/public/track-order.css');
 $cartScript = assetUrl('assets/js/public/cart.js');
 $searchScript = assetUrl('assets/js/public/search.js');
+$mobileNavScript = assetUrl('assets/js/public/mobileNav.js');
 $trackScript = assetUrl('assets/js/public/track-order.js');
 $homeUrl = orderingUrl('index.php');
 $aboutUrl = orderingUrl('about.php');
@@ -31,6 +32,10 @@ $productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
     <!-- Header: mirrors the home page layout so the experience feels seamless -->
     <header class="header">
         <div class="header-content">
+            <button type="button" class="mobile-nav-toggle" id="mobileNavToggle" aria-controls="primaryNav" aria-expanded="false">
+                <span class="mobile-nav-toggle__icon" aria-hidden="true"></span>
+                <span class="sr-only">Toggle navigation</span>
+            </button>
             <div class="logo">
                 <img src="<?= htmlspecialchars($logoAsset) ?>" alt="DGZ Motorshop Logo">
             </div>
@@ -51,13 +56,21 @@ $productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
     </header>
 
     <!-- Navigation: adds the Track Order entry while keeping existing links -->
-    <nav class="nav">
+    <nav class="nav" id="primaryNav" aria-label="Primary navigation">
+        <div class="search-container mobile-nav-search">
+            <input type="text" class="search-bar" placeholder="Search by Category, Part, Brand...">
+            <button class="search-btn" type="button">
+                <i class="fas fa-search"></i>
+            </button>
+        </div>
         <div class="nav-content">
             <a href="<?= htmlspecialchars($homeUrl) ?>" class="nav-link">HOME</a>
             <a href="<?= htmlspecialchars($aboutUrl) ?>" class="nav-link">ABOUT</a>
             <a href="<?= htmlspecialchars($trackOrderUrl) ?>" class="nav-link active">TRACK ORDER</a>
         </div>
     </nav>
+
+    <div class="nav-backdrop" id="navBackdrop" hidden></div>
 
     <!-- Main tracker module -->
     <main class="tracker-wrapper">
@@ -115,6 +128,7 @@ $productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
     </script>
     <script src="<?= htmlspecialchars($cartScript) ?>"></script>
     <script src="<?= htmlspecialchars($searchScript) ?>"></script>
+    <script src="<?= htmlspecialchars($mobileNavScript) ?>"></script>
     <!-- Page specific logic for handling status lookups -->
     <script src="<?= htmlspecialchars($trackScript) ?>"></script>
 </body>

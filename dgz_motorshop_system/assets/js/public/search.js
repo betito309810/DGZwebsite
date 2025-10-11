@@ -7,25 +7,40 @@
         document.addEventListener('DOMContentLoaded', function () {
             loadCart();
 
-            const searchBar = document.querySelector('.search-bar');
-            const searchBtn = document.querySelector('.search-btn');
+            const searchContainers = Array.from(document.querySelectorAll('.search-container'));
+            const searchInputs = [];
             const categoryLinks = document.querySelectorAll('.category-link');
             const sectionTitle = document.getElementById('productSectionTitle');
 
-            if (searchBar && searchBtn) {
-                // Search on Enter key
-                searchBar.addEventListener('keyup', function (e) {
-                    if (e.key === 'Enter') {
-                        filterProducts(this.value);
+            if (searchContainers.length) {
+                searchContainers.forEach(container => {
+                    const input = container.querySelector('.search-bar');
+                    const button = container.querySelector('.search-btn');
+
+                    if (!input) {
+                        return;
                     }
-                });
-                // Search on button click
-                searchBtn.addEventListener('click', function () {
-                    filterProducts(searchBar.value);
-                });
-                // Live search as user types
-                searchBar.addEventListener('input', function () {
-                    filterProducts(this.value);
+
+                    searchInputs.push(input);
+
+                    const performFilter = () => {
+                        const value = input.value;
+                        searchInputs.forEach(otherInput => {
+                            if (otherInput !== input) {
+                                otherInput.value = value;
+                            }
+                        });
+                        filterProducts(value);
+                    };
+
+                    input.addEventListener('keyup', function (e) {
+                        if (e.key === 'Enter') {
+                            performFilter();
+                        }
+                    });
+
+                    input.addEventListener('input', performFilter);
+                    button?.addEventListener('click', performFilter);
                 });
             }
 

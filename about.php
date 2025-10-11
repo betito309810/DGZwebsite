@@ -2,6 +2,8 @@
 require __DIR__ . '/dgz_motorshop_system/config/config.php';
 
 $logoAsset = assetUrl('assets/logo.png');
+$searchScript = assetUrl('assets/js/public/search.js');
+$mobileNavScript = assetUrl('assets/js/public/mobileNav.js');
 $aboutStylesheet = assetUrl('assets/css/public/about.css');
 $faqStylesheet = assetUrl('assets/css/public/faq.css');
 $cartScript = assetUrl('assets/js/public/cart.js');
@@ -25,8 +27,18 @@ $productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
     <!-- Header -->
     <header class="header">
         <div class="header-content">
+            <button type="button" class="mobile-nav-toggle" id="mobileNavToggle" aria-controls="primaryNav" aria-expanded="false">
+                <span class="mobile-nav-toggle__icon" aria-hidden="true"></span>
+                <span class="sr-only">Toggle navigation</span>
+            </button>
             <div class="logo">
                 <img src="<?= htmlspecialchars($logoAsset) ?>" alt="DGZ Motorshop Logo">
+            </div>
+            <div class="search-container">
+                <input type="text" class="search-bar" placeholder="Search by Category, Part, Brand...">
+                <button class="search-btn" type="button">
+                    <i class="fas fa-search"></i>
+                </button>
             </div>
             <a href="#" class="cart-btn" id="cartButton">
                 <i class="fas fa-shopping-cart"></i>
@@ -37,14 +49,21 @@ $productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
     </header>
 
     <!-- Navigation -->
-       <nav class="nav">
+    <nav class="nav" id="primaryNav" aria-label="Primary navigation">
+        <div class="search-container mobile-nav-search">
+            <input type="text" class="search-bar" placeholder="Search by Category, Part, Brand...">
+            <button class="search-btn" type="button">
+                <i class="fas fa-search"></i>
+            </button>
+        </div>
         <div class="nav-content">
             <a href="<?= htmlspecialchars($homeUrl) ?>" class="nav-link">HOME</a>
             <a href="<?= htmlspecialchars($aboutUrl) ?>" class="nav-link active">ABOUT</a>
             <a href="<?= htmlspecialchars($trackOrderUrl) ?>" class="nav-link">TRACK ORDER</a>
-
         </div>
     </nav>
+
+    <div class="nav-backdrop" id="navBackdrop" hidden></div>
 
     <!-- About Content -->
     <div class="about-container">
@@ -115,5 +134,7 @@ $productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
         });
     </script>
     <script src="<?= htmlspecialchars($cartScript) ?>"></script>
+    <script src="<?= htmlspecialchars($searchScript) ?>"></script>
+    <script src="<?= htmlspecialchars($mobileNavScript) ?>"></script>
 </body>
 </html>

@@ -10,6 +10,7 @@ $indexStylesheet = assetUrl('assets/css/public/index.css');
 $productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
 $cartScript = assetUrl('assets/js/public/cart.js');
 $searchScript = assetUrl('assets/js/public/search.js');
+$mobileNavScript = assetUrl('assets/js/public/mobileNav.js');
 $mobileFiltersScript = assetUrl('assets/js/public/mobileFilters.js');
 $galleryScript = assetUrl('assets/js/public/productGallery.js');
 $termsScript = assetUrl('assets/js/public/termsNotice.js');
@@ -51,6 +52,10 @@ natcasesort($categories);
     <!-- Header -->
     <header class="header">
         <div class="header-content">
+            <button type="button" class="mobile-nav-toggle" id="mobileNavToggle" aria-controls="primaryNav" aria-expanded="false">
+                <span class="mobile-nav-toggle__icon" aria-hidden="true"></span>
+                <span class="sr-only">Toggle navigation</span>
+            </button>
             <div class="logo">
                 <img src="<?= htmlspecialchars($logoAsset) ?>" alt="Company Logo">
             </div>
@@ -72,14 +77,21 @@ natcasesort($categories);
     </header>
 
     <!-- Navigation -->
-    <nav class="nav">
+    <nav class="nav" id="primaryNav" aria-label="Primary navigation">
+        <div class="search-container mobile-nav-search">
+            <input type="text" class="search-bar" placeholder="Search by Category, Part, Brand...">
+            <button class="search-btn" type="button">
+                <i class="fas fa-search"></i>
+            </button>
+        </div>
         <div class="nav-content">
             <a href="<?= htmlspecialchars($homeUrl) ?>" class="nav-link active">HOME</a>
             <a href="<?= htmlspecialchars($aboutUrl) ?>" class="nav-link">ABOUT</a>
             <a href="<?= htmlspecialchars($trackOrderUrl) ?>" class="nav-link">TRACK ORDER</a>
-
         </div>
     </nav>
+
+    <div class="nav-backdrop" id="navBackdrop" hidden></div>
 
     <div class="mobile-toolbar" id="mobileCatalogToolbar" aria-label="Catalog controls">
         <button type="button" class="toolbar-btn" id="mobileFilterToggle" aria-controls="categorySidebar" aria-expanded="false">
@@ -343,6 +355,8 @@ natcasesort($categories);
     <script src="<?= htmlspecialchars($cartScript) ?>"></script>
     <!-- Search functionality -->
     <script src="<?= htmlspecialchars($searchScript) ?>"></script>
+    <!-- Mobile primary navigation -->
+    <script src="<?= htmlspecialchars($mobileNavScript) ?>"></script>
     <!-- Mobile filter & sort controls -->
     <script src="<?= htmlspecialchars($mobileFiltersScript) ?>"></script>
     <!-- Added: storefront gallery controller that powers the modal defined above. -->
