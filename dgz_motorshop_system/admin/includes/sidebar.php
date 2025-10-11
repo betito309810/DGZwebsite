@@ -5,6 +5,15 @@ if (!isset($role)) {
 
 $activePage = $activePage ?? basename($_SERVER['PHP_SELF'] ?? '');
 
+if (!isset($onlineOrderBadgeCount)) {
+    try {
+        $sidebarPdo = isset($pdo) && $pdo instanceof PDO ? $pdo : db();
+        $onlineOrderBadgeCount = countOnlineOrdersByStatus($sidebarPdo);
+    } catch (Throwable $e) {
+        $onlineOrderBadgeCount = 0;
+    }
+}
+
 $navItems = [
     [
         'href' => 'dashboard.php',
@@ -38,6 +47,16 @@ $navItems = [
     ],
 ];
 
+if (!empty($onlineOrderBadgeCount)) {
+    foreach ($navItems as &$navItem) {
+        if ($navItem['href'] === 'pos.php') {
+            $navItem['badge'] = (int) $onlineOrderBadgeCount;
+            break;
+        }
+    }
+    unset($navItem);
+}
+
 $staffAllowedPages = [
     'dashboard.php',
     'sales.php',
@@ -65,7 +84,10 @@ $staffAllowedPages = [
             <div class="nav-item">
                 <a href="<?php echo htmlspecialchars($href); ?>" class="nav-link<?php echo $isActive ? ' active' : ''; ?>">
                     <i class="<?php echo htmlspecialchars($item['icon']); ?>"></i>
-                    <?php echo htmlspecialchars($item['label']); ?>
+                    <span class="nav-text"><?php echo htmlspecialchars($item['label']); ?></span>
+                    <?php if (!empty($item['badge'])): ?>
+                        <span class="nav-badge" data-sidebar-pos-count><?= (int) $item['badge'] ?></span>
+                    <?php endif; ?>
                 </a>
             </div>
         <?php endforeach; ?>

@@ -7,8 +7,60 @@ header h1 {
     margin: 0
 }
 
-nav a {
-    margin-right: 10px
+
+.sidebar .nav-menu {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.sidebar .nav-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 20px;
+    color: #bdc3c7;
+    text-decoration: none;
+    font-size: 14px;
+    transition: all 0.3s ease;
+}
+
+.sidebar .nav-link:hover {
+    background: #d4d406;
+    color: #fff;
+    padding-left: 25px;
+}
+
+.sidebar .nav-link.active {
+    background: #3498db;
+    color: #fff;
+    border-right: 3px solid #2980b9;
+}
+
+.sidebar .nav-icon {
+    width: 20px;
+    font-size: 16px;
+}
+
+.sidebar .nav-text {
+    flex: 1;
+}
+
+.sidebar .nav-badge {
+    margin-left: auto;
+    background: #e74c3c;
+    color: #fff;
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    min-width: 22px;
+    text-align: center;
+}
+
+.sidebar .nav-link.active .nav-badge {
+    background: #ff7675;
 }
 
 .grid {

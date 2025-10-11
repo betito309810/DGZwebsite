@@ -164,15 +164,18 @@
     }
 
     function wireStatusForms() {
-        document.querySelectorAll('.status-form').forEach((form) => {
-            form.addEventListener('submit', (event) => {
-                const select = form.querySelector('select[name="new_status"]');
-                const nextStatus = select ? select.value : '';
-                if (nextStatus === 'disapproved') {
-                    event.preventDefault();
-                    openDeclineModal(form);
-                }
-            });
+        document.addEventListener('submit', (event) => {
+            const form = event.target.closest('.status-form');
+            if (!form) {
+                return;
+            }
+
+            const select = form.querySelector('select[name="new_status"]');
+            const nextStatus = select ? select.value : '';
+            if (nextStatus === 'disapproved') {
+                event.preventDefault();
+                openDeclineModal(form);
+            }
         });
     }
 
