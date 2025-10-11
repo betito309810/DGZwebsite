@@ -10,6 +10,7 @@ $indexStylesheet = assetUrl('assets/css/public/index.css');
 $productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
 $cartScript = assetUrl('assets/js/public/cart.js');
 $searchScript = assetUrl('assets/js/public/search.js');
+$mobileFiltersScript = assetUrl('assets/js/public/mobileFilters.js');
 $galleryScript = assetUrl('assets/js/public/productGallery.js');
 $termsScript = assetUrl('assets/js/public/termsNotice.js');
 $homeUrl = orderingUrl('index.php');
@@ -80,9 +81,29 @@ natcasesort($categories);
         </div>
     </nav>
 
+    <div class="mobile-toolbar" id="mobileCatalogToolbar" aria-label="Catalog controls">
+        <button type="button" class="toolbar-btn" id="mobileFilterToggle" aria-controls="categorySidebar" aria-expanded="false">
+            <i class="fas fa-sliders" aria-hidden="true"></i>
+            <span class="toolbar-btn__label">Filter</span>
+        </button>
+        <button type="button" class="toolbar-btn" id="mobileSortToggle" aria-controls="sortSheet" aria-expanded="false">
+            <i class="fas fa-arrow-down-wide-short" aria-hidden="true"></i>
+            <span class="toolbar-btn__label">
+                Sort
+                <span class="toolbar-btn__value" id="mobileSortValue">Recommended</span>
+            </span>
+        </button>
+    </div>
+
+    <div class="sidebar-backdrop" id="sidebarBackdrop" hidden></div>
+
     <div class="container">
         <!-- Sidebar -->
-        <aside class="sidebar">
+        <aside class="sidebar" id="categorySidebar" aria-labelledby="mobileFilterToggle">
+            <button type="button" class="sidebar-close" id="sidebarCloseButton">
+                <i class="fas fa-xmark" aria-hidden="true"></i>
+                <span class="sidebar-close__label">Close</span>
+            </button>
             <h3 class="sidebar-title">Shop by Category</h3>
             <ul class="category-list">
                 <li class="category-item"><a href="#" class="category-link active" data-category="all">All Products</a></li>
@@ -225,6 +246,23 @@ natcasesort($categories);
             <!-- Footer -->
 
     </div>
+    <div class="sort-sheet" id="sortSheet" role="dialog" aria-modal="true" aria-labelledby="sortSheetTitle" hidden>
+        <div class="sort-sheet__panel">
+            <div class="sort-sheet__header">
+                <h2 class="sort-sheet__title" id="sortSheetTitle">Sort Products</h2>
+                <button type="button" class="sort-sheet__close" id="sortSheetClose" aria-label="Close sort options">
+                    <i class="fas fa-xmark" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="sort-sheet__options" role="radiogroup" aria-labelledby="sortSheetTitle">
+                <button type="button" class="sort-option is-active" data-sort="recommended" data-label="Recommended" data-short-label="Recommended" aria-pressed="true">Recommended</button>
+                <button type="button" class="sort-option" data-sort="price-asc" data-label="Price: Low to High" data-short-label="Price ↑" aria-pressed="false">Price: Low to High</button>
+                <button type="button" class="sort-option" data-sort="price-desc" data-label="Price: High to Low" data-short-label="Price ↓" aria-pressed="false">Price: High to Low</button>
+                <button type="button" class="sort-option" data-sort="name-asc" data-label="Name: A to Z" data-short-label="Name A–Z" aria-pressed="false">Name: A to Z</button>
+            </div>
+        </div>
+    </div>
+
     <div class="terms-overlay" id="termsOverlay" role="dialog" aria-modal="true" aria-labelledby="termsTitle" hidden>
         <div class="terms-overlay__backdrop" aria-hidden="true"></div>
         <div class="terms-overlay__dialog" role="document">
@@ -305,6 +343,8 @@ natcasesort($categories);
     <script src="<?= htmlspecialchars($cartScript) ?>"></script>
     <!-- Search functionality -->
     <script src="<?= htmlspecialchars($searchScript) ?>"></script>
+    <!-- Mobile filter & sort controls -->
+    <script src="<?= htmlspecialchars($mobileFiltersScript) ?>"></script>
     <!-- Added: storefront gallery controller that powers the modal defined above. -->
     <script src="<?= htmlspecialchars($galleryScript) ?>"></script>
     <!-- Terms acknowledgement overlay -->

@@ -5,6 +5,7 @@ $logoAsset = assetUrl('assets/logo.png');
 $indexStylesheet = assetUrl('assets/css/public/index.css');
 $trackStylesheet = assetUrl('assets/css/public/track-order.css');
 $cartScript = assetUrl('assets/js/public/cart.js');
+$searchScript = assetUrl('assets/js/public/search.js');
 $trackScript = assetUrl('assets/js/public/track-order.js');
 $homeUrl = orderingUrl('index.php');
 $aboutUrl = orderingUrl('about.php');
@@ -32,7 +33,21 @@ $productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
         <div class="header-content">
             <div class="logo">
                 <img src="<?= htmlspecialchars($logoAsset) ?>" alt="DGZ Motorshop Logo">
-            
+            </div>
+
+            <div class="search-container">
+                <input type="text" class="search-bar" placeholder="Search by Category, Part, Brand...">
+                <button class="search-btn" type="button">
+                    <i class="fas fa-search"></i>
+                </button>
+            </div>
+
+            <a href="#" class="cart-btn" id="cartButton">
+                <i class="fas fa-shopping-cart" aria-hidden="true"></i>
+                <span>Cart</span>
+                <div class="cart-count" id="cartCount">0</div>
+            </a>
+        </div>
     </header>
 
     <!-- Navigation: adds the Track Order entry while keeping existing links -->
@@ -99,6 +114,7 @@ $productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
         });
     </script>
     <script src="<?= htmlspecialchars($cartScript) ?>"></script>
+    <script src="<?= htmlspecialchars($searchScript) ?>"></script>
     <!-- Page specific logic for handling status lookups -->
     <script src="<?= htmlspecialchars($trackScript) ?>"></script>
 </body>

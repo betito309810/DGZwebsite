@@ -28,61 +28,6 @@ body {
     min-height: 100vh;
 }
 
-/* Header styling kept identical to other public pages */
-.header {
-    background: #43d6ff;
-    padding: 10px 20px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-}
-
-.header-content {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 20px;
-}
-
-.logo {
-    width: 120px;
-    height: auto;
-}
-
-.logo img {
-    width: 100%;
-    height: auto;
-}
-
-
-.nav {
-    background: white;
-    padding: 10px 0;
-    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.05);
-}
-
-.nav-content {
-    max-width: 1200px;
-    margin: 0 auto;
-    display: flex;
-    justify-content: center;
-    gap: 30px;
-}
-
-.nav-link {
-    color: #2d3436;
-    text-decoration: none;
-    font-weight: 600;
-    font-size: 14px;
-    padding: 8px 15px;
-    border-radius: 20px;
-    transition: all 0.3s ease;
-}
-
-.nav-link:hover,
-.nav-link.active {
-    background: linear-gradient(135deg, #00bcd4 0%, #2196f3 100%);
-    color: white;
-}
-
 /* Tracker layout */
 main {
     /* Grow the main element so empty states still push the footer down */
@@ -260,22 +205,22 @@ main {
 
 
 @media (max-width: 768px) {
-    .header-content {
-        flex-direction: column;
-    }
-
-    .search-container {
-        width: 100%;
-        max-width: none;
-    }
-
-    .cart-btn {
-        width: 100%;
-        justify-content: center;
+    .tracker-wrapper {
+        margin: 24px auto;
+        padding: 0 16px 40px;
     }
 
     .tracker-card {
-        padding: 30px 24px;
+        padding: 28px 24px;
+        border-radius: 20px;
+    }
+
+    .tracker-form {
+        flex-direction: column;
+    }
+
+    .tracker-button {
+        width: 100%;
     }
 
     .status-details {

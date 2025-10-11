@@ -239,8 +239,10 @@ textarea {
 }
 
 .qr-code img {
-    width: 350px;
-    height: 400px;
+    width: 100%;
+    max-width: clamp(220px, 60vw, 360px);
+    height: auto;
+    aspect-ratio: 7 / 8;
     border-radius: 12px;
     border: 2px solid #e9ecef;
 }
@@ -481,5 +483,39 @@ textarea {
 
     .form-row {
         grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 600px) {
+    .payment-methods {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .payment-option label {
+        width: 100%;
+    }
+
+    .qr-code {
+        margin: 20px auto;
+    }
+}
+
+@media (max-width: 480px) {
+    .container {
+        padding: 0 16px;
+    }
+
+    .checkout-form,
+    .order-summary {
+        padding: 24px;
+    }
+
+    .qr-code {
+        margin: 16px auto;
+    }
+
+    .qr-code img {
+        max-width: min(280px, 100%);
     }
 }
