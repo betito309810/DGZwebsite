@@ -217,14 +217,7 @@ $profile_created = format_profile_date($current_user['created_at'] ?? null);
                     <div class="stat-value">₱<?= number_format($t['s'], 2) ?></div>
                     <div class="stat-label">Today's Sales</div>
                 </a>
-                <a class="stat-card" href="inventory.php">
-                    <div class="stat-value"><?= count($low) ?></div>
-                    <div class="stat-label">Low Stock Items</div>
-                </a>
-                <a class="stat-card" href="sales.php">
-                    <div class="stat-value"><?= count($top) ?></div>
-                    <div class="stat-label">Top Products</div>
-                </a>
+               
             </div>
 
             <!-- Dashboard Grid -->
