@@ -48,6 +48,8 @@ $productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
         </div>
     </header>
 
+    <div class="header-offset" aria-hidden="true"></div>
+
     <!-- Navigation -->
     <nav class="nav" id="primaryNav" aria-label="Primary navigation">
         <div class="search-container mobile-nav-search">

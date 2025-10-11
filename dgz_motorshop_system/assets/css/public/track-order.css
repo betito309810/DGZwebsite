@@ -28,6 +28,10 @@ body {
     min-height: 100vh;
 }
 
+.header-offset {
+    height: var(--header-height);
+}
+
 /* Tracker layout */
 main {
     /* Grow the main element so empty states still push the footer down */
