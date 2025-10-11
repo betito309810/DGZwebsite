@@ -734,6 +734,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
 
         <!-- Right Column - Order Summary -->
         <div class="order-summary">
+            <h2 class="summary-title">Order Summary</h2>
             <!-- Clear cart button keeps summary synchronized with local storage -->
             <button type="button" id="clearCartButton" class="clear-cart-btn" style="<?= empty($cartItems) ? 'display:none;' : '' ?>">Clear Cart</button>
             <div id="orderItemsContainer" class="order-items">
@@ -742,18 +743,26 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                     <div class="item-image">
                         <i class="fas fa-box"></i>
                     </div>
-                        <div class="item-details">
-                            <div class="item-header">
-                                <span class="item-name"><?= htmlspecialchars($item['name']) ?></span>
-                                <span class="item-price">₱ <?= number_format($item['price'], 2) ?></span>
-                            </div>
+                    <div class="item-details">
+                        <div class="item-header">
+                            <span class="item-name"><?= htmlspecialchars($item['name']) ?></span>
+                            <span class="item-price">₱ <?= number_format($item['price'], 2) ?></span>
+                        </div>
                         <div class="item-category">
                             <?= htmlspecialchars($item['variant_label'] !== '' ? 'Variant: ' . $item['variant_label'] : 'Product') ?>
                         </div>
-                        </div>
+                    </div>
                     <div class="item-meta">
                         <!-- Quantity input remains editable so buyers can adjust before checkout -->
-                        <input type="number" class="quantity-input" min="1" value="<?= $item['quantity'] ?>" data-index="<?= $index ?>" style="width: 50px; margin-right: 10px;">
+                        <div class="quantity-control" data-index="<?= $index ?>">
+                            <button type="button" class="qty-btn qty-btn--decrease" data-index="<?= $index ?>" aria-label="Decrease quantity">
+                                <i class="fas fa-minus" aria-hidden="true"></i>
+                            </button>
+                            <input type="number" class="quantity-input" min="1" value="<?= $item['quantity'] ?>" data-index="<?= $index ?>">
+                            <button type="button" class="qty-btn qty-btn--increase" data-index="<?= $index ?>" aria-label="Increase quantity">
+                                <i class="fas fa-plus" aria-hidden="true"></i>
+                            </button>
+                        </div>
                         <button type="button" class="item-remove" data-index="<?= $index ?>">Remove</button>
                     </div>
                 </div>
@@ -953,15 +962,36 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             meta.className = 'item-meta';
 
             // Quantity input remains editable so buyers can adjust before checkout
+            const qtyWrapper = document.createElement('div');
+            qtyWrapper.className = 'quantity-control';
+            qtyWrapper.dataset.index = String(index);
+
+            const decreaseBtn = document.createElement('button');
+            decreaseBtn.type = 'button';
+            decreaseBtn.className = 'qty-btn qty-btn--decrease';
+            decreaseBtn.dataset.index = String(index);
+            decreaseBtn.setAttribute('aria-label', 'Decrease quantity');
+            decreaseBtn.innerHTML = '<i class="fas fa-minus" aria-hidden="true"></i>';
+
             const qty = document.createElement('input');
             qty.type = 'number';
             qty.className = 'quantity-input';
             qty.min = 1;
             qty.value = item.quantity;
             qty.dataset.index = String(index);
-            qty.style.width = '65px';
-            qty.style.marginBottom = '4px';
-            meta.appendChild(qty);
+
+            const increaseBtn = document.createElement('button');
+            increaseBtn.type = 'button';
+            increaseBtn.className = 'qty-btn qty-btn--increase';
+            increaseBtn.dataset.index = String(index);
+            increaseBtn.setAttribute('aria-label', 'Increase quantity');
+            increaseBtn.innerHTML = '<i class="fas fa-plus" aria-hidden="true"></i>';
+
+            qtyWrapper.appendChild(decreaseBtn);
+            qtyWrapper.appendChild(qty);
+            qtyWrapper.appendChild(increaseBtn);
+
+            meta.appendChild(qtyWrapper);
 
             const remove = document.createElement('button');
             remove.type = 'button';
@@ -993,24 +1023,50 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
         }
 
         orderItemsContainer?.addEventListener('click', (event) => {
-            const target = event.target.closest('.item-remove');
-            if (!target) {
+            const removeTarget = event.target.closest('.item-remove');
+            if (removeTarget) {
+                const index = Number(removeTarget.dataset.index);
+                if (!Number.isInteger(index) || index < 0 || index >= cartState.length) {
+                    return;
+                }
+
+                cartState.splice(index, 1);
+                renderOrderItems();
+
+                if (cartState.length === 0) {
+                    setTimeout(() => {
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }, 150);
+                }
                 return;
             }
 
-            const index = Number(target.dataset.index);
+            const adjustButton = event.target.closest('.qty-btn');
+            if (!adjustButton) {
+                return;
+            }
+
+            const control = adjustButton.closest('.quantity-control');
+            const input = control?.querySelector('.quantity-input');
+            if (!control || !input) {
+                return;
+            }
+
+            const index = Number(adjustButton.dataset.index);
             if (!Number.isInteger(index) || index < 0 || index >= cartState.length) {
                 return;
             }
 
-            cartState.splice(index, 1);
-            renderOrderItems();
+            const delta = adjustButton.classList.contains('qty-btn--increase') ? 1 : -1;
+            const currentValue = Number(input.value) || 1;
+            const nextValue = Math.max(1, currentValue + delta);
 
-            if (cartState.length === 0) {
-                setTimeout(() => {
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                }, 150);
+            if (nextValue === currentValue) {
+                return;
             }
+
+            input.value = String(nextValue);
+            input.dispatchEvent(new Event('input', { bubbles: true }));
         });
 
         // Add event listener for quantity input changes

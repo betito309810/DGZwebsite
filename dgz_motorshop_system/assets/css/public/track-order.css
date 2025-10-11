@@ -49,6 +49,8 @@ main {
     padding: 36px;
     border-radius: 24px;
     box-shadow: 0 20px 45px rgba(0, 0, 0, 0.08);
+    max-width: 640px;
+    margin: 0 auto;
 }
 
 .tracker-card h1 {
@@ -63,27 +65,27 @@ main {
 
 /* Form styling */
 .tracker-form {
-    display: flex;
-    gap: 15px;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 14px;
+    align-items: end;
     margin-bottom: 30px;
 }
 
 .tracker-form label {
-    width: 100%;
+    grid-column: 1 / -1;
     font-weight: 600;
     color: #2d3436;
 }
 
 .tracker-input {
-    flex: 1 1 260px;
     padding: 12px 18px;
     border-radius: 14px;
     border: 1px solid #dfe6e9;
     font-size: 16px;
-    min-height: 0;
-    height: 54px;
+    min-height: 48px;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    width: 100%;
 }
 
 .tracker-input:focus {
@@ -97,11 +99,15 @@ main {
     color: white;
     border: none;
     border-radius: 14px;
-    padding: 14px 26px;
+    padding: 13px 24px;
     font-size: 16px;
     font-weight: 600;
     cursor: pointer;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
+    align-self: stretch;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .tracker-button:hover {
@@ -222,14 +228,12 @@ main {
     }
 
     .tracker-form {
-        flex-direction: column;
+        grid-template-columns: 1fr;
         gap: 12px;
-        align-items: stretch;
     }
 
     .tracker-button {
         width: 100%;
-        justify-content: center;
     }
 
     .status-details {
@@ -240,20 +244,28 @@ main {
 @media (max-width: 480px) {
     .tracker-wrapper {
         margin: 24px auto;
-        padding: 0 14px 36px;
+        padding: 0 14px 32px;
     }
 
     .tracker-card {
         padding: 24px 18px;
+        border-radius: 18px;
+    }
+
+    .tracker-card h1 {
+        font-size: 26px;
     }
 
     .tracker-input {
         font-size: 15px;
-        height: 52px;
+        min-height: 46px;
         padding: 11px 16px;
+        border-radius: 12px;
     }
 
     .tracker-button {
         padding: 12px 20px;
+        border-radius: 12px;
+        font-size: 15px;
     }
 }

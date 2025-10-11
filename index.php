@@ -208,45 +208,34 @@ natcasesort($categories);
 
                         <div class="product-footer">
                             <div class="price">₱<?=number_format($displayPrice,2)?></div>
-                            <div class="stock <?= $displayQuantity <= 5 ? ($displayQuantity == 0 ? 'out' : 'low') : '' ?>">
-                                <?= $displayQuantity == 0 ? 'Out of Stock' : $displayQuantity . ' in stock' ?>
+                            <div class="stock <?= $displayQuantity <= 5 ? ($displayQuantity == 0 ? 'out' : 'low') : '' ?>" data-stock="<?= (int) $displayQuantity ?>">
+                                <?php if ($displayQuantity == 0): ?>
+                                    <span class="stock-status-text">Out of stock</span>
+                                <?php else: ?>
+                                    <span class="stock-indicator" aria-hidden="true"></span>
+                                    <span class="stock-status-text">In stock</span>
+                                <?php endif; ?>
                             </div>
                         </div>
 
-                        <!-- Buy Now area now feeds into the shared cart flow -->
                         <div class="buy-form">
                             <input type="number" name="qty" value="1" min="1" max="<?=max(1,$displayQuantity)?>"
                                 class="qty-input" <?= $displayQuantity == 0 ? 'disabled' : '' ?> data-gallery-ignore="true">
-                            <button type="button" class="buy-btn" <?= $displayQuantity == 0 ? 'disabled' : '' ?>
-                                data-gallery-ignore="true"
+
+                            <button class="add-cart-btn" data-gallery-ignore="true"
                                 onclick="(function(button) {
                                     const qtyInput = button.parentElement.querySelector('.qty-input');
+                                    const qty = qtyInput ? parseInt(qtyInput.value) || 1 : 1;
                                     if (qtyInput && !qtyInput.checkValidity()) {
                                         qtyInput.reportValidity();
-                                        return;
+                                        return false;
                                     }
-                                    const qty = qtyInput ? parseInt(qtyInput.value) || 1 : 1;
-                                    buyNow(<?= $p['id'] ?>, '<?= htmlspecialchars(addslashes($p['name'])) ?>', <?= $displayPrice ?>, qty, <?= isset($defaultVariant['id']) ? (int)$defaultVariant['id'] : 'null' ?>, '<?= htmlspecialchars(addslashes($defaultVariant['label'] ?? '')) ?>', <?= isset($defaultVariant['price']) ? $defaultVariant['price'] : $displayPrice ?>);
-                                })(this)">
-                                <?= $displayQuantity == 0 ? 'Out of Stock' : 'Buy Now' ?>
+                                    addToCart(<?= $p['id'] ?>, '<?= htmlspecialchars(addslashes($p['name'])) ?>', <?= $displayPrice ?>, qty, <?= isset($defaultVariant['id']) ? (int)$defaultVariant['id'] : 'null' ?>, '<?= htmlspecialchars(addslashes($defaultVariant['label'] ?? '')) ?>', <?= isset($defaultVariant['price']) ? $defaultVariant['price'] : $displayPrice ?>);
+                                })(this)"
+                                <?= $displayQuantity == 0 ? 'disabled' : '' ?>>
+                                <i class="fas fa-cart-plus"></i> Add to Cart
                             </button>
                         </div>
-
-                        <!-- Add to Cart Button -->
-                        <button class="add-cart-btn" data-gallery-ignore="true"
-                            onclick="(function(button) {
-                                const qtyInput = button.parentElement.querySelector('.qty-input');
-                                const qty = qtyInput ? parseInt(qtyInput.value) || 1 : 1;
-                                const stock = <?= $displayQuantity ?>;
-                                if (qtyInput && !qtyInput.checkValidity()) {
-                                    qtyInput.reportValidity();
-                                    return false;
-                                }
-                                addToCart(<?= $p['id'] ?>, '<?= htmlspecialchars(addslashes($p['name'])) ?>', <?= $displayPrice ?>, qty, <?= isset($defaultVariant['id']) ? (int)$defaultVariant['id'] : 'null' ?>, '<?= htmlspecialchars(addslashes($defaultVariant['label'] ?? '')) ?>', <?= isset($defaultVariant['price']) ? $defaultVariant['price'] : $displayPrice ?>);
-                            })(this)"
-                            <?= $displayQuantity == 0 ? 'disabled' : '' ?>>
-                            <i class="fas fa-cart-plus"></i> Add to Cart
-                        </button>
                     </div>
                     <?php endforeach; ?>
                 </div>
