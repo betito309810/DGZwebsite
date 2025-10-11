@@ -842,7 +842,17 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
         <!-- Restock Request Form -->
 
         <div id="restockRequestForm" class="restock-request hidden" aria-hidden="true">
-            <h3><i class="fas fa-clipboard-list"></i> Submit Restock Request</h3>
+            <div class="restock-form-header">
+                <h3><i class="fas fa-clipboard-list"></i> Submit Restock Request</h3>
+                <div class="product-picker-actions">
+                    <button type="button" class="product-filter-apply" data-product-filter>
+                        Apply Filters
+                    </button>
+                    <button type="button" class="product-filter-reset" data-product-filter-clear>
+                        Reset
+                    </button>
+                </div>
+            </div>
             <form method="post" class="restock-form"
                 data-initial-product="<?php echo htmlspecialchars($restockFormData['product']); ?>"
                 data-initial-quantity="<?php echo htmlspecialchars($restockFormData['quantity']); ?>"
@@ -859,14 +869,29 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                 <div class="restock-grid">
                     <div class="form-group">
                         <label for="restock_product">Product</label>
+                        <!-- Added product search tools so staff can quickly locate a product option -->
+                        <div class="product-picker-tools">
+                            <div class="product-picker-search-wrapper">
+                                <input
+                                    type="text"
+                                    id="restock_product_search"
+                                    class="product-picker-search"
+                                    placeholder="Search by product name or code"
+                                    autocomplete="off"
+                                >
+                                <ul class="product-picker-suggestions" data-product-suggestions></ul>
+                            </div>
+                        </div>
                         <select id="restock_product" name="restock_product" required>
                             <option value="">Select Product</option>
                             <?php foreach ($allProducts as $product): ?>
                                 <option 
                                     value="<?php echo $product['id']; ?>"
+                                    data-name="<?php echo htmlspecialchars($product['name'] ?? ''); ?>"
                                     data-category="<?php echo htmlspecialchars($product['category'] ?? ''); ?>"
                                     data-brand="<?php echo htmlspecialchars($product['brand'] ?? ''); ?>"
                                     data-supplier="<?php echo htmlspecialchars($product['supplier'] ?? ''); ?>"
+                                    data-code="<?php echo htmlspecialchars($product['code'] ?? ''); ?>"
                                     <?php echo ($restockFormData['product'] === (string) $product['id']) ? 'selected' : ''; ?>
                                 >
                                     <?php echo htmlspecialchars($product['name']); ?>

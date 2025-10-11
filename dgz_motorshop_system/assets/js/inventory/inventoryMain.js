@@ -244,6 +244,10 @@
             const brandNewInput = document.getElementById('restock_brand_new');
             const supplierSelect = document.getElementById('restock_supplier');
             const supplierNewInput = document.getElementById('restock_supplier_new');
+            const productSearchInput = document.getElementById('restock_product_search');
+            const productSuggestions = document.querySelector('[data-product-suggestions]');
+            const productFilterApplyButton = document.querySelector('[data-product-filter]');
+            const productFilterResetButton = document.querySelector('[data-product-filter-clear]');
             const statusPanel = document.getElementById('restockStatusPanel');
             const statusButton = document.getElementById('restockStatusButton');
             const quantityInput = document.getElementById('restock_quantity');
@@ -288,6 +292,18 @@
                 }
             }
 
+            const metadataOverrides = {
+                category: false,
+                brand: false,
+                supplier: false,
+            };
+
+            const metadataFieldMap = new Map([
+                [categorySelect, 'category'],
+                [brandSelect, 'brand'],
+                [supplierSelect, 'supplier'],
+            ]);
+
             const selectMappings = [
                 { select: categorySelect, input: categoryNewInput },
                 { select: brandSelect, input: brandNewInput },
@@ -296,10 +312,315 @@
 
             selectMappings.forEach(({ select, input }) => {
                 if (select && input) {
-                    select.addEventListener('change', () => handleSelectChange(select, input));
+                    select.addEventListener('change', (event) => {
+                        handleSelectChange(select, input);
+                        if (event.isTrusted) {
+                            const key = metadataFieldMap.get(select);
+                            if (key) {
+                                const rawValue = select.value || '';
+                                metadataOverrides[key] = rawValue !== '';
+                            }
+                        }
+                    });
+                    input.addEventListener('input', (event) => {
+                        if (event.isTrusted) {
+                            const key = metadataFieldMap.get(select);
+                            if (key) {
+                                metadataOverrides[key] = (event.target.value || '').trim() !== '';
+                            }
+                        }
+                    });
                     handleSelectChange(select, input);
                 }
             });
+
+            // Added product filter/search helpers for restock picker
+            let productOptionsSnapshot = null;
+            let suggestionDismissTimer = null;
+
+            const normaliseFilterValue = (value) => {
+                if (!value) {
+                    return '';
+                }
+                const trimmed = value.trim();
+                if (trimmed === '__addnew__') {
+                    return '';
+                }
+                return trimmed.toLowerCase();
+            };
+
+            function ensureProductOptionsSnapshot() {
+                if (productOptionsSnapshot || !productSelect) {
+                    return;
+                }
+
+                const optionNodes = Array.from(productSelect.options);
+                const placeholderNode = optionNodes.find((option) => option.value === '');
+                const placeholder = placeholderNode
+                    ? {
+                        value: placeholderNode.value,
+                        text: placeholderNode.textContent,
+                        disabled: placeholderNode.disabled,
+                        hidden: placeholderNode.hidden,
+                    }
+                    : null;
+
+                const entries = optionNodes
+                    .filter((option) => option.value !== '')
+                    .map((option) => ({
+                        value: option.value,
+                        text: option.textContent,
+                        name: option.dataset.name || '',
+                        code: option.dataset.code || '',
+                        category: option.dataset.category || '',
+                        brand: option.dataset.brand || '',
+                        supplier: option.dataset.supplier || '',
+                    }));
+
+                productOptionsSnapshot = { placeholder, entries };
+            }
+
+            function hideProductSuggestions() {
+                if (!productSuggestions) {
+                    return;
+                }
+                productSuggestions.classList.remove('is-visible');
+                productSuggestions.innerHTML = '';
+            }
+
+            function showProductSuggestions() {
+                if (!productSuggestions || !productSuggestions.hasChildNodes()) {
+                    return;
+                }
+                productSuggestions.classList.add('is-visible');
+            }
+
+            function createSuggestionItem(entry) {
+                const listItem = document.createElement('li');
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.dataset.productId = entry.value;
+
+                const title = document.createElement('span');
+                title.className = 'suggestion-title';
+                title.textContent = entry.name || entry.text;
+                button.appendChild(title);
+
+                const metaParts = [];
+                if (entry.code) {
+                    metaParts.push(`#${entry.code}`);
+                }
+                if (entry.brand) {
+                    metaParts.push(entry.brand);
+                }
+                if (entry.category) {
+                    metaParts.push(entry.category);
+                }
+
+                if (metaParts.length > 0) {
+                    const meta = document.createElement('span');
+                    meta.className = 'suggestion-meta';
+                    meta.textContent = metaParts.join(' • ');
+                    button.appendChild(meta);
+                }
+
+                listItem.appendChild(button);
+                return listItem;
+            }
+
+            function updateProductSuggestions() {
+                if (!productSearchInput || !productSuggestions) {
+                    return;
+                }
+
+                ensureProductOptionsSnapshot();
+                if (!productOptionsSnapshot) {
+                    hideProductSuggestions();
+                    return;
+                }
+
+                const query = productSearchInput.value.trim().toLowerCase();
+                if (query.length === 0) {
+                    hideProductSuggestions();
+                    return;
+                }
+
+                const categoryFilter = normaliseFilterValue(categorySelect?.value || '');
+                const brandFilter = normaliseFilterValue(brandSelect?.value || '');
+                const supplierFilter = normaliseFilterValue(supplierSelect?.value || '');
+
+                const matches = productOptionsSnapshot.entries.filter((entry) => {
+                    const matchesCategory = categoryFilter === '' || (entry.category || '').toLowerCase() === categoryFilter;
+                    const matchesBrand = brandFilter === '' || (entry.brand || '').toLowerCase() === brandFilter;
+                    const matchesSupplier = supplierFilter === '' || (entry.supplier || '').toLowerCase() === supplierFilter;
+
+                    if (!matchesCategory || !matchesBrand || !matchesSupplier) {
+                        return false;
+                    }
+
+                    const searchIndex = `${entry.name} ${entry.code} ${entry.text}`.toLowerCase();
+                    return searchIndex.includes(query);
+                }).slice(0, 8);
+
+                if (matches.length === 0) {
+                    hideProductSuggestions();
+                    return;
+                }
+
+                productSuggestions.innerHTML = '';
+                matches.forEach((entry) => {
+                    productSuggestions.appendChild(createSuggestionItem(entry));
+                });
+                showProductSuggestions();
+            }
+
+            function createOptionNode(data) {
+                const option = document.createElement('option');
+                option.value = data.value;
+                option.textContent = data.text;
+                if (data.disabled) {
+                    option.disabled = true;
+                }
+                if (data.hidden) {
+                    option.hidden = true;
+                }
+                if (data.category !== undefined) {
+                    option.setAttribute('data-category', data.category);
+                }
+                if (data.brand !== undefined) {
+                    option.setAttribute('data-brand', data.brand);
+                }
+                if (data.supplier !== undefined) {
+                    option.setAttribute('data-supplier', data.supplier);
+                }
+                if (data.code !== undefined) {
+                    option.setAttribute('data-code', data.code);
+                }
+                if (data.name !== undefined) {
+                    option.setAttribute('data-name', data.name);
+                }
+                return option;
+            }
+
+            function renderProductOptions(entries, { focusSelect = false } = {}) {
+                if (!productSelect) {
+                    return;
+                }
+
+                const previousValue = productSelect.value;
+                productSelect.innerHTML = '';
+
+                hideProductSuggestions();
+
+                if (productOptionsSnapshot?.placeholder) {
+                    const placeholderOption = createOptionNode(productOptionsSnapshot.placeholder);
+                    placeholderOption.selected = true;
+                    productSelect.appendChild(placeholderOption);
+                }
+
+                if (entries.length === 0) {
+                    const emptyNotice = document.createElement('option');
+                    emptyNotice.value = '';
+                    emptyNotice.textContent = 'No matching products';
+                    emptyNotice.disabled = true;
+                    productSelect.appendChild(emptyNotice);
+                    productSelect.value = '';
+                } else {
+                    entries.forEach((entry) => {
+                        productSelect.appendChild(createOptionNode(entry));
+                    });
+
+                    if (entries.some((entry) => entry.value === previousValue)) {
+                        productSelect.value = previousValue;
+                    } else if (entries.length === 1) {
+                        productSelect.value = entries[0].value;
+                    } else {
+                        productSelect.value = '';
+                    }
+                }
+
+                updateProductMeta();
+                if (focusSelect) {
+                    productSelect.focus();
+                }
+            }
+
+            function applyProductFilters({ focusSelect = false } = {}) {
+                ensureProductOptionsSnapshot();
+                if (!productOptionsSnapshot) {
+                    return;
+                }
+
+                const searchTerm = (productSearchInput?.value || '').trim().toLowerCase();
+                const categoryFilter = normaliseFilterValue(categorySelect?.value || '');
+                const brandFilter = normaliseFilterValue(brandSelect?.value || '');
+                const supplierFilter = normaliseFilterValue(supplierSelect?.value || '');
+
+                const entries = productOptionsSnapshot.entries.filter((entry) => {
+                    const matchesCategory = categoryFilter === '' || (entry.category || '').toLowerCase() === categoryFilter;
+                    const matchesBrand = brandFilter === '' || (entry.brand || '').toLowerCase() === brandFilter;
+                    const matchesSupplier = supplierFilter === '' || (entry.supplier || '').toLowerCase() === supplierFilter;
+
+                    if (!matchesCategory || !matchesBrand || !matchesSupplier) {
+                        return false;
+                    }
+
+                    if (searchTerm === '') {
+                        return true;
+                    }
+
+                    const searchIndex = `${entry.name} ${entry.code} ${entry.text}`.toLowerCase();
+                    return searchIndex.includes(searchTerm);
+                });
+
+                renderProductOptions(entries, { focusSelect });
+                hideProductSuggestions();
+            }
+
+            function resetProductFilters() {
+                if (productSearchInput) {
+                    productSearchInput.value = '';
+                }
+
+                const resetMappings = [
+                    { key: 'category', select: categorySelect, input: categoryNewInput },
+                    { key: 'brand', select: brandSelect, input: brandNewInput },
+                    { key: 'supplier', select: supplierSelect, input: supplierNewInput },
+                ];
+
+                resetMappings.forEach(({ key, select, input }) => {
+                    if (!select || !input) {
+                        return;
+                    }
+                    metadataOverrides[key] = false;
+                    setSelectOrInput(select, input, '');
+                    handleSelectChange(select, input);
+                });
+
+                if (productSelect) {
+                    productSelect.value = '';
+                }
+
+                ensureProductOptionsSnapshot();
+                if (productOptionsSnapshot) {
+                    renderProductOptions(productOptionsSnapshot.entries);
+                }
+
+                hideProductSuggestions();
+            }
+
+            function syncMetadataField(selectEl, inputEl, key, value) {
+                if (!selectEl || !inputEl) {
+                    return;
+                }
+
+                if (metadataOverrides[key]) {
+                    return;
+                }
+
+                setSelectOrInput(selectEl, inputEl, value);
+                handleSelectChange(selectEl, inputEl);
+            }
 
             function updateProductMeta() {
                 if (!productSelect) {
@@ -308,19 +629,15 @@
 
                 const selectedOption = productSelect.options[productSelect.selectedIndex];
                 if (!selectedOption) {
-                    selectMappings.forEach(({ select, input }) => {
-                        setSelectOrInput(select, input, '');
-                        handleSelectChange(select, input);
-                    });
+                    syncMetadataField(categorySelect, categoryNewInput, 'category', '');
+                    syncMetadataField(brandSelect, brandNewInput, 'brand', '');
+                    syncMetadataField(supplierSelect, supplierNewInput, 'supplier', '');
                     return;
                 }
 
-                setSelectOrInput(categorySelect, categoryNewInput, selectedOption.getAttribute('data-category') || '');
-                setSelectOrInput(brandSelect, brandNewInput, selectedOption.getAttribute('data-brand') || '');
-                setSelectOrInput(supplierSelect, supplierNewInput, selectedOption.getAttribute('data-supplier') || '');
-                handleSelectChange(categorySelect, categoryNewInput);
-                handleSelectChange(brandSelect, brandNewInput);
-                handleSelectChange(supplierSelect, supplierNewInput);
+                syncMetadataField(categorySelect, categoryNewInput, 'category', selectedOption.getAttribute('data-category') || '');
+                syncMetadataField(brandSelect, brandNewInput, 'brand', selectedOption.getAttribute('data-brand') || '');
+                syncMetadataField(supplierSelect, supplierNewInput, 'supplier', selectedOption.getAttribute('data-supplier') || '');
             }
 
             let hasInitialFormData = false;
@@ -348,6 +665,15 @@
                     handleSelectChange(brandSelect, brandNewInput);
                     setSelectOrInput(supplierSelect, supplierNewInput, initialSupplierValue || '');
                     handleSelectChange(supplierSelect, supplierNewInput);
+                    if (initialCategoryValue) {
+                        metadataOverrides.category = true;
+                    }
+                    if (initialBrandValue) {
+                        metadataOverrides.brand = true;
+                    }
+                    if (initialSupplierValue) {
+                        metadataOverrides.supplier = true;
+                    }
                     if (prioritySelect) {
                         prioritySelect.value = data.initialPriority || '';
                     }
@@ -361,6 +687,7 @@
             }
 
             if (productSelect) {
+                ensureProductOptionsSnapshot();
                 productSelect.addEventListener('change', () => {
                     updateProductMeta();
                 });
@@ -368,6 +695,90 @@
                     updateProductMeta();
                 }
             }
+
+            productSearchInput?.addEventListener('input', () => {
+                updateProductSuggestions();
+            });
+
+            productSearchInput?.addEventListener('focus', () => {
+                window.clearTimeout(suggestionDismissTimer);
+                updateProductSuggestions();
+            });
+
+            productSearchInput?.addEventListener('blur', () => {
+                window.clearTimeout(suggestionDismissTimer);
+                suggestionDismissTimer = window.setTimeout(() => {
+                    hideProductSuggestions();
+                }, 160);
+            });
+
+            productSuggestions?.addEventListener('mousedown', (event) => {
+                // Prevent blur handler from clearing suggestions before we handle the click
+                event.preventDefault();
+            });
+
+            productSuggestions?.addEventListener('click', (event) => {
+                const button = event.target.closest('button[data-product-id]');
+                if (!button) {
+                    return;
+                }
+
+                ensureProductOptionsSnapshot();
+                const productId = button.dataset.productId;
+                const entry = productOptionsSnapshot?.entries.find((item) => item.value === productId);
+                if (!entry) {
+                    hideProductSuggestions();
+                    return;
+                }
+
+                if (productSelect) {
+                    productSelect.value = entry.value;
+                    updateProductMeta();
+                    productSelect.focus();
+                }
+
+                if (productSearchInput) {
+                    productSearchInput.value = entry.name || entry.text || '';
+                }
+
+                hideProductSuggestions();
+            });
+
+            document.addEventListener('click', (event) => {
+                if (
+                    productSuggestions &&
+                    productSearchInput &&
+                    !productSuggestions.contains(event.target) &&
+                    event.target !== productSearchInput
+                ) {
+                    hideProductSuggestions();
+                }
+            });
+
+            productFilterApplyButton?.addEventListener('click', (event) => {
+                event.preventDefault();
+                applyProductFilters({ focusSelect: true });
+            });
+
+            productSearchInput?.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    if (productSuggestions && productSuggestions.classList.contains('is-visible')) {
+                        const firstSuggestion = productSuggestions.querySelector('button[data-product-id]');
+                        if (firstSuggestion) {
+                            firstSuggestion.click();
+                            return;
+                        }
+                    }
+                    applyProductFilters({ focusSelect: true });
+                }
+            });
+
+            productFilterResetButton?.addEventListener('click', (event) => {
+                event.preventDefault();
+                resetProductFilters();
+                productSelect?.focus();
+            });
 
             if (statusPanel && statusButton && !statusPanel.classList.contains('hidden')) {
                 statusButton.classList.add('active');
