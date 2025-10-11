@@ -5,7 +5,7 @@
 }
 
 :root {
-    --nav-sticky-offset: 84px;
+    --header-height: 84px;
 }
 
 body {
@@ -192,7 +192,7 @@ body {
     padding: 10px 0;
     box-shadow: 0 1px 5px rgba(0, 0, 0, 0.05);
     position: sticky;
-    top: var(--nav-sticky-offset);
+    top: var(--header-height);
     z-index: 1500;
 }
 
@@ -670,16 +670,16 @@ body.sort-sheet-open {
 /* Products Grid */
 .products-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 30px;
-    margin-top: 40px;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 24px;
+    margin-top: 28px;
 }
 
 .product-card {
     background: white;
-    border-radius: 20px;
-    padding: 25px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+    border-radius: 18px;
+    padding: 22px;
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.08);
     transition: all 0.3s ease;
     border: 2px solid transparent;
     cursor: pointer; /* Updated: entire card now launches the product gallery modal. */
@@ -1183,7 +1183,7 @@ body.modal-open {
 
 @media (max-width: 992px) {
     :root {
-        --nav-sticky-offset: 78px;
+        --header-height: 78px;
     }
 
     .header-content {
@@ -1366,11 +1366,11 @@ body.modal-open {
 
     .nav {
         position: fixed;
-        top: 0;
+        top: var(--header-height);
         left: 0;
-        bottom: 0;
         width: min(320px, 85vw);
-        padding: 32px 24px 40px;
+        height: calc(100vh - var(--header-height));
+        padding: 28px 24px 36px;
         box-shadow: 12px 0 30px rgba(0, 0, 0, 0.18);
         border-radius: 0 28px 28px 0;
         transform: translateX(-110%);
@@ -1380,6 +1380,7 @@ body.modal-open {
         gap: 24px;
         background: linear-gradient(180deg, #43d6ff 0%, #1c8ae6 100%);
         z-index: 1600;
+        overflow-y: auto;
     }
 
     .nav.is-open {
@@ -1446,23 +1447,26 @@ body.modal-open {
     .container {
         display: flex;
         flex-direction: column;
-        padding: 20px 16px 40px;
-        gap: 0;
+        padding: 16px 12px 32px;
+        gap: 12px;
     }
 
     .main-content {
         order: 1;
-        margin-top: 16px;
-        padding: 28px 20px;
+        margin-top: 0;
+        padding: 0;
+        background: transparent;
+        border-radius: 0;
+        box-shadow: none;
     }
 
     .sidebar {
         order: 2;
         position: fixed;
-        top: 0;
+        top: var(--header-height);
         left: 0;
-        bottom: 0;
         width: min(85vw, 340px);
+        height: calc(100vh - var(--header-height));
         max-width: 340px;
         padding: 28px 24px 40px;
         overflow-y: auto;
@@ -1501,7 +1505,8 @@ body.modal-open {
     }
 
     .products-grid {
-        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
     }
 }
 
@@ -1594,17 +1599,18 @@ body.terms-overlay-active {
 @media (max-width: 600px) {
     .products-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 16px;
+        gap: 10px;
     }
 
     .product-card {
-        padding: 18px;
-        border-radius: 18px;
-        gap: 12px;
+        padding: 16px;
+        border-radius: 14px;
+        gap: 10px;
     }
 
     .product-photo {
-        border-radius: 14px;
+        border-radius: 12px;
+        margin-bottom: 12px;
     }
 
     .product-info h3 {

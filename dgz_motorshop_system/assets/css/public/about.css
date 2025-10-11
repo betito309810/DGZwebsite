@@ -5,7 +5,7 @@
 }
 
 :root {
-    --nav-sticky-offset: 84px;
+    --header-height: 84px;
 }
 
 body {
@@ -190,7 +190,7 @@ body {
     padding: 10px 0;
     box-shadow: 0 1px 5px rgba(0, 0, 0, 0.05);
     position: sticky;
-    top: var(--nav-sticky-offset);
+    top: var(--header-height);
     z-index: 1500;
 }
 
@@ -385,7 +385,7 @@ body.nav-open {
 
 @media (max-width: 992px) {
     :root {
-        --nav-sticky-offset: 78px;
+        --header-height: 78px;
     }
 
     .header-content {
@@ -409,11 +409,11 @@ body.nav-open {
 
     .nav {
         position: fixed;
-        top: 0;
+        top: var(--header-height);
         left: 0;
-        bottom: 0;
         width: min(320px, 85vw);
-        padding: 32px 24px 40px;
+        height: calc(100vh - var(--header-height));
+        padding: 28px 24px 36px;
         box-shadow: 12px 0 30px rgba(0, 0, 0, 0.18);
         border-radius: 0 28px 28px 0;
         transform: translateX(-110%);
@@ -423,6 +423,7 @@ body.nav-open {
         gap: 24px;
         background: linear-gradient(180deg, #43d6ff 0%, #1c8ae6 100%);
         z-index: 1600;
+        overflow-y: auto;
     }
 
     .nav.is-open {

@@ -3,13 +3,32 @@
     const nav = document.getElementById('primaryNav');
     const backdrop = document.getElementById('navBackdrop');
     const body = document.body;
+    const root = document.documentElement;
+    const header = document.querySelector('.header');
     const focusableSelector = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
     const mobileMediaQuery = window.matchMedia('(max-width: 768px)');
     let lastFocusedElement = null;
-
     if (!toggle || !nav) {
         return;
     }
+
+    function updateHeaderOffset() {
+        if (!header) {
+            return;
+        }
+
+        const { height } = header.getBoundingClientRect();
+        root.style.setProperty('--header-height', `${Math.round(height)}px`);
+    }
+
+    if (header && typeof ResizeObserver !== 'undefined') {
+        const headerResizeObserver = new ResizeObserver(updateHeaderOffset);
+        headerResizeObserver.observe(header);
+    }
+
+    updateHeaderOffset();
+    window.addEventListener('resize', updateHeaderOffset);
+    window.addEventListener('orientationchange', updateHeaderOffset);
 
     function setAriaHidden(hidden) {
         if (mobileMediaQuery.matches) {
