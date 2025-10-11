@@ -80,12 +80,6 @@ natcasesort($categories);
 
     <!-- Navigation -->
     <nav class="nav" id="primaryNav" aria-label="Primary navigation">
-        <div class="search-container mobile-nav-search">
-            <input type="text" class="search-bar" placeholder="Search by Category, Part, Brand...">
-            <button class="search-btn" type="button">
-                <i class="fas fa-search"></i>
-            </button>
-        </div>
         <div class="nav-content">
             <a href="<?= htmlspecialchars($homeUrl) ?>" class="nav-link active">HOME</a>
             <a href="<?= htmlspecialchars($aboutUrl) ?>" class="nav-link">ABOUT</a>

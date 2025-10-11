@@ -18,7 +18,9 @@
         }
 
         const { height } = header.getBoundingClientRect();
-        root.style.setProperty('--header-height', `${Math.round(height)}px`);
+        if (height > 0) {
+            root.style.setProperty('--header-height', `${height}px`);
+        }
     }
 
     if (header && typeof ResizeObserver !== 'undefined') {
