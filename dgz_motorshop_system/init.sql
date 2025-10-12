@@ -76,7 +76,9 @@ CREATE TABLE IF NOT EXISTS orders (
   payment_method VARCHAR(50),
   payment_proof VARCHAR(255),
   status VARCHAR(50) DEFAULT 'pending',
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  processed_by_user_id INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (processed_by_user_id) REFERENCES users(id)
 );
 
 -- order_items

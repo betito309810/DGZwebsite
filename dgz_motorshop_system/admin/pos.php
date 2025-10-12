@@ -137,6 +137,39 @@ if (!function_exists('ensureOrdersCustomerNoteColumn')) {
     }
 }
 ensureOrdersCustomerNoteColumn($pdo); // Added call so POS reflects checkout notes even on older databases
+if (!function_exists('ensureOrdersProcessedByColumn')) {
+    /**
+     * Ensure the orders table can store which staff processed the transaction.
+     */
+    function ensureOrdersProcessedByColumn(PDO $pdo): void
+    {
+        static $ensured = false;
+        if ($ensured) {
+            return;
+        }
+
+        $ensured = true;
+
+        try {
+            $stmt = $pdo->query("SHOW COLUMNS FROM orders LIKE 'processed_by_user_id'");
+            $hasColumn = $stmt !== false && $stmt->fetch() !== false;
+            if ($hasColumn) {
+                return;
+            }
+
+            $pdo->exec("ALTER TABLE orders ADD COLUMN processed_by_user_id INT NULL");
+
+            try {
+                $pdo->exec("ALTER TABLE orders ADD CONSTRAINT fk_orders_processed_by FOREIGN KEY (processed_by_user_id) REFERENCES users(id)");
+            } catch (Throwable $e) {
+                error_log('Unable to add processed_by_user_id foreign key: ' . $e->getMessage());
+            }
+        } catch (Throwable $e) {
+            error_log('Unable to ensure processed_by_user_id column: ' . $e->getMessage());
+        }
+    }
+}
+ensureOrdersProcessedByColumn($pdo);
 if (!function_exists('ensureOrderItemsDescriptionColumn')) {
     /**
      * Ensure order_items table can store custom item labels (e.g. POS services).
@@ -556,6 +589,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                     $fields[] = 'decline_reason_note = ?';
                     $params[] = null;
 
+                    $fields[] = 'processed_by_user_id = ?';
+                    $params[] = isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null;
+
                     $params[] = $orderId;
                     $updateSql = 'UPDATE orders SET ' . implode(', ', $fields) . ' WHERE id = ?';
                     $stmt = $pdo->prepare($updateSql);
@@ -958,6 +994,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pos_checkout'])) {
             'total',
             'payment_method',
             'status',
+            'processed_by_user_id',
             'vatable',
             'vat',
             'amount_paid',
@@ -972,6 +1009,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pos_checkout'])) {
             $salesTotal,
             'Cash',
             'completed',
+            isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null,
             $vatable,
             $vat,
             $amountPaid,

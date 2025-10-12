@@ -190,7 +190,8 @@ $html .= '
                     <th>ID</th>
                     <th>Invoice</th>
                     <th>Customer Name</th>
-                    <th>Contact</th>
+                    <th>Email</th>
+                    <th>Phone</th>
                     <th>Payment Method</th>
                     <th>Total</th>
                     <th>Date</th>
@@ -203,9 +204,10 @@ foreach ($orders as $order) {
                     <td>' . htmlspecialchars($order['id']) . '</td>
                     <td>' . htmlspecialchars($order['invoice_number'] ?? 'N/A') . '</td>
                     <td>' . htmlspecialchars($order['customer_name']) . '</td>
-                    <td>' . htmlspecialchars($order['contact'] ?? 'N/A') . '</td>
+                    <td>' . htmlspecialchars($order['email'] ?? 'N/A') . '</td>
+                    <td>' . htmlspecialchars($order['phone'] ?? $order['contact'] ?? 'N/A') . '</td>
                     <td>' . htmlspecialchars($order['payment_method']) . '</td>
-<td>' . number_format($order['total'], 2) . '</td>
+                    <td>' . number_format($order['total'], 2) . '</td>
                     <td>' . date('M d, Y g:i A', strtotime($order['created_at'])) . '</td>
                 </tr>';
 }

@@ -71,22 +71,46 @@ function generateSalesReport(PDO $pdo, string $period): array
     ];
 }
 
+function resolveCashierName(array $row): string
+{
+    $candidates = [];
+
+    foreach (['cashier_username', 'cashier_name'] as $key) {
+        if (!empty($row[$key])) {
+            $candidates[] = $row[$key];
+        }
+    }
+
+    foreach ($candidates as $candidate) {
+        $candidate = trim((string) $candidate);
+        if ($candidate !== '') {
+            return $candidate;
+        }
+    }
+
+    return 'Unassigned';
+}
+
 // Handle CSV export FIRST - before any other queries
 if(isset($_GET['export']) && $_GET['export'] == 'csv') {
     // Get ALL orders for export
-    $export_sql = "SELECT * FROM orders WHERE status IN ('approved','completed') ORDER BY created_at DESC";
+    $export_sql = "SELECT o.*, u.username AS cashier_username, u.name AS cashier_name
+        FROM orders o
+        LEFT JOIN users u ON u.id = o.processed_by_user_id
+        WHERE o.status IN ('approved','completed')
+        ORDER BY o.created_at DESC";
     $export_orders = $pdo->query($export_sql)->fetchAll();
-    
+
     header('Content-Type: text/csv');
     header('Content-Disposition: attachment; filename="sales.csv"');
     $out = fopen('php://output', 'w');
-    fputcsv($out, ['ID','Invoice','Customer Name','Contact','Address','Total','Payment Method','Payment Reference','Proof Image','Status','Created At']);
+    fputcsv($out, ['ID','Invoice','Cashier Name','Contact','Address','Total','Payment Method','Payment Reference','Proof Image','Status','Created At']);
     foreach($export_orders as $o) {
 
         fputcsv($out, [
             $o['id'],
             $o['invoice_number'] ?? '',
-            $o['customer_name'],
+            resolveCashierName($o),
             $o['contact'],
             $o['address'],
             $o['total'],
@@ -178,9 +202,10 @@ if ($total_pages > 0 && $current_page > $total_pages) {
 $offset = ($current_page - 1) * $records_per_page;
 
 // Get orders with pagination
-$sql = "SELECT o.*, r.label AS decline_reason_label
+$sql = "SELECT o.*, r.label AS decline_reason_label, u.username AS cashier_username, u.name AS cashier_name
         FROM orders o
         LEFT JOIN order_decline_reasons r ON r.id = o.decline_reason_id
+        LEFT JOIN users u ON u.id = o.processed_by_user_id
         WHERE $whereClause
         ORDER BY o.created_at DESC
         LIMIT :limit OFFSET :offset";
@@ -299,7 +324,7 @@ $buildPageUrl = static function (int $page) use ($queryParams): string {
                         <tr>
                             <th>ID</th>
                             <th>Invoice</th>
-                            <th>Customer Name</th>
+                            <th>Cashier</th>
                             <th>Address</th>
                             <th>Total</th>
                             <th>Payment Method</th>
@@ -344,7 +369,7 @@ $buildPageUrl = static function (int $page) use ($queryParams): string {
                         <tr class="transaction-row" data-order-id="<?=$o['id']?>" style="cursor: pointer;">
                             <td><?=$o['id']?></td>
                             <td><?=$o['invoice_number'] ? htmlspecialchars($o['invoice_number']) : 'N/A'?></td>
-                            <td><?=htmlspecialchars($o['customer_name'])?></td>
+                            <td><?=htmlspecialchars(resolveCashierName($o))?></td>
                             <td><?=htmlspecialchars($o['address'] ?? 'N/A')?></td>
                             <td>₱<?=number_format($o['total'],2)?></td>
                             <td><?=htmlspecialchars($o['payment_method'])?></td>

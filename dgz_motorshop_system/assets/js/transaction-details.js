@@ -52,9 +52,11 @@ async function loadTransactionDetails(orderId) {
         const modalBody = document.querySelector('#transactionModal .modal-body');
         const order = data.order;
         const items = data.items;
-        
+
         // Format the date
         const orderDate = new Date(order.created_at).toLocaleString();
+        const cashierName = (order.cashier_display_name || order.cashier_name || order.cashier_username || '').trim() || 'Unassigned';
+        const customerName = (order.customer_name || '').trim() || 'N/A';
         
         // Debug: log items data to console
         console.log('Transaction items:', items);
@@ -108,12 +110,16 @@ async function loadTransactionDetails(orderId) {
                 
                 <div class="order-info-grid">
                     <div class="info-group">
+                        <label>Cashier:</label>
+                        <span>${escapeHtml(cashierName)}</span>
+                    </div>
+                    <div class="info-group">
                         <label>Customer:</label>
-                        <span>${order.customer_name}</span>
+                        <span>${escapeHtml(customerName)}</span>
                     </div>
                     <div class="info-group">
                         <label>Invoice #:</label>
-                        <span>${order.invoice_number || 'N/A'}</span>
+                        <span>${escapeHtml(order.invoice_number || 'N/A')}</span>
                     </div>
                     <div class="info-group">
                         <label>Date:</label>
