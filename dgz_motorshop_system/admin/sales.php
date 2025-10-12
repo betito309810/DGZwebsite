@@ -89,7 +89,7 @@ function resolveCashierName(array $row): string
 {
     $candidates = [];
 
-    foreach (['cashier_username', 'cashier_name'] as $key) {
+    foreach (['cashier_name', 'cashier_username'] as $key) {
         if (isset($row[$key]) && $row[$key] !== null && $row[$key] !== '') {
             $candidates[] = $row[$key];
         }
@@ -99,6 +99,34 @@ function resolveCashierName(array $row): string
         $candidate = trim((string) $candidate);
         if ($candidate !== '') {
             return $candidate;
+        }
+    }
+
+    $userId = isset($row['processed_by_user_id']) ? (int) $row['processed_by_user_id'] : 0;
+    if ($userId > 0) {
+        static $cache = [];
+        if (!array_key_exists($userId, $cache)) {
+            $cache[$userId] = '';
+
+            try {
+                global $pdo;
+                if ($pdo instanceof PDO) {
+                    $resolved = fetchUserDisplayName($pdo, $userId);
+                    if (is_string($resolved)) {
+                        $cache[$userId] = $resolved;
+                    }
+                }
+            } catch (Throwable $e) {
+                error_log('Unable to resolve cashier name for listing: ' . $e->getMessage());
+            }
+        }
+
+        $fallback = $cache[$userId];
+        if (is_string($fallback)) {
+            $fallback = trim($fallback);
+            if ($fallback !== '') {
+                return $fallback;
+            }
         }
     }
 

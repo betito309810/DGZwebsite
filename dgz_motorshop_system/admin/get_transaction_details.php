@@ -5,10 +5,10 @@ if(empty($_SESSION['user_id'])){
     exit('Unauthorized');
 }
 
-function resolveCashierDisplay(array $row): string
+function resolveCashierDisplay(PDO $pdo, array $row): string
 {
     $candidates = [];
-    foreach (['cashier_username', 'cashier_name'] as $key) {
+    foreach (['cashier_name', 'cashier_username'] as $key) {
         if (isset($row[$key]) && $row[$key] !== null && $row[$key] !== '') {
             $candidates[] = $row[$key];
         }
@@ -18,6 +18,22 @@ function resolveCashierDisplay(array $row): string
         $candidate = trim((string) $candidate);
         if ($candidate !== '') {
             return $candidate;
+        }
+    }
+
+    $userId = isset($row['processed_by_user_id']) ? (int) $row['processed_by_user_id'] : 0;
+    if ($userId > 0) {
+        static $cache = [];
+        if (!array_key_exists($userId, $cache)) {
+            $cache[$userId] = fetchUserDisplayName($pdo, $userId) ?? '';
+        }
+
+        $fallback = $cache[$userId];
+        if (is_string($fallback)) {
+            $fallback = trim($fallback);
+            if ($fallback !== '') {
+                return $fallback;
+            }
         }
     }
 
@@ -86,7 +102,13 @@ try {
     $details = parsePaymentProofValue($order['payment_proof'] ?? null, $order['reference_no'] ?? null);
 
     $order['reference_number'] = $details['reference'];
-    $order['cashier_display_name'] = resolveCashierDisplay($order);
+    $order['cashier_display_name'] = resolveCashierDisplay($pdo, $order);
+    if (
+        (!isset($order['cashier_name']) || trim((string) $order['cashier_name']) === '')
+        && $order['cashier_display_name'] !== 'Unassigned'
+    ) {
+        $order['cashier_name'] = $order['cashier_display_name'];
+    }
     $order['phone'] = $order['phone'] ?? null;
     $order['customer_note'] = isset($order['customer_note']) && $order['customer_note'] !== null
         ? (string) $order['customer_note']

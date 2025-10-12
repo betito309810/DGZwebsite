@@ -1394,7 +1394,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 let vat = 0;
                 let amountPaid = 0;
                 let change = 0;
-                let cashierName = 'Admin';
+                let cashierName = 'Cashier';
                 let createdAt = new Date();
                 let orderId = params.get('order_id') || '';
                 let invoiceNumber = params.get('invoice_number') || '';
@@ -1471,7 +1471,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     change = parseFloat(params.get('change') || '0');
                     vatable = salesTotal / 1.12;
                     vat = salesTotal - vatable;
-                    cashierName = 'Admin';
+                    cashierName = 'Cashier';
                     createdAt = new Date();
                 }
 
@@ -1493,7 +1493,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 document.getElementById('receiptNumber').textContent = invoiceNumber;
                 document.getElementById('receiptDate').textContent = Number.isNaN(createdAt.getTime()) ? new Date().toLocaleString() : createdAt.toLocaleString();
-                document.getElementById('receiptCashier').textContent = cashierName || 'Admin';
+                document.getElementById('receiptCashier').textContent = cashierName || 'Cashier';
                 document.getElementById('receiptSalesTotal').textContent = formatPeso(salesTotal);
                 document.getElementById('receiptDiscount').textContent = formatPeso(discount);
                 document.getElementById('receiptVatable').textContent = formatPeso(vatable);

@@ -659,7 +659,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                                     'vat' => $orderTotal - ($orderTotal / 1.12),
                                     'amount_paid' => $orderTotal,
                                     'change' => 0.0,
-                                    'cashier' => $_SESSION['username'] ?? 'Admin',
+                                    'cashier' => currentSessionUserDisplayName() ?? 'Cashier',
                                     'items' => array_map(static function (array $item): array {
                                         return [
                                             'name' => $item['name'] ?? 'Item',
@@ -769,7 +769,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                                     'vat' => $orderTotal - ($orderTotal / 1.12),
                                     'amount_paid' => $orderTotal,
                                     'change' => 0.0,
-                                    'cashier' => $_SESSION['username'] ?? 'Admin',
+                                    'cashier' => currentSessionUserDisplayName() ?? 'Cashier',
                                     'items' => array_map(static function (array $item): array {
                                         return [
                                             'name' => $item['name'] ?? 'Item',
@@ -1074,7 +1074,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pos_checkout'])) {
             'vat' => $vat,
             'amount_paid' => $amountPaid,
             'change' => $change,
-            'cashier' => $_SESSION['username'] ?? 'Admin',
+            'cashier' => currentSessionUserDisplayName() ?? 'Cashier',
             'items' => array_map(static function (array $item): array {
                 return [
                     'name' => $item['name'],
@@ -1303,7 +1303,7 @@ if (isset($_GET['ok'], $_GET['order_id']) && $_GET['ok'] === '1') {
                 'amount_paid' => (float) ($orderRow['amount_paid'] ?? 0),
                 'change' => (float) ($orderRow['change_amount'] ?? 0),
                 'discount' => 0.0,
-                'cashier' => (string) ($_SESSION['username'] ?? 'Admin'),
+                'cashier' => (string) (currentSessionUserDisplayName() ?? 'Cashier'),
                 'items' => $items,
             ];
         }

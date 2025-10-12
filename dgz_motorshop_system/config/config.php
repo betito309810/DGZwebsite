@@ -323,6 +323,119 @@ if (!function_exists('ordersSupportsProcessedBy')) {
     }
 }
 
+if (!function_exists('resolveUserDisplayName')) {
+    function resolveUserDisplayName(array $user, array $fallbacks = []): ?string
+    {
+        $candidates = [];
+
+        foreach (['name', 'full_name', 'display_name'] as $key) {
+            if (!empty($user[$key])) {
+                $candidates[] = $user[$key];
+            }
+        }
+
+        if (!empty($user['first_name']) || !empty($user['last_name'])) {
+            $first = trim((string) ($user['first_name'] ?? ''));
+            $last = trim((string) ($user['last_name'] ?? ''));
+            $combined = trim($first . ' ' . $last);
+            if ($combined !== '') {
+                $candidates[] = $combined;
+            }
+        }
+
+        foreach (['username', 'email'] as $key) {
+            if (!empty($user[$key])) {
+                $candidates[] = $user[$key];
+            }
+        }
+
+        foreach ($fallbacks as $value) {
+            if (!empty($value)) {
+                $candidates[] = $value;
+            }
+        }
+
+        foreach ($candidates as $candidate) {
+            $candidate = trim((string) $candidate);
+            if ($candidate !== '') {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+}
+
+if (!function_exists('fetchUserDisplayName')) {
+    function fetchUserDisplayName(PDO $pdo, int $userId): ?string
+    {
+        if ($userId <= 0) {
+            return null;
+        }
+
+        try {
+            $stmt = $pdo->prepare('SELECT * FROM users WHERE id = ? LIMIT 1');
+            $stmt->execute([$userId]);
+            $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$user) {
+                return null;
+            }
+
+            $fallbacks = [];
+            if (!empty($_SESSION['user_name']) && isset($_SESSION['user_id']) && (int) $_SESSION['user_id'] === $userId) {
+                $fallbacks[] = $_SESSION['user_name'];
+            }
+
+            return resolveUserDisplayName($user, $fallbacks);
+        } catch (Throwable $e) {
+            error_log('Unable to fetch user display name: ' . $e->getMessage());
+            return null;
+        }
+    }
+}
+
+if (!function_exists('currentSessionUserDisplayName')) {
+    function currentSessionUserDisplayName(): ?string
+    {
+        $sessionCandidates = [];
+        foreach (['user_name', 'username', 'name'] as $key) {
+            if (!empty($_SESSION[$key])) {
+                $sessionCandidates[] = $_SESSION[$key];
+            }
+        }
+
+        foreach ($sessionCandidates as $candidate) {
+            $candidate = trim((string) $candidate);
+            if ($candidate !== '') {
+                return $candidate;
+            }
+        }
+
+        if (!empty($_SESSION['user_id'])) {
+            try {
+                $pdo = db();
+                $fetched = fetchUserDisplayName($pdo, (int) $_SESSION['user_id']);
+                if ($fetched !== null) {
+                    $_SESSION['user_name'] = $fetched;
+                    return $fetched;
+                }
+            } catch (Throwable $e) {
+                error_log('Unable to resolve current session user display name: ' . $e->getMessage());
+            }
+        }
+
+        if (!empty($_SESSION['role'])) {
+            $role = trim((string) $_SESSION['role']);
+            if ($role !== '') {
+                return ucfirst($role);
+            }
+        }
+
+        return null;
+    }
+}
+
 if (!function_exists('parsePaymentProofValue')) {
     function parsePaymentProofValue($value, $fallbackReference = null): array
     {
