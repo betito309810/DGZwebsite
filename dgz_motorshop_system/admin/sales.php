@@ -6,6 +6,19 @@ $pdo = db();
 $role = $_SESSION['role'] ?? '';
 enforceStaffAccess();
 $supportsProcessedBy = ordersSupportsProcessedBy($pdo);
+$buildCashierFragments = static function (bool $enabled): array {
+    if ($enabled) {
+        return [
+            'select' => 'u.username AS cashier_username, u.name AS cashier_name',
+            'join'   => 'LEFT JOIN users u ON u.id = o.processed_by_user_id',
+        ];
+    }
+
+    return [
+        'select' => 'NULL AS cashier_username, NULL AS cashier_name',
+        'join'   => '',
+    ];
+};
 
 /**
  * Generate sales report for a given period.
@@ -77,7 +90,7 @@ function resolveCashierName(array $row): string
     $candidates = [];
 
     foreach (['cashier_username', 'cashier_name'] as $key) {
-        if (!empty($row[$key])) {
+        if (isset($row[$key]) && $row[$key] !== null && $row[$key] !== '') {
             $candidates[] = $row[$key];
         }
     }
@@ -95,16 +108,37 @@ function resolveCashierName(array $row): string
 // Handle CSV export FIRST - before any other queries
 if(isset($_GET['export']) && $_GET['export'] == 'csv') {
     // Get ALL orders for export
-    $cashierSelect = $supportsProcessedBy
-        ? 'u.username AS cashier_username, u.name AS cashier_name'
-        : 'NULL AS cashier_username, NULL AS cashier_name';
-    $cashierJoin = $supportsProcessedBy ? 'LEFT JOIN users u ON u.id = o.processed_by_user_id' : '';
+    $fragments = $buildCashierFragments($supportsProcessedBy);
+    $cashierSelect = $fragments['select'];
+    $cashierJoin = $fragments['join'];
     $export_sql = "SELECT o.*, $cashierSelect
         FROM orders o
         $cashierJoin
         WHERE o.status IN ('approved','completed')
         ORDER BY o.created_at DESC";
-    $export_orders = $pdo->query($export_sql)->fetchAll();
+
+    $export_stmt = null;
+    try {
+        $export_stmt = $pdo->query($export_sql);
+    } catch (Throwable $e) {
+        if ($supportsProcessedBy) {
+            error_log('Cashier join failed during CSV export; retrying without processed_by_user_id: ' . $e->getMessage());
+            $supportsProcessedBy = false;
+            $fragments = $buildCashierFragments(false);
+            $cashierSelect = $fragments['select'];
+            $cashierJoin = $fragments['join'];
+            $export_sql = "SELECT o.*, $cashierSelect
+                FROM orders o
+                $cashierJoin
+                WHERE o.status IN ('approved','completed')
+                ORDER BY o.created_at DESC";
+            $export_stmt = $pdo->query($export_sql);
+        } else {
+            throw $e;
+        }
+    }
+
+    $export_orders = $export_stmt instanceof PDOStatement ? $export_stmt->fetchAll() : [];
 
     header('Content-Type: text/csv');
     header('Content-Disposition: attachment; filename="sales.csv"');
@@ -207,10 +241,9 @@ if ($total_pages > 0 && $current_page > $total_pages) {
 $offset = ($current_page - 1) * $records_per_page;
 
 // Get orders with pagination
-$cashierSelect = $supportsProcessedBy
-    ? 'u.username AS cashier_username, u.name AS cashier_name'
-    : 'NULL AS cashier_username, NULL AS cashier_name';
-$cashierJoin = $supportsProcessedBy ? 'LEFT JOIN users u ON u.id = o.processed_by_user_id' : '';
+$fragments = $buildCashierFragments($supportsProcessedBy);
+$cashierSelect = $fragments['select'];
+$cashierJoin = $fragments['join'];
 $sql = "SELECT o.*, r.label AS decline_reason_label, $cashierSelect
         FROM orders o
         LEFT JOIN order_decline_reasons r ON r.id = o.decline_reason_id
@@ -218,13 +251,42 @@ $sql = "SELECT o.*, r.label AS decline_reason_label, $cashierSelect
         WHERE $whereClause
         ORDER BY o.created_at DESC
         LIMIT :limit OFFSET :offset";
-$stmt = $pdo->prepare($sql);
-foreach ($sqlParams as $param => $value) {
-    $stmt->bindValue($param, $value, PDO::PARAM_STR);
+
+$stmt = null;
+try {
+    $stmt = $pdo->prepare($sql);
+    foreach ($sqlParams as $param => $value) {
+        $stmt->bindValue($param, $value, PDO::PARAM_STR);
+    }
+    $stmt->bindValue(':limit', $records_per_page, PDO::PARAM_INT);
+    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+    $stmt->execute();
+} catch (Throwable $e) {
+    if ($supportsProcessedBy) {
+        error_log('Cashier join failed during sales listing; retrying without processed_by_user_id: ' . $e->getMessage());
+        $supportsProcessedBy = false;
+        $fragments = $buildCashierFragments(false);
+        $cashierSelect = $fragments['select'];
+        $cashierJoin = $fragments['join'];
+        $sql = "SELECT o.*, r.label AS decline_reason_label, $cashierSelect
+            FROM orders o
+            LEFT JOIN order_decline_reasons r ON r.id = o.decline_reason_id
+            $cashierJoin
+            WHERE $whereClause
+            ORDER BY o.created_at DESC
+            LIMIT :limit OFFSET :offset";
+        $stmt = $pdo->prepare($sql);
+        foreach ($sqlParams as $param => $value) {
+            $stmt->bindValue($param, $value, PDO::PARAM_STR);
+        }
+        $stmt->bindValue(':limit', $records_per_page, PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+        $stmt->execute();
+    } else {
+        throw $e;
+    }
 }
-$stmt->bindValue(':limit', $records_per_page, PDO::PARAM_INT);
-$stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
-$stmt->execute();
+
 $orders = $stmt->fetchAll();
 
 // Calculate showing info

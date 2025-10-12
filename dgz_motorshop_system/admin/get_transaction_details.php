@@ -9,7 +9,7 @@ function resolveCashierDisplay(array $row): string
 {
     $candidates = [];
     foreach (['cashier_username', 'cashier_name'] as $key) {
-        if (!empty($row[$key])) {
+        if (isset($row[$key]) && $row[$key] !== null && $row[$key] !== '') {
             $candidates[] = $row[$key];
         }
     }
@@ -44,8 +44,26 @@ try {
          LEFT JOIN order_decline_reasons r ON r.id = o.decline_reason_id
          $cashierJoin
          WHERE o.id = ?";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute([$order_id]);
+
+    $stmt = null;
+    try {
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$order_id]);
+    } catch (Throwable $e) {
+        if ($supportsProcessedBy) {
+            error_log('Cashier join failed, retrying without processed_by_user_id: ' . $e->getMessage());
+            $supportsProcessedBy = false;
+            $fallbackSql = "SELECT o.*, r.label AS decline_reason_label,
+                     NULL AS cashier_username, NULL AS cashier_name
+                 FROM orders o
+                 LEFT JOIN order_decline_reasons r ON r.id = o.decline_reason_id
+                 WHERE o.id = ?";
+            $stmt = $pdo->prepare($fallbackSql);
+            $stmt->execute([$order_id]);
+        } else {
+            throw $e;
+        }
+    }
     $order = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$order) {
