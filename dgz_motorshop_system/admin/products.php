@@ -178,6 +178,178 @@ if (!function_exists('persistGalleryUploads')) {
     }
 }
 
+if (!function_exists('productImageAbsolutePath')) {
+    /**
+     * Translate a stored relative upload path into an absolute filesystem path.
+     */
+    function productImageAbsolutePath(string $storedPath): ?string
+    {
+        $normalised = str_replace('\\', '/', trim($storedPath));
+        if ($normalised === '') {
+            return null;
+        }
+
+        $normalised = ltrim($normalised, '/');
+        if (strpos($normalised, '..') !== false) {
+            return null;
+        }
+
+        if (strpos($normalised, 'uploads/products/') !== 0) {
+            return null;
+        }
+
+        static $basePath = null;
+        if ($basePath === null) {
+            $resolved = realpath(__DIR__ . '/..');
+            $basePath = $resolved !== false ? $resolved : __DIR__ . '/..';
+        }
+
+        return $basePath . '/' . $normalised;
+    }
+}
+
+if (!function_exists('deleteMainProductImage')) {
+    /**
+     * Remove the stored main image for a product from the filesystem.
+     */
+    function deleteMainProductImage(int $productId, ?string $storedPath = null): void
+    {
+        $productDir = __DIR__ . '/../uploads/products/' . $productId;
+        if (is_dir($productDir)) {
+            foreach (glob($productDir . '/main.*') as $file) {
+                if (is_file($file)) {
+                    @unlink($file);
+                }
+            }
+        }
+
+        if ($storedPath) {
+            $absolute = productImageAbsolutePath($storedPath);
+            if ($absolute && is_file($absolute)) {
+                @unlink($absolute);
+            }
+        }
+    }
+}
+
+if (!function_exists('reorderGallerySortOrder')) {
+    /**
+     * Re-pack gallery sort orders so they remain sequential after deletions.
+     */
+    function reorderGallerySortOrder(PDO $pdo, int $productId): void
+    {
+        $stmt = $pdo->prepare('SELECT id FROM product_images WHERE product_id = ? ORDER BY sort_order ASC, id ASC');
+        $stmt->execute([$productId]);
+        $ids = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        if (empty($ids)) {
+            return;
+        }
+
+        $update = $pdo->prepare('UPDATE product_images SET sort_order = ? WHERE id = ?');
+        $order = 0;
+        foreach ($ids as $id) {
+            $order++;
+            $update->execute([$order, (int) $id]);
+        }
+    }
+}
+
+if (!function_exists('removeGalleryImages')) {
+    /**
+     * Delete gallery images by id and return the removed rows for history logging.
+     */
+    function removeGalleryImages(PDO $pdo, int $productId, array $imageIds): array
+    {
+        $normalisedIds = [];
+        foreach ($imageIds as $id) {
+            $id = (int) $id;
+            if ($id > 0) {
+                $normalisedIds[$id] = $id;
+            }
+        }
+
+        if (empty($normalisedIds)) {
+            return [];
+        }
+
+        $normalisedIds = array_values($normalisedIds);
+        $placeholders = implode(',', array_fill(0, count($normalisedIds), '?'));
+        $params = array_merge([$productId], $normalisedIds);
+
+        $select = $pdo->prepare(
+            "SELECT id, file_path FROM product_images WHERE product_id = ? AND id IN ($placeholders)"
+        );
+        $select->execute($params);
+        $rows = $select->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        if (empty($rows)) {
+            return [];
+        }
+
+        $idsToDelete = [];
+        foreach ($rows as $row) {
+            $idsToDelete[] = (int) ($row['id'] ?? 0);
+            $storedPath = $row['file_path'] ?? '';
+            $absolute = $storedPath ? productImageAbsolutePath($storedPath) : null;
+            if ($absolute && is_file($absolute)) {
+                @unlink($absolute);
+            }
+        }
+
+        if (!empty($idsToDelete)) {
+            $deletePlaceholders = implode(',', array_fill(0, count($idsToDelete), '?'));
+            $deleteParams = array_merge([$productId], $idsToDelete);
+            $delete = $pdo->prepare(
+                "DELETE FROM product_images WHERE product_id = ? AND id IN ($deletePlaceholders)"
+            );
+            $delete->execute($deleteParams);
+        }
+
+        reorderGallerySortOrder($pdo, $productId);
+
+        return $rows;
+    }
+}
+
+if (!function_exists('fetchGalleryImagesForProducts')) {
+    /**
+     * Bulk fetch gallery images for the supplied product ids.
+     */
+    function fetchGalleryImagesForProducts(PDO $pdo, array $productIds): array
+    {
+        $productIds = array_values(array_unique(array_filter(array_map('intval', $productIds))));
+        if (empty($productIds)) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($productIds), '?'));
+        $stmt = $pdo->prepare(
+            "SELECT id, product_id, file_path, sort_order FROM product_images WHERE product_id IN ($placeholders) ORDER BY product_id ASC, sort_order ASC, id ASC"
+        );
+        $stmt->execute($productIds);
+
+        $gallery = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $productId = (int) ($row['product_id'] ?? 0);
+            if ($productId <= 0) {
+                continue;
+            }
+
+            $rawPath = $row['file_path'] ?? '';
+            $normalisedPath = ltrim(str_replace('\\', '/', trim((string) $rawPath)), '/');
+            $url = $normalisedPath !== '' ? '../' . $normalisedPath : '';
+
+            $gallery[$productId][] = [
+                'id' => (int) ($row['id'] ?? 0),
+                'file_path' => $rawPath,
+                'url' => $url,
+            ];
+        }
+
+        return $gallery;
+    }
+}
+
 if (!function_exists('syncProductVariants')) {
     /**
      * Added: persist variant rows (insert/update/delete) and capture a diff summary for history logging.
@@ -540,6 +712,11 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_product'])){
 
     $mainImageFile = $_FILES['image'] ?? null;
     $galleryImageFiles = $_FILES['gallery_images'] ?? null;
+    $removeMainImage = isset($_POST['remove_main_image']) && (string) $_POST['remove_main_image'] === '1';
+    $removeGalleryIds = $_POST['remove_gallery_ids'] ?? [];
+    if (!is_array($removeGalleryIds)) {
+        $removeGalleryIds = [$removeGalleryIds];
+    }
 
     $variantsPayloadJson = $_POST['variants_payload'] ?? '';
     $variantRecords = normaliseVariantPayload($variantsPayloadJson);
@@ -611,6 +788,14 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_product'])){
 
         $existingImagePath = $old_product['image'] ?? null;
         $newImagePath = null;
+        $removedMainImage = false;
+
+        if ($removeMainImage) {
+            deleteMainProductImage($id, $existingImagePath);
+            $existingImagePath = null;
+            $removedMainImage = true;
+        }
+
         try {
             $newImagePath = moveUploadedProductImage($mainImageFile, $id);
         } catch (RuntimeException $e) {
@@ -625,6 +810,7 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_product'])){
         $stmt = $pdo->prepare('UPDATE products SET code=?, name=?, description=?, price=?, quantity=?, low_stock_threshold=?, brand=?, category=?, supplier=?, image=? WHERE id=?');
         $stmt->execute([$code, $name, $desc, $price, $qty, $low, $brand, $category, $supplier, $imagePathForUpdate, $id]);
 
+        $removedGalleryRows = removeGalleryImages($pdo, $id, $removeGalleryIds);
         persistGalleryUploads($pdo, $galleryImageFiles, $id);
         $variantSyncSummary = syncProductVariants($pdo, $id, $variantRecords); // Added: store variant rows alongside the product.
         $currentSnapshot['variants'] = fetchProductVariants($pdo, $id); // Added: refresh snapshot with persisted variant IDs.
@@ -673,6 +859,22 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_product'])){
             }
         }
 
+        $removedGallerySummaries = [];
+        foreach ($removedGalleryRows as $row) {
+            $path = isset($row['file_path']) ? (string) $row['file_path'] : '';
+            $removedGallerySummaries[] = $path !== '' ? basename(str_replace('\\', '/', $path)) : ('Image #' . ($row['id'] ?? '?'));
+        }
+
+        if (!empty($removedGallerySummaries)) {
+            $changes[] = [
+                'field' => 'gallery_images',
+                'label' => 'Gallery images',
+                'type' => 'text',
+                'from' => implode(', ', $removedGallerySummaries),
+                'to' => 'Removed',
+            ];
+        }
+
         if (!empty($variantSyncSummary['added']) || !empty($variantSyncSummary['updated']) || !empty($variantSyncSummary['deleted'])) {
             // Added: highlight variant activity in the history feed so staff can audit stock per size.
             $variantChangeFragments = [];
@@ -704,6 +906,8 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_product'])){
             'snapshot' => $currentSnapshot,
             'previous' => $previousSnapshot,
             'variant_changes' => $variantSyncSummary,
+            'removed_gallery_images' => $removedGallerySummaries,
+            'removed_main_image' => $removedMainImage,
         ];
 
         $pdo->prepare('INSERT INTO product_add_history (product_id, user_id, action, details) VALUES (?, ?, ?, ?)')
@@ -825,7 +1029,9 @@ $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
 $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
 $stmt->execute();
 $products = $stmt->fetchAll();
-$productVariantMap = fetchVariantsForProducts($pdo, array_column($products, 'id')); // Added: preload variants for listing/actions.
+$productIds = array_column($products, 'id');
+$productVariantMap = fetchVariantsForProducts($pdo, $productIds); // Added: preload variants for listing/actions.
+$productGalleryMap = fetchGalleryImagesForProducts($pdo, $productIds);
 
 // Calculate showing info (like sales.php)
 $start_record = $offset + 1;
@@ -1149,6 +1355,8 @@ if ($currentSort === 'name') {
                         $imageUrl = $normalisedImagePath !== '' ? '../' . $normalisedImagePath : '../assets/img/product-placeholder.svg';
 
                         // Added: package the row payload so the detail modal can display read-only information.
+                        $galleryImagesForProduct = array_values($productGalleryMap[$p['id']] ?? []);
+
                         $productDetailPayload = [
                             'id' => (int) $p['id'],
                             'code' => $p['code'] ?? '',
@@ -1164,8 +1372,10 @@ if ($currentSort === 'name') {
                             'imageUrl' => $imageUrl,
                             'variants' => $variantsForProduct,
                             'defaultVariant' => $defaultVariantLabel,
+                            'gallery' => $galleryImagesForProduct,
                         ];
                         $productDetailJson = htmlspecialchars(json_encode($productDetailPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8');
+                        $galleryJson = htmlspecialchars(json_encode($galleryImagesForProduct, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8');
                     ?>
                         <tr class="product-row" data-product="<?=$productDetailJson?>">
                             <td><?=htmlspecialchars($p['code'])?></td>
@@ -1186,6 +1396,7 @@ if ($currentSort === 'name') {
                                     data-image="<?=htmlspecialchars($p['image'] ?? '')?>"
                                     data-image-url="<?=htmlspecialchars($imageUrl)?>"
                                     data-variants="<?=$variantsJson?>"
+                                    data-gallery="<?=$galleryJson?>"
                                     data-default-variant="<?=htmlspecialchars($defaultVariantLabel)?>"><i class="fas fa-edit"></i>Edit</a>
                                 <a href="products.php?delete=<?=$p['id']?>" class="delete-btn action-btn"
                                     onclick="return confirm('Delete?')"> <i class="fas fa-trash"></i>Delete</a>
@@ -1414,10 +1625,22 @@ if ($currentSort === 'name') {
                             <label>Product Image:
                                 <input name="image" id="edit_image" type="file" accept="image/*" onchange="previewEditImage(event)">
                             </label>
+                            <div class="product-modal__checkbox-group" data-main-image-toggle hidden>
+                                <label class="product-modal__checkbox" for="edit_remove_main_image">
+                                    <input type="checkbox" id="edit_remove_main_image" name="remove_main_image" value="1">
+                                    Remove current image
+                                </label>
+                                <p class="product-modal__checkbox-note">The product will use the placeholder image after saving.</p>
+                            </div>
                             <p>Upload square photos (~600×600px). Files are stored under <code>/uploads/products</code>.</p>
                             <label>Additional Gallery Images:
                                 <input name="gallery_images[]" id="edit_gallery_images" type="file" accept="image/*" multiple>
                             </label>
+                            <div class="product-modal__gallery" data-gallery-container hidden>
+                                <p class="product-modal__gallery-title">Existing gallery images</p>
+                                <p class="product-modal__gallery-hint">Tick the images you want to remove before saving.</p>
+                                <div class="product-modal__gallery-grid" data-gallery-list></div>
+                            </div>
                             <img id="editImagePreview" class="modal-image-preview" src="../assets/img/product-placeholder.svg" alt="Preview">
                         </div>
                         <div class="product-modal__panel product-modal__variants">

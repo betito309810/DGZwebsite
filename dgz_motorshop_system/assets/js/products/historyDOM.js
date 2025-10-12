@@ -105,6 +105,9 @@
             const detailImage = detailModal?.querySelector('[data-detail-image]');
             const detailVariantsContainer = detailModal?.querySelector('[data-detail-variants]');
             const detailFields = {};
+            const placeholderImageSrc = (typeof window !== 'undefined' && window.PRODUCT_IMAGE_PLACEHOLDER)
+                ? window.PRODUCT_IMAGE_PLACEHOLDER
+                : '../assets/img/product-placeholder.svg';
             detailModal?.querySelectorAll('[data-detail-field]').forEach((node) => {
                 if (!(node instanceof HTMLElement)) {
                     return;
@@ -309,6 +312,95 @@
                 }
             });
 
+            const editImageInput = document.getElementById('edit_image');
+            const editGalleryInput = document.getElementById('edit_gallery_images');
+            const editImagePreview = document.getElementById('editImagePreview');
+            const removeMainToggle = document.getElementById('edit_remove_main_image');
+            const removeMainToggleContainer = editModal?.querySelector('[data-main-image-toggle]');
+            const galleryContainer = editModal?.querySelector('[data-gallery-container]');
+            const galleryList = editModal?.querySelector('[data-gallery-list]');
+
+            const parseJson = (value, fallback = []) => {
+                if (typeof value !== 'string' || value.trim() === '') {
+                    return fallback;
+                }
+
+                try {
+                    const parsed = JSON.parse(value);
+                    return Array.isArray(parsed) ? parsed : fallback;
+                } catch (error) {
+                    console.warn('Failed to parse JSON payload', error);
+                    return fallback;
+                }
+            };
+
+            const renderEditGallery = (images) => {
+                if (!galleryContainer || !galleryList) {
+                    return;
+                }
+
+                galleryList.innerHTML = '';
+
+                if (!Array.isArray(images) || images.length === 0) {
+                    galleryContainer.hidden = true;
+                    return;
+                }
+
+                galleryContainer.hidden = false;
+
+                images.forEach((image) => {
+                    const id = Number(image?.id);
+                    if (!Number.isFinite(id) || id <= 0) {
+                        return;
+                    }
+
+                    const item = document.createElement('div');
+                    item.className = 'product-modal__gallery-item';
+
+                    const thumb = document.createElement('img');
+                    thumb.className = 'product-modal__gallery-thumb';
+                    thumb.alt = 'Gallery image preview';
+                    thumb.src = image?.url || placeholderImageSrc;
+                    thumb.addEventListener('error', () => {
+                        thumb.src = placeholderImageSrc;
+                    });
+
+                    const checkboxId = `remove_gallery_${id}`;
+                    const label = document.createElement('label');
+                    label.className = 'product-modal__gallery-remove';
+                    label.setAttribute('for', checkboxId);
+
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.name = 'remove_gallery_ids[]';
+                    checkbox.id = checkboxId;
+                    checkbox.value = String(id);
+
+                    const text = document.createElement('span');
+                    text.textContent = 'Remove';
+
+                    label.append(checkbox, text);
+                    item.append(thumb, label);
+                    galleryList.appendChild(item);
+                });
+            };
+
+            removeMainToggle?.addEventListener('change', () => {
+                if (!editImagePreview) {
+                    return;
+                }
+
+                if (removeMainToggle.checked) {
+                    if (editImageInput) {
+                        editImageInput.value = '';
+                    }
+                    editImagePreview.src = placeholderImageSrc;
+                } else {
+                    const original = removeMainToggle.dataset.currentImageUrl || placeholderImageSrc;
+                    editImagePreview.src = original;
+                }
+            });
+
             document.querySelectorAll('.edit-btn').forEach((btn) => {
                 btn.addEventListener('click', (event) => {
                     event.preventDefault();
@@ -322,16 +414,32 @@
                     setSelectWithFallback('edit_brand', 'edit_brand_new', btn.dataset.brand || '');
                     setSelectWithFallback('edit_category', 'edit_category_new', btn.dataset.category || '');
                     setSelectWithFallback('edit_supplier', 'edit_supplier_new', btn.dataset.supplier || '');
+                    if (editImageInput) {
+                        editImageInput.value = '';
+                    }
+                    if (editGalleryInput) {
+                        editGalleryInput.value = '';
+                    }
                     const preview = document.getElementById('editImagePreview');
                     if (preview) {
-                        const imageUrl = btn.dataset.imageUrl || '../assets/img/product-placeholder.svg';
+                        const imageUrl = btn.dataset.imageUrl || placeholderImageSrc;
                         preview.src = imageUrl;
+                    }
+                    if (removeMainToggle) {
+                        const hasStoredImage = Boolean((btn.dataset.image || '').trim() !== '');
+                        removeMainToggle.checked = false;
+                        removeMainToggle.disabled = !hasStoredImage;
+                        removeMainToggle.dataset.currentImageUrl = btn.dataset.imageUrl || placeholderImageSrc;
+                        if (removeMainToggleContainer) {
+                            removeMainToggleContainer.hidden = !hasStoredImage;
+                        }
                     }
                     const editVariantEditor = editModal?.querySelector('[data-variant-editor][data-context="edit"]');
                     if (editVariantEditor) {
                         editVariantEditor.dataset.initialVariants = btn.dataset.variants || '[]';
                         editVariantEditor.dispatchEvent(new CustomEvent('variant:hydrate'));
                     }
+                    renderEditGallery(parseJson(btn.dataset.gallery || '[]'));
                     if (editModal) {
                         editModal.style.display = 'flex';
                     }

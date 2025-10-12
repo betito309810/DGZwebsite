@@ -1,4 +1,10 @@
-        const PRODUCT_IMAGE_PLACEHOLDER = '../assets/img/product-placeholder.svg';
+        const PRODUCT_IMAGE_PLACEHOLDER =
+            (typeof window !== 'undefined' && window.PRODUCT_IMAGE_PLACEHOLDER)
+                ? window.PRODUCT_IMAGE_PLACEHOLDER
+                : '../assets/img/product-placeholder.svg';
+        if (typeof window !== 'undefined') {
+            window.PRODUCT_IMAGE_PLACEHOLDER = PRODUCT_IMAGE_PLACEHOLDER;
+        }
 
         // Added: preview helper for the add-product modal so admins instantly see their chosen file.
         function previewAddImage(event) {
@@ -18,6 +24,11 @@
                 return;
             }
             preview.src = file ? URL.createObjectURL(file) : PRODUCT_IMAGE_PLACEHOLDER;
+            const removeToggle = document.getElementById('edit_remove_main_image');
+            if (removeToggle) {
+                removeToggle.checked = false;
+                removeToggle.dataset.currentImageUrl = preview.src;
+            }
         }
         // End Edit modal image preview updater
 
