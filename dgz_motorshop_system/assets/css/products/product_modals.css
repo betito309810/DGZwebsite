@@ -124,6 +124,38 @@
     text-align: center;
 }
 
+.product-modal__main {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    text-align: left;
+}
+
+.product-modal__gallery-item--main {
+    align-self: center;
+    width: 100%;
+    max-width: 220px;
+}
+
+.product-modal__main-thumb {
+    width: 160px;
+    height: 160px;
+}
+
+.product-modal__gallery-remove--main {
+    color: #ef4444;
+    font-weight: 600;
+}
+
+.product-modal__file-label {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-weight: 600;
+    color: #1f2937;
+    text-align: left;
+}
+
 .product-modal__variants {
     grid-area: variants;
 }

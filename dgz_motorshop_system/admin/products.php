@@ -1622,17 +1622,19 @@ if ($currentSort === 'name') {
                         </div>
                         <div class="product-modal__panel product-modal__media">
                             <!-- Added: Media panel mirrors add modal so imagery stays aligned. -->
-                            <label>Product Image:
+                            <div class="product-modal__main" data-main-image-wrapper>
+                                <p class="product-modal__gallery-title">Product image</p>
+                                <div class="product-modal__gallery-item product-modal__gallery-item--main">
+                                    <img id="editImagePreview" class="modal-image-preview product-modal__main-thumb" src="../assets/img/product-placeholder.svg" alt="Product image preview">
+                                    <label class="product-modal__gallery-remove product-modal__gallery-remove--main" for="edit_remove_main_image" data-main-image-toggle hidden>
+                                        <input type="checkbox" id="edit_remove_main_image" name="remove_main_image" value="1">
+                                        <span>Remove current image</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <label class="product-modal__file-label">Replace product image:
                                 <input name="image" id="edit_image" type="file" accept="image/*" onchange="previewEditImage(event)">
                             </label>
-                            <div class="product-modal__checkbox-group" data-main-image-toggle hidden>
-                                <label class="product-modal__checkbox" for="edit_remove_main_image">
-                                    <input type="checkbox" id="edit_remove_main_image" name="remove_main_image" value="1">
-                                    Remove current image
-                                </label>
-                                <p class="product-modal__checkbox-note">The product will use the placeholder image after saving.</p>
-                            </div>
-                            <p>Upload square photos (~600×600px). Files are stored under <code>/uploads/products</code>.</p>
                             <label>Additional Gallery Images:
                                 <input name="gallery_images[]" id="edit_gallery_images" type="file" accept="image/*" multiple>
                             </label>
@@ -1641,7 +1643,6 @@ if ($currentSort === 'name') {
                                 <p class="product-modal__gallery-hint">Tick the images you want to remove before saving.</p>
                                 <div class="product-modal__gallery-grid" data-gallery-list></div>
                             </div>
-                            <img id="editImagePreview" class="modal-image-preview" src="../assets/img/product-placeholder.svg" alt="Preview">
                         </div>
                         <div class="product-modal__panel product-modal__variants">
                             <div class="variant-editor" data-variant-editor data-context="edit" data-initial-variants="[]">
