@@ -1533,9 +1533,15 @@ if ($currentSort === 'name') {
                             </div>
                         </div>
                         <div class="product-modal__panel product-modal__media">
-                            <div class="product-detail__meta">
-                                <img class="product-detail__image" data-detail-image src="../assets/img/product-placeholder.svg" alt="Product preview">
-                                <span class="product-detail__image-note">Main product image</span>
+                            <div class="product-detail__gallery" data-detail-gallery-wrapper>
+                                <p class="product-detail__gallery-title">Product images</p>
+                                <div class="product-detail__gallery-grid" data-detail-gallery-grid>
+                                    <div class="product-detail__gallery-item product-detail__gallery-item--main" data-detail-main-item>
+                                        <img class="product-detail__gallery-thumb product-detail__gallery-thumb--main" data-detail-image src="../assets/img/product-placeholder.svg" alt="Product preview">
+                                        <span class="product-detail__gallery-caption">Main product image</span>
+                                    </div>
+                                </div>
+                                <p class="product-detail__gallery-empty" data-detail-gallery-empty hidden>No additional gallery images available for this product.</p>
                             </div>
                         </div>
                         <div class="product-modal__panel product-modal__variants">

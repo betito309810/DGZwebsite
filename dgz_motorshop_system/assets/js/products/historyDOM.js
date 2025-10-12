@@ -104,6 +104,8 @@
             const detailCloseButton = document.getElementById('closeProductDetailModal');
             const detailImage = detailModal?.querySelector('[data-detail-image]');
             const detailVariantsContainer = detailModal?.querySelector('[data-detail-variants]');
+            const detailGalleryGrid = detailModal?.querySelector('[data-detail-gallery-grid]');
+            const detailGalleryEmpty = detailModal?.querySelector('[data-detail-gallery-empty]');
             const detailFields = {};
             const placeholderImageSrc = (typeof window !== 'undefined' && window.PRODUCT_IMAGE_PLACEHOLDER)
                 ? window.PRODUCT_IMAGE_PLACEHOLDER
@@ -235,6 +237,51 @@
                 detailVariantsContainer.appendChild(list);
             };
 
+            const renderDetailGallery = (images, productName) => {
+                if (!detailGalleryGrid) {
+                    return;
+                }
+
+                detailGalleryGrid.querySelectorAll('[data-detail-gallery-item]').forEach((node) => {
+                    node.remove();
+                });
+
+                const safeImages = Array.isArray(images)
+                    ? images.filter((image) => image && typeof image === 'object')
+                    : [];
+
+                if (detailGalleryEmpty) {
+                    detailGalleryEmpty.hidden = safeImages.length !== 0;
+                }
+
+                if (safeImages.length === 0) {
+                    return;
+                }
+
+                safeImages.forEach((image, index) => {
+                    const item = document.createElement('div');
+                    item.className = 'product-detail__gallery-item';
+                    item.dataset.detailGalleryItem = 'true';
+
+                    const thumb = document.createElement('img');
+                    thumb.className = 'product-detail__gallery-thumb';
+                    const sourceUrl = (image?.url && String(image.url).trim()) || '';
+                    thumb.src = sourceUrl !== '' ? sourceUrl : placeholderImageSrc;
+                    thumb.alt = `Gallery image ${index + 1} for ${productName || 'selected product'}`;
+                    thumb.loading = 'lazy';
+                    thumb.addEventListener('error', () => {
+                        thumb.src = placeholderImageSrc;
+                    });
+
+                    const caption = document.createElement('span');
+                    caption.className = 'product-detail__gallery-caption';
+                    caption.textContent = `Gallery image ${index + 1}`;
+
+                    item.append(thumb, caption);
+                    detailGalleryGrid.appendChild(item);
+                });
+            };
+
             const openDetailModal = (product) => {
                 if (!detailModal) {
                     return;
@@ -263,6 +310,7 @@
                     detailImage.alt = `Product preview for ${product.name || 'selected product'}`;
                 }
 
+                renderDetailGallery(product.gallery, product.name ?? '');
                 renderVariantCards(product.variants);
 
                 detailModal.style.display = 'flex';
