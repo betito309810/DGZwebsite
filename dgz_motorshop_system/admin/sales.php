@@ -5,6 +5,7 @@ if(empty($_SESSION['user_id'])){ header('Location: login.php'); exit; }
 $pdo = db();
 $role = $_SESSION['role'] ?? '';
 enforceStaffAccess();
+$supportsProcessedBy = ordersSupportsProcessedBy($pdo);
 
 /**
  * Generate sales report for a given period.
@@ -94,9 +95,13 @@ function resolveCashierName(array $row): string
 // Handle CSV export FIRST - before any other queries
 if(isset($_GET['export']) && $_GET['export'] == 'csv') {
     // Get ALL orders for export
-    $export_sql = "SELECT o.*, u.username AS cashier_username, u.name AS cashier_name
+    $cashierSelect = $supportsProcessedBy
+        ? 'u.username AS cashier_username, u.name AS cashier_name'
+        : 'NULL AS cashier_username, NULL AS cashier_name';
+    $cashierJoin = $supportsProcessedBy ? 'LEFT JOIN users u ON u.id = o.processed_by_user_id' : '';
+    $export_sql = "SELECT o.*, $cashierSelect
         FROM orders o
-        LEFT JOIN users u ON u.id = o.processed_by_user_id
+        $cashierJoin
         WHERE o.status IN ('approved','completed')
         ORDER BY o.created_at DESC";
     $export_orders = $pdo->query($export_sql)->fetchAll();
@@ -202,10 +207,14 @@ if ($total_pages > 0 && $current_page > $total_pages) {
 $offset = ($current_page - 1) * $records_per_page;
 
 // Get orders with pagination
-$sql = "SELECT o.*, r.label AS decline_reason_label, u.username AS cashier_username, u.name AS cashier_name
+$cashierSelect = $supportsProcessedBy
+    ? 'u.username AS cashier_username, u.name AS cashier_name'
+    : 'NULL AS cashier_username, NULL AS cashier_name';
+$cashierJoin = $supportsProcessedBy ? 'LEFT JOIN users u ON u.id = o.processed_by_user_id' : '';
+$sql = "SELECT o.*, r.label AS decline_reason_label, $cashierSelect
         FROM orders o
         LEFT JOIN order_decline_reasons r ON r.id = o.decline_reason_id
-        LEFT JOIN users u ON u.id = o.processed_by_user_id
+        $cashierJoin
         WHERE $whereClause
         ORDER BY o.created_at DESC
         LIMIT :limit OFFSET :offset";

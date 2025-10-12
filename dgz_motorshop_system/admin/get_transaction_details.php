@@ -30,17 +30,21 @@ if (!isset($_GET['order_id'])) {
 }
 
 $pdo = db();
+$supportsProcessedBy = ordersSupportsProcessedBy($pdo);
 $order_id = (int)$_GET['order_id'];
 
 try {
     // Get order details
-    $stmt = $pdo->prepare(
-        "SELECT o.*, r.label AS decline_reason_label, u.username AS cashier_username, u.name AS cashier_name
+    $cashierSelect = $supportsProcessedBy
+        ? 'u.username AS cashier_username, u.name AS cashier_name'
+        : 'NULL AS cashier_username, NULL AS cashier_name';
+    $cashierJoin = $supportsProcessedBy ? 'LEFT JOIN users u ON u.id = o.processed_by_user_id' : '';
+    $sql = "SELECT o.*, r.label AS decline_reason_label, $cashierSelect
          FROM orders o
          LEFT JOIN order_decline_reasons r ON r.id = o.decline_reason_id
-         LEFT JOIN users u ON u.id = o.processed_by_user_id
-         WHERE o.id = ?"
-    );
+         $cashierJoin
+         WHERE o.id = ?";
+    $stmt = $pdo->prepare($sql);
     $stmt->execute([$order_id]);
     $order = $stmt->fetch(PDO::FETCH_ASSOC);
 

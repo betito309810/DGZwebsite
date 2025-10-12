@@ -302,6 +302,27 @@ if (!function_exists('publicAsset')) {
  * @param string|null $fallbackReference Optional reference number to use when the value
  *                                       does not contain one.
  */
+if (!function_exists('ordersSupportsProcessedBy')) {
+    function ordersSupportsProcessedBy(PDO $pdo): bool
+    {
+        static $supports = null;
+
+        if (is_bool($supports)) {
+            return $supports;
+        }
+
+        try {
+            $stmt = $pdo->query("SHOW COLUMNS FROM orders LIKE 'processed_by_user_id'");
+            $supports = $stmt !== false && $stmt->fetch(PDO::FETCH_ASSOC) !== false;
+        } catch (Throwable $e) {
+            error_log('Unable to determine processed_by_user_id support: ' . $e->getMessage());
+            $supports = false;
+        }
+
+        return $supports;
+    }
+}
+
 if (!function_exists('parsePaymentProofValue')) {
     function parsePaymentProofValue($value, $fallbackReference = null): array
     {
