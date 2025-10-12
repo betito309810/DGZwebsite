@@ -15,100 +15,83 @@ $systemRoot = str_replace('\\', '/', realpath(__DIR__ . '/..'));
 $projectRoot = $systemRoot !== false ? str_replace('\\', '/', dirname($systemRoot)) : false;
 
 $documentRootCandidates = [];
-if (isset($_SERVER['DOCUMENT_ROOT'])) {
-    $documentRootRaw = str_replace('\\', '/', (string) $_SERVER['DOCUMENT_ROOT']);
-    if ($documentRootRaw !== '') {
-        $documentRootCandidates[] = rtrim($documentRootRaw, '/') ?: '/';
+$addDocumentRoot = static function ($value) use (&$documentRootCandidates): void {
+    if (!is_string($value) || $value === '') {
+        return;
     }
 
-    $resolvedDocumentRoot = realpath($_SERVER['DOCUMENT_ROOT']);
-    if ($resolvedDocumentRoot !== false && $resolvedDocumentRoot !== '') {
-        $documentRootCandidates[] = rtrim(str_replace('\\', '/', $resolvedDocumentRoot), '/') ?: '/';
+    $normalized = str_replace('\\', '/', $value);
+    $normalized = rtrim($normalized, '/');
+
+    if ($normalized === '') {
+        $normalized = '/';
+    }
+
+    $documentRootCandidates[$normalized] = strlen($normalized);
+};
+
+if (!empty($_SERVER['DOCUMENT_ROOT'])) {
+    $addDocumentRoot($_SERVER['DOCUMENT_ROOT']);
+
+    $resolved = realpath($_SERVER['DOCUMENT_ROOT']);
+    if ($resolved !== false) {
+        $addDocumentRoot($resolved);
     }
 }
 
-$scriptNameCandidates = [];
+$scriptNames = [];
 foreach (['SCRIPT_NAME', 'PHP_SELF'] as $key) {
-    if (empty($_SERVER[$key])) {
-        continue;
+    if (!empty($_SERVER[$key])) {
+        $value = '/' . ltrim(str_replace('\\', '/', (string) $_SERVER[$key]), '/');
+        $scriptNames[] = $value;
     }
-
-    $value = str_replace('\\', '/', (string) $_SERVER[$key]);
-    if ($value === '') {
-        continue;
-    }
-
-    if ($value[0] !== '/') {
-        $value = '/' . ltrim($value, '/');
-    }
-
-    $scriptNameCandidates[] = $value;
 }
 
-$scriptFilenameCandidates = [];
-if (!empty($_SERVER['SCRIPT_FILENAME'])) {
+if (!empty($_SERVER['SCRIPT_FILENAME']) && $scriptNames !== []) {
     $scriptFilename = str_replace('\\', '/', (string) $_SERVER['SCRIPT_FILENAME']);
-    if ($scriptFilename !== '') {
-        $scriptFilenameCandidates[] = $scriptFilename;
 
-        $resolvedScriptFilename = realpath($scriptFilename);
-        if ($resolvedScriptFilename !== false && $resolvedScriptFilename !== '') {
-            $scriptFilenameCandidates[] = str_replace('\\', '/', $resolvedScriptFilename);
-        }
-    }
-}
-
-if ($scriptNameCandidates !== [] && $scriptFilenameCandidates !== []) {
-    foreach ($scriptFilenameCandidates as $scriptPath) {
-        if ($scriptPath === '') {
+    foreach ($scriptNames as $scriptName) {
+        $length = strlen($scriptName);
+        if ($length === 0 || $length > strlen($scriptFilename)) {
             continue;
         }
 
-        foreach ($scriptNameCandidates as $scriptName) {
-            $length = strlen($scriptName);
-            if ($length === 0 || $length > strlen($scriptPath)) {
-                continue;
-            }
+        if (substr_compare($scriptFilename, $scriptName, -$length) !== 0) {
+            continue;
+        }
 
-            if (substr_compare($scriptPath, $scriptName, -$length, null, true) !== 0) {
-                continue;
-            }
-
-            $candidate = substr($scriptPath, 0, -$length);
-            if ($candidate === '') {
-                continue;
-            }
-
-            $documentRootCandidates[] = rtrim($candidate, '/') ?: '/';
+        $candidate = substr($scriptFilename, 0, -$length);
+        if ($candidate !== '') {
+            $addDocumentRoot($candidate);
         }
     }
 }
 
-$documentRootCandidates = array_values(array_unique(array_filter($documentRootCandidates, static function ($value) {
-    return is_string($value) && $value !== '' && $value !== '/';
-})));
-usort($documentRootCandidates, static function ($left, $right) {
-    return strlen($right) <=> strlen($left);
-});
+if ($documentRootCandidates === [] && $projectRoot !== false) {
+    $addDocumentRoot($projectRoot);
+}
+
+arsort($documentRootCandidates);
+$documentRoots = array_keys($documentRootCandidates);
 
 $APP_BASE_PATH = '';
 $SYSTEM_BASE_PATH = '';
 $SYSTEM_BASE_URL = '';
 $systemFolderName = $systemRoot !== false ? basename($systemRoot) : 'dgz_motorshop_system';
 
-$normalizeRelativePath = static function (?string $path): string {
-    if ($path === null) {
+$normalizeRelativePath = static function ($path) {
+    if (!is_string($path)) {
         return '';
     }
 
-    $normalized = str_replace('\\', '/', (string) $path);
+    $normalized = str_replace('\\', '/', $path);
     $normalized = '/' . ltrim($normalized, '/');
 
     if ($normalized === '/') {
         return '';
     }
 
-    $physicalRoots = [
+    $hostingRoots = [
         'public_html',
         'public',
         'htdocs',
@@ -117,7 +100,7 @@ $normalizeRelativePath = static function (?string $path): string {
         'wwwroot',
     ];
 
-    foreach ($physicalRoots as $folder) {
+    foreach ($hostingRoots as $folder) {
         $prefix = '/' . $folder;
 
         if (strcasecmp($normalized, $prefix) === 0) {
@@ -139,18 +122,43 @@ $normalizeRelativePath = static function (?string $path): string {
     return $normalized;
 };
 
-foreach ($documentRootCandidates as $documentRoot) {
-    if ($projectRoot !== false && strpos($projectRoot, $documentRoot) === 0) {
-        $relativePath = substr($projectRoot, strlen($documentRoot));
-        $APP_BASE_PATH = $normalizeRelativePath($relativePath);
+$startsWithPath = static function ($haystack, $needle): bool {
+    if (!is_string($haystack) || !is_string($needle)) {
+        return false;
+    }
+
+    $needleLength = strlen($needle);
+    if ($needleLength === 0) {
+        return false;
+    }
+
+    if ($needleLength > strlen($haystack)) {
+        return false;
+    }
+
+    return strncasecmp($haystack, $needle, $needleLength) === 0;
+};
+
+foreach ($documentRoots as $documentRoot) {
+    if ($documentRoot === '/' || $documentRoot === '') {
+        continue;
+    }
+
+    if ($projectRoot !== false && $startsWithPath($projectRoot, $documentRoot)) {
+        $relative = substr($projectRoot, strlen($documentRoot));
+        $APP_BASE_PATH = $normalizeRelativePath($relative);
         break;
     }
 }
 
-foreach ($documentRootCandidates as $documentRoot) {
-    if ($systemRoot !== false && strpos($systemRoot, $documentRoot) === 0) {
-        $relativePath = substr($systemRoot, strlen($documentRoot));
-        $SYSTEM_BASE_PATH = $normalizeRelativePath($relativePath);
+foreach ($documentRoots as $documentRoot) {
+    if ($documentRoot === '/' || $documentRoot === '') {
+        continue;
+    }
+
+    if ($systemRoot !== false && $startsWithPath($systemRoot, $documentRoot)) {
+        $relative = substr($systemRoot, strlen($documentRoot));
+        $SYSTEM_BASE_PATH = $normalizeRelativePath($relative);
         break;
     }
 }
