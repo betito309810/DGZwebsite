@@ -1138,8 +1138,31 @@ if ($currentSort === 'name') {
                                 break;
                             }
                         }
+
+                        $rawImagePath = $p['image'] ?? '';
+                        $normalisedImagePath = $rawImagePath !== '' ? ltrim(str_replace('\\', '/', $rawImagePath), '/') : '';
+                        $imageUrl = $normalisedImagePath !== '' ? '../' . $normalisedImagePath : '../assets/img/product-placeholder.svg';
+
+                        // Added: package the row payload so the detail modal can display read-only information.
+                        $productDetailPayload = [
+                            'id' => (int) $p['id'],
+                            'code' => $p['code'] ?? '',
+                            'name' => $p['name'] ?? '',
+                            'description' => $p['description'] ?? '',
+                            'brand' => $p['brand'] ?? '',
+                            'category' => $p['category'] ?? '',
+                            'supplier' => $p['supplier'] ?? '',
+                            'quantity' => isset($p['quantity']) ? (float) $p['quantity'] : null,
+                            'price' => isset($p['price']) ? (float) $p['price'] : null,
+                            'low_stock_threshold' => isset($p['low_stock_threshold']) ? (float) $p['low_stock_threshold'] : null,
+                            'image' => $rawImagePath,
+                            'imageUrl' => $imageUrl,
+                            'variants' => $variantsForProduct,
+                            'defaultVariant' => $defaultVariantLabel,
+                        ];
+                        $productDetailJson = htmlspecialchars(json_encode($productDetailPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8');
                     ?>
-                        <tr>
+                        <tr class="product-row" data-product="<?=$productDetailJson?>">
                             <td><?=htmlspecialchars($p['code'])?></td>
                             <td><?=htmlspecialchars($p['name'])?></td>
                             <td><?=intval($p['quantity'])?></td>
@@ -1155,7 +1178,7 @@ if ($currentSort === 'name') {
                                     data-category="<?=htmlspecialchars($p['category'] ?? '')?>"
                                     data-supplier="<?=htmlspecialchars($p['supplier'] ?? '')?>"
                                     data-image="<?=htmlspecialchars($p['image'] ?? '')?>"
-                                    data-image-url="<?=htmlspecialchars(($p['image'] ?? '') !== '' ? '../' . ltrim($p['image'], '/') : '../assets/img/product-placeholder.svg')?>"
+                                    data-image-url="<?=htmlspecialchars($imageUrl)?>"
                                     data-variants="<?=$variantsJson?>"
                                     data-default-variant="<?=htmlspecialchars($defaultVariantLabel)?>"><i class="fas fa-edit"></i>Edit</a>
                                 <a href="products.php?delete=<?=$p['id']?>" class="delete-btn action-btn"
@@ -1237,6 +1260,74 @@ if ($currentSort === 'name') {
                 </div>
             </div>
             <?php endif; ?>
+        </div>
+        <!-- Product Detail Modal -->
+        <div id="productDetailModal" class="modal-portal">
+            <div class="modal-content-horizontal">
+                <div class="modal-close-bar">
+                    <button type="button" id="closeProductDetailModal" class="modal-close-button">&times;</button>
+                </div>
+                <div class="product-modal__form product-modal__form--readonly">
+                    <h3>Product Detail</h3>
+                    <div class="product-modal__layout">
+                        <div class="product-modal__panel product-modal__details">
+                            <div class="product-modal__grid">
+                                <div class="product-modal__field">
+                                    <label>Product Code</label>
+                                    <div class="product-detail__value" data-detail-field="code">&mdash;</div>
+                                </div>
+                                <div class="product-modal__field">
+                                    <label>Name</label>
+                                    <div class="product-detail__value" data-detail-field="name">&mdash;</div>
+                                </div>
+                                <div class="product-modal__field">
+                                    <label>Brand</label>
+                                    <div class="product-detail__value" data-detail-field="brand">&mdash;</div>
+                                </div>
+                                <div class="product-modal__field">
+                                    <label>Category</label>
+                                    <div class="product-detail__value" data-detail-field="category">&mdash;</div>
+                                </div>
+                                <div class="product-modal__field">
+                                    <label>Supplier</label>
+                                    <div class="product-detail__value" data-detail-field="supplier">&mdash;</div>
+                                </div>
+                                <div class="product-modal__field">
+                                    <label>Quantity</label>
+                                    <div class="product-detail__value" data-detail-field="quantity">&mdash;</div>
+                                </div>
+                                <div class="product-modal__field">
+                                    <label>Price per unit</label>
+                                    <div class="product-detail__value" data-detail-field="price">&mdash;</div>
+                                </div>
+                                <div class="product-modal__field">
+                                    <label>Low Stock Threshold</label>
+                                    <div class="product-detail__value" data-detail-field="low_stock_threshold">&mdash;</div>
+                                </div>
+                                <div class="product-modal__field product-modal__full">
+                                    <label>Description</label>
+                                    <div class="product-detail__value product-detail__value--multiline" data-detail-field="description">No description provided.</div>
+                                </div>
+                                <div class="product-modal__field product-modal__full">
+                                    <label>Default Variant</label>
+                                    <div class="product-detail__value" data-detail-field="defaultVariant">&mdash;</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="product-modal__panel product-modal__media">
+                            <div class="product-detail__meta">
+                                <img class="product-detail__image" data-detail-image src="../assets/img/product-placeholder.svg" alt="Product preview">
+                                <span class="product-detail__image-note">Main product image</span>
+                            </div>
+                        </div>
+                        <div class="product-modal__panel product-modal__variants">
+                            <div class="product-detail__variants" data-detail-variants>
+                                <p class="product-detail__variants-empty">No variants available for this product.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
         <!-- Edit Product Modal -->
         <!-- Added: Reuse the horizontal modal overlay for the edit form. -->
