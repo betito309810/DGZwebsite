@@ -59,6 +59,7 @@ if (!empty($onlineOrderBadgeCount)) {
 
 $staffAllowedPages = [
     'dashboard.php',
+    'products.php',
     'sales.php',
     'pos.php',
     'inventory.php',
