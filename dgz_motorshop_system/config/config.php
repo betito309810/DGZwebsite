@@ -13,23 +13,146 @@ date_default_timezone_set('Asia/Manila');
 // project root (public) and the `dgz_motorshop_system` path for shared assets.
 $systemRoot = str_replace('\\', '/', realpath(__DIR__ . '/..'));
 $projectRoot = $systemRoot !== false ? str_replace('\\', '/', dirname($systemRoot)) : false;
-$documentRoot = isset($_SERVER['DOCUMENT_ROOT'])
-    ? str_replace('\\', '/', realpath($_SERVER['DOCUMENT_ROOT']))
-    : false;
+
+$documentRootCandidates = [];
+if (isset($_SERVER['DOCUMENT_ROOT'])) {
+    $documentRootRaw = str_replace('\\', '/', (string) $_SERVER['DOCUMENT_ROOT']);
+    if ($documentRootRaw !== '') {
+        $documentRootCandidates[] = rtrim($documentRootRaw, '/') ?: '/';
+    }
+
+    $resolvedDocumentRoot = realpath($_SERVER['DOCUMENT_ROOT']);
+    if ($resolvedDocumentRoot !== false && $resolvedDocumentRoot !== '') {
+        $documentRootCandidates[] = rtrim(str_replace('\\', '/', $resolvedDocumentRoot), '/') ?: '/';
+    }
+}
+
+$scriptNameCandidates = [];
+foreach (['SCRIPT_NAME', 'PHP_SELF'] as $key) {
+    if (empty($_SERVER[$key])) {
+        continue;
+    }
+
+    $value = str_replace('\\', '/', (string) $_SERVER[$key]);
+    if ($value === '') {
+        continue;
+    }
+
+    if ($value[0] !== '/') {
+        $value = '/' . ltrim($value, '/');
+    }
+
+    $scriptNameCandidates[] = $value;
+}
+
+$scriptFilenameCandidates = [];
+if (!empty($_SERVER['SCRIPT_FILENAME'])) {
+    $scriptFilename = str_replace('\\', '/', (string) $_SERVER['SCRIPT_FILENAME']);
+    if ($scriptFilename !== '') {
+        $scriptFilenameCandidates[] = $scriptFilename;
+
+        $resolvedScriptFilename = realpath($scriptFilename);
+        if ($resolvedScriptFilename !== false && $resolvedScriptFilename !== '') {
+            $scriptFilenameCandidates[] = str_replace('\\', '/', $resolvedScriptFilename);
+        }
+    }
+}
+
+if ($scriptNameCandidates !== [] && $scriptFilenameCandidates !== []) {
+    foreach ($scriptFilenameCandidates as $scriptPath) {
+        if ($scriptPath === '') {
+            continue;
+        }
+
+        foreach ($scriptNameCandidates as $scriptName) {
+            $length = strlen($scriptName);
+            if ($length === 0 || $length > strlen($scriptPath)) {
+                continue;
+            }
+
+            if (substr_compare($scriptPath, $scriptName, -$length, null, true) !== 0) {
+                continue;
+            }
+
+            $candidate = substr($scriptPath, 0, -$length);
+            if ($candidate === '') {
+                continue;
+            }
+
+            $documentRootCandidates[] = rtrim($candidate, '/') ?: '/';
+        }
+    }
+}
+
+$documentRootCandidates = array_values(array_unique(array_filter($documentRootCandidates, static function ($value) {
+    return is_string($value) && $value !== '' && $value !== '/';
+})));
+usort($documentRootCandidates, static function ($left, $right) {
+    return strlen($right) <=> strlen($left);
+});
 
 $APP_BASE_PATH = '';
 $SYSTEM_BASE_PATH = '';
 $SYSTEM_BASE_URL = '';
 $systemFolderName = $systemRoot !== false ? basename($systemRoot) : 'dgz_motorshop_system';
 
-if ($projectRoot !== false && $documentRoot !== false && strpos($projectRoot, $documentRoot) === 0) {
-    $relativePath = substr($projectRoot, strlen($documentRoot));
-    $APP_BASE_PATH = $relativePath === '' ? '' : '/' . ltrim($relativePath, '/');
+$normalizeRelativePath = static function (?string $path): string {
+    if ($path === null) {
+        return '';
+    }
+
+    $normalized = str_replace('\\', '/', (string) $path);
+    $normalized = '/' . ltrim($normalized, '/');
+
+    if ($normalized === '/') {
+        return '';
+    }
+
+    $physicalRoots = [
+        'public_html',
+        'public',
+        'htdocs',
+        'httpdocs',
+        'www',
+        'wwwroot',
+    ];
+
+    foreach ($physicalRoots as $folder) {
+        $prefix = '/' . $folder;
+
+        if (strcasecmp($normalized, $prefix) === 0) {
+            return '';
+        }
+
+        if (stripos($normalized, $prefix . '/') === 0) {
+            $normalized = substr($normalized, strlen($prefix));
+            $normalized = '/' . ltrim($normalized, '/');
+
+            if ($normalized === '/') {
+                return '';
+            }
+
+            break;
+        }
+    }
+
+    return $normalized;
+};
+
+foreach ($documentRootCandidates as $documentRoot) {
+    if ($projectRoot !== false && strpos($projectRoot, $documentRoot) === 0) {
+        $relativePath = substr($projectRoot, strlen($documentRoot));
+        $APP_BASE_PATH = $normalizeRelativePath($relativePath);
+        break;
+    }
 }
 
-if ($systemRoot !== false && $documentRoot !== false && strpos($systemRoot, $documentRoot) === 0) {
-    $relativePath = substr($systemRoot, strlen($documentRoot));
-    $SYSTEM_BASE_PATH = $relativePath === '' ? '' : '/' . ltrim($relativePath, '/');
+foreach ($documentRootCandidates as $documentRoot) {
+    if ($systemRoot !== false && strpos($systemRoot, $documentRoot) === 0) {
+        $relativePath = substr($systemRoot, strlen($documentRoot));
+        $SYSTEM_BASE_PATH = $normalizeRelativePath($relativePath);
+        break;
+    }
 }
 
 if ($APP_BASE_PATH === '/') {
