@@ -7,6 +7,14 @@ $DB_PASS = '';
 // Ensure all pages consistently render dates in Philippine time.
 date_default_timezone_set('Asia/Manila');
 
+// Preload shared helpers that expose product variant utilities so storefront
+// and admin pages do not need to include the file manually (which can be
+// fragile on hosts that relocate the public web root).
+$productVariantHelpers = __DIR__ . '/../includes/product_variants.php';
+if (is_file($productVariantHelpers)) {
+    require_once $productVariantHelpers;
+}
+
 // Resolve the project's public and system base paths so generated links work
 // regardless of where the project is deployed inside the web root. The
 // storefront PHP files live alongside this directory, so we compute both the
