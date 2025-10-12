@@ -100,6 +100,214 @@
             });
 
             const editModal = document.getElementById('editModal');
+            const detailModal = document.getElementById('productDetailModal');
+            const detailCloseButton = document.getElementById('closeProductDetailModal');
+            const detailImage = detailModal?.querySelector('[data-detail-image]');
+            const detailVariantsContainer = detailModal?.querySelector('[data-detail-variants]');
+            const detailFields = {};
+            detailModal?.querySelectorAll('[data-detail-field]').forEach((node) => {
+                if (!(node instanceof HTMLElement)) {
+                    return;
+                }
+                const fieldKey = node.dataset.detailField;
+                if (fieldKey) {
+                    detailFields[fieldKey] = node;
+                }
+            });
+
+            const formatCurrency = (value) => {
+                if (value === null || value === undefined || value === '') {
+                    return null;
+                }
+                const numeric = Number(value);
+                if (Number.isFinite(numeric)) {
+                    return `₱${numeric.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                    })}`;
+                }
+                return String(value);
+            };
+
+            const formatNumber = (value) => {
+                if (value === null || value === undefined || value === '') {
+                    return null;
+                }
+                const numeric = Number(value);
+                if (Number.isFinite(numeric)) {
+                    const formatOptions = Number.isInteger(numeric)
+                        ? {}
+                        : { maximumFractionDigits: 2, minimumFractionDigits: 0 };
+                    return numeric.toLocaleString(undefined, formatOptions);
+                }
+                return String(value);
+            };
+
+            const setDetailText = (field, value, options = {}) => {
+                const target = detailFields[field];
+                if (!target) {
+                    return;
+                }
+
+                const { fallback = '—', mutedWhenFallback = true } = options;
+
+                let displayValue = value;
+                let isFallback = false;
+
+                if (displayValue === null || displayValue === undefined || displayValue === '') {
+                    displayValue = fallback;
+                    isFallback = true;
+                } else if (typeof displayValue === 'string' && displayValue.trim() === '') {
+                    displayValue = fallback;
+                    isFallback = true;
+                }
+
+                target.textContent = displayValue;
+                target.classList.toggle('product-detail__value--muted', isFallback && mutedWhenFallback);
+            };
+
+            const renderVariantCards = (variants) => {
+                if (!detailVariantsContainer) {
+                    return;
+                }
+
+                detailVariantsContainer.innerHTML = '';
+
+                if (!Array.isArray(variants) || variants.length === 0) {
+                    const empty = document.createElement('p');
+                    empty.className = 'product-detail__variants-empty';
+                    empty.textContent = 'No variants available for this product.';
+                    detailVariantsContainer.appendChild(empty);
+                    return;
+                }
+
+                const list = document.createElement('div');
+                list.className = 'product-detail__variant-list';
+
+                variants.forEach((variant) => {
+                    const card = document.createElement('div');
+                    card.className = 'product-detail__variant-card';
+
+                    const header = document.createElement('div');
+                    header.className = 'product-detail__variant-card-header';
+
+                    const label = document.createElement('span');
+                    label.textContent = (variant?.label && String(variant.label).trim()) || 'Untitled variant';
+                    header.appendChild(label);
+
+                    if (variant?.is_default) {
+                        const badge = document.createElement('span');
+                        badge.className = 'product-detail__badge';
+                        const icon = document.createElement('i');
+                        icon.className = 'fas fa-star';
+                        badge.append(icon, document.createTextNode(' Default'));
+                        header.appendChild(badge);
+                    }
+
+                    card.appendChild(header);
+
+                    const meta = document.createElement('div');
+                    meta.className = 'product-detail__variant-meta';
+
+                    const sku = document.createElement('span');
+                    sku.textContent = `SKU: ${
+                        (variant?.sku && String(variant.sku).trim()) || '—'
+                    }`;
+                    meta.appendChild(sku);
+
+                    const price = document.createElement('span');
+                    const formattedPrice = formatCurrency(variant?.price);
+                    price.textContent = `Price: ${formattedPrice ?? '—'}`;
+                    meta.appendChild(price);
+
+                    const qty = document.createElement('span');
+                    const formattedQty = formatNumber(variant?.quantity);
+                    qty.textContent = `Quantity: ${formattedQty ?? '—'}`;
+                    meta.appendChild(qty);
+
+                    card.appendChild(meta);
+                    list.appendChild(card);
+                });
+
+                detailVariantsContainer.appendChild(list);
+            };
+
+            const openDetailModal = (product) => {
+                if (!detailModal) {
+                    return;
+                }
+
+                setDetailText('code', product.code ?? '', { fallback: '—' });
+                setDetailText('name', product.name ?? '', { fallback: '—' });
+                setDetailText('brand', product.brand ?? '', { fallback: '—' });
+                setDetailText('category', product.category ?? '', { fallback: '—' });
+                setDetailText('supplier', product.supplier ?? '', { fallback: '—' });
+                setDetailText('quantity', formatNumber(product.quantity), { fallback: '—' });
+                setDetailText('price', formatCurrency(product.price), { fallback: '—' });
+                setDetailText('low_stock_threshold', formatNumber(product.low_stock_threshold), {
+                    fallback: '—',
+                });
+                setDetailText('description', product.description ?? '', {
+                    fallback: 'No description provided.',
+                });
+                setDetailText('defaultVariant', product.defaultVariant ?? '', {
+                    fallback: 'No default variant selected.',
+                });
+
+                if (detailImage) {
+                    const imageUrl = (product.imageUrl && String(product.imageUrl)) || '../assets/img/product-placeholder.svg';
+                    detailImage.src = imageUrl;
+                    detailImage.alt = `Product preview for ${product.name || 'selected product'}`;
+                }
+
+                renderVariantCards(product.variants);
+
+                detailModal.style.display = 'flex';
+            };
+
+            const closeDetailModal = () => {
+                if (detailModal) {
+                    detailModal.style.display = 'none';
+                }
+            };
+
+            if (detailImage) {
+                detailImage.addEventListener('error', () => {
+                    if (!detailImage.src.includes('product-placeholder.svg')) {
+                        detailImage.src = '../assets/img/product-placeholder.svg';
+                    }
+                });
+            }
+
+            document.querySelectorAll('.product-row').forEach((row) => {
+                row.addEventListener('click', (event) => {
+                    if (event.target.closest('.action-btn')) {
+                        return;
+                    }
+
+                    const payload = row.dataset.product;
+                    if (!payload) {
+                        return;
+                    }
+
+                    try {
+                        const product = JSON.parse(payload);
+                        openDetailModal(product);
+                    } catch (error) {
+                        console.error('Failed to parse product payload for detail modal', error);
+                    }
+                });
+            });
+
+            detailCloseButton?.addEventListener('click', () => {
+                closeDetailModal();
+            });
+
+            detailModal?.addEventListener('click', (event) => {
+                if (event.target === detailModal) {
+                    closeDetailModal();
+                }
+            });
 
             document.querySelectorAll('.edit-btn').forEach((btn) => {
                 btn.addEventListener('click', (event) => {
@@ -139,6 +347,12 @@
             editModal?.addEventListener('click', (event) => {
                 if (event.target === editModal) {
                     editModal.style.display = 'none';
+                }
+            });
+
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape' && detailModal?.style.display === 'flex') {
+                    closeDetailModal();
                 }
             });
 
