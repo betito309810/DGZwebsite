@@ -636,6 +636,7 @@ if (!function_exists('staffAllowedAdminPages')) {
             'inventory.php',
             'sales_report_pdf.php',
             'stockEntry.php',
+            'products.php',
             'settings.php',
         ];
     }

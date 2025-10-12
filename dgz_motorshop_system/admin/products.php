@@ -4,6 +4,7 @@ require_once __DIR__ . '/../includes/product_variants.php'; // Added: helper tha
 if(empty($_SESSION['user_id'])){ header('Location: login.php'); exit; }
 $pdo = db();
 $role = $_SESSION['role'] ?? '';
+$isStaff = ($role === 'staff');
 enforceStaffAccess();
 // Added: helper utilities that manage product image uploads in a single place.
 if (!function_exists('ensureProductImageDirectory')) {
@@ -898,9 +899,11 @@ if ($currentSort === 'name') {
         </header>
         <!-- Action buttons aligned to the right -->
         <div class="products-action-bar">
+            <?php if (!$isStaff): ?>
             <button id="openAddModal" class="add-btn" type="button">
                 <i class="fas fa-plus"></i> Add Product
             </button>
+            <?php endif; ?>
             <button id="openHistoryModal" class="history-btn" type="button">
                 <i class="fas fa-history"></i> History
             </button>
@@ -1114,13 +1117,15 @@ if ($currentSort === 'name') {
                             </th>
                             <th scope="col">Qty</th>
                             <th scope="col">Price</th>
+                            <?php if (!$isStaff): ?>
                             <th scope="col">Action</th>
+                            <?php endif; ?>
                         </tr>
                     </thead>
                     <tbody>
                     <?php if (empty($products)): ?>
                         <tr>
-                            <td colspan="5" style="text-align: center; padding: 40px; color: #6b7280;">
+                            <td colspan="<?= $isStaff ? 4 : 5 ?>" style="text-align: center; padding: 40px; color: #6b7280;">
                                 <i class="fas fa-inbox" style="font-size: 36px; margin-bottom: 8px; display: block;"></i>
                                 No products found matching the criteria.
                             </td>
@@ -1167,6 +1172,7 @@ if ($currentSort === 'name') {
                             <td><?=htmlspecialchars($p['name'])?></td>
                             <td><?=intval($p['quantity'])?></td>
                             <td>₱<?=number_format($p['price'],2)?></td>
+                            <?php if (!$isStaff): ?>
                             <td>
                                 <a href="#" class="edit-btn action-btn" data-id="<?=$p['id']?>"
                                     data-code="<?=htmlspecialchars($p['code'])?>" data-name="<?=htmlspecialchars($p['name'])?>"
@@ -1184,6 +1190,7 @@ if ($currentSort === 'name') {
                                 <a href="products.php?delete=<?=$p['id']?>" class="delete-btn action-btn"
                                     onclick="return confirm('Delete?')"> <i class="fas fa-trash"></i>Delete</a>
                             </td>
+                            <?php endif; ?>
                         </tr>
                     <?php endforeach; ?>
                     <?php endif; ?>
