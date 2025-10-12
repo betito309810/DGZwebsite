@@ -153,16 +153,30 @@ if (!function_exists('ensureOrdersProcessedByColumn')) {
         try {
             $stmt = $pdo->query("SHOW COLUMNS FROM orders LIKE 'processed_by_user_id'");
             $hasColumn = $stmt !== false && $stmt->fetch() !== false;
-            if ($hasColumn) {
-                return;
+            if (!$hasColumn) {
+                $pdo->exec("ALTER TABLE orders ADD COLUMN processed_by_user_id INT NULL");
             }
 
-            $pdo->exec("ALTER TABLE orders ADD COLUMN processed_by_user_id INT NULL");
-
             try {
-                $pdo->exec("ALTER TABLE orders ADD CONSTRAINT fk_orders_processed_by FOREIGN KEY (processed_by_user_id) REFERENCES users(id)");
+                $constraintStmt = $pdo->prepare(<<<'SQL'
+                    SELECT CONSTRAINT_NAME
+                    FROM information_schema.TABLE_CONSTRAINTS
+                    WHERE TABLE_SCHEMA = DATABASE()
+                      AND TABLE_NAME = 'orders'
+                      AND CONSTRAINT_TYPE = 'FOREIGN KEY'
+                      AND CONSTRAINT_NAME = 'fk_orders_processed_by'
+                SQL);
+                if ($constraintStmt && $constraintStmt->execute()) {
+                    $hasForeignKey = $constraintStmt->fetchColumn() !== false;
+                } else {
+                    $hasForeignKey = false;
+                }
+
+                if (!$hasForeignKey) {
+                    $pdo->exec("ALTER TABLE orders ADD CONSTRAINT fk_orders_processed_by FOREIGN KEY (processed_by_user_id) REFERENCES users(id)");
+                }
             } catch (Throwable $e) {
-                error_log('Unable to add processed_by_user_id foreign key: ' . $e->getMessage());
+                error_log('Unable to ensure processed_by_user_id foreign key: ' . $e->getMessage());
             }
         } catch (Throwable $e) {
             error_log('Unable to ensure processed_by_user_id column: ' . $e->getMessage());
