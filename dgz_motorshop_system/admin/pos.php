@@ -1,6 +1,7 @@
 <?php
 require __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../includes/email.php';
+require_once __DIR__ . '/../includes/product_variants.php'; // Added: variant utilities for POS catalog
 require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/includes/decline_reasons.php'; // Decline reason helpers
 require_once __DIR__ . '/includes/online_orders_helpers.php'; // Online order feed helpers
@@ -769,11 +770,72 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pos_checkout'])) {
 
     $lineItemsInput = $_POST['line_items'] ?? [];
     $productLookupStmt = $pdo->prepare('SELECT id, name, price, quantity FROM products WHERE id = ?');
+    $productVariantLookupStmt = $pdo->prepare(
+        'SELECT id, product_id, label, price, quantity FROM product_variants WHERE id = ? AND product_id = ?'
+    );
 
-    $processProduct = static function (\PDOStatement $stmt, int $productId, int $qty) use (&$cartItems, &$salesTotal): void {
-        $stmt->execute([$productId]);
-        $product = $stmt->fetch();
+    $processProduct = static function (
+        \PDOStatement $productStmt,
+        \PDOStatement $variantStmt,
+        int $productId,
+        int $qty,
+        ?int $variantId,
+        string $variantLabel
+    ) use (&$cartItems, &$salesTotal): void {
+        $productStmt->execute([$productId]);
+        $product = $productStmt->fetch();
         if (!$product) {
+            return;
+        }
+
+        $variantId = $variantId !== null && $variantId > 0 ? $variantId : null;
+        $variantLabel = trim($variantLabel);
+
+        if ($variantId !== null) {
+            $variantStmt->execute([$variantId, $productId]);
+            $variant = $variantStmt->fetch();
+            if (!$variant) {
+                return;
+            }
+
+            $availableQty = (int) ($variant['quantity'] ?? 0);
+            if ($availableQty <= 0) {
+                return;
+            }
+
+            if ($qty > $availableQty) {
+                $qty = $availableQty;
+            }
+
+            if ($qty <= 0) {
+                return;
+            }
+
+            $price = (float) ($variant['price'] ?? 0);
+            if ($price <= 0) {
+                $price = (float) ($product['price'] ?? 0);
+            }
+
+            $label = $variantLabel !== ''
+                ? $variantLabel
+                : (string) ($variant['label'] ?? '');
+            $displayName = $label !== ''
+                ? sprintf('%s — %s', (string) ($product['name'] ?? 'Product'), $label)
+                : (string) ($product['name'] ?? 'Product');
+
+            $lineTotal = $price * $qty;
+            $salesTotal += $lineTotal;
+
+            $cartItems[] = [
+                'type' => 'product',
+                'id' => (int) $product['id'],
+                'variant_id' => (int) $variant['id'],
+                'variant_label' => $label,
+                'name' => $displayName,
+                'qty' => $qty,
+                'price' => $price,
+            ];
+
             return;
         }
 
@@ -836,7 +898,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pos_checkout'])) {
                 continue;
             }
 
-            $processProduct($productLookupStmt, $productId, $qty);
+            $variantId = isset($itemData['variant_id']) ? (int) $itemData['variant_id'] : null;
+            $variantLabel = isset($itemData['variant_label']) ? (string) $itemData['variant_label'] : '';
+
+            $processProduct($productLookupStmt, $productVariantLookupStmt, $productId, $qty, $variantId, $variantLabel);
         }
     } else {
         $productIds = isset($_POST['product_id']) ? (array) $_POST['product_id'] : [];
@@ -853,7 +918,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pos_checkout'])) {
                 $qty = 1;
             }
 
-            $processProduct($productLookupStmt, $productId, $qty);
+            $processProduct($productLookupStmt, $productVariantLookupStmt, $productId, $qty, null, '');
         }
     }
 
@@ -928,6 +993,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pos_checkout'])) {
 
         $itemInsertStmt = $pdo->prepare('INSERT INTO order_items (order_id, product_id, qty, price, description) VALUES (?,?,?,?,?)');
         $inventoryUpdateStmt = $pdo->prepare('UPDATE products SET quantity = quantity - ? WHERE id = ?');
+        $variantInventoryUpdateStmt = $pdo->prepare('UPDATE product_variants SET quantity = quantity - ? WHERE id = ?');
 
         foreach ($cartItems as $item) {
             if ($item['type'] === 'service') {
@@ -937,6 +1003,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pos_checkout'])) {
 
             $itemInsertStmt->execute([$orderId, $item['id'], $item['qty'], $item['price'], $item['name']]);
             $inventoryUpdateStmt->execute([$item['qty'], $item['id']]);
+            if (!empty($item['variant_id'])) {
+                $variantInventoryUpdateStmt->execute([$item['qty'], $item['variant_id']]);
+            }
         }
 
         $pdo->commit();
@@ -1031,14 +1100,43 @@ $products = $productQuery->fetchAll();
 $brands = $pdo->query('SELECT DISTINCT brand FROM products WHERE brand IS NOT NULL AND brand != "" ORDER BY brand')->fetchAll(PDO::FETCH_COLUMN);
 $categories = $pdo->query('SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND category != "" ORDER BY category')->fetchAll(PDO::FETCH_COLUMN);
 
-$productCatalog = array_map(static function (array $product): array {
+$productIds = array_column($products, 'id');
+$productVariantMap = !empty($productIds) ? fetchVariantsForProducts($pdo, $productIds) : [];
+
+$productCatalog = array_map(static function (array $product) use ($productVariantMap): array {
+    $productId = (int) $product['id'];
+    $variants = $productVariantMap[$productId] ?? [];
+    $formattedVariants = array_map(static function (array $variantRow): array {
+        return [
+            'id' => (int) ($variantRow['id'] ?? 0),
+            'label' => (string) ($variantRow['label'] ?? ''),
+            'price' => (float) ($variantRow['price'] ?? 0),
+            'quantity' => (int) ($variantRow['quantity'] ?? 0),
+            'is_default' => !empty($variantRow['is_default']),
+        ];
+    }, $variants);
+
+    $price = (float) $product['price'];
+    $quantity = (int) $product['quantity'];
+
+    if (!empty($formattedVariants)) {
+        $summary = summariseVariantStock($formattedVariants);
+        if (isset($summary['price'])) {
+            $price = (float) $summary['price'];
+        }
+        if (isset($summary['quantity'])) {
+            $quantity = (int) $summary['quantity'];
+        }
+    }
+
     return [
-        'id' => (int) $product['id'],
+        'id' => $productId,
         'name' => (string) $product['name'],
-        'price' => (float) $product['price'],
-        'quantity' => (int) $product['quantity'],
+        'price' => $price,
+        'quantity' => $quantity,
         'brand' => $product['brand'] ?? '',
         'category' => $product['category'] ?? '',
+        'variants' => $formattedVariants,
     ];
 }, $products);
 
@@ -1596,6 +1694,16 @@ if ($receiptDataJson === false) {
                 </div>
                 <button type="submit" class="primary-button full-width">Add to POS</button>
             </form>
+        </div>
+    </div>
+
+    <div id="variantModal" class="modal-overlay" style="display:none;">
+        <div class="modal-content variant-modal">
+            <button id="closeVariantModal" type="button" class="modal-close">&times;</button>
+            <h3 id="variantModalTitle">Select Variant</h3>
+            <p id="variantModalSubtitle" class="variant-modal-subtitle">Choose a configuration for this product.</p>
+            <div id="variantOptions" class="variant-options"></div>
+            <div id="variantModalEmpty" class="variant-modal-empty" style="display:none;">All variants are out of stock.</div>
         </div>
     </div>
 

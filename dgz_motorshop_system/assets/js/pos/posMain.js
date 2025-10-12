@@ -53,6 +53,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const servicePriceInput = document.getElementById('servicePrice');
             const serviceQtyInput = document.getElementById('serviceQty');
 
+            const variantModal = document.getElementById('variantModal');
+            const closeVariantModalButton = document.getElementById('closeVariantModal');
+            const variantOptionsContainer = document.getElementById('variantOptions');
+            const variantModalEmpty = document.getElementById('variantModalEmpty');
+            const variantModalTitle = document.getElementById('variantModalTitle');
+            const variantModalSubtitle = document.getElementById('variantModalSubtitle');
+
             const receiptModal = document.getElementById('receiptModal');
             const closeReceiptModalButton = document.getElementById('closeReceiptModal');
             const printReceiptButton = document.getElementById('printReceiptButton');
@@ -706,6 +713,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         price: priceValue,
                         available: availableValue,
                         qty: qtyInput ? (parseInt(qtyInput.value, 10) || 1) : 1,
+                        variantId: row.dataset.variantId || null,
+                        variantLabel: row.dataset.variantLabel || '',
                     });
                 });
 
@@ -741,11 +750,26 @@ document.addEventListener('DOMContentLoaded', () => {
             function createRow(item) {
                 const type = item.type === 'service' ? 'service' : 'product';
                 const productId = type === 'product' ? String(item.id) : null;
-                if (type === 'product' && productId && posTableBody.querySelector(`[data-product-id="${productId}"]`)) {
-                    return;
+                const variantId = type === 'product' && item.variantId ? String(item.variantId) : null;
+                const variantLabel = type === 'product' ? (item.variantLabel || '') : '';
+
+                if (type === 'product' && productId) {
+                    if (variantId) {
+                        const existingVariantRow = posTableBody.querySelector(
+                            `[data-product-id="${productId}"][data-variant-id="${variantId}"]`
+                        );
+                        if (existingVariantRow) {
+                            return;
+                        }
+                    } else if (posTableBody.querySelector(`[data-product-id="${productId}"]:not([data-variant-id])`)) {
+                        return;
+                    }
                 }
 
-                const lineId = item.lineId || (type === 'product' && productId ? `product-${productId}` : generateLineId(type));
+                const lineId = item.lineId
+                    || (type === 'product' && productId
+                        ? (variantId ? `product-${productId}-variant-${variantId}` : `product-${productId}`)
+                        : generateLineId(type));
                 const resolvedName = item.name || (type === 'service' ? '' : 'Item');
                 const resolvedPrice = Number.isFinite(item.price) ? item.price : 0;
                 const resolvedQty = Math.max(1, item.qty || 1);
@@ -755,6 +779,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 tr.dataset.itemType = type;
                 if (type === 'product' && productId) {
                     tr.dataset.productId = productId;
+                    if (variantId) {
+                        tr.dataset.variantId = variantId;
+                    }
+                    if (variantLabel) {
+                        tr.dataset.variantLabel = variantLabel;
+                    } else {
+                        tr.dataset.variantLabel = '';
+                    }
                 }
 
                 const baseName = `line_items[${lineId}]`;
@@ -797,6 +829,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     productInput.name = `${baseName}[product_id]`;
                     productInput.value = productId || '';
                     nameCell.appendChild(productInput);
+
+                    if (variantId) {
+                        const variantIdInput = document.createElement('input');
+                        variantIdInput.type = 'hidden';
+                        variantIdInput.name = `${baseName}[variant_id]`;
+                        variantIdInput.value = variantId;
+                        nameCell.appendChild(variantIdInput);
+
+                        const variantLabelInput = document.createElement('input');
+                        variantLabelInput.type = 'hidden';
+                        variantLabelInput.name = `${baseName}[variant_label]`;
+                        variantLabelInput.value = variantLabel;
+                        nameCell.appendChild(variantLabelInput);
+                    }
                 }
 
                 const priceCell = document.createElement('td');
@@ -869,16 +915,32 @@ document.addEventListener('DOMContentLoaded', () => {
             function addProductById(productId) {
                 const product = productCatalog.find((item) => String(item.id) === String(productId));
                 if (!product) {
-                    return;
+                    return false;
+                }
+
+                const variants = Array.isArray(product.variants) ? product.variants : [];
+                if (variants.length > 0) {
+                    const totalVariantQty = variants.reduce((total, variant) => {
+                        const qty = Number(variant.quantity) || 0;
+                        return total + Math.max(0, qty);
+                    }, 0);
+
+                    if (totalVariantQty <= 0) {
+                        alert(`${product.name} is out of stock and cannot be added.`);
+                        return false;
+                    }
+
+                    openVariantModal(product);
+                    return false;
                 }
 
                 const availableQty = Number(product.quantity) || 0;
                 if (availableQty <= 0) {
                     alert(`${product.name} is out of stock and cannot be added.`);
-                    return;
+                    return false;
                 }
 
-                const existingRow = posTableBody.querySelector(`[data-product-id="${product.id}"]`);
+                const existingRow = posTableBody.querySelector(`[data-product-id="${product.id}"]:not([data-variant-id])`);
                 if (existingRow) {
                     const qtyInput = existingRow.querySelector('.pos-qty');
                     const currentQty = parseInt(qtyInput.value, 10) || 0;
@@ -903,6 +965,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateEmptyState();
                 recalcTotals();
                 persistTableState();
+                updateSettleButtonState();
+                return true;
             }
             // End POS add-product helper
 
@@ -935,13 +999,40 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     const product = productCatalog.find((productItem) => String(productItem.id) === String(productId));
                     if (product) {
+                        const variantId = item.variantId || null;
+                        const variants = Array.isArray(product.variants) ? product.variants : [];
+                        if (variantId) {
+                            const variant = variants.find((variantItem) => String(variantItem.id) === String(variantId));
+                            if (variant) {
+                                const availableQty = Number(variant.quantity) || 0;
+                                const variantLabel = item.variantLabel || variant.label || '';
+                                const resolvedName = item.name
+                                    || (variantLabel ? `${product.name} — ${variantLabel}` : product.name);
+                                const variantPrice = Number(item.price) || Number(variant.price) || Number(product.price) || 0;
+
+                                createRow({
+                                    type: 'product',
+                                    id: product.id,
+                                    lineId: item.lineId || `product-${product.id}-variant-${variant.id}`,
+                                    name: resolvedName,
+                                    price: variantPrice,
+                                    available: availableQty,
+                                    qty: Number(item.qty) || 1,
+                                    max: availableQty,
+                                    variantId: variant.id,
+                                    variantLabel,
+                                });
+                                return;
+                            }
+                        }
+
                         const availableQty = Number(product.quantity) || 0;
                         createRow({
                             type: 'product',
                             id: product.id,
                             lineId: item.lineId || `product-${product.id}`,
-                            name: product.name,
-                            price: Number(product.price) || 0,
+                            name: item.name || product.name,
+                            price: Number(item.price) || Number(product.price) || 0,
                             available: availableQty,
                             qty: Number(item.qty) || 1,
                             max: availableQty,
@@ -959,6 +1050,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 updateEmptyState();
                 recalcTotals();
+                updateSettleButtonState();
             }
             // End POS cart state restorer
 
@@ -1004,6 +1096,141 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 serviceModal.style.display = 'none';
                 resetServiceForm();
+            }
+
+            function closeVariantModal() {
+                if (!variantModal) {
+                    return;
+                }
+
+                variantModal.style.display = 'none';
+
+                if (variantOptionsContainer) {
+                    variantOptionsContainer.innerHTML = '';
+                }
+
+                if (variantModalEmpty) {
+                    variantModalEmpty.style.display = 'none';
+                }
+            }
+
+            function renderVariantOptions(product) {
+                if (!variantOptionsContainer || !variantModalEmpty) {
+                    return;
+                }
+
+                variantOptionsContainer.innerHTML = '';
+                variantModalEmpty.style.display = 'none';
+
+                const variants = Array.isArray(product.variants) ? product.variants : [];
+                let hasAvailableOption = false;
+
+                variants.forEach((variant) => {
+                    const optionButton = document.createElement('button');
+                    optionButton.type = 'button';
+                    optionButton.className = 'variant-option';
+
+                    const label = (variant.label || '').trim() || 'Variant';
+                    const price = Number(variant.price) || Number(product.price) || 0;
+                    const stockQty = Number(variant.quantity) || 0;
+
+                    const labelParts = [label];
+                    if (price > 0) {
+                        labelParts.push(formatPeso(price));
+                    }
+
+                    let stockText = '';
+                    if (stockQty > 0) {
+                        stockText = `${stockQty} in stock`;
+                        hasAvailableOption = true;
+                    } else {
+                        stockText = 'Out of stock';
+                    }
+
+                    optionButton.textContent = stockText
+                        ? `${labelParts.join(' • ')} (${stockText})`
+                        : labelParts.join(' • ');
+                    optionButton.dataset.variantId = String(variant.id || '');
+                    optionButton.disabled = stockQty <= 0;
+                    optionButton.addEventListener('click', () => {
+                        handleVariantSelection(product, variant);
+                    });
+
+                    variantOptionsContainer.appendChild(optionButton);
+                });
+
+                if (!hasAvailableOption) {
+                    variantModalEmpty.style.display = 'block';
+                }
+            }
+
+            function openVariantModal(product) {
+                if (!variantModal) {
+                    return;
+                }
+
+                if (variantModalTitle) {
+                    variantModalTitle.textContent = 'Select Variant';
+                }
+                if (variantModalSubtitle) {
+                    const productName = (product.name || '').trim();
+                    variantModalSubtitle.textContent = productName
+                        ? `Choose a variant for ${productName}.`
+                        : 'Choose a configuration for this product.';
+                }
+
+                renderVariantOptions(product);
+                variantModal.style.display = 'flex';
+            }
+
+            function handleVariantSelection(product, variant) {
+                if (!product || !variant) {
+                    return;
+                }
+
+                const availableQty = Number(variant.quantity) || 0;
+                if (availableQty <= 0) {
+                    alert('Selected variant is out of stock.');
+                    return;
+                }
+
+                const variantLabel = (variant.label || '').trim();
+                const displayName = variantLabel ? `${product.name} — ${variantLabel}` : product.name;
+                const price = Number(variant.price) || Number(product.price) || 0;
+
+                const existingRow = posTableBody.querySelector(
+                    `[data-product-id="${product.id}"][data-variant-id="${variant.id}"]`
+                );
+
+                if (existingRow) {
+                    const qtyInput = existingRow.querySelector('.pos-qty');
+                    const currentQty = parseInt(qtyInput.value, 10) || 0;
+                    const maxQty = Math.max(parseInt(qtyInput.max, 10) || 0, availableQty);
+                    const newQty = Math.min(currentQty + 1, maxQty);
+                    qtyInput.max = availableQty > 0 ? String(availableQty) : '';
+                    existingRow.querySelector('.pos-available').textContent = availableQty;
+                    qtyInput.value = newQty;
+                } else {
+                    createRow({
+                        type: 'product',
+                        id: product.id,
+                        lineId: `product-${product.id}-variant-${variant.id}`,
+                        name: displayName,
+                        price,
+                        available: availableQty,
+                        qty: 1,
+                        max: availableQty,
+                        variantId: variant.id,
+                        variantLabel,
+                    });
+                }
+
+                updateEmptyState();
+                recalcTotals();
+                persistTableState();
+                updateSettleButtonState();
+                closeVariantModal();
+                closeProductModal();
             }
 
             // Begin POS product table renderer
@@ -1418,6 +1645,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (onlineOrderModal && onlineOrderModal.style.display !== 'none') {
                         closeOnlineOrderModalOverlay();
                     }
+
+                    if (variantModal && variantModal.style.display !== 'none') {
+                        closeVariantModal();
+                    }
                 }
             });
 
@@ -1440,6 +1671,16 @@ document.addEventListener('DOMContentLoaded', () => {
             serviceModal?.addEventListener('click', (event) => {
                 if (event.target === serviceModal) {
                     closeServiceModal();
+                }
+            });
+
+            closeVariantModalButton?.addEventListener('click', () => {
+                closeVariantModal();
+            });
+
+            variantModal?.addEventListener('click', (event) => {
+                if (event.target === variantModal) {
+                    closeVariantModal();
                 }
             });
 
@@ -1495,12 +1736,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
 
+                let requiresVariantSelection = false;
                 selected.forEach((checkbox) => {
-                    addProductById(checkbox.dataset.id);
+                    const added = addProductById(checkbox.dataset.id);
+                    if (added === false) {
+                        requiresVariantSelection = true;
+                    }
                     checkbox.checked = false;
                 });
 
-                closeProductModal();
+                if (!requiresVariantSelection) {
+                    closeProductModal();
+                }
             });
 
             posTableBody.addEventListener('click', (event) => {

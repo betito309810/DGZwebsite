@@ -958,6 +958,57 @@ body {
     min-height: 320px; /* taller preview area for longer receipts */
 }
 
+.variant-modal {
+    max-width: 520px;
+    padding: 28px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.variant-modal-subtitle {
+    font-size: 14px;
+    color: #475569;
+}
+
+.variant-options {
+    display: grid;
+    gap: 12px;
+}
+
+.variant-option {
+    padding: 12px 16px;
+    border-radius: 12px;
+    border: 1px solid #dbe4f0;
+    background: #f8fafc;
+    color: #1e293b;
+    font-weight: 600;
+    text-align: left;
+    transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.variant-option:hover:not(:disabled),
+.variant-option:focus-visible:not(:disabled) {
+    background: #e0f2fe;
+    border-color: #38bdf8;
+    outline: none;
+    transform: translateY(-1px);
+}
+
+.variant-option:disabled {
+    background: #f1f5f9;
+    border-color: #e2e8f0;
+    color: #94a3b8;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.variant-modal-empty {
+    text-align: center;
+    font-size: 14px;
+    color: #94a3b8;
+}
+
 .proof-image-wrapper img {
     max-height: 480px; /* tweak this to control preview height */
 }
