@@ -31,7 +31,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const totals = {
                 sales: document.getElementById('salesTotalAmount'),
-                discount: document.getElementById('discountAmount'),
                 vatable: document.getElementById('vatableAmount'),
                 vat: document.getElementById('vatAmount'),
                 topTotal: document.getElementById('topTotalAmountSimple'),
@@ -636,14 +635,12 @@ document.addEventListener('DOMContentLoaded', () => {
             // Begin POS totals recalculator
             function recalcTotals() {
                 const salesTotal = getSalesTotal();
-                const discount = 0;
                 const vatable = salesTotal / 1.12;
                 const vat = salesTotal - vatable;
                 const amountReceived = parseFloat(amountReceivedInput.value || '0');
                 const change = amountReceived - salesTotal;
 
                 totals.sales.textContent = formatPeso(salesTotal);
-                totals.discount.textContent = formatPeso(discount);
                 totals.vatable.textContent = formatPeso(vatable);
                 totals.vat.textContent = formatPeso(vat);
                 totals.topTotal.textContent = formatPeso(salesTotal);
@@ -1389,7 +1386,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 let items = [];
                 let salesTotal = 0;
-                let discount = 0;
                 let vatable = 0;
                 let vat = 0;
                 let amountPaid = 0;
@@ -1413,7 +1409,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
 
                     salesTotal = Number(checkoutReceipt.sales_total) || items.reduce((sum, item) => sum + item.total, 0);
-                    discount = Number(checkoutReceipt.discount) || 0;
                     vatable = Number(checkoutReceipt.vatable);
                     vat = Number(checkoutReceipt.vat);
                     amountPaid = Number(checkoutReceipt.amount_paid) || parseFloat(params.get('amount_paid') || '0');
@@ -1479,10 +1474,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 items.forEach((item) => {
                     const row = document.createElement('tr');
                     row.innerHTML = `
-                        <td style="text-align:left;">${item.name}</td>
-                        <td style="text-align:right;">${item.qty}</td>
-                        <td style="text-align:right;">${formatPeso(item.price)}</td>
-                        <td style="text-align:right;">${formatPeso(item.total)}</td>
+                        <td class="receipt-item-name">${item.name}</td>
+                        <td class="receipt-item-qty">${item.qty}</td>
+                        <td class="receipt-item-price">${formatPeso(item.price)}</td>
+                        <td class="receipt-item-total">${formatPeso(item.total)}</td>
                     `;
                     receiptItemsBody.appendChild(row);
                 });
@@ -1495,7 +1490,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('receiptDate').textContent = Number.isNaN(createdAt.getTime()) ? new Date().toLocaleString() : createdAt.toLocaleString();
                 document.getElementById('receiptCashier').textContent = cashierName || 'Cashier';
                 document.getElementById('receiptSalesTotal').textContent = formatPeso(salesTotal);
-                document.getElementById('receiptDiscount').textContent = formatPeso(discount);
                 document.getElementById('receiptVatable').textContent = formatPeso(vatable);
                 document.getElementById('receiptVat').textContent = formatPeso(vat);
                 document.getElementById('receiptAmountPaid').textContent = formatPeso(amountPaid);
@@ -1538,6 +1532,16 @@ document.addEventListener('DOMContentLoaded', () => {
                             <title>Print Receipt</title>
                             <style>
                                 body { font-family: 'Courier New', monospace; font-size: 14px; }
+                                #receiptItems { width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed; }
+                                #receiptItems th, #receiptItems td { padding: 6px 12px; border-bottom: 1px dashed #cbd5f5; font-weight: 500; }
+                                #receiptItems th { border-bottom: 1px solid #e2e8f0; font-weight: 700; }
+                                #receiptItems th:first-child, #receiptItems td:first-child { text-align: left; width: 48%; word-break: break-word; }
+                                #receiptItems th:nth-child(2), #receiptItems td:nth-child(2) { text-align: center; width: 12%; }
+                                #receiptItems th:nth-child(3), #receiptItems td:nth-child(3),
+                                #receiptItems th:nth-child(4), #receiptItems td:nth-child(4) { text-align: right; width: 20%; white-space: nowrap; }
+                                .receipt-totals { margin-top: 14px; display: grid; gap: 4px; font-size: 13px; color: #1f2937; }
+                                .receipt-totals div { display: flex; justify-content: space-between; }
+                                .receipt-footer { margin-top: 16px; text-align: center; color: #6b7280; font-size: 12px; }
                                 @media print {
                                     @page { margin: 0; }
                                     body { margin: 1cm; }

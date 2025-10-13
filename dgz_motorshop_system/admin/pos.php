@@ -1302,7 +1302,6 @@ if (isset($_GET['ok'], $_GET['order_id']) && $_GET['ok'] === '1') {
                 'vat' => (float) ($orderRow['vat'] ?? 0),
                 'amount_paid' => (float) ($orderRow['amount_paid'] ?? 0),
                 'change' => (float) ($orderRow['change_amount'] ?? 0),
-                'discount' => 0.0,
                 'cashier' => (string) (currentSessionUserDisplayName() ?? 'Cashier'),
                 'items' => $items,
             ];
@@ -1407,10 +1406,6 @@ if ($receiptDataJson === false) {
                     <div class="totals-item">
                         <label>Sales Total</label>
                         <div id="salesTotalAmount" class="value">₱0.00</div>
-                    </div>
-                    <div class="totals-item">
-                        <label>Discount</label>
-                        <div id="discountAmount" class="value">₱0.00</div>
                     </div>
                     <div class="totals-item">
                         <label>Vatable</label>
@@ -1822,7 +1817,6 @@ if ($receiptDataJson === false) {
                 </div>
                 <div class="receipt-totals">
                     <div><span>Sales Total:</span> <span id="receiptSalesTotal">₱0.00</span></div>
-                    <div><span>Discount:</span> <span id="receiptDiscount">₱0.00</span></div>
                     <div><span>Vatable:</span> <span id="receiptVatable">₱0.00</span></div>
                     <div><span>VAT (12%):</span> <span id="receiptVat">₱0.00</span></div>
                     <div><span>Amount Paid:</span> <span id="receiptAmountPaid">₱0.00</span></div>

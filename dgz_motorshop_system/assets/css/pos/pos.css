@@ -944,8 +944,9 @@ body {
 }
 
 #receiptModal .receipt-modal {
-    max-width: 380px;
-    padding: 28px 24px 20px;
+    max-width: 460px;
+    width: min(90vw, 460px);
+    padding: 32px 28px 24px;
 }
 
 /* Payment proof modal sizing – widen container and allow taller images */
@@ -1017,6 +1018,7 @@ body {
     font-family: 'Courier New', Courier, monospace;
     font-size: 13px;
     color: #111827;
+    line-height: 1.4;
 }
 
 .receipt-header {
@@ -1037,11 +1039,12 @@ body {
     width: 100%;
     border-collapse: collapse;
     margin-top: 10px;
+    table-layout: fixed;
 }
 
 #receiptItems th,
 #receiptItems td {
-    padding: 6px 0;
+    padding: 6px 12px;
     border-bottom: 1px dashed #cbd5f5;
     font-weight: 500;
 }
@@ -1051,13 +1054,26 @@ body {
     font-weight: 700;
 }
 
+#receiptItems th:first-child,
+#receiptItems td:first-child {
+    text-align: left;
+    width: 48%;
+    word-break: break-word;
+}
+
 #receiptItems th:nth-child(2),
+#receiptItems td:nth-child(2) {
+    text-align: center;
+    width: 12%;
+}
+
 #receiptItems th:nth-child(3),
-#receiptItems th:nth-child(4),
-#receiptItems td:nth-child(2),
 #receiptItems td:nth-child(3),
+#receiptItems th:nth-child(4),
 #receiptItems td:nth-child(4) {
     text-align: right;
+    width: 20%;
+    white-space: nowrap;
 }
 
 .receipt-totals {
