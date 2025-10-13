@@ -6,6 +6,30 @@ $pdo = db();
 $role = $_SESSION['role'] ?? '';
 $isStaff = ($role === 'staff');
 enforceStaffAccess();
+
+if (!defined('DGZ_PRODUCT_IMAGE_MAX_BYTES')) {
+    define('DGZ_PRODUCT_IMAGE_MAX_BYTES', 5 * 1024 * 1024); // 5 MB per image
+}
+
+if (!function_exists('dgzFormatBytesShort')) {
+    function dgzFormatBytesShort(int $bytes): string
+    {
+        $units = ['B', 'KB', 'MB', 'GB'];
+        $value = (float) max($bytes, 0);
+        $index = 0;
+
+        while ($value >= 1024 && $index < count($units) - 1) {
+            $value /= 1024;
+            $index++;
+        }
+
+        $precision = ($value >= 10 || $index === 0) ? 0 : 1;
+        return number_format($value, $precision) . ' ' . $units[$index];
+    }
+}
+
+$productPageErrors = [];
+$maxProductImageSizeLabel = dgzFormatBytesShort(DGZ_PRODUCT_IMAGE_MAX_BYTES);
 // Added: helper utilities that manage product image uploads in a single place.
 if (!function_exists('ensureProductImageDirectory')) {
     /**
@@ -44,6 +68,18 @@ if (!function_exists('moveUploadedProductImage')) {
 
         if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
             throw new RuntimeException('Image upload failed with error code ' . ($file['error'] ?? 'unknown'));
+        }
+
+        $fileSize = isset($file['size']) ? (int) $file['size'] : 0;
+        if ($fileSize <= 0) {
+            throw new RuntimeException('Uploaded image appears to be empty.');
+        }
+
+        if ($fileSize > DGZ_PRODUCT_IMAGE_MAX_BYTES) {
+            throw new RuntimeException(sprintf(
+                'Main image exceeds the %s limit. Please upload a smaller file.',
+                dgzFormatBytesShort(DGZ_PRODUCT_IMAGE_MAX_BYTES)
+            ));
         }
 
         $imageMeta = @getimagesize($file['tmp_name'] ?? '');
@@ -117,6 +153,7 @@ if (!function_exists('persistGalleryUploads')) {
      */
     function persistGalleryUploads(PDO $pdo, ?array $files, int $productId): void
     {
+        global $productPageErrors;
         $normalised = normaliseUploadedFilesArray($files);
         if (empty($normalised)) {
             return;
@@ -127,6 +164,22 @@ if (!function_exists('persistGalleryUploads')) {
 
         foreach ($normalised as $file) {
             if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+                continue;
+            }
+
+            $fileSize = isset($file['size']) ? (int) $file['size'] : 0;
+            if ($fileSize <= 0) {
+                $productPageErrors[] = 'One of the gallery images could not be processed because the file was empty.';
+                continue;
+            }
+
+            if ($fileSize > DGZ_PRODUCT_IMAGE_MAX_BYTES) {
+                $originalName = trim((string) ($file['name'] ?? 'Gallery image'));
+                $productPageErrors[] = sprintf(
+                    'Gallery image "%s" exceeds the %s limit and was skipped.',
+                    $originalName !== '' ? $originalName : 'Gallery image',
+                    dgzFormatBytesShort(DGZ_PRODUCT_IMAGE_MAX_BYTES)
+                );
                 continue;
             }
 
@@ -800,6 +853,7 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_product'])){
             $newImagePath = moveUploadedProductImage($mainImageFile, $id);
         } catch (RuntimeException $e) {
             // Added: keep processing but surface the failure in logs for debugging.
+            $productPageErrors[] = $e->getMessage();
             error_log('Product image upload failed: ' . $e->getMessage());
         }
 
@@ -922,6 +976,7 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_product'])){
         try {
             $storedImagePath = moveUploadedProductImage($mainImageFile, (int) $product_id);
         } catch (RuntimeException $e) {
+            $productPageErrors[] = $e->getMessage();
             error_log('Product image upload failed: ' . $e->getMessage());
         }
 
@@ -1114,6 +1169,17 @@ if ($currentSort === 'name') {
                 <i class="fas fa-history"></i> History
             </button>
         </div>
+
+        <?php if (!empty($productPageErrors)): ?>
+        <div class="products-feedback products-feedback--error">
+            <strong>Image upload blocked.</strong>
+            <ul>
+                <?php foreach ($productPageErrors as $message): ?>
+                <li><?= htmlspecialchars($message, ENT_QUOTES, 'UTF-8') ?></li>
+                <?php endforeach; ?>
+            </ul>
+        </div>
+        <?php endif; ?>
 
         <!-- Product Add History Modal (like stockEntry.php) -->
         <div id="historyModal"
