@@ -79,7 +79,8 @@ $top_items_sql = "
             WHEN TRIM(COALESCE(oi.description, '')) <> '' THEN oi.description
             ELSE 'Service'
         END AS item_name,
-        COALESCE(SUM(oi.qty), 0) AS total_qty
+        COALESCE(SUM(oi.qty), 0) AS total_qty,
+        COALESCE(SUM(oi.qty * oi.price), 0) AS total_sales
     FROM order_items oi
     INNER JOIN orders o ON o.id = oi.order_id
     LEFT JOIN products p ON p.id = oi.product_id
@@ -88,7 +89,6 @@ $top_items_sql = "
     $topItemsFilter
     GROUP BY item_name
     ORDER BY total_qty DESC
-    LIMIT 5
 ";
 
 $top_items_stmt = $pdo->prepare($top_items_sql);
@@ -133,11 +133,6 @@ $html = '
         .top-items table { width: 100%; border-collapse: collapse; }
         .top-items th, .top-items td { padding: 8px; text-align: left; border: 1px solid #ddd; font-size: 12px; }
         .top-items th { background-color: #f5f5f5; }
-        .orders { margin-top: 30px; }
-        .orders h2 { margin-bottom: 15px; }
-        .orders table { width: 100%; border-collapse: collapse; }
-        .orders th, .orders td { padding: 8px; text-align: left; border: 1px solid #ddd; font-size: 12px; }
-        .orders th { background-color: #f5f5f5; }
         .total-row { font-weight: bold; background-color: #e9ecef; }
         .footer { margin-top: 50px; text-align: center; font-size: 10px; color: #666; }
     </style>
@@ -166,12 +161,13 @@ $html = '
     </div>
 
     <div class="top-items">
-        <h2>Top 5 Items Sold</h2>
+        <h2>Items Sold</h2>
         <table>
             <thead>
                 <tr>
                     <th>Item Name</th>
                     <th>Quantity Sold</th>
+                    <th>Total Sales</th>
                 </tr>
             </thead>
             <tbody>';
@@ -181,54 +177,19 @@ foreach ($top_items as $item) {
                 <tr>
                     <td>' . htmlspecialchars($item['item_name']) . '</td>
                     <td>' . number_format($item['total_qty']) . '</td>
+                    <td>&#8369;' . number_format($item['total_sales'], 2) . '</td>
                 </tr>';
 }
 if (empty($top_items)) {
     $html .= '
                 <tr>
-                    <td colspan="2" style="text-align:center; color:#64748b;">No items recorded for this period.</td>
+                    <td colspan="3" style="text-align:center; color:#64748b;">No items recorded for this period.</td>
                 </tr>';
 }
 $html .= '
             </tbody>
         </table>
     </div>
-
-    <div class="orders">
-        <h2>Order Details</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Invoice</th>
-                    <th>Customer Name</th>
-                    <th>Email</th>
-                    <th>Phone</th>
-                    <th>Payment Method</th>
-                    <th>Total</th>
-                    <th>Date</th>
-                </tr>
-            </thead>
-            <tbody>';
-foreach ($orders as $order) {
-    $html .= '
-                <tr>
-                    <td>' . htmlspecialchars($order['id']) . '</td>
-                    <td>' . htmlspecialchars($order['invoice_number'] ?? 'N/A') . '</td>
-                    <td>' . htmlspecialchars($order['customer_name']) . '</td>
-                    <td>' . htmlspecialchars($order['email'] ?? 'N/A') . '</td>
-                    <td>' . htmlspecialchars($order['phone'] ?? $order['contact'] ?? 'N/A') . '</td>
-                    <td>' . htmlspecialchars($order['payment_method']) . '</td>
-                    <td>' . number_format($order['total'], 2) . '</td>
-                    <td>' . date('M d, Y g:i A', strtotime($order['created_at'])) . '</td>
-                </tr>';
-}
-
-
-    $html .= '
-                </tbody>
-            </table>
-        </div>
 
         <div class="footer">
             <p>This report was generated automatically by the DGZ Motorshop System.</p>
