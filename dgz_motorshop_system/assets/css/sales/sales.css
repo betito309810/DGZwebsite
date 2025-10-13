@@ -126,18 +126,23 @@ body {
     align-items: flex-end;
     gap: 16px;
     flex-wrap: wrap;
+    justify-content: flex-end;
 }
 
 .sales-search-group {
     position: relative;
-    max-width: 360px;
+    flex: 1 1 360px;
+    min-width: 280px;
+    max-width: 520px;
 }
 
 .sales-filter-group {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    min-width: 180px;
+    min-width: 150px;
+    max-width: 200px;
+    width: 100%;
 }
 
 .sales-filter-label {
@@ -156,19 +161,14 @@ body {
     background: #ffffff;
     height: 48px;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
-    min-width: 200px;
+    min-width: 0;
+    width: 100%;
 }
 
 .sales-filter-select:focus {
     outline: none;
     border-color: #2563eb;
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
-}
-
-.sales-filter-hint {
-    font-size: 12px;
-    line-height: 1.4;
-    color: #64748b;
 }
 
 .sales-search-input {

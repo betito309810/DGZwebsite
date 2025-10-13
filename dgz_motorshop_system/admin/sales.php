@@ -556,9 +556,6 @@ $buildPageUrl = static function (int $page) use ($queryParams): string {
                     <option value="walkin"<?php if($orderTypeFilter === 'walkin') echo ' selected'; ?>>Walk-in orders</option>
                     <option value="online"<?php if($orderTypeFilter === 'online') echo ' selected'; ?>>Online orders</option>
                 </select>
-                <?php if(!empty($orderTypeFilterDetails['uses_payment_method_fallback'])): ?>
-                <p class="sales-filter-hint">Filtering by payment method when order type data is unavailable.</p>
-                <?php endif; ?>
             </div>
         </form>
 
