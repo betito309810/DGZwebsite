@@ -75,7 +75,74 @@ if (isset($_GET['posted']) && $_GET['posted'] === '1') {
 
 $products = fetchProductCatalog($pdo);
 $suppliers = fetchSuppliersList($pdo);
-$recentReceipts = $moduleReady ? fetchRecentReceipts($pdo) : [];
+$recentActivityFilters = parseRecentReceiptFilters($_GET ?? []);
+$recentActivityFiltersActive = (
+    ($recentActivityFilters['search'] ?? '') !== '' ||
+    ($recentActivityFilters['date_from_input'] ?? '') !== '' ||
+    ($recentActivityFilters['date_to_input'] ?? '') !== ''
+);
+$recentActivityPage = isset($_GET['recent_page']) ? (int)$_GET['recent_page'] : 1;
+$recentActivityPage = max(1, $recentActivityPage);
+$recentReceiptsLimit = 10;
+$recentReceiptsOffset = 0;
+$recentReceiptsTotal = 0;
+$recentReceiptsTotalPages = 0;
+$recentReceiptsStartRecord = 0;
+$recentReceiptsEndRecord = 0;
+$recentReceipts = [];
+
+$recentActivityPreservedParams = [];
+foreach (($_GET ?? []) as $paramKey => $paramValue) {
+    if (in_array($paramKey, ['recent_search', 'recent_date_from', 'recent_date_to', 'recent_page'], true)) {
+        continue;
+    }
+    $recentActivityPreservedParams[$paramKey] = $paramValue;
+}
+
+if ($moduleReady) {
+    $recentReceiptsTotal = countRecentReceipts($pdo, $recentActivityFilters);
+    $recentReceiptsTotalPages = $recentReceiptsTotal > 0 ? (int)ceil($recentReceiptsTotal / $recentReceiptsLimit) : 0;
+    if ($recentReceiptsTotalPages > 0 && $recentActivityPage > $recentReceiptsTotalPages) {
+        $recentActivityPage = $recentReceiptsTotalPages;
+    }
+    $recentActivityPage = max(1, $recentActivityPage);
+    $recentReceiptsOffset = ($recentActivityPage - 1) * $recentReceiptsLimit;
+    if ($recentReceiptsOffset < 0) {
+        $recentReceiptsOffset = 0;
+    }
+
+    if ($recentReceiptsTotal > 0) {
+        $recentReceipts = fetchRecentReceipts($pdo, $recentActivityFilters, $recentReceiptsLimit, $recentReceiptsOffset);
+        $recentReceiptsStartRecord = $recentReceiptsOffset + 1;
+        $recentReceiptsEndRecord = $recentReceiptsOffset + count($recentReceipts);
+        if ($recentReceiptsEndRecord > $recentReceiptsTotal) {
+            $recentReceiptsEndRecord = $recentReceiptsTotal;
+        }
+    }
+}
+
+$recentActivityFilterParams = $recentActivityPreservedParams;
+if (($recentActivityFilters['search'] ?? '') !== '') {
+    $recentActivityFilterParams['recent_search'] = $recentActivityFilters['search'];
+}
+if (($recentActivityFilters['date_from_input'] ?? '') !== '') {
+    $recentActivityFilterParams['recent_date_from'] = $recentActivityFilters['date_from_input'];
+}
+if (($recentActivityFilters['date_to_input'] ?? '') !== '') {
+    $recentActivityFilterParams['recent_date_to'] = $recentActivityFilters['date_to_input'];
+}
+
+$recentActivityPaginationParams = $recentActivityFilterParams;
+unset($recentActivityPaginationParams['recent_page']);
+$recentActivityPaginationQuery = http_build_query($recentActivityPaginationParams);
+$recentActivityPaginationUrl = 'stockEntry.php' . ($recentActivityPaginationQuery !== '' ? '?' . $recentActivityPaginationQuery : '');
+$recentActivityPaginationSeparator = $recentActivityPaginationQuery !== '' ? '&' : '?';
+
+$recentActivityResetUrl = 'stockEntry.php';
+if (!empty($recentActivityPreservedParams)) {
+    $recentActivityResetQuery = http_build_query($recentActivityPreservedParams);
+    $recentActivityResetUrl .= $recentActivityResetQuery !== '' ? '?' . $recentActivityResetQuery : '';
+}
 
 // Stock-in report state: filters, rows for on-page preview, and inventory snapshot
 $stockReceiptStatusOptions = getStockReceiptStatusOptions();
@@ -103,6 +170,21 @@ sort($brandOptions, SORT_NATURAL | SORT_FLAG_CASE);
 sort($categoryOptions, SORT_NATURAL | SORT_FLAG_CASE);
 sort($supplierFilterOptions, SORT_NATURAL | SORT_FLAG_CASE);
 $reportFilters = parseStockInReportFilters($_GET ?? [], $stockReceiptStatusOptions, $productLookup, $brandOptions, $categoryOptions);
+$stockInReportPage = isset($_GET['report_page']) ? (int)$_GET['report_page'] : 1;
+$stockInReportPage = max(1, $stockInReportPage);
+$stockInReportLimit = 15;
+$stockInReportOffset = 0;
+$stockInReportTotal = 0;
+$stockInReportTotalPages = 0;
+$stockInReportStartRecord = 0;
+$stockInReportEndRecord = 0;
+$stockInReportPreservedParams = [];
+$stockInReportFilterParams = [];
+$stockInReportPaginationParams = [];
+$stockInReportPaginationQuery = '';
+$stockInReportPaginationUrl = 'stockEntry.php';
+$stockInReportPaginationSeparator = '?';
+$stockInReportResetUrl = 'stockEntry.php';
 
 $inventorySearchTerm = trim((string)($_GET['inv_search'] ?? ''));
 $inventoryBrandFilter = trim((string)($_GET['inv_brand'] ?? ''));
@@ -199,6 +281,51 @@ $inventoryNameSortUrl = 'stockEntry.php' . ($inventoryNameSortQuery !== '' ? '?'
 
 $stockInReportRows = [];
 
+foreach (($_GET ?? []) as $paramKey => $paramValue) {
+    if (strpos($paramKey, 'report_') === 0) {
+        continue;
+    }
+    $stockInReportPreservedParams[$paramKey] = $paramValue;
+}
+
+$stockInReportFilterParams = $stockInReportPreservedParams;
+if (($reportFilters['date_from_input'] ?? '') !== '') {
+    $stockInReportFilterParams['report_date_from'] = $reportFilters['date_from_input'];
+}
+if (($reportFilters['date_to_input'] ?? '') !== '') {
+    $stockInReportFilterParams['report_date_to'] = $reportFilters['date_to_input'];
+}
+if (($reportFilters['supplier'] ?? '') !== '') {
+    $stockInReportFilterParams['report_supplier'] = $reportFilters['supplier'];
+}
+if (!empty($reportFilters['product_id'])) {
+    $stockInReportFilterParams['report_product_id'] = (int)$reportFilters['product_id'];
+}
+if (($reportFilters['product_search'] ?? '') !== '') {
+    $stockInReportFilterParams['report_product_search'] = $reportFilters['product_search'];
+}
+if (($reportFilters['brand'] ?? '') !== '') {
+    $stockInReportFilterParams['report_brand'] = $reportFilters['brand'];
+}
+if (($reportFilters['category'] ?? '') !== '') {
+    $stockInReportFilterParams['report_category'] = $reportFilters['category'];
+}
+if (($reportFilters['status'] ?? '') !== '') {
+    $stockInReportFilterParams['report_status'] = $reportFilters['status'];
+}
+
+$stockInReportPaginationParams = $stockInReportFilterParams;
+unset($stockInReportPaginationParams['report_page']);
+$stockInReportPaginationQuery = http_build_query($stockInReportPaginationParams);
+$stockInReportPaginationUrl = 'stockEntry.php' . ($stockInReportPaginationQuery !== '' ? '?' . $stockInReportPaginationQuery : '');
+$stockInReportPaginationSeparator = $stockInReportPaginationQuery !== '' ? '&' : '?';
+
+$stockInReportResetUrl = 'stockEntry.php';
+if (!empty($stockInReportPreservedParams)) {
+    $stockInReportResetQuery = http_build_query($stockInReportPreservedParams);
+    $stockInReportResetUrl .= $stockInReportResetQuery !== '' ? '?' . $stockInReportResetQuery : '';
+}
+
 if ($moduleReady) {
     if (!empty($_GET['stock_in_export'])) {
         $exportFormat = strtolower((string)$_GET['stock_in_export']);
@@ -208,7 +335,25 @@ if ($moduleReady) {
         }
     }
 
-    $stockInReportRows = fetchStockInReport($pdo, $reportFilters, 50);
+    $stockInReportTotal = countStockInReportRows($pdo, $reportFilters);
+    $stockInReportTotalPages = $stockInReportTotal > 0 ? (int)ceil($stockInReportTotal / $stockInReportLimit) : 0;
+    if ($stockInReportTotalPages > 0 && $stockInReportPage > $stockInReportTotalPages) {
+        $stockInReportPage = $stockInReportTotalPages;
+    }
+    $stockInReportPage = max(1, $stockInReportPage);
+    $stockInReportOffset = ($stockInReportPage - 1) * $stockInReportLimit;
+    if ($stockInReportOffset < 0) {
+        $stockInReportOffset = 0;
+    }
+
+    if ($stockInReportTotal > 0) {
+        $stockInReportRows = fetchStockInReport($pdo, $reportFilters, $stockInReportLimit, $stockInReportOffset);
+        $stockInReportStartRecord = $stockInReportOffset + 1;
+        $stockInReportEndRecord = $stockInReportOffset + count($stockInReportRows);
+        if ($stockInReportEndRecord > $stockInReportTotal) {
+            $stockInReportEndRecord = $stockInReportTotal;
+        }
+    }
 }
 
 $formSupplier = $activeReceipt['header']['supplier_name'] ?? '';
@@ -543,45 +688,152 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                     </div>
                 </div>
                 <div id="recentReceiptsContent" class="panel-content">
-                    <?php if (!empty($recentReceipts)): ?>
-                    <div class="table-wrapper">
-                        <table class="data-table data-table--compact">
-                            <thead>
-                                <tr>
-                                    <th>Posted</th>
-                                    <th>Reference</th>
-                                    <th>Supplier</th>
-                                    <th>Received By</th>
-                                    <th>Status</th>
-                                    <th>Items</th>
-                                    <th>Total Qty</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($recentReceipts as $receipt): ?>
-                                    <tr>
-                                        <td><?= htmlspecialchars($receipt['posted_at_formatted'] ?? $receipt['created_at_formatted']) ?></td>
-                                        <td><?= htmlspecialchars($receipt['receipt_code']) ?></td>
-                                        <td><?= htmlspecialchars($receipt['supplier_name']) ?></td>
-                                        <td><?= htmlspecialchars($receipt['received_by_name'] ?? 'Pending') ?></td>
-                                        <td><span class="status-badge status-<?= htmlspecialchars($receipt['status']) ?>"><?= htmlspecialchars(formatStatusLabel($receipt['status'])) ?></span></td>
-                                        <td><?= (int)$receipt['item_count'] ?></td>
-                                        <td><?= (int)$receipt['total_received_qty'] ?></td>
-                                        <td class="table-actions">
-                                            <?php if ($receipt['status'] === 'draft'): ?>
-                                                <a href="stockEntry.php?receipt=<?= (int)$receipt['id'] ?>&mode=edit" class="table-link">Edit Draft</a>
-                                            <?php else: ?>
-                                                <a href="stockReceiptView.php?receipt=<?= (int)$receipt['id'] ?>" class="table-link">View</a>
-                                            <?php endif; ?>
-                                        </td>
-                                    </tr>
+                    <form method="get" class="recent-activity-filter-form" id="recentActivityFilterForm" aria-label="Recent stock-in filters">
+                        <?php foreach ($recentActivityPreservedParams as $paramKey => $paramValue): ?>
+                            <?php if (is_array($paramValue)): ?>
+                                <?php foreach ($paramValue as $value): ?>
+                                    <input type="hidden" name="<?= htmlspecialchars($paramKey) ?>[]" value="<?= htmlspecialchars((string)$value) ?>">
                                 <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
+                            <?php else: ?>
+                                <input type="hidden" name="<?= htmlspecialchars($paramKey) ?>" value="<?= htmlspecialchars((string)$paramValue) ?>">
+                            <?php endif; ?>
+                        <?php endforeach; ?>
+                        <input type="hidden" name="recent_page" value="1">
+                        <div class="filter-row">
+                            <div class="filter-search-group">
+                                <input
+                                    type="text"
+                                    id="recentSearch"
+                                    name="recent_search"
+                                    value="<?= htmlspecialchars($recentActivityFilters['search'] ?? '') ?>"
+                                    placeholder="Search by reference number..."
+                                    class="filter-search-input"
+                                    aria-label="Search recent stock-in by reference"
+                                >
+                                <button type="button" class="filter-clear" data-filter-clear aria-label="Clear recent stock-in search">&times;</button>
+                            </div>
+                        </div>
+                        <div class="filter-row filter-row--selects">
+                            <div class="filter-date-group">
+                                <label for="recentDateFrom">From</label>
+                                <input
+                                    type="date"
+                                    id="recentDateFrom"
+                                    name="recent_date_from"
+                                    value="<?= htmlspecialchars($recentActivityFilters['date_from_input'] ?? '') ?>"
+                                >
+                            </div>
+                            <div class="filter-date-group">
+                                <label for="recentDateTo">To</label>
+                                <input
+                                    type="date"
+                                    id="recentDateTo"
+                                    name="recent_date_to"
+                                    value="<?= htmlspecialchars($recentActivityFilters['date_to_input'] ?? '') ?>"
+                                >
+                            </div>
+                        </div>
+                        <div class="filter-actions">
+                            <button type="submit" class="filter-submit">Filter</button>
+                            <a class="filter-reset" href="<?= htmlspecialchars($recentActivityResetUrl) ?>#recentReceiptsTitle">Reset</a>
+                        </div>
+                    </form>
+
+                    <?php if ($recentReceiptsTotal > 0 && !empty($recentReceipts)): ?>
+                        <div class="table-wrapper">
+                            <table class="data-table data-table--compact">
+                                <thead>
+                                    <tr>
+                                        <th>Posted</th>
+                                        <th>Reference</th>
+                                        <th>Supplier</th>
+                                        <th>Received By</th>
+                                        <th>Status</th>
+                                        <th>Items</th>
+                                        <th>Total Qty</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($recentReceipts as $receipt): ?>
+                                        <tr>
+                                            <td><?= htmlspecialchars($receipt['posted_at_formatted'] ?? $receipt['created_at_formatted']) ?></td>
+                                            <td><?= htmlspecialchars($receipt['receipt_code']) ?></td>
+                                            <td><?= htmlspecialchars($receipt['supplier_name']) ?></td>
+                                            <td><?= htmlspecialchars($receipt['received_by_name'] ?? 'Pending') ?></td>
+                                            <td><span class="status-badge status-<?= htmlspecialchars($receipt['status']) ?>"><?= htmlspecialchars(formatStatusLabel($receipt['status'])) ?></span></td>
+                                            <td><?= (int)$receipt['item_count'] ?></td>
+                                            <td><?= (int)$receipt['total_received_qty'] ?></td>
+                                            <td class="table-actions">
+                                                <?php if ($receipt['status'] === 'draft'): ?>
+                                                    <a href="stockEntry.php?receipt=<?= (int)$receipt['id'] ?>&mode=edit" class="table-link">Edit Draft</a>
+                                                <?php else: ?>
+                                                    <a href="stockReceiptView.php?receipt=<?= (int)$receipt['id'] ?>" class="table-link">View</a>
+                                                <?php endif; ?>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="pagination-container">
+                            <div class="pagination-info">
+                                Showing <?= $recentReceiptsStartRecord ?> to <?= $recentReceiptsEndRecord ?> of <?= $recentReceiptsTotal ?> entries
+                            </div>
+                            <div class="pagination">
+                                <?php if ($recentActivityPage > 1): ?>
+                                    <a href="<?= htmlspecialchars($recentActivityPaginationUrl . $recentActivityPaginationSeparator . 'recent_page=' . ($recentActivityPage - 1)) ?>" class="prev">
+                                        <i class="fas fa-chevron-left"></i> Prev
+                                    </a>
+                                <?php else: ?>
+                                    <span class="prev disabled">
+                                        <i class="fas fa-chevron-left"></i> Prev
+                                    </span>
+                                <?php endif; ?>
+
+                                <?php
+                                    $recentActivityStartPage = max(1, $recentActivityPage - 2);
+                                    $recentActivityEndPage = min($recentReceiptsTotalPages, $recentActivityPage + 2);
+                                ?>
+
+                                <?php if ($recentActivityStartPage > 1): ?>
+                                    <a href="<?= htmlspecialchars($recentActivityPaginationUrl . $recentActivityPaginationSeparator . 'recent_page=1') ?>">1</a>
+                                    <?php if ($recentActivityStartPage > 2): ?>
+                                        <span>...</span>
+                                    <?php endif; ?>
+                                <?php endif; ?>
+
+                                <?php for ($i = $recentActivityStartPage; $i <= $recentActivityEndPage; $i++): ?>
+                                    <?php if ($i === $recentActivityPage): ?>
+                                        <span class="current"><?= $i ?></span>
+                                    <?php else: ?>
+                                        <a href="<?= htmlspecialchars($recentActivityPaginationUrl . $recentActivityPaginationSeparator . 'recent_page=' . $i) ?>"><?= $i ?></a>
+                                    <?php endif; ?>
+                                <?php endfor; ?>
+
+                                <?php if ($recentActivityEndPage < $recentReceiptsTotalPages): ?>
+                                    <?php if ($recentActivityEndPage < $recentReceiptsTotalPages - 1): ?>
+                                        <span>...</span>
+                                    <?php endif; ?>
+                                    <a href="<?= htmlspecialchars($recentActivityPaginationUrl . $recentActivityPaginationSeparator . 'recent_page=' . $recentReceiptsTotalPages) ?>"><?= $recentReceiptsTotalPages ?></a>
+                                <?php endif; ?>
+
+                                <?php if ($recentActivityPage < $recentReceiptsTotalPages): ?>
+                                    <a href="<?= htmlspecialchars($recentActivityPaginationUrl . $recentActivityPaginationSeparator . 'recent_page=' . ($recentActivityPage + 1)) ?>" class="next">
+                                        Next <i class="fas fa-chevron-right"></i>
+                                    </a>
+                                <?php else: ?>
+                                    <span class="next disabled">
+                                        Next <i class="fas fa-chevron-right"></i>
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
                     <?php else: ?>
-                        <p class="empty-state">No stock-in documents recorded yet.</p>
+                        <p class="empty-state">
+                            <?= $recentActivityFiltersActive ? 'No stock-in documents match the selected filters.' : 'No stock-in documents recorded yet.' ?>
+                        </p>
                     <?php endif; ?>
                 </div>
             </section>
@@ -805,70 +1057,100 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                     </div>
                 </div>
                 <div id="stockInReportContent" class="panel-content">
-                    <form class="report-filters" method="GET" aria-label="Stock-In report filters">
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label for="filter_date_from">Date From</label>
-                            <input type="date" id="filter_date_from" name="report_date_from" value="<?= htmlspecialchars($reportFilters['date_from_input']) ?>">
-                        </div>
-                        <div class="form-group">
-                            <label for="filter_date_to">Date To</label>
-                            <input type="date" id="filter_date_to" name="report_date_to" value="<?= htmlspecialchars($reportFilters['date_to_input']) ?>">
-                        </div>
-                        <div class="form-group">
-                            <label for="filter_supplier">Supplier</label>
-                            <input type="text" id="filter_supplier" name="report_supplier" list="supplierOptions" placeholder="Match supplier name" value="<?= htmlspecialchars($reportFilters['supplier']) ?>">
-                        </div>
-                        <div class="form-group">
-                            <label for="filter_product">Product</label>
-                            <select id="filter_product" name="report_product_id">
-                                <option value="">All products</option>
-                                <?php foreach ($products as $productOption): ?>
-                                    <option value="<?= (int)$productOption['id'] ?>" <?= (int)$reportFilters['product_id'] === (int)$productOption['id'] ? 'selected' : '' ?>><?= htmlspecialchars($productOption['name']) ?></option>
+                    <form class="stock-in-report-filter-form" id="stockInReportFilterForm" method="GET" aria-label="Stock-In report filters">
+                        <?php foreach ($stockInReportPreservedParams as $paramKey => $paramValue): ?>
+                            <?php if (is_array($paramValue)): ?>
+                                <?php foreach ($paramValue as $value): ?>
+                                    <input type="hidden" name="<?= htmlspecialchars($paramKey) ?>[]" value="<?= htmlspecialchars((string)$value) ?>">
                                 <?php endforeach; ?>
-                            </select>
+                            <?php else: ?>
+                                <input type="hidden" name="<?= htmlspecialchars($paramKey) ?>" value="<?= htmlspecialchars((string)$paramValue) ?>">
+                            <?php endif; ?>
+                        <?php endforeach; ?>
+                        <input type="hidden" name="report_page" value="1">
+                        <div class="filter-row">
+                            <div class="filter-search-group">
+                                <input
+                                    type="text"
+                                    id="filter_product_search"
+                                    name="report_product_search"
+                                    placeholder="Search product, reference, or DR number..."
+                                    value="<?= htmlspecialchars($reportFilters['product_search']) ?>"
+                                    class="filter-search-input"
+                                    aria-label="Search stock-in report entries"
+                                >
+                                <button type="button" class="filter-clear" data-filter-clear aria-label="Clear stock-in report search">&times;</button>
+                            </div>
+                            <div class="filter-field">
+                                <label for="filter_supplier">Supplier</label>
+                                <input
+                                    type="text"
+                                    id="filter_supplier"
+                                    name="report_supplier"
+                                    list="supplierOptions"
+                                    placeholder="Match supplier name"
+                                    value="<?= htmlspecialchars($reportFilters['supplier']) ?>"
+                                >
+                            </div>
                         </div>
-                        <!-- Additional filters to support larger catalogs (brand/category/search). -->
-                        <div class="form-group">
-                            <label for="filter_product_search">Product Search</label>
-                            <input type="text" id="filter_product_search" name="report_product_search" placeholder="Search name, code, or receipt" value="<?= htmlspecialchars($reportFilters['product_search']) ?>">
+                        <div class="filter-row filter-row--selects">
+                            <div class="filter-date-group">
+                                <label for="filter_date_from">Date From</label>
+                                <input type="date" id="filter_date_from" name="report_date_from" value="<?= htmlspecialchars($reportFilters['date_from_input']) ?>">
+                            </div>
+                            <div class="filter-date-group">
+                                <label for="filter_date_to">Date To</label>
+                                <input type="date" id="filter_date_to" name="report_date_to" value="<?= htmlspecialchars($reportFilters['date_to_input']) ?>">
+                            </div>
+                            <div class="filter-field">
+                                <label for="filter_product">Product</label>
+                                <select id="filter_product" name="report_product_id">
+                                    <option value="">All products</option>
+                                    <?php foreach ($products as $productOption): ?>
+                                        <option value="<?= (int)$productOption['id'] ?>" <?= (int)$reportFilters['product_id'] === (int)$productOption['id'] ? 'selected' : '' ?>><?= htmlspecialchars($productOption['name']) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="filter-field">
+                                <label for="filter_brand">Brand</label>
+                                <select id="filter_brand" name="report_brand">
+                                    <option value="">All brands</option>
+                                    <?php foreach ($brandOptions as $brandOption): ?>
+                                        <option value="<?= htmlspecialchars($brandOption) ?>" <?= $reportFilters['brand'] === $brandOption ? 'selected' : '' ?>><?= htmlspecialchars($brandOption) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="filter-field">
+                                <label for="filter_category">Category</label>
+                                <select id="filter_category" name="report_category">
+                                    <option value="">All categories</option>
+                                    <?php foreach ($categoryOptions as $categoryOption): ?>
+                                        <option value="<?= htmlspecialchars($categoryOption) ?>" <?= $reportFilters['category'] === $categoryOption ? 'selected' : '' ?>><?= htmlspecialchars($categoryOption) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="filter-field">
+                                <label for="filter_status">Status</label>
+                                <select id="filter_status" name="report_status">
+                                    <option value="">All statuses</option>
+                                    <?php foreach ($stockReceiptStatusOptions as $statusValue => $statusLabel): ?>
+                                        <option value="<?= htmlspecialchars($statusValue) ?>" <?= $reportFilters['status'] === $statusValue ? 'selected' : '' ?>><?= htmlspecialchars($statusLabel) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label for="filter_brand">Brand</label>
-                            <select id="filter_brand" name="report_brand">
-                                <option value="">All brands</option>
-                                <?php foreach ($brandOptions as $brandOption): ?>
-                                    <option value="<?= htmlspecialchars($brandOption) ?>" <?= $reportFilters['brand'] === $brandOption ? 'selected' : '' ?>><?= htmlspecialchars($brandOption) ?></option>
-                                <?php endforeach; ?>
-                            </select>
+                        <div class="filter-actions filter-actions--split">
+                            <div class="filter-actions__group">
+                                <button type="submit" class="filter-submit">Apply Filters</button>
+                                <a class="filter-reset" href="<?= htmlspecialchars($stockInReportResetUrl) ?>#stock-in-report">Reset</a>
+                            </div>
+                            <div class="filter-actions__group">
+                                <button type="submit" class="filter-export" name="stock_in_export" value="csv">Export CSV</button>
+                                <button type="submit" class="filter-export" name="stock_in_export" value="pdf">Export PDF</button>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label for="filter_category">Category</label>
-                            <select id="filter_category" name="report_category">
-                                <option value="">All categories</option>
-                                <?php foreach ($categoryOptions as $categoryOption): ?>
-                                    <option value="<?= htmlspecialchars($categoryOption) ?>" <?= $reportFilters['category'] === $categoryOption ? 'selected' : '' ?>><?= htmlspecialchars($categoryOption) ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="filter_status">Status</label>
-                            <select id="filter_status" name="report_status">
-                                <option value="">All statuses</option>
-                                <?php foreach ($stockReceiptStatusOptions as $statusValue => $statusLabel): ?>
-                                    <option value="<?= htmlspecialchars($statusValue) ?>" <?= $reportFilters['status'] === $statusValue ? 'selected' : '' ?>><?= htmlspecialchars($statusLabel) ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="filter-actions">
-                        <button type="submit" class="btn-primary">Apply Filters</button>
-                        <a class="btn-secondary" href="stockEntry.php#stock-in-report">Reset</a>
-                        <button type="submit" class="btn-secondary" name="stock_in_export" value="csv">Export CSV</button>
-                        <button type="submit" class="btn-secondary" name="stock_in_export" value="pdf">Export PDF</button>
-                    </div>
                     </form>
-                    <?php if (!empty($stockInReportRows)): ?>
+                    <?php if ($stockInReportTotal > 0 && !empty($stockInReportRows)): ?>
                     <div class="table-wrapper">
                         <table class="data-table">
                             <thead>
@@ -900,6 +1182,61 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                                 <?php endforeach; ?>
                             </tbody>
                         </table>
+                    </div>
+                    <div class="pagination-container">
+                        <div class="pagination-info">
+                            Showing <?= $stockInReportStartRecord ?> to <?= $stockInReportEndRecord ?> of <?= $stockInReportTotal ?> entries
+                        </div>
+                        <?php if ($stockInReportTotalPages > 1): ?>
+                            <div class="pagination">
+                                <?php if ($stockInReportPage > 1): ?>
+                                    <a href="<?= htmlspecialchars($stockInReportPaginationUrl . $stockInReportPaginationSeparator . 'report_page=' . ($stockInReportPage - 1)) ?>#stock-in-report" class="prev">
+                                        <i class="fas fa-chevron-left"></i> Prev
+                                    </a>
+                                <?php else: ?>
+                                    <span class="prev disabled">
+                                        <i class="fas fa-chevron-left"></i> Prev
+                                    </span>
+                                <?php endif; ?>
+
+                                <?php
+                                    $stockInReportStartPage = max(1, $stockInReportPage - 2);
+                                    $stockInReportEndPage = min($stockInReportTotalPages, $stockInReportPage + 2);
+                                ?>
+
+                                <?php if ($stockInReportStartPage > 1): ?>
+                                    <a href="<?= htmlspecialchars($stockInReportPaginationUrl . $stockInReportPaginationSeparator . 'report_page=1') ?>#stock-in-report">1</a>
+                                    <?php if ($stockInReportStartPage > 2): ?>
+                                        <span>...</span>
+                                    <?php endif; ?>
+                                <?php endif; ?>
+
+                                <?php for ($i = $stockInReportStartPage; $i <= $stockInReportEndPage; $i++): ?>
+                                    <?php if ($i === $stockInReportPage): ?>
+                                        <span class="current"><?= $i ?></span>
+                                    <?php else: ?>
+                                        <a href="<?= htmlspecialchars($stockInReportPaginationUrl . $stockInReportPaginationSeparator . 'report_page=' . $i) ?>#stock-in-report"><?= $i ?></a>
+                                    <?php endif; ?>
+                                <?php endfor; ?>
+
+                                <?php if ($stockInReportEndPage < $stockInReportTotalPages): ?>
+                                    <?php if ($stockInReportEndPage < $stockInReportTotalPages - 1): ?>
+                                        <span>...</span>
+                                    <?php endif; ?>
+                                    <a href="<?= htmlspecialchars($stockInReportPaginationUrl . $stockInReportPaginationSeparator . 'report_page=' . $stockInReportTotalPages) ?>#stock-in-report"><?= $stockInReportTotalPages ?></a>
+                                <?php endif; ?>
+
+                                <?php if ($stockInReportPage < $stockInReportTotalPages): ?>
+                                    <a href="<?= htmlspecialchars($stockInReportPaginationUrl . $stockInReportPaginationSeparator . 'report_page=' . ($stockInReportPage + 1)) ?>#stock-in-report" class="next">
+                                        Next <i class="fas fa-chevron-right"></i>
+                                    </a>
+                                <?php else: ?>
+                                    <span class="next disabled">
+                                        Next <i class="fas fa-chevron-right"></i>
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+                        <?php endif; ?>
                     </div>
                     <?php else: ?>
                         <p class="empty-state">No stock-in activity matches the selected filters.</p>
@@ -1503,8 +1840,107 @@ function logReceiptAudit(PDO $pdo, int $receiptId, string $action, int $userId, 
 /**
  * Fetch latest stock receipts with aggregate info for dashboard table.
  */
-function fetchRecentReceipts(PDO $pdo): array
+function parseRecentReceiptFilters(array $source): array
 {
+    $search = trim((string)($source['recent_search'] ?? ''));
+
+    $dateFromRaw = trim((string)($source['recent_date_from'] ?? ''));
+    $dateToRaw = trim((string)($source['recent_date_to'] ?? ''));
+
+    $dateFrom = null;
+    $dateTo = null;
+
+    if ($dateFromRaw !== '') {
+        $dateFromObj = DateTime::createFromFormat('Y-m-d', $dateFromRaw);
+        if ($dateFromObj instanceof DateTime) {
+            $dateFrom = $dateFromObj->format('Y-m-d');
+        }
+    }
+
+    if ($dateToRaw !== '') {
+        $dateToObj = DateTime::createFromFormat('Y-m-d', $dateToRaw);
+        if ($dateToObj instanceof DateTime) {
+            $dateTo = $dateToObj->format('Y-m-d');
+        }
+    }
+
+    if ($dateFrom !== null && $dateTo !== null && $dateFrom > $dateTo) {
+        [$dateFrom, $dateTo] = [$dateTo, $dateFrom];
+        [$dateFromRaw, $dateToRaw] = [$dateToRaw, $dateFromRaw];
+    }
+
+    return [
+        'search' => $search,
+        'date_from' => $dateFrom,
+        'date_to' => $dateTo,
+        'date_from_input' => $dateFromRaw,
+        'date_to_input' => $dateToRaw,
+    ];
+}
+
+function countRecentReceipts(PDO $pdo, array $filters): int
+{
+    $conditions = [];
+    $params = [];
+
+    if (($filters['search'] ?? '') !== '') {
+        $conditions[] = 'sr.receipt_code LIKE :recent_search';
+        $params[':recent_search'] = '%' . $filters['search'] . '%';
+    }
+
+    if (($filters['date_from'] ?? null) !== null) {
+        $conditions[] = 'DATE(COALESCE(sr.posted_at, sr.created_at)) >= :recent_date_from';
+        $params[':recent_date_from'] = $filters['date_from'];
+    }
+
+    if (($filters['date_to'] ?? null) !== null) {
+        $conditions[] = 'DATE(COALESCE(sr.posted_at, sr.created_at)) <= :recent_date_to';
+        $params[':recent_date_to'] = $filters['date_to'];
+    }
+
+    $whereSql = '';
+    if (!empty($conditions)) {
+        $whereSql = 'WHERE ' . implode(' AND ', $conditions);
+    }
+
+    $sql = 'SELECT COUNT(*) FROM stock_receipts sr ' . $whereSql;
+    $stmt = $pdo->prepare($sql);
+    foreach ($params as $name => $value) {
+        $stmt->bindValue($name, $value);
+    }
+    $stmt->execute();
+
+    return (int)$stmt->fetchColumn();
+}
+
+function fetchRecentReceipts(PDO $pdo, array $filters, int $limit = 10, int $offset = 0): array
+{
+    $limit = max(1, $limit);
+    $offset = max(0, $offset);
+
+    $conditions = [];
+    $params = [];
+
+    if (($filters['search'] ?? '') !== '') {
+        $conditions[] = 'sr.receipt_code LIKE :recent_search';
+        $params[':recent_search'] = '%' . $filters['search'] . '%';
+    }
+
+    if (($filters['date_from'] ?? null) !== null) {
+        $conditions[] = 'DATE(COALESCE(sr.posted_at, sr.created_at)) >= :recent_date_from';
+        $params[':recent_date_from'] = $filters['date_from'];
+    }
+
+    if (($filters['date_to'] ?? null) !== null) {
+        $conditions[] = 'DATE(COALESCE(sr.posted_at, sr.created_at)) <= :recent_date_to';
+        $params[':recent_date_to'] = $filters['date_to'];
+    }
+
+    $whereSql = '';
+    if (!empty($conditions)) {
+        $whereSql = 'WHERE ' . implode(' AND ', $conditions);
+    }
+
     $sql = '
         SELECT
             sr.id,
@@ -1519,11 +1955,20 @@ function fetchRecentReceipts(PDO $pdo): array
         FROM stock_receipts sr
         LEFT JOIN stock_receipt_items items ON items.receipt_id = sr.id
         LEFT JOIN users u ON u.id = sr.received_by_user_id
+        ' . $whereSql . '
         GROUP BY sr.id, sr.receipt_code, sr.supplier_name, sr.status, sr.created_at, sr.posted_at, u.name
-        ORDER BY sr.created_at DESC
-        LIMIT 10
+        ORDER BY COALESCE(sr.posted_at, sr.created_at) DESC, sr.id DESC
+        LIMIT :recent_limit OFFSET :recent_offset
     ';
-    $stmt = $pdo->query($sql);
+
+    $stmt = $pdo->prepare($sql);
+    foreach ($params as $name => $value) {
+        $stmt->bindValue($name, $value);
+    }
+    $stmt->bindValue(':recent_limit', $limit, PDO::PARAM_INT);
+    $stmt->bindValue(':recent_offset', $offset, PDO::PARAM_INT);
+    $stmt->execute();
+
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     foreach ($rows as &$row) {
@@ -1621,8 +2066,63 @@ function normalizeOptionalReportDate(string $value): ?string
 /**
  * Fetch stock receipt lines matching the active filters for reporting.
  */
-function fetchStockInReport(PDO $pdo, array $filters, ?int $limit = 50): array
+function buildStockInReportWhereClause(array $filters, array &$params): string
 {
+    $clauses = ['1=1'];
+
+    if (!empty($filters['date_from'])) {
+        $clauses[] = 'sr.date_received >= :date_from';
+        $params[':date_from'] = $filters['date_from'];
+    }
+
+    if (!empty($filters['date_to'])) {
+        $clauses[] = 'sr.date_received <= :date_to';
+        $params[':date_to'] = $filters['date_to'];
+    }
+
+    if (!empty($filters['supplier'])) {
+        $clauses[] = 'sr.supplier_name LIKE :supplier';
+        $params[':supplier'] = '%' . $filters['supplier'] . '%';
+    }
+
+    if (!empty($filters['product_id'])) {
+        $clauses[] = 'sri.product_id = :product_id';
+        $params[':product_id'] = $filters['product_id'];
+    }
+
+    if (!empty($filters['product_search'])) {
+        $clauses[] = '(
+            p.name LIKE :product_search
+            OR p.code LIKE :product_search
+            OR sr.receipt_code LIKE :product_search
+            OR sr.document_number LIKE :product_search
+        )';
+        $params[':product_search'] = '%' . $filters['product_search'] . '%';
+    }
+
+    if (!empty($filters['brand'])) {
+        $clauses[] = 'p.brand = :brand';
+        $params[':brand'] = $filters['brand'];
+    }
+
+    if (!empty($filters['category'])) {
+        $clauses[] = 'p.category = :category';
+        $params[':category'] = $filters['category'];
+    }
+
+    if (!empty($filters['status'])) {
+        $clauses[] = 'sr.status = :status';
+        $params[':status'] = $filters['status'];
+    }
+
+    return implode(' AND ', $clauses);
+}
+
+function fetchStockInReport(PDO $pdo, array $filters, ?int $limit = 50, int $offset = 0): array
+{
+    $params = [];
+    $whereClause = buildStockInReportWhereClause($filters, $params);
+
     $sql = '
         SELECT
             sr.date_received,
@@ -1638,62 +2138,25 @@ function fetchStockInReport(PDO $pdo, array $filters, ?int $limit = 50): array
         INNER JOIN stock_receipt_items sri ON sri.receipt_id = sr.id
         LEFT JOIN products p ON p.id = sri.product_id
         LEFT JOIN users receiver ON receiver.id = sr.received_by_user_id
-        WHERE 1=1
+        WHERE ' . $whereClause . '
+        ORDER BY sr.date_received DESC, sr.id DESC, sri.id ASC
     ';
-    $params = [];
 
-    if (!empty($filters['date_from'])) {
-        $sql .= ' AND sr.date_received >= :date_from';
-        $params[':date_from'] = $filters['date_from'];
-    }
-
-    if (!empty($filters['date_to'])) {
-        $sql .= ' AND sr.date_received <= :date_to';
-        $params[':date_to'] = $filters['date_to'];
-    }
-
-    if ($filters['supplier'] !== '') {
-        $sql .= ' AND sr.supplier_name LIKE :supplier';
-        $params[':supplier'] = '%' . $filters['supplier'] . '%';
-    }
-
-    if (!empty($filters['product_id'])) {
-        $sql .= ' AND sri.product_id = :product_id';
-        $params[':product_id'] = $filters['product_id'];
-    }
-
-    if ($filters['product_search'] !== '') {
-        $sql .= ' AND (
-            (p.name LIKE :product_search)
-            OR (p.code LIKE :product_search)
-            OR (sr.receipt_code LIKE :product_search)
-            OR (sr.document_number LIKE :product_search)
-        )';
-        $params[':product_search'] = '%' . $filters['product_search'] . '%';
-    }
-
-    if ($filters['brand'] !== '') {
-        $sql .= ' AND p.brand = :brand';
-        $params[':brand'] = $filters['brand'];
-    }
-
-    if ($filters['category'] !== '') {
-        $sql .= ' AND p.category = :category';
-        $params[':category'] = $filters['category'];
-    }
-
-    if (!empty($filters['status'])) {
-        $sql .= ' AND sr.status = :status';
-        $params[':status'] = $filters['status'];
-    }
-
-    $sql .= ' ORDER BY sr.date_received DESC, sr.id DESC, sri.id ASC';
     if ($limit !== null) {
-        $sql .= ' LIMIT ' . (int)$limit;
+        $sql .= ' LIMIT :limit OFFSET :offset';
     }
 
     $stmt = $pdo->prepare($sql);
-    $stmt->execute($params);
+    foreach ($params as $placeholder => $value) {
+        $stmt->bindValue($placeholder, $value);
+    }
+
+    if ($limit !== null) {
+        $stmt->bindValue(':limit', (int)$limit, PDO::PARAM_INT);
+        $stmt->bindValue(':offset', max(0, (int)$offset), PDO::PARAM_INT);
+    }
+
+    $stmt->execute();
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     foreach ($rows as &$row) {
@@ -1706,6 +2169,29 @@ function fetchStockInReport(PDO $pdo, array $filters, ?int $limit = 50): array
     }
 
     return $rows;
+}
+
+function countStockInReportRows(PDO $pdo, array $filters): int
+{
+    $params = [];
+    $whereClause = buildStockInReportWhereClause($filters, $params);
+
+    $sql = '
+        SELECT COUNT(*)
+        FROM stock_receipts sr
+        INNER JOIN stock_receipt_items sri ON sri.receipt_id = sr.id
+        LEFT JOIN products p ON p.id = sri.product_id
+        WHERE ' . $whereClause . '
+    ';
+
+    $stmt = $pdo->prepare($sql);
+    foreach ($params as $placeholder => $value) {
+        $stmt->bindValue($placeholder, $value);
+    }
+
+    $stmt->execute();
+
+    return (int)$stmt->fetchColumn();
 }
 
 /**
