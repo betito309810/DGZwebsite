@@ -69,24 +69,51 @@
         return value;
     }
 
-    function normaliseQuantityField() {
+    function normaliseQuantityField(options = {}) {
+        const { allowEmpty = false, suppressAlert = false } = options;
+
         if (!quantityInput || quantityInput.disabled) {
             return 0;
         }
 
+        const rawValue = quantityInput.value.trim();
         const hasKnownStock = typeof state.quantity === 'number';
         const maxQuantity = hasKnownStock ? Math.max(1, state.quantity) : Number.POSITIVE_INFINITY;
-        let desired = Number.parseInt(quantityInput.value, 10);
+
+        if (rawValue === '') {
+            if (allowEmpty) {
+                return 0;
+            }
+
+            const previous = Number.parseInt(quantityInput.dataset.previousValidValue || '', 10);
+            const fallback = Number.isInteger(previous) && previous >= 1
+                ? Math.min(previous, maxQuantity)
+                : 1;
+            quantityInput.value = String(fallback);
+            quantityInput.dataset.previousValidValue = String(fallback);
+            return fallback;
+        }
+
+        let desired = Number.parseInt(rawValue, 10);
 
         if (Number.isNaN(desired) || desired < 1) {
             desired = 1;
         }
 
-        if (hasKnownStock) {
-            desired = Math.min(desired, maxQuantity);
+        if (hasKnownStock && desired > maxQuantity) {
+            if (!suppressAlert) {
+                alert(`Only ${maxQuantity} stock available.`);
+            }
+
+            const previous = Number.parseInt(quantityInput.dataset.previousValidValue || '', 10);
+            const fallback = Number.isInteger(previous) && previous >= 1
+                ? Math.min(previous, maxQuantity)
+                : maxQuantity;
+            desired = fallback;
         }
 
         quantityInput.value = String(desired);
+        quantityInput.dataset.previousValidValue = String(desired);
         return desired;
     }
 
@@ -111,11 +138,12 @@
             } else {
                 quantityInput.removeAttribute('max');
             }
-            normaliseQuantityField();
+            normaliseQuantityField({ suppressAlert: true });
         } else {
             quantityInput.value = '0';
             quantityInput.setAttribute('disabled', 'disabled');
             quantityInput.removeAttribute('max');
+            quantityInput.dataset.previousValidValue = '0';
         }
     }
 
@@ -439,6 +467,7 @@
             quantityInput.value = '1';
             quantityInput.disabled = false;
             quantityInput.removeAttribute('max');
+            quantityInput.dataset.previousValidValue = '1';
         }
 
         if (buyButton) {
@@ -523,7 +552,47 @@
         updateStage();
     });
 
-    quantityInput?.addEventListener('input', normaliseQuantityField);
+    quantityInput?.addEventListener('focusin', () => {
+        if (!quantityInput) {
+            return;
+        }
+
+        const min = Number.parseInt(quantityInput.min, 10) || 1;
+        const current = Number.parseInt(quantityInput.value, 10);
+        const safeValue = Number.isFinite(current) && current >= min ? current : min;
+        quantityInput.dataset.previousValidValue = String(safeValue);
+    });
+
+    quantityInput?.addEventListener('input', () => {
+        if (!quantityInput) {
+            return;
+        }
+
+        const rawValue = quantityInput.value.trim();
+        if (rawValue === '') {
+            return;
+        }
+
+        let value = Number.parseInt(rawValue, 10);
+        if (!Number.isFinite(value)) {
+            value = 1;
+        }
+
+        if (value < 1) {
+            value = 1;
+            quantityInput.value = '1';
+        }
+
+        const hasKnownStock = typeof state.quantity === 'number';
+        const maxQuantity = hasKnownStock ? Math.max(1, state.quantity) : null;
+        if (maxQuantity !== null && value <= maxQuantity) {
+            quantityInput.dataset.previousValidValue = String(value);
+        }
+    });
+
+    quantityInput?.addEventListener('focusout', () => {
+        normaliseQuantityField();
+    });
 
     // Added: mirror the card-level Buy Now/Add to Cart behaviour within the modal controls.
     buyButton?.addEventListener('click', () => {

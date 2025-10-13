@@ -902,6 +902,85 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             }
         }
 
+        function commitQuantityChange(input, options = {}) {
+            const { allowEmpty = false, showAlert = true, enforceMax = true } = options;
+
+            if (!input) {
+                return;
+            }
+
+            const index = Number(input.dataset.index);
+            if (!Number.isInteger(index) || index < 0 || index >= cartState.length) {
+                return;
+            }
+
+            const cartItem = cartState[index];
+            if (!cartItem) {
+                return;
+            }
+
+            const rawValue = String(input.value).trim();
+            const stockRaw = cartItem.stock;
+            const stockQuantity = stockRaw !== undefined && stockRaw !== null
+                ? Number(stockRaw)
+                : null;
+
+            if (rawValue === '') {
+                if (allowEmpty) {
+                    return;
+                }
+
+                const previous = Number.parseInt(input.dataset.previousValidValue || '', 10);
+                let fallback = Number.isFinite(previous) && previous >= 1 ? previous : 1;
+                if (stockQuantity !== null) {
+                    fallback = Math.min(fallback, Math.max(1, stockQuantity));
+                }
+
+                input.value = String(fallback);
+                input.dataset.previousValidValue = String(fallback);
+                cartState[index].quantity = fallback;
+                updateSummary();
+                syncCartInput();
+                syncBrowserStorage();
+                return;
+            }
+
+            let parsed = Number.parseInt(rawValue, 10);
+            if (!Number.isFinite(parsed) || parsed < 1) {
+                if (!enforceMax) {
+                    return;
+                }
+                parsed = 1;
+            }
+
+            if (stockQuantity !== null && parsed > stockQuantity) {
+                if (!enforceMax) {
+                    return;
+                }
+
+                if (showAlert) {
+                    alert(`Only ${stockQuantity} stock available.`);
+                }
+
+                const previous = Number.parseInt(input.dataset.previousValidValue || '', 10);
+                let fallback;
+                if (Number.isFinite(previous) && previous >= 1 && previous <= stockQuantity) {
+                    fallback = previous;
+                } else {
+                    fallback = Math.max(1, stockQuantity);
+                }
+
+                parsed = fallback;
+            }
+
+            input.value = String(parsed);
+            input.dataset.previousValidValue = String(parsed);
+            cartState[index].quantity = parsed;
+            updateSummary();
+            syncCartInput();
+            syncBrowserStorage();
+        }
+
         function updateSummary() {
             const totals = cartState.reduce((acc, item) => {
                 const { price, quantity } = normaliseItem(item);
@@ -979,6 +1058,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             qty.min = 1;
             qty.value = item.quantity;
             qty.dataset.index = String(index);
+            qty.dataset.previousValidValue = String(item.quantity);
 
             const increaseBtn = document.createElement('button');
             increaseBtn.type = 'button';
@@ -1066,7 +1146,18 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             }
 
             input.value = String(nextValue);
-            input.dispatchEvent(new Event('input', { bubbles: true }));
+            commitQuantityChange(input, { allowEmpty: false, showAlert: true, enforceMax: true });
+        });
+
+        orderItemsContainer?.addEventListener('focusin', (event) => {
+            const target = event.target;
+            if (!target.classList.contains('quantity-input')) {
+                return;
+            }
+
+            const current = Number.parseInt(target.value, 10);
+            const safeValue = Number.isFinite(current) && current >= 1 ? current : 1;
+            target.dataset.previousValidValue = String(safeValue);
         });
 
         // Add event listener for quantity input changes
@@ -1075,33 +1166,16 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             if (!target.classList.contains('quantity-input')) {
                 return;
             }
+            commitQuantityChange(target, { allowEmpty: true, showAlert: false, enforceMax: false });
+        });
 
-            const index = Number(target.dataset.index);
-            if (!Number.isInteger(index) || index < 0 || index >= cartState.length) {
+        orderItemsContainer?.addEventListener('focusout', (event) => {
+            const target = event.target;
+            if (!target.classList.contains('quantity-input')) {
                 return;
             }
 
-            let newQuantity = parseInt(target.value);
-            if (isNaN(newQuantity) || newQuantity < 1) {
-                newQuantity = 1;
-                target.value = newQuantity;
-            }
-
-            // Get the product stock quantity from cartState or fetch from server if needed
-            const productId = cartState[index].id;
-            // For simplicity, assume stock quantity is available in cartState as stock
-            const stockQuantity = cartState[index].stock ?? null;
-
-            if (stockQuantity !== null && newQuantity > stockQuantity) {
-                alert(`Only ${stockQuantity} pcs available.`);
-                newQuantity = stockQuantity;
-                target.value = newQuantity;
-            }
-
-            cartState[index].quantity = newQuantity;
-            updateSummary();
-            syncCartInput();
-            syncBrowserStorage();
+            commitQuantityChange(target, { allowEmpty: false, showAlert: true, enforceMax: true });
         });
 
         // Clearing the cart wipes local storage and refreshes the summary instantly

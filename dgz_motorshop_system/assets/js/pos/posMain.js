@@ -1782,7 +1782,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (target.classList.contains('pos-qty')) {
                     const min = parseInt(target.min, 10) || 1;
                     const max = parseInt(target.max, 10);
-                    let value = parseInt(target.value, 10);
+                    const rawValue = target.value.trim();
+
+                    if (rawValue === '') {
+                        // Allow clearing while editing; restore on blur if left empty.
+                        recalcTotals();
+                        persistTableState();
+                        return;
+                    }
+
+                    let value = parseInt(rawValue, 10);
 
                     if (!Number.isFinite(value) || value < min) {
                         value = min;
@@ -1836,6 +1845,42 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (target.classList.contains('pos-service-name')) {
                     persistTableState();
                 }
+            });
+
+            posTableBody.addEventListener('focusout', (event) => {
+                const target = event.target;
+                if (!target.classList.contains('pos-qty')) {
+                    return;
+                }
+
+                const min = parseInt(target.min, 10) || 1;
+                const max = parseInt(target.max, 10);
+                const rawValue = target.value.trim();
+
+                if (rawValue === '') {
+                    const previous = parseInt(target.dataset.previousValidValue || '', 10);
+                    const fallback = Number.isFinite(previous) && previous >= min ? previous : min;
+                    target.value = fallback;
+                    target.dataset.previousValidValue = String(fallback);
+                    recalcTotals();
+                    persistTableState();
+                    return;
+                }
+
+                let value = parseInt(rawValue, 10);
+                if (!Number.isFinite(value) || value < min) {
+                    value = min;
+                }
+
+                if (Number.isFinite(max) && max > 0 && value > max) {
+                    alert(`Only ${max} stock available.`);
+                    value = max;
+                }
+
+                target.value = value;
+                target.dataset.previousValidValue = String(value);
+                recalcTotals();
+                persistTableState();
             });
 
             amountReceivedInput?.addEventListener('input', () => {
