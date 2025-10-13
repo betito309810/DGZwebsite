@@ -2152,7 +2152,6 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
         </div>
 
         <div class="section filters">
-            <h3>Filters</h3>
             <ul>
                 <?php if (empty($filterSummaries)): ?>
                     <li>All stock-in entries</li>
