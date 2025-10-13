@@ -860,7 +860,45 @@
                 });
             }
 
-            // New: surface manual adjustment feedback and keep the user near the edited product
+            // Preserve manual adjustment scroll position so the table doesn't jump after submit.
+            let sessionStore = null;
+            try {
+                sessionStore = window.sessionStorage;
+                sessionStore.setItem('__inventory_scroll_test__', '1');
+                sessionStore.removeItem('__inventory_scroll_test__');
+            } catch (error) {
+                sessionStore = null;
+            }
+
+            const manualAdjustForms = document.querySelectorAll('.manual-adjust-form');
+            const scrollStorageKey = 'inventory_manual_adjust_scroll';
+
+            manualAdjustForms.forEach((form) => {
+                form.addEventListener('submit', () => {
+                    if (!sessionStore) {
+                        return;
+                    }
+                    const currentScroll = typeof window.scrollY === 'number' ? window.scrollY : window.pageYOffset;
+                    sessionStore.setItem(scrollStorageKey, String(currentScroll));
+                });
+            });
+
+            let restoredScroll = false;
+            if (sessionStore) {
+                const storedScroll = sessionStore.getItem(scrollStorageKey);
+                if (storedScroll !== null) {
+                    sessionStore.removeItem(scrollStorageKey);
+                    const parsedScroll = parseFloat(storedScroll);
+                    if (!Number.isNaN(parsedScroll)) {
+                        restoredScroll = true;
+                        window.requestAnimationFrame(() => {
+                            window.scrollTo({ top: parsedScroll, behavior: 'auto', left: 0 });
+                        });
+                    }
+                }
+            }
+
+            // New: surface manual adjustment feedback while leaving the scroll position untouched
             const flashAlert = document.querySelector('[data-inventory-flash]');
             if (flashAlert) {
                 window.setTimeout(() => {
@@ -873,7 +911,14 @@
 
             const flashRow = document.querySelector('tr[data-flash-product="true"]');
             if (flashRow) {
-                flashRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                if (!restoredScroll) {
+                    // Ensure the highlighted row remains within view without forcing a jump when we already restored the scroll.
+                    const rowBounds = flashRow.getBoundingClientRect();
+                    const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+                    if (rowBounds.top < 0 || rowBounds.bottom > viewportHeight) {
+                        flashRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }
                 window.setTimeout(() => {
                     flashRow.classList.remove('manual-adjust-highlight');
                 }, 4000);

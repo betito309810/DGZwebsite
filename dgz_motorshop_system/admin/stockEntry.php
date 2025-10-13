@@ -359,10 +359,11 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                             data-toggle-target="inventorySnapshotContainer"
                             data-expanded-text="Hide Inventory"
                             data-collapsed-text="Show Inventory"
-                            aria-expanded="true"
+                            data-start-collapsed="true"
+                            aria-expanded="false"
                         >
-                            <i class="fas fa-chevron-up panel-toggle__icon" aria-hidden="true"></i>
-                            <span class="panel-toggle__label">Hide Inventory</span>
+                            <i class="fas fa-chevron-down panel-toggle__icon" aria-hidden="true"></i>
+                            <span class="panel-toggle__label">Show Inventory</span>
                         </button>
                     </div>
                 </div>
@@ -520,7 +521,8 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                 </div>
             </section>
 
-            <section class="panel" aria-labelledby="stockInFormTitle">
+            <div class="panel-grid panel-grid--two">
+                <section class="panel panel--stock-form" aria-labelledby="stockInFormTitle">
                 <div class="panel-header">
                     <div>
                         <h3 id="stockInFormTitle"><?= $formMode === 'edit' ? 'Edit Stock-In' : 'New Stock-In' ?></h3>
@@ -544,8 +546,8 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                             data-start-collapsed="true"
                             aria-expanded="false"
                         >
-                            <i class="fas fa-chevron-up panel-toggle__icon" aria-hidden="true"></i>
-                            <span class="panel-toggle__label">Hide Form</span>
+                            <i class="fas fa-chevron-down panel-toggle__icon" aria-hidden="true"></i>
+                            <span class="panel-toggle__label">Show Form</span>
                         </button>
                     </div>
                 </div>
@@ -715,7 +717,73 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                     </div>
                     </form>
                 </div>
-            </section>
+                </section>
+
+                <section class="panel panel--recent-activity" aria-labelledby="recentReceiptsTitle">
+                    <div class="panel-header">
+                        <div>
+                            <h3 id="recentReceiptsTitle">Recent Stock-In Activity</h3>
+                            <p class="panel-subtitle">Latest receipts with status and totals.</p>
+                        </div>
+                        <div class="panel-actions">
+                            <button
+                                type="button"
+                                class="panel-toggle"
+                                data-toggle-target="recentReceiptsContent"
+                                data-expanded-text="Hide Activity"
+                                data-collapsed-text="Show Activity"
+                                data-start-collapsed="true"
+                                aria-expanded="false"
+                            >
+                                <i class="fas fa-chevron-down panel-toggle__icon" aria-hidden="true"></i>
+                                <span class="panel-toggle__label">Show Activity</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="recentReceiptsContent" class="panel-content">
+                        <?php if (!empty($recentReceipts)): ?>
+                        <div class="table-wrapper">
+                            <table class="data-table data-table--compact">
+                                <thead>
+                                    <tr>
+                                        <th>Posted</th>
+                                        <th>Reference</th>
+                                        <th>Supplier</th>
+                                        <th>Received By</th>
+                                        <th>Status</th>
+                                        <th>Items</th>
+                                        <th>Total Qty</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($recentReceipts as $receipt): ?>
+                                        <tr>
+                                            <td><?= htmlspecialchars($receipt['posted_at_formatted'] ?? $receipt['created_at_formatted']) ?></td>
+                                            <td><?= htmlspecialchars($receipt['receipt_code']) ?></td>
+                                            <td><?= htmlspecialchars($receipt['supplier_name']) ?></td>
+                                            <td><?= htmlspecialchars($receipt['received_by_name'] ?? 'Pending') ?></td>
+                                            <td><span class="status-badge status-<?= htmlspecialchars($receipt['status']) ?>"><?= htmlspecialchars(formatStatusLabel($receipt['status'])) ?></span></td>
+                                            <td><?= (int)$receipt['item_count'] ?></td>
+                                            <td><?= (int)$receipt['total_received_qty'] ?></td>
+                                            <td class="table-actions">
+                                                <?php if ($receipt['status'] === 'draft'): ?>
+                                                    <a href="stockEntry.php?receipt=<?= (int)$receipt['id'] ?>&mode=edit" class="table-link">Edit Draft</a>
+                                                <?php else: ?>
+                                                    <a href="stockReceiptView.php?receipt=<?= (int)$receipt['id'] ?>" class="table-link">View</a>
+                                                <?php endif; ?>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                        <?php else: ?>
+                            <p class="empty-state">No stock-in documents recorded yet.</p>
+                        <?php endif; ?>
+                    </div>
+                </section>
+            </div>
 
             <!-- Stock-In report with filters, preview table, and export triggers -->
             <section class="panel" aria-labelledby="stockInReportTitle" id="stock-in-report">
@@ -734,8 +802,8 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                             data-start-collapsed="true"
                             aria-expanded="false"
                         >
-                            <i class="fas fa-chevron-up panel-toggle__icon" aria-hidden="true"></i>
-                            <span class="panel-toggle__label">Hide Report</span>
+                            <i class="fas fa-chevron-down panel-toggle__icon" aria-hidden="true"></i>
+                            <span class="panel-toggle__label">Show Report</span>
                         </button>
                     </div>
                 </div>
@@ -842,70 +910,6 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                 </div>
             </section>
 
-            <section class="panel" aria-labelledby="recentReceiptsTitle">
-                <div class="panel-header">
-                    <div>
-                        <h3 id="recentReceiptsTitle">Recent Stock-In Activity</h3>
-                        <p class="panel-subtitle">Latest receipts with status and totals.</p>
-                    </div>
-                    <div class="panel-actions">
-                        <button
-                            type="button"
-                            class="panel-toggle"
-                            data-toggle-target="recentReceiptsContent"
-                            data-expanded-text="Hide Activity"
-                            data-collapsed-text="Show Activity"
-                            data-start-collapsed="true"
-                            aria-expanded="false"
-                        >
-                            <i class="fas fa-chevron-up panel-toggle__icon" aria-hidden="true"></i>
-                            <span class="panel-toggle__label">Hide Activity</span>
-                        </button>
-                    </div>
-                </div>
-                <div id="recentReceiptsContent" class="panel-content">
-                    <?php if (!empty($recentReceipts)): ?>
-                    <div class="table-wrapper">
-                        <table class="data-table data-table--compact">
-                            <thead>
-                                <tr>
-                                    <th>Posted</th>
-                                    <th>Reference</th>
-                                    <th>Supplier</th>
-                                    <th>Received By</th>
-                                    <th>Status</th>
-                                    <th>Items</th>
-                                    <th>Total Qty</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($recentReceipts as $receipt): ?>
-                                    <tr>
-                                        <td><?= htmlspecialchars($receipt['posted_at_formatted'] ?? $receipt['created_at_formatted']) ?></td>
-                                        <td><?= htmlspecialchars($receipt['receipt_code']) ?></td>
-                                        <td><?= htmlspecialchars($receipt['supplier_name']) ?></td>
-                                        <td><?= htmlspecialchars($receipt['received_by_name'] ?? 'Pending') ?></td>
-                                        <td><span class="status-badge status-<?= htmlspecialchars($receipt['status']) ?>"><?= htmlspecialchars(formatStatusLabel($receipt['status'])) ?></span></td>
-                                        <td><?= (int)$receipt['item_count'] ?></td>
-                                        <td><?= (int)$receipt['total_received_qty'] ?></td>
-                                        <td class="table-actions">
-                                            <?php if ($receipt['status'] === 'draft'): ?>
-                                                <a href="stockEntry.php?receipt=<?= (int)$receipt['id'] ?>&mode=edit" class="table-link">Edit Draft</a>
-                                            <?php else: ?>
-                                                <a href="stockReceiptView.php?receipt=<?= (int)$receipt['id'] ?>" class="table-link">View</a>
-                                            <?php endif; ?>
-                                        </td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                    <?php else: ?>
-                        <p class="empty-state">No stock-in documents recorded yet.</p>
-                    <?php endif; ?>
-                </div>
-            </section>
         </div>
     </main>
 
