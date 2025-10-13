@@ -18,6 +18,42 @@ document.addEventListener('DOMContentLoaded', () => {
     const panelToggleButtons = document.querySelectorAll('[data-toggle-target]');
     const panelTransitionHandlers = new WeakMap();
 
+    const PANEL_STATE_STORAGE_KEY = 'dgzStockEntryPanelStates';
+
+    const loadStoredPanelStates = () => {
+        try {
+            const raw = window.localStorage.getItem(PANEL_STATE_STORAGE_KEY);
+            if (!raw) {
+                return {};
+            }
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') {
+                return parsed;
+            }
+        } catch (error) {
+            console.warn('Unable to read stored panel states.', error);
+        }
+        return {};
+    };
+
+    const storedPanelStates = loadStoredPanelStates();
+
+    const persistPanelStates = () => {
+        try {
+            window.localStorage.setItem(PANEL_STATE_STORAGE_KEY, JSON.stringify(storedPanelStates));
+        } catch (error) {
+            console.warn('Unable to persist panel state.', error);
+        }
+    };
+
+    const rememberPanelState = (panelId, isExpanded) => {
+        if (!panelId) {
+            return;
+        }
+        storedPanelStates[panelId] = isExpanded ? 'expanded' : 'collapsed';
+        persistPanelStates();
+    };
+
     const setPanelVisibilityState = (element, state) => {
         element.dataset.panelVisibility = state;
     };
@@ -151,7 +187,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const expandedText = button.getAttribute('data-expanded-text') || 'Hide';
         const label = button.querySelector('.panel-toggle__label');
         const icon = button.querySelector('.panel-toggle__icon');
-        const startCollapsed = button.getAttribute('data-start-collapsed') === 'true';
+        const storedState = storedPanelStates[targetId];
+        let startCollapsed = button.getAttribute('data-start-collapsed') === 'true';
+
+        if (storedState === 'expanded') {
+            startCollapsed = false;
+        } else if (storedState === 'collapsed') {
+            startCollapsed = true;
+        }
 
         if (startCollapsed) {
             hidePanel(target, { immediate: true });
@@ -159,7 +202,7 @@ document.addEventListener('DOMContentLoaded', () => {
             showPanel(target, { immediate: true });
         }
 
-        const syncState = (isHidden) => {
+        const syncState = (isHidden, { persist = false } = {}) => {
             button.setAttribute('aria-expanded', (!isHidden).toString());
             if (label) {
                 label.textContent = isHidden ? collapsedText : expandedText;
@@ -168,9 +211,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 icon.className = `${isHidden ? 'fas fa-chevron-down' : 'fas fa-chevron-up'} panel-toggle__icon`;
             }
             target.setAttribute('aria-hidden', isHidden.toString());
+            if (persist) {
+                rememberPanelState(targetId, !isHidden);
+            }
         };
 
-        syncState(isPanelHidden(target));
+        const initialHidden = isPanelHidden(target);
+        syncState(initialHidden, { persist: Boolean(storedState) });
 
         let scrollTimer;
 
@@ -178,14 +225,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const isCurrentlyHidden = isPanelHidden(target);
             if (isCurrentlyHidden) {
                 showPanel(target);
-                syncState(false);
+                syncState(false, { persist: true });
                 window.clearTimeout(scrollTimer);
                 scrollTimer = window.setTimeout(() => {
                     target.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }, 320);
             } else {
                 hidePanel(target);
-                syncState(true);
+                syncState(true, { persist: true });
             }
         });
     });
