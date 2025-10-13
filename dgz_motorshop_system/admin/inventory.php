@@ -174,6 +174,66 @@ if ($canManualAdjust && isset($_POST['update_stock'])) {
     $change = intval($_POST['change'] ?? 0);
     $redirectTarget = 'inventory.php';
 
+    $returnViewRaw = $_POST['return_view'] ?? '';
+    if (is_string($returnViewRaw)) {
+        $returnViewRaw = trim($returnViewRaw);
+    } else {
+        $returnViewRaw = '';
+    }
+
+    if ($returnViewRaw !== '') {
+        $returnViewData = [];
+        parse_str($returnViewRaw, $returnViewData);
+        if (!empty($returnViewData)) {
+            $allowedViewKeys = array_flip(['search', 'brand', 'category', 'page', 'sort', 'direction']);
+            $returnViewData = array_intersect_key($returnViewData, $allowedViewKeys);
+
+            if (isset($returnViewData['page'])) {
+                $pageValue = max(1, (int) $returnViewData['page']);
+                if ($pageValue === 1) {
+                    unset($returnViewData['page']);
+                } else {
+                    $returnViewData['page'] = (string) $pageValue;
+                }
+            }
+
+            if (isset($returnViewData['sort'])) {
+                $sortValue = (string) $returnViewData['sort'];
+                if ($sortValue !== 'name') {
+                    unset($returnViewData['sort'], $returnViewData['direction']);
+                } else {
+                    $returnViewData['sort'] = $sortValue;
+                    if (isset($returnViewData['direction'])) {
+                        $directionValue = strtolower((string) $returnViewData['direction']);
+                        if (!in_array($directionValue, ['asc', 'desc'], true)) {
+                            unset($returnViewData['direction']);
+                        } else {
+                            $returnViewData['direction'] = $directionValue;
+                        }
+                    }
+                }
+            } else {
+                unset($returnViewData['direction']);
+            }
+
+            foreach (['search', 'brand', 'category'] as $textKey) {
+                if (isset($returnViewData[$textKey])) {
+                    $textValue = trim((string) $returnViewData[$textKey]);
+                    if ($textValue === '') {
+                        unset($returnViewData[$textKey]);
+                    } else {
+                        $returnViewData[$textKey] = $textValue;
+                    }
+                }
+            }
+
+            $queryString = http_build_query($returnViewData);
+            if ($queryString !== '') {
+                $redirectTarget .= '?' . $queryString;
+            }
+        }
+    }
+
     if ($id) {
         $redirectTarget .= '#product-' . $id;
     }
@@ -343,6 +403,20 @@ if ($currentSort === 'name') {
 } else {
     $nameSortIndicator = '↕';
 }
+
+$manualAdjustReturnParams = [
+    'search' => $search !== '' ? $search : null,
+    'brand' => $brandFilter !== '' ? $brandFilter : null,
+    'category' => $categoryFilter !== '' ? $categoryFilter : null,
+    'page' => $page > 1 ? (string) $page : null,
+    'sort' => $currentSort !== '' ? $currentSort : null,
+    'direction' => $currentDirection !== '' ? $currentDirection : null,
+];
+
+$manualAdjustReturnParams = array_filter($manualAdjustReturnParams, static function ($value) {
+    return $value !== null && $value !== '';
+});
+$manualAdjustReturnView = http_build_query($manualAdjustReturnParams);
 
 $exportParams = $_GET;
 unset($exportParams['export'], $exportParams['page']);
@@ -1241,6 +1315,7 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                                 <div class="manual-adjust">
                                     <form method="post" class="manual-adjust-form">
                                         <input type="hidden" name="id" value="<?= (int) $p['id'] ?>">
+                                        <input type="hidden" name="return_view" value="<?= htmlspecialchars($manualAdjustReturnView) ?>">
                                         <input
                                             type="number"
                                             id="manualAdjust<?= (int) $p['id'] ?>"
