@@ -1944,7 +1944,25 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
 
     if ($dateFromLabel !== '' || $dateToLabel !== '') {
         if ($dateFromLabel !== '' && $dateToLabel !== '') {
-            $filterSummaries[] = 'Date: ' . $dateFromLabel . ' – ' . $dateToLabel;
+            $dateFromValue = $dateFromLabel;
+            $dateFromRaw = $filters['date_from'] ?? $filters['date_from_input'] ?? '';
+            if ($dateFromRaw !== '') {
+                $dateFromTimestamp = strtotime($dateFromRaw);
+                if ($dateFromTimestamp !== false) {
+                    $dateFromValue = date('m/d/Y', $dateFromTimestamp);
+                }
+            }
+
+            $dateToValue = $dateToLabel;
+            $dateToRaw = $filters['date_to'] ?? $filters['date_to_input'] ?? '';
+            if ($dateToRaw !== '') {
+                $dateToTimestamp = strtotime($dateToRaw);
+                if ($dateToTimestamp !== false) {
+                    $dateToValue = date('m/d/Y', $dateToTimestamp);
+                }
+            }
+
+            $filterSummaries[] = 'Date: ' . $dateFromValue . ' to ' . $dateToValue;
         } elseif ($dateFromLabel !== '') {
             $filterSummaries[] = 'Date From: ' . $dateFromLabel;
         } else {
@@ -2150,20 +2168,12 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
             <h3>Summary</h3>
             <table>
                 <tr>
-                    <th>Total Rows</th>
-                    <td><?= number_format($totalRows) ?></td>
-                </tr>
-                <tr>
-                    <th>Distinct Receipts</th>
-                    <td><?= number_format($uniqueReceipts) ?></td>
-                </tr>
-                <tr>
                     <th>Total Quantity Received</th>
                     <td><?= number_format($totalQty, 0) ?></td>
                 </tr>
                 <tr>
                     <th>Estimated Total Value</th>
-                    <td>&#8369;<?= number_format($totalValue, 2) ?></td>
+                    <td>PHP <?= number_format($totalValue, 2) ?></td>
                 </tr>
             </table>
         </div>
@@ -2198,7 +2208,7 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
                                 <td><?= htmlspecialchars($row['document_number'] ?? '') ?></td>
                                 <td><?= htmlspecialchars($row['product_name'] ?? 'Unknown Product') ?></td>
                                 <td><?= htmlspecialchars($qtyDisplay) ?></td>
-                                <td>&#8369;<?= htmlspecialchars($unitCostDisplay) ?></td>
+                                <td>PHP <?= htmlspecialchars($unitCostDisplay) ?></td>
                                 <td><?= htmlspecialchars($row['receiver_name'] ?? 'Pending') ?></td>
                                 <td class="status-cell"><span class="badge badge-<?= htmlspecialchars($statusValue) ?>"><?= htmlspecialchars($statusLabel) ?></span></td>
                             </tr>
@@ -2287,10 +2297,8 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
     }
 
     $lines[] = $lightDivider;
-    $lines[] = 'Total Rows: ' . $totalRows;
-    $lines[] = 'Distinct Receipts: ' . $uniqueReceipts;
     $lines[] = 'Total Quantity Received: ' . number_format($totalQty, 0);
-    $lines[] = 'Estimated Total Value: ₱' . number_format($totalValue, 2);
+    $lines[] = 'Estimated Total Value: PHP ' . number_format($totalValue, 2);
     $lines[] = '';
     $lines[] = 'Prepared via DGZ Inventory System';
 
