@@ -198,6 +198,19 @@
     color: #1f2937;
 }
 
+.activity-filters .form-grid {
+    grid-template-columns: repeat(auto-fit, minmax(160px, auto));
+    justify-content: flex-start;
+}
+
+.activity-filters .form-group {
+    max-width: 220px;
+}
+
+.activity-filters input[type="date"] {
+    width: 100%;
+}
+
 .form-group input,
 .form-group select,
 .form-group textarea {
@@ -964,60 +977,78 @@
     font-size: 14px;
 }
 
-#inventorySnapshotContainer .pagination-container {
+.panel .pagination-container {
     display: flex;
     flex-wrap: wrap;
     justify-content: space-between;
     align-items: center;
-    gap: 12px;
+    gap: 14px;
+    width: 100%;
+    margin-top: 18px;
+    padding: 16px 20px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
-#inventorySnapshotContainer .pagination-info {
+.panel .pagination-info {
     font-size: 13px;
     color: #6b7280;
 }
 
-#inventorySnapshotContainer .pagination {
+.panel .pagination {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
 }
 
-#inventorySnapshotContainer .pagination a,
-#inventorySnapshotContainer .pagination span {
+.panel .pagination a,
+.panel .pagination span {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     padding: 8px 12px;
-    border-radius: 8px;
+    border-radius: 10px;
     border: 1px solid #d1d5db;
     font-size: 13px;
+    font-weight: 500;
     text-decoration: none;
     color: #1f2937;
-    min-width: 36px;
-    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+    min-width: 38px;
+    background: #ffffff;
+    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-#inventorySnapshotContainer .pagination a:hover {
+.panel .pagination a:hover {
     background: #2563eb;
     color: #ffffff;
     border-color: #2563eb;
+    box-shadow: 0 6px 12px rgba(37, 99, 235, 0.25);
 }
 
-#inventorySnapshotContainer .pagination .current {
+.panel .pagination .current {
     background: #2563eb;
     border-color: #2563eb;
     color: #ffffff;
     font-weight: 600;
+    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.32);
 }
 
-#inventorySnapshotContainer .pagination .disabled {
-    color: #9ca3af;
-    border-color: #e5e7eb;
+.panel .pagination .prev,
+.panel .pagination .next {
+    padding: 8px 16px;
+    min-width: 64px;
+}
+
+.panel .pagination .disabled {
+    color: #94a3b8;
+    border-color: #e2e8f0;
     background: #f3f4f6;
+    box-shadow: none;
     cursor: default;
 }
 
-#inventorySnapshotContainer .pagination .disabled i {
+.panel .pagination .disabled i {
     color: inherit;
 }

@@ -86,7 +86,7 @@ $staffAllowedPages = [
                 <a href="<?php echo htmlspecialchars($href); ?>" class="nav-link<?php echo $isActive ? ' active' : ''; ?>">
                     <i class="<?php echo htmlspecialchars($item['icon']); ?>"></i>
                     <span class="nav-text"><?php echo htmlspecialchars($item['label']); ?></span>
-                    <?php if (!empty($item['badge'])): ?>
+                    <?php if (!empty($item['badge']) && !$isActive): ?>
                         <span class="nav-badge" data-sidebar-pos-count><?= (int) $item['badge'] ?></span>
                     <?php endif; ?>
                 </a>
