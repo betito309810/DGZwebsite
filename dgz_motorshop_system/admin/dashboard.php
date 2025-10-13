@@ -34,7 +34,12 @@ try {
 
 // Simple stats
 try {
-    $today = $pdo->prepare("SELECT COUNT(*) as c, COALESCE(SUM(total),0) as s FROM orders WHERE DATE(created_at)=CURDATE()");
+    $today = $pdo->prepare(
+        "SELECT COUNT(*) as c, COALESCE(SUM(total),0) as s
+           FROM orders
+          WHERE DATE(created_at)=CURDATE()
+            AND status IN ('approved','completed')"
+    );
     $today->execute();
     $t = $today->fetch();
 } catch (Exception $e) {

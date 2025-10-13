@@ -213,20 +213,83 @@ try {
 
     $newAttachmentPath = $storedAttachment['relativePath'] ?? $existingAttachmentPath;
 
-    $updateStmt = $pdo->prepare(
-        'UPDATE orders
-             SET status = "disapproved",
-                 decline_reason_id = ?,
-                 decline_reason_note = ?,
-                 decline_attachment_path = ?
-           WHERE id = ?'
+    $restockProducts = [];
+    $restockVariants = [];
+
+    $itemsStmt = $pdo->prepare(
+        'SELECT oi.product_id,
+                oi.variant_id,
+                oi.qty,
+                COALESCE(oi.product_id, pv.product_id) AS resolved_product_id
+           FROM order_items oi
+      LEFT JOIN product_variants pv ON pv.id = oi.variant_id
+          WHERE oi.order_id = ?'
     );
-    $updateStmt->execute([
+    $itemsStmt->execute([$orderId]);
+    foreach ($itemsStmt->fetchAll(PDO::FETCH_ASSOC) as $itemRow) {
+        $qty = (int) ($itemRow['qty'] ?? 0);
+        if ($qty <= 0) {
+            continue;
+        }
+
+        $variantId = isset($itemRow['variant_id']) ? (int) $itemRow['variant_id'] : 0;
+        $productId = isset($itemRow['resolved_product_id']) ? (int) $itemRow['resolved_product_id'] : 0;
+
+        if ($variantId > 0) {
+            if (!isset($restockVariants[$variantId])) {
+                $restockVariants[$variantId] = 0;
+            }
+            $restockVariants[$variantId] += $qty;
+        }
+
+        if ($productId > 0) {
+            if (!isset($restockProducts[$productId])) {
+                $restockProducts[$productId] = 0;
+            }
+            $restockProducts[$productId] += $qty;
+        }
+    }
+
+    if (!empty($restockVariants)) {
+        $variantRestockStmt = $pdo->prepare('UPDATE product_variants SET quantity = quantity + ? WHERE id = ?');
+        foreach ($restockVariants as $variantId => $qty) {
+            $variantRestockStmt->execute([$qty, $variantId]);
+        }
+    }
+
+    if (!empty($restockProducts)) {
+        $productRestockStmt = $pdo->prepare('UPDATE products SET quantity = quantity + ? WHERE id = ?');
+        foreach ($restockProducts as $productId => $qty) {
+            $productRestockStmt->execute([$qty, $productId]);
+        }
+    }
+
+    $processedByUserId = isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null;
+    $supportsProcessedBy = ordersSupportsProcessedBy($pdo);
+
+    $updateFields = [
+        'status = "disapproved"',
+        'decline_reason_id = ?',
+        'decline_reason_note = ?',
+        'decline_attachment_path = ?',
+    ];
+
+    $updateParams = [
         $reasonId,
         $note !== '' ? $note : null,
         $newAttachmentPath !== '' ? $newAttachmentPath : null,
-        $orderId,
-    ]);
+    ];
+
+    if ($supportsProcessedBy) {
+        $updateFields[] = 'processed_by_user_id = ?';
+        $updateParams[] = $processedByUserId;
+    }
+
+    $updateParams[] = $orderId;
+
+    $updateSql = 'UPDATE orders SET ' . implode(', ', $updateFields) . ' WHERE id = ?';
+    $updateStmt = $pdo->prepare($updateSql);
+    $updateStmt->execute($updateParams);
 
     $pdo->commit();
 } catch (RuntimeException $e) {
