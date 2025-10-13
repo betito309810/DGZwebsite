@@ -122,11 +122,47 @@ body {
 .sales-search-form {
     padding: 0 20px;
     margin: -10px 0 10px;
+    display: flex;
+    align-items: flex-end;
+    gap: 16px;
+    flex-wrap: wrap;
 }
 
 .sales-search-group {
     position: relative;
     max-width: 360px;
+}
+
+.sales-filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 180px;
+}
+
+.sales-filter-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.sales-filter-select {
+    border-radius: 10px;
+    border: 1px solid #d4d4d8;
+    padding: 10px 16px;
+    font-size: 15px;
+    background: #ffffff;
+    height: 48px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    min-width: 200px;
+}
+
+.sales-filter-select:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
 }
 
 .sales-search-input {
@@ -176,10 +212,19 @@ body {
 @media (max-width: 768px) {
     .sales-search-form {
         margin: 0 0 15px;
+        align-items: stretch;
     }
 
     .sales-search-group {
         max-width: none;
+    }
+
+    .sales-filter-group {
+        width: 100%;
+    }
+
+    .sales-filter-select {
+        width: 100%;
     }
 }
 

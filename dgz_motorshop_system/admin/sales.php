@@ -6,6 +6,26 @@ $pdo = db();
 $role = $_SESSION['role'] ?? '';
 enforceStaffAccess();
 $supportsProcessedBy = ordersSupportsProcessedBy($pdo);
+
+if (!function_exists('ordersHasColumn')) {
+    function ordersHasColumn(PDO $pdo, string $column): bool
+    {
+        static $cache = [];
+
+        if (!array_key_exists($column, $cache)) {
+            try {
+                $stmt = $pdo->prepare('SHOW COLUMNS FROM orders LIKE :column');
+                $stmt->execute([':column' => $column]);
+                $cache[$column] = $stmt->fetchColumn() !== false;
+            } catch (Throwable $e) {
+                error_log('ordersHasColumn detection failed: ' . $e->getMessage());
+                $cache[$column] = false;
+            }
+        }
+
+        return $cache[$column];
+    }
+}
 $buildCashierFragments = static function (bool $enabled): array {
     if ($enabled) {
         return [
@@ -233,6 +253,26 @@ if ($hasInvoiceSearch) {
     $queryParams['invoice'] = $invoiceSearch;
 }
 
+$hasOrderTypeColumn = false;
+try {
+    $hasOrderTypeColumn = ordersHasColumn($pdo, 'order_type');
+} catch (Throwable $e) {
+    error_log('Unable to determine order_type availability: ' . $e->getMessage());
+    $hasOrderTypeColumn = false;
+}
+
+$validOrderTypes = ['all', 'walkin', 'online'];
+$orderTypeFilter = isset($_GET['order_type']) ? strtolower(trim((string) $_GET['order_type'])) : 'all';
+if (!in_array($orderTypeFilter, $validOrderTypes, true)) {
+    $orderTypeFilter = 'all';
+}
+
+if (!$hasOrderTypeColumn) {
+    $orderTypeFilter = 'all';
+} elseif ($orderTypeFilter !== 'all') {
+    $queryParams['order_type'] = $orderTypeFilter;
+}
+
 // Pagination variables
 $records_per_page = 20;
 $current_page = isset($_GET['page']) ? (int) $_GET['page'] : 1;
@@ -246,6 +286,11 @@ $sqlParams = [];
 if ($hasInvoiceSearch) {
     $baseConditions[] = 'o.invoice_number LIKE :invoice_search';
     $sqlParams[':invoice_search'] = '%' . $invoiceSearch . '%';
+}
+
+if ($hasOrderTypeColumn && $orderTypeFilter !== 'all') {
+    $baseConditions[] = "LOWER(COALESCE(o.order_type, '')) = :order_type";
+    $sqlParams[':order_type'] = $orderTypeFilter;
 }
 
 $whereClause = implode(' AND ', $baseConditions);
@@ -413,6 +458,21 @@ $buildPageUrl = static function (int $page) use ($queryParams): string {
                     data-sales-search-clear
                 >&times;</button>
             </div>
+            <?php if($hasOrderTypeColumn): ?>
+            <div class="sales-filter-group">
+                <label for="orderTypeFilter" class="sales-filter-label">Customer type</label>
+                <select
+                    id="orderTypeFilter"
+                    name="order_type"
+                    class="sales-filter-select"
+                    onchange="this.form.submit()"
+                >
+                    <option value="all"<?php if($orderTypeFilter === 'all') echo ' selected'; ?>>All orders</option>
+                    <option value="walkin"<?php if($orderTypeFilter === 'walkin') echo ' selected'; ?>>Walk-in orders</option>
+                    <option value="online"<?php if($orderTypeFilter === 'online') echo ' selected'; ?>>Online orders</option>
+                </select>
+            </div>
+            <?php endif; ?>
         </form>
 
         <!-- Table Container -->
@@ -424,7 +484,6 @@ $buildPageUrl = static function (int $page) use ($queryParams): string {
                             <th>ID</th>
                             <th>Invoice</th>
                             <th>Cashier</th>
-                            <th>Address</th>
                             <th>Total</th>
                             <th>Payment Method</th>
                             <th>Reference</th>
@@ -436,7 +495,7 @@ $buildPageUrl = static function (int $page) use ($queryParams): string {
                     <tbody>
                         <?php if(empty($orders)): ?>
                         <tr>
-                            <td colspan="11" style="text-align: center; padding: 40px; color: #6b7280;">
+                            <td colspan="9" style="text-align: center; padding: 40px; color: #6b7280;">
                                 <i class="fas fa-inbox"
                                     style="font-size: 48px; margin-bottom: 10px; display: block;"></i>
                                 <?php if($hasInvoiceSearch): ?>
@@ -469,7 +528,6 @@ $buildPageUrl = static function (int $page) use ($queryParams): string {
                             <td><?=$o['id']?></td>
                             <td><?=$o['invoice_number'] ? htmlspecialchars($o['invoice_number']) : 'N/A'?></td>
                             <td><?=htmlspecialchars(resolveCashierName($o))?></td>
-                            <td><?=htmlspecialchars($o['address'] ?? 'N/A')?></td>
                             <td>₱<?=number_format($o['total'],2)?></td>
                             <td><?=htmlspecialchars($o['payment_method'])?></td>
                             <?php
