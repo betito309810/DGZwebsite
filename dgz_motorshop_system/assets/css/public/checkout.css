@@ -535,6 +535,94 @@ textarea {
     box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.35);
 }
 
+.transaction-limit-modal {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(1.5px);
+    z-index: 2600;
+}
+
+.transaction-limit-modal[hidden] {
+    display: none;
+}
+
+.transaction-limit-modal__dialog {
+    width: min(480px, 100%);
+    background: #ffffff;
+    border-radius: 18px;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.25);
+    border: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.transaction-limit-modal__content {
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.transaction-limit-modal__content h3 {
+    font-size: 22px;
+    color: #1f2937;
+    font-weight: 700;
+    margin: 0;
+}
+
+.transaction-limit-modal__message {
+    font-size: 16px;
+    color: #334155;
+    line-height: 1.6;
+    margin: 0;
+}
+
+.transaction-limit-modal__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: flex-end;
+}
+
+.transaction-limit-modal__button {
+    border: 1px solid #d7e0f2;
+    background: #ffffff;
+    color: #1f2937;
+    font-weight: 600;
+    padding: 10px 18px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.transaction-limit-modal__button:hover {
+    background: rgba(226, 232, 240, 0.5);
+    transform: translateY(-1px);
+}
+
+.transaction-limit-modal__button:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+}
+
+.transaction-limit-modal__button--primary {
+    background: #2563eb;
+    color: #ffffff;
+    border-color: #1d4ed8;
+    box-shadow: 0 12px 24px rgba(37, 99, 235, 0.25);
+}
+
+.transaction-limit-modal__button--primary:hover {
+    background: #1d4ed8;
+}
+
+.transaction-limit-modal__button--primary:focus-visible {
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.35);
+}
+
 @media (min-width: 1024px) {
     body {
         background: #eef2f8;

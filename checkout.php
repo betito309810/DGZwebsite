@@ -794,6 +794,23 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
         </div>
     </div>
 
+    <div id="transactionLimitModal" class="transaction-limit-modal" aria-hidden="true" hidden>
+        <div class="transaction-limit-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="transactionLimitModalTitle">
+            <div class="transaction-limit-modal__content">
+                <h3 id="transactionLimitModalTitle">Large Transaction Notice</h3>
+                <p class="transaction-limit-modal__message" data-modal-message>
+                    This transaction is too big, would you like to personally go to our store or would you like to proceed?
+                </p>
+                <div class="transaction-limit-modal__actions">
+                    <button type="button" class="transaction-limit-modal__button transaction-limit-modal__button--primary" data-modal-proceed>
+                        Yes, I would like to proceed
+                    </button>
+                    <button type="button" class="transaction-limit-modal__button" data-modal-ok>OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         // File upload feedback
         document.getElementById('proof').addEventListener('change', function(e) {
@@ -826,6 +843,10 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
         const submitButton = document.querySelector('.submit-btn');
         const clearCartButton = document.getElementById('clearCartButton');
         const checkoutForm = document.querySelector('.checkout-form form');
+        const transactionLimitModal = document.getElementById('transactionLimitModal');
+        const transactionLimitModalMessage = transactionLimitModal?.querySelector('[data-modal-message]');
+        const transactionLimitModalProceed = transactionLimitModal?.querySelector('[data-modal-proceed]');
+        const transactionLimitModalOk = transactionLimitModal?.querySelector('[data-modal-ok]');
 
         let cartState = [];
         try {
@@ -833,6 +854,68 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
         } catch (error) {
             cartState = [];
         }
+
+        let currentTransactionTotal = 0;
+        let allowLargeTransactionSubmission = false;
+        let transactionModalProceedHandler = null;
+
+        function toggleTransactionModal(visible) {
+            if (!transactionLimitModal) {
+                return;
+            }
+
+            transactionLimitModal.toggleAttribute('hidden', !visible);
+            transactionLimitModal.setAttribute('aria-hidden', visible ? 'false' : 'true');
+
+            if (visible) {
+                const focusTarget = (!transactionLimitModalProceed?.hidden && transactionLimitModalProceed)
+                    ? transactionLimitModalProceed
+                    : transactionLimitModalOk;
+                requestAnimationFrame(() => {
+                    focusTarget?.focus({ preventScroll: true });
+                });
+            }
+        }
+
+        function closeTransactionModal() {
+            toggleTransactionModal(false);
+            transactionModalProceedHandler = null;
+        }
+
+        function showTransactionModal({ message, showProceed, onProceed }) {
+            if (!transactionLimitModal || !transactionLimitModalMessage) {
+                return;
+            }
+
+            transactionLimitModalMessage.textContent = message;
+
+            if (transactionLimitModalProceed) {
+                transactionLimitModalProceed.hidden = !showProceed;
+            }
+
+            transactionModalProceedHandler = typeof onProceed === 'function' ? onProceed : null;
+
+            toggleTransactionModal(true);
+        }
+
+        transactionLimitModalOk?.addEventListener('click', () => {
+            closeTransactionModal();
+        });
+
+        transactionLimitModalProceed?.addEventListener('click', () => {
+            if (transactionModalProceedHandler) {
+                const handler = transactionModalProceedHandler;
+                transactionModalProceedHandler = null;
+                handler();
+            }
+            closeTransactionModal();
+        });
+
+        transactionLimitModal?.addEventListener('click', (event) => {
+            if (event.target === transactionLimitModal) {
+                closeTransactionModal();
+            }
+        });
 
         // Guard submission so blank required fields cannot slip through trimming
         checkoutForm?.addEventListener('submit', (event) => {
@@ -856,6 +939,36 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             if (invalidField) {
                 event.preventDefault();
                 invalidField.reportValidity();
+                return;
+            }
+
+            if (allowLargeTransactionSubmission) {
+                allowLargeTransactionSubmission = false;
+                return;
+            }
+
+            const LARGE_TRANSACTION_NOTICE_LIMIT = 70000;
+            const LARGE_TRANSACTION_REJECTION_LIMIT = 100000;
+
+            if (currentTransactionTotal >= LARGE_TRANSACTION_REJECTION_LIMIT) {
+                event.preventDefault();
+                showTransactionModal({
+                    message: 'This transaction is too big for our online ordering. We would advise you to personally go to our physical store to shop!',
+                    showProceed: false,
+                });
+                return;
+            }
+
+            if (currentTransactionTotal >= LARGE_TRANSACTION_NOTICE_LIMIT) {
+                event.preventDefault();
+                showTransactionModal({
+                    message: 'This transaction is too big, would you like to personally go to our store or would you like to proceed?',
+                    showProceed: true,
+                    onProceed: () => {
+                        allowLargeTransactionSubmission = true;
+                        checkoutForm.requestSubmit();
+                    },
+                });
             }
         });
 
@@ -913,6 +1026,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             subtotalLabel.textContent = `Subtotal, ${totals.items} item${totals.items === 1 ? '' : 's'}`;
             subtotalValue.textContent = formatPeso(totals.subtotal);
             totalValue.textContent = formatPeso(totals.subtotal);
+            currentTransactionTotal = totals.subtotal;
 
             const hasItems = cartState.length > 0;
             submitButton.disabled = !hasItems;
