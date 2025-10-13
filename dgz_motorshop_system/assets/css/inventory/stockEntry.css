@@ -824,7 +824,9 @@
     gap: 20px;
 }
 
-#inventorySnapshotContainer .inventory-filter-form {
+#inventorySnapshotContainer .inventory-filter-form,
+.recent-activity-filter-form,
+.stock-in-report-filter-form {
     display: flex;
     flex-direction: column;
     gap: 14px;
@@ -834,13 +836,17 @@
     padding: 18px;
 }
 
-#inventorySnapshotContainer .inventory-filter-form .filter-row {
+#inventorySnapshotContainer .inventory-filter-form .filter-row,
+.recent-activity-filter-form .filter-row,
+.stock-in-report-filter-form .filter-row {
     display: flex;
     flex-wrap: wrap;
     gap: 12px;
 }
 
-#inventorySnapshotContainer .inventory-filter-form .filter-search-group {
+#inventorySnapshotContainer .inventory-filter-form .filter-search-group,
+.recent-activity-filter-form .filter-search-group,
+.stock-in-report-filter-form .filter-search-group {
     position: relative;
     flex: 1 1 320px;
     display: flex;
@@ -851,7 +857,9 @@
     background: #ffffff;
 }
 
-#inventorySnapshotContainer .inventory-filter-form .filter-search-input {
+#inventorySnapshotContainer .inventory-filter-form .filter-search-input,
+.recent-activity-filter-form .filter-search-input,
+.stock-in-report-filter-form .filter-search-input {
     flex: 1;
     border: none;
     background: transparent;
@@ -860,11 +868,15 @@
     color: #0f172a;
 }
 
-#inventorySnapshotContainer .inventory-filter-form .filter-search-input:focus {
+#inventorySnapshotContainer .inventory-filter-form .filter-search-input:focus,
+.recent-activity-filter-form .filter-search-input:focus,
+.stock-in-report-filter-form .filter-search-input:focus {
     outline: none;
 }
 
-#inventorySnapshotContainer .inventory-filter-form .filter-clear {
+#inventorySnapshotContainer .inventory-filter-form .filter-clear,
+.recent-activity-filter-form .filter-clear,
+.stock-in-report-filter-form .filter-clear {
     border: none;
     background: none;
     color: #9ca3af;
@@ -875,15 +887,23 @@
     transition: color 0.2s ease;
 }
 
-#inventorySnapshotContainer .inventory-filter-form .filter-clear:hover {
+#inventorySnapshotContainer .inventory-filter-form .filter-clear:hover,
+.recent-activity-filter-form .filter-clear:hover,
+.stock-in-report-filter-form .filter-clear:hover {
     color: #ef4444;
 }
 
-#inventorySnapshotContainer .filter-row--selects {
+#inventorySnapshotContainer .filter-row--selects,
+.recent-activity-filter-form .filter-row--selects,
+.stock-in-report-filter-form .filter-row--selects {
     align-items: center;
 }
 
-#inventorySnapshotContainer .filter-select {
+#inventorySnapshotContainer .filter-select,
+.recent-activity-filter-form .filter-select,
+.stock-in-report-filter-form .filter-select,
+.recent-activity-filter-form select,
+.stock-in-report-filter-form select {
     min-width: 160px;
     border: 1px solid #d1d5db;
     border-radius: 10px;
@@ -893,13 +913,22 @@
     color: #1f2937;
 }
 
-#inventorySnapshotContainer .filter-select:focus {
+#inventorySnapshotContainer .filter-select:focus,
+.recent-activity-filter-form .filter-select:focus,
+.stock-in-report-filter-form .filter-select:focus,
+.recent-activity-filter-form select:focus,
+.stock-in-report-filter-form select:focus,
+.recent-activity-filter-form input[type="date"]:focus,
+.stock-in-report-filter-form input[type="date"]:focus,
+.stock-in-report-filter-form input[type="text"]:focus {
     outline: none;
     border-color: #2563eb;
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
 }
 
-#inventorySnapshotContainer .filter-submit {
+#inventorySnapshotContainer .filter-submit,
+.recent-activity-filter-form .filter-submit,
+.stock-in-report-filter-form .filter-submit {
     background: #2563eb;
     color: #ffffff;
     border: none;
@@ -910,12 +939,16 @@
     transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-#inventorySnapshotContainer .filter-submit:hover {
+#inventorySnapshotContainer .filter-submit:hover,
+.recent-activity-filter-form .filter-submit:hover,
+.stock-in-report-filter-form .filter-submit:hover {
     transform: translateY(-1px);
     box-shadow: 0 8px 16px rgba(37, 99, 235, 0.28);
 }
 
-#inventorySnapshotContainer .filter-reset {
+#inventorySnapshotContainer .filter-reset,
+.recent-activity-filter-form .filter-reset,
+.stock-in-report-filter-form .filter-reset {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -928,7 +961,66 @@
     transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-#inventorySnapshotContainer .filter-reset:hover {
+#inventorySnapshotContainer .filter-reset:hover,
+.recent-activity-filter-form .filter-reset:hover,
+.stock-in-report-filter-form .filter-reset:hover {
+    background: #e5ebf5;
+}
+
+.recent-activity-filter-form .filter-date-group,
+.stock-in-report-filter-form .filter-date-group,
+.stock-in-report-filter-form .filter-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 160px;
+}
+
+.recent-activity-filter-form .filter-date-group input,
+.stock-in-report-filter-form .filter-date-group input,
+.stock-in-report-filter-form .filter-field input,
+.stock-in-report-filter-form .filter-field select {
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    color: #1f2937;
+    background: #ffffff;
+}
+
+.recent-activity-filter-form .filter-actions,
+.stock-in-report-filter-form .filter-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: flex-end;
+    align-items: center;
+}
+
+.filter-actions--split {
+    justify-content: space-between;
+}
+
+.filter-actions__group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.filter-export {
+    background: #f1f5f9;
+    color: #1f2937;
+    border: 1px solid #cbd5f5;
+    border-radius: 10px;
+    padding: 10px 18px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.filter-export:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 16px rgba(148, 163, 184, 0.2);
     background: #e5ebf5;
 }
 

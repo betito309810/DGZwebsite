@@ -756,26 +756,35 @@ document.addEventListener('DOMContentLoaded', () => {
         markDirty();
     });
 
-    const inventoryFilterForm = document.getElementById('inventoryFilterForm');
-    if (inventoryFilterForm) {
-        const searchInput = inventoryFilterForm.querySelector('.filter-search-input');
-        const clearButton = inventoryFilterForm.querySelector('[data-filter-clear]');
-        const pageField = inventoryFilterForm.querySelector('input[name="inv_page"]');
+    function setupFilterForm({ formId, pageFieldName, searchInputName }) {
+        const form = document.getElementById(formId);
+        if (!form) {
+            return;
+        }
 
-        inventoryFilterForm.addEventListener('submit', () => {
-            if (pageField) {
+        const pageField = pageFieldName ? form.querySelector(`input[name="${pageFieldName}"]`) : null;
+        if (pageField) {
+            form.addEventListener('submit', () => {
                 pageField.value = '1';
-            }
-        });
-
-        if (clearButton && searchInput) {
-            clearButton.addEventListener('click', () => {
-                searchInput.value = '';
-                if (pageField) {
-                    pageField.value = '1';
-                }
-                inventoryFilterForm.submit();
             });
         }
+
+        if (searchInputName) {
+            const searchInput = form.querySelector(`input[name="${searchInputName}"]`);
+            const clearButton = form.querySelector('[data-filter-clear]');
+            if (clearButton && searchInput) {
+                clearButton.addEventListener('click', () => {
+                    searchInput.value = '';
+                    if (pageField) {
+                        pageField.value = '1';
+                    }
+                    form.submit();
+                });
+            }
+        }
     }
+
+    setupFilterForm({ formId: 'inventoryFilterForm', pageFieldName: 'inv_page', searchInputName: 'inv_search' });
+    setupFilterForm({ formId: 'recentActivityFilterForm', pageFieldName: 'recent_page', searchInputName: 'recent_search' });
+    setupFilterForm({ formId: 'stockInReportFilterForm', pageFieldName: 'report_page', searchInputName: 'report_product_search' });
 });
