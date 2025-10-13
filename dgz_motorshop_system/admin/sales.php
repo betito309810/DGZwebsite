@@ -153,21 +153,114 @@ function resolveCashierName(array $row): string
     return 'Unassigned';
 }
 
+if (!function_exists('buildOrderTypeFilterCondition')) {
+    /**
+     * Build the SQL clause and parameters required to filter orders by type.
+     *
+     * When the "order_type" column is available we filter directly against it.
+     * Otherwise we fall back to classifying walk-in transactions as any order
+     * whose payment method matches a known cash-based keyword. All other
+     * payment methods are treated as online orders.
+     *
+     * @param string $filter               The requested filter value.
+     * @param bool   $hasOrderTypeColumn   Whether the orders table exposes the order_type column.
+     * @return array{clause:string,params:array<string,string>,uses_payment_method_fallback:bool}
+     */
+    function buildOrderTypeFilterCondition(string $filter, bool $hasOrderTypeColumn): array
+    {
+        $normalizedFilter = strtolower(trim($filter));
+        $result = [
+            'clause' => '',
+            'params' => [],
+            'uses_payment_method_fallback' => false,
+        ];
+
+        if ($normalizedFilter === '' || $normalizedFilter === 'all') {
+            $result['uses_payment_method_fallback'] = !$hasOrderTypeColumn;
+            return $result;
+        }
+
+        if ($hasOrderTypeColumn) {
+            $result['clause'] = "LOWER(TRIM(COALESCE(o.order_type, ''))) = :order_type_filter";
+            $result['params'][':order_type_filter'] = $normalizedFilter;
+            return $result;
+        }
+
+        $normalizedMethodExpression = "LOWER(TRIM(COALESCE(o.payment_method, '')))";
+        $walkInKeywords = [
+            'cash',
+            'cash payment',
+            'cash (walk-in)',
+            'cash - walk-in',
+            'walk-in',
+            'walk in',
+            'cash on delivery',
+            'cash-on-delivery',
+            'cod',
+        ];
+
+        $placeholders = [];
+        foreach ($walkInKeywords as $index => $keyword) {
+            $paramName = ':walkin_keyword_' . $index;
+            $placeholders[] = $paramName;
+            $result['params'][$paramName] = $keyword;
+        }
+
+        $comparisonList = $normalizedMethodExpression . ' IN (' . implode(', ', $placeholders) . ')';
+        $result['uses_payment_method_fallback'] = true;
+
+        if ($normalizedFilter === 'walkin') {
+            $result['clause'] = $comparisonList;
+            return $result;
+        }
+
+        // Treat all other filters ("online") as the inverse of the walk-in list.
+        $result['clause'] = $normalizedMethodExpression . ' NOT IN (' . implode(', ', $placeholders) . ')';
+        return $result;
+    }
+}
+
+$validOrderTypes = ['all', 'walkin', 'online'];
+$orderTypeFilter = isset($_GET['order_type']) ? strtolower(trim((string) $_GET['order_type'])) : 'all';
+if (!in_array($orderTypeFilter, $validOrderTypes, true)) {
+    $orderTypeFilter = 'all';
+}
+
+$hasOrderTypeColumn = false;
+try {
+    $hasOrderTypeColumn = ordersHasColumn($pdo, 'order_type');
+} catch (Throwable $e) {
+    error_log('Unable to determine order_type availability: ' . $e->getMessage());
+    $hasOrderTypeColumn = false;
+}
+
+$orderTypeFilterDetails = buildOrderTypeFilterCondition($orderTypeFilter, $hasOrderTypeColumn);
+
 // Handle CSV export FIRST - before any other queries
 if(isset($_GET['export']) && $_GET['export'] == 'csv') {
-    // Get ALL orders for export
+    $exportConditions = ["o.status IN ('approved','completed')"];
+    if ($orderTypeFilterDetails['clause'] !== '') {
+        $exportConditions[] = $orderTypeFilterDetails['clause'];
+    }
+
+    $exportWhereClause = implode(' AND ', $exportConditions);
+
     $fragments = $buildCashierFragments($supportsProcessedBy);
     $cashierSelect = $fragments['select'];
     $cashierJoin = $fragments['join'];
     $export_sql = "SELECT o.*, $cashierSelect
         FROM orders o
         $cashierJoin
-        WHERE o.status IN ('approved','completed')
+        WHERE $exportWhereClause
         ORDER BY o.created_at DESC";
 
     $export_stmt = null;
     try {
-        $export_stmt = $pdo->query($export_sql);
+        $export_stmt = $pdo->prepare($export_sql);
+        foreach ($orderTypeFilterDetails['params'] as $param => $value) {
+            $export_stmt->bindValue($param, $value, PDO::PARAM_STR);
+        }
+        $export_stmt->execute();
     } catch (Throwable $e) {
         if ($supportsProcessedBy) {
             error_log('Cashier join failed during CSV export; retrying without processed_by_user_id: ' . $e->getMessage());
@@ -178,9 +271,13 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
             $export_sql = "SELECT o.*, $cashierSelect
                 FROM orders o
                 $cashierJoin
-                WHERE o.status IN ('approved','completed')
+                WHERE $exportWhereClause
                 ORDER BY o.created_at DESC";
-            $export_stmt = $pdo->query($export_sql);
+            $export_stmt = $pdo->prepare($export_sql);
+            foreach ($orderTypeFilterDetails['params'] as $param => $value) {
+                $export_stmt->bindValue($param, $value, PDO::PARAM_STR);
+            }
+            $export_stmt->execute();
         } else {
             throw $e;
         }
@@ -252,26 +349,13 @@ $queryParams = [];
 if ($hasInvoiceSearch) {
     $queryParams['invoice'] = $invoiceSearch;
 }
-
-$hasOrderTypeColumn = false;
-try {
-    $hasOrderTypeColumn = ordersHasColumn($pdo, 'order_type');
-} catch (Throwable $e) {
-    error_log('Unable to determine order_type availability: ' . $e->getMessage());
-    $hasOrderTypeColumn = false;
-}
-
-$validOrderTypes = ['all', 'walkin', 'online'];
-$orderTypeFilter = isset($_GET['order_type']) ? strtolower(trim((string) $_GET['order_type'])) : 'all';
-if (!in_array($orderTypeFilter, $validOrderTypes, true)) {
-    $orderTypeFilter = 'all';
-}
-
-if (!$hasOrderTypeColumn) {
-    $orderTypeFilter = 'all';
-} elseif ($orderTypeFilter !== 'all') {
+if ($orderTypeFilter !== 'all') {
     $queryParams['order_type'] = $orderTypeFilter;
 }
+
+$exportUrlParams = $queryParams;
+$exportUrlParams['export'] = 'csv';
+$exportUrl = '?' . http_build_query($exportUrlParams);
 
 // Pagination variables
 $records_per_page = 20;
@@ -288,9 +372,11 @@ if ($hasInvoiceSearch) {
     $sqlParams[':invoice_search'] = '%' . $invoiceSearch . '%';
 }
 
-if ($hasOrderTypeColumn && $orderTypeFilter !== 'all') {
-    $baseConditions[] = "LOWER(COALESCE(o.order_type, '')) = :order_type";
-    $sqlParams[':order_type'] = $orderTypeFilter;
+if ($orderTypeFilterDetails['clause'] !== '') {
+    $baseConditions[] = $orderTypeFilterDetails['clause'];
+    foreach ($orderTypeFilterDetails['params'] as $param => $value) {
+        $sqlParams[$param] = $value;
+    }
 }
 
 $whereClause = implode(' AND ', $baseConditions);
@@ -428,7 +514,7 @@ $buildPageUrl = static function (int $page) use ($queryParams): string {
 
         <!-- Export Button and PDF Report Generator -->
         <div class="action-buttons">
-            <a href="?export=csv" class="btn btn-export">
+            <a href="<?=htmlspecialchars($exportUrl, ENT_QUOTES, 'UTF-8')?>" class="btn btn-export">
                 <i class="fas fa-file-export"></i>
                 Export to CSV
             </a>
@@ -458,7 +544,6 @@ $buildPageUrl = static function (int $page) use ($queryParams): string {
                     data-sales-search-clear
                 >&times;</button>
             </div>
-            <?php if($hasOrderTypeColumn): ?>
             <div class="sales-filter-group">
                 <label for="orderTypeFilter" class="sales-filter-label">Customer type</label>
                 <select
@@ -471,8 +556,10 @@ $buildPageUrl = static function (int $page) use ($queryParams): string {
                     <option value="walkin"<?php if($orderTypeFilter === 'walkin') echo ' selected'; ?>>Walk-in orders</option>
                     <option value="online"<?php if($orderTypeFilter === 'online') echo ' selected'; ?>>Online orders</option>
                 </select>
+                <?php if(!empty($orderTypeFilterDetails['uses_payment_method_fallback'])): ?>
+                <p class="sales-filter-hint">Filtering by payment method when order type data is unavailable.</p>
+                <?php endif; ?>
             </div>
-            <?php endif; ?>
         </form>
 
         <!-- Table Container -->
