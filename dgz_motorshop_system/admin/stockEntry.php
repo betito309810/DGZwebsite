@@ -75,7 +75,74 @@ if (isset($_GET['posted']) && $_GET['posted'] === '1') {
 
 $products = fetchProductCatalog($pdo);
 $suppliers = fetchSuppliersList($pdo);
-$recentReceipts = $moduleReady ? fetchRecentReceipts($pdo) : [];
+$recentActivityFilters = parseRecentReceiptFilters($_GET ?? []);
+$recentActivityFiltersActive = (
+    ($recentActivityFilters['search'] ?? '') !== '' ||
+    ($recentActivityFilters['date_from_input'] ?? '') !== '' ||
+    ($recentActivityFilters['date_to_input'] ?? '') !== ''
+);
+$recentActivityPage = isset($_GET['recent_page']) ? (int)$_GET['recent_page'] : 1;
+$recentActivityPage = max(1, $recentActivityPage);
+$recentReceiptsLimit = 10;
+$recentReceiptsOffset = 0;
+$recentReceiptsTotal = 0;
+$recentReceiptsTotalPages = 0;
+$recentReceiptsStartRecord = 0;
+$recentReceiptsEndRecord = 0;
+$recentReceipts = [];
+
+$recentActivityPreservedParams = [];
+foreach (($_GET ?? []) as $paramKey => $paramValue) {
+    if (in_array($paramKey, ['recent_search', 'recent_date_from', 'recent_date_to', 'recent_page'], true)) {
+        continue;
+    }
+    $recentActivityPreservedParams[$paramKey] = $paramValue;
+}
+
+if ($moduleReady) {
+    $recentReceiptsTotal = countRecentReceipts($pdo, $recentActivityFilters);
+    $recentReceiptsTotalPages = $recentReceiptsTotal > 0 ? (int)ceil($recentReceiptsTotal / $recentReceiptsLimit) : 0;
+    if ($recentReceiptsTotalPages > 0 && $recentActivityPage > $recentReceiptsTotalPages) {
+        $recentActivityPage = $recentReceiptsTotalPages;
+    }
+    $recentActivityPage = max(1, $recentActivityPage);
+    $recentReceiptsOffset = ($recentActivityPage - 1) * $recentReceiptsLimit;
+    if ($recentReceiptsOffset < 0) {
+        $recentReceiptsOffset = 0;
+    }
+
+    if ($recentReceiptsTotal > 0) {
+        $recentReceipts = fetchRecentReceipts($pdo, $recentActivityFilters, $recentReceiptsLimit, $recentReceiptsOffset);
+        $recentReceiptsStartRecord = $recentReceiptsOffset + 1;
+        $recentReceiptsEndRecord = $recentReceiptsOffset + count($recentReceipts);
+        if ($recentReceiptsEndRecord > $recentReceiptsTotal) {
+            $recentReceiptsEndRecord = $recentReceiptsTotal;
+        }
+    }
+}
+
+$recentActivityFilterParams = $recentActivityPreservedParams;
+if (($recentActivityFilters['search'] ?? '') !== '') {
+    $recentActivityFilterParams['recent_search'] = $recentActivityFilters['search'];
+}
+if (($recentActivityFilters['date_from_input'] ?? '') !== '') {
+    $recentActivityFilterParams['recent_date_from'] = $recentActivityFilters['date_from_input'];
+}
+if (($recentActivityFilters['date_to_input'] ?? '') !== '') {
+    $recentActivityFilterParams['recent_date_to'] = $recentActivityFilters['date_to_input'];
+}
+
+$recentActivityPaginationParams = $recentActivityFilterParams;
+unset($recentActivityPaginationParams['recent_page']);
+$recentActivityPaginationQuery = http_build_query($recentActivityPaginationParams);
+$recentActivityPaginationUrl = 'stockEntry.php' . ($recentActivityPaginationQuery !== '' ? '?' . $recentActivityPaginationQuery : '');
+$recentActivityPaginationSeparator = $recentActivityPaginationQuery !== '' ? '&' : '?';
+
+$recentActivityResetUrl = 'stockEntry.php';
+if (!empty($recentActivityPreservedParams)) {
+    $recentActivityResetQuery = http_build_query($recentActivityPreservedParams);
+    $recentActivityResetUrl .= $recentActivityResetQuery !== '' ? '?' . $recentActivityResetQuery : '';
+}
 
 // Stock-in report state: filters, rows for on-page preview, and inventory snapshot
 $stockReceiptStatusOptions = getStockReceiptStatusOptions();
@@ -543,45 +610,150 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                     </div>
                 </div>
                 <div id="recentReceiptsContent" class="panel-content">
-                    <?php if (!empty($recentReceipts)): ?>
-                    <div class="table-wrapper">
-                        <table class="data-table data-table--compact">
-                            <thead>
-                                <tr>
-                                    <th>Posted</th>
-                                    <th>Reference</th>
-                                    <th>Supplier</th>
-                                    <th>Received By</th>
-                                    <th>Status</th>
-                                    <th>Items</th>
-                                    <th>Total Qty</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($recentReceipts as $receipt): ?>
-                                    <tr>
-                                        <td><?= htmlspecialchars($receipt['posted_at_formatted'] ?? $receipt['created_at_formatted']) ?></td>
-                                        <td><?= htmlspecialchars($receipt['receipt_code']) ?></td>
-                                        <td><?= htmlspecialchars($receipt['supplier_name']) ?></td>
-                                        <td><?= htmlspecialchars($receipt['received_by_name'] ?? 'Pending') ?></td>
-                                        <td><span class="status-badge status-<?= htmlspecialchars($receipt['status']) ?>"><?= htmlspecialchars(formatStatusLabel($receipt['status'])) ?></span></td>
-                                        <td><?= (int)$receipt['item_count'] ?></td>
-                                        <td><?= (int)$receipt['total_received_qty'] ?></td>
-                                        <td class="table-actions">
-                                            <?php if ($receipt['status'] === 'draft'): ?>
-                                                <a href="stockEntry.php?receipt=<?= (int)$receipt['id'] ?>&mode=edit" class="table-link">Edit Draft</a>
-                                            <?php else: ?>
-                                                <a href="stockReceiptView.php?receipt=<?= (int)$receipt['id'] ?>" class="table-link">View</a>
-                                            <?php endif; ?>
-                                        </td>
-                                    </tr>
+                    <form method="get" class="recent-activity-filter-form" aria-label="Recent stock-in filters">
+                        <input type="hidden" name="recent_page" value="1">
+                        <?php foreach ($recentActivityPreservedParams as $paramKey => $paramValue): ?>
+                            <?php if (is_array($paramValue)): ?>
+                                <?php foreach ($paramValue as $value): ?>
+                                    <input type="hidden" name="<?= htmlspecialchars($paramKey) ?>[]" value="<?= htmlspecialchars((string)$value) ?>">
                                 <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
+                            <?php else: ?>
+                                <input type="hidden" name="<?= htmlspecialchars($paramKey) ?>" value="<?= htmlspecialchars((string)$paramValue) ?>">
+                            <?php endif; ?>
+                        <?php endforeach; ?>
+                        <div class="filter-row">
+                            <div class="filter-search-group">
+                                <input
+                                    type="text"
+                                    name="recent_search"
+                                    value="<?= htmlspecialchars($recentActivityFilters['search'] ?? '') ?>"
+                                    placeholder="Search by reference number..."
+                                    class="filter-search-input"
+                                    aria-label="Search recent stock-in by reference"
+                                >
+                            </div>
+                        </div>
+                        <div class="filter-row filter-row--selects">
+                            <div class="filter-date-group">
+                                <label for="recentDateFrom">From</label>
+                                <input
+                                    type="date"
+                                    id="recentDateFrom"
+                                    name="recent_date_from"
+                                    value="<?= htmlspecialchars($recentActivityFilters['date_from_input'] ?? '') ?>"
+                                    class="filter-select"
+                                >
+                            </div>
+                            <div class="filter-date-group">
+                                <label for="recentDateTo">To</label>
+                                <input
+                                    type="date"
+                                    id="recentDateTo"
+                                    name="recent_date_to"
+                                    value="<?= htmlspecialchars($recentActivityFilters['date_to_input'] ?? '') ?>"
+                                    class="filter-select"
+                                >
+                            </div>
+                            <button type="submit" class="filter-submit">Filter</button>
+                            <a class="filter-reset" href="<?= htmlspecialchars($recentActivityResetUrl) ?>">Reset</a>
+                        </div>
+                    </form>
+
+                    <?php if ($recentReceiptsTotal > 0 && !empty($recentReceipts)): ?>
+                        <div class="table-wrapper">
+                            <table class="data-table data-table--compact">
+                                <thead>
+                                    <tr>
+                                        <th>Posted</th>
+                                        <th>Reference</th>
+                                        <th>Supplier</th>
+                                        <th>Received By</th>
+                                        <th>Status</th>
+                                        <th>Items</th>
+                                        <th>Total Qty</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($recentReceipts as $receipt): ?>
+                                        <tr>
+                                            <td><?= htmlspecialchars($receipt['posted_at_formatted'] ?? $receipt['created_at_formatted']) ?></td>
+                                            <td><?= htmlspecialchars($receipt['receipt_code']) ?></td>
+                                            <td><?= htmlspecialchars($receipt['supplier_name']) ?></td>
+                                            <td><?= htmlspecialchars($receipt['received_by_name'] ?? 'Pending') ?></td>
+                                            <td><span class="status-badge status-<?= htmlspecialchars($receipt['status']) ?>"><?= htmlspecialchars(formatStatusLabel($receipt['status'])) ?></span></td>
+                                            <td><?= (int)$receipt['item_count'] ?></td>
+                                            <td><?= (int)$receipt['total_received_qty'] ?></td>
+                                            <td class="table-actions">
+                                                <?php if ($receipt['status'] === 'draft'): ?>
+                                                    <a href="stockEntry.php?receipt=<?= (int)$receipt['id'] ?>&mode=edit" class="table-link">Edit Draft</a>
+                                                <?php else: ?>
+                                                    <a href="stockReceiptView.php?receipt=<?= (int)$receipt['id'] ?>" class="table-link">View</a>
+                                                <?php endif; ?>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="pagination-container">
+                            <div class="pagination-info">
+                                Showing <?= $recentReceiptsStartRecord ?> to <?= $recentReceiptsEndRecord ?> of <?= $recentReceiptsTotal ?> entries
+                            </div>
+                            <div class="pagination">
+                                <?php if ($recentActivityPage > 1): ?>
+                                    <a href="<?= htmlspecialchars($recentActivityPaginationUrl . $recentActivityPaginationSeparator . 'recent_page=' . ($recentActivityPage - 1)) ?>" class="prev">
+                                        <i class="fas fa-chevron-left"></i> Prev
+                                    </a>
+                                <?php else: ?>
+                                    <span class="prev disabled">
+                                        <i class="fas fa-chevron-left"></i> Prev
+                                    </span>
+                                <?php endif; ?>
+
+                                <?php
+                                    $recentActivityStartPage = max(1, $recentActivityPage - 2);
+                                    $recentActivityEndPage = min($recentReceiptsTotalPages, $recentActivityPage + 2);
+                                ?>
+
+                                <?php if ($recentActivityStartPage > 1): ?>
+                                    <a href="<?= htmlspecialchars($recentActivityPaginationUrl . $recentActivityPaginationSeparator . 'recent_page=1') ?>">1</a>
+                                    <?php if ($recentActivityStartPage > 2): ?>
+                                        <span>...</span>
+                                    <?php endif; ?>
+                                <?php endif; ?>
+
+                                <?php for ($i = $recentActivityStartPage; $i <= $recentActivityEndPage; $i++): ?>
+                                    <?php if ($i === $recentActivityPage): ?>
+                                        <span class="current"><?= $i ?></span>
+                                    <?php else: ?>
+                                        <a href="<?= htmlspecialchars($recentActivityPaginationUrl . $recentActivityPaginationSeparator . 'recent_page=' . $i) ?>"><?= $i ?></a>
+                                    <?php endif; ?>
+                                <?php endfor; ?>
+
+                                <?php if ($recentActivityEndPage < $recentReceiptsTotalPages): ?>
+                                    <?php if ($recentActivityEndPage < $recentReceiptsTotalPages - 1): ?>
+                                        <span>...</span>
+                                    <?php endif; ?>
+                                    <a href="<?= htmlspecialchars($recentActivityPaginationUrl . $recentActivityPaginationSeparator . 'recent_page=' . $recentReceiptsTotalPages) ?>"><?= $recentReceiptsTotalPages ?></a>
+                                <?php endif; ?>
+
+                                <?php if ($recentActivityPage < $recentReceiptsTotalPages): ?>
+                                    <a href="<?= htmlspecialchars($recentActivityPaginationUrl . $recentActivityPaginationSeparator . 'recent_page=' . ($recentActivityPage + 1)) ?>" class="next">
+                                        Next <i class="fas fa-chevron-right"></i>
+                                    </a>
+                                <?php else: ?>
+                                    <span class="next disabled">
+                                        Next <i class="fas fa-chevron-right"></i>
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
                     <?php else: ?>
-                        <p class="empty-state">No stock-in documents recorded yet.</p>
+                        <p class="empty-state">
+                            <?= $recentActivityFiltersActive ? 'No stock-in documents match the selected filters.' : 'No stock-in documents recorded yet.' ?>
+                        </p>
                     <?php endif; ?>
                 </div>
             </section>
@@ -1503,8 +1675,107 @@ function logReceiptAudit(PDO $pdo, int $receiptId, string $action, int $userId, 
 /**
  * Fetch latest stock receipts with aggregate info for dashboard table.
  */
-function fetchRecentReceipts(PDO $pdo): array
+function parseRecentReceiptFilters(array $source): array
 {
+    $search = trim((string)($source['recent_search'] ?? ''));
+
+    $dateFromRaw = trim((string)($source['recent_date_from'] ?? ''));
+    $dateToRaw = trim((string)($source['recent_date_to'] ?? ''));
+
+    $dateFrom = null;
+    $dateTo = null;
+
+    if ($dateFromRaw !== '') {
+        $dateFromObj = DateTime::createFromFormat('Y-m-d', $dateFromRaw);
+        if ($dateFromObj instanceof DateTime) {
+            $dateFrom = $dateFromObj->format('Y-m-d');
+        }
+    }
+
+    if ($dateToRaw !== '') {
+        $dateToObj = DateTime::createFromFormat('Y-m-d', $dateToRaw);
+        if ($dateToObj instanceof DateTime) {
+            $dateTo = $dateToObj->format('Y-m-d');
+        }
+    }
+
+    if ($dateFrom !== null && $dateTo !== null && $dateFrom > $dateTo) {
+        [$dateFrom, $dateTo] = [$dateTo, $dateFrom];
+        [$dateFromRaw, $dateToRaw] = [$dateToRaw, $dateFromRaw];
+    }
+
+    return [
+        'search' => $search,
+        'date_from' => $dateFrom,
+        'date_to' => $dateTo,
+        'date_from_input' => $dateFromRaw,
+        'date_to_input' => $dateToRaw,
+    ];
+}
+
+function countRecentReceipts(PDO $pdo, array $filters): int
+{
+    $conditions = [];
+    $params = [];
+
+    if (($filters['search'] ?? '') !== '') {
+        $conditions[] = 'sr.receipt_code LIKE :recent_search';
+        $params[':recent_search'] = '%' . $filters['search'] . '%';
+    }
+
+    if (($filters['date_from'] ?? null) !== null) {
+        $conditions[] = 'DATE(COALESCE(sr.posted_at, sr.created_at)) >= :recent_date_from';
+        $params[':recent_date_from'] = $filters['date_from'];
+    }
+
+    if (($filters['date_to'] ?? null) !== null) {
+        $conditions[] = 'DATE(COALESCE(sr.posted_at, sr.created_at)) <= :recent_date_to';
+        $params[':recent_date_to'] = $filters['date_to'];
+    }
+
+    $whereSql = '';
+    if (!empty($conditions)) {
+        $whereSql = 'WHERE ' . implode(' AND ', $conditions);
+    }
+
+    $sql = 'SELECT COUNT(*) FROM stock_receipts sr ' . $whereSql;
+    $stmt = $pdo->prepare($sql);
+    foreach ($params as $name => $value) {
+        $stmt->bindValue($name, $value);
+    }
+    $stmt->execute();
+
+    return (int)$stmt->fetchColumn();
+}
+
+function fetchRecentReceipts(PDO $pdo, array $filters, int $limit = 10, int $offset = 0): array
+{
+    $limit = max(1, $limit);
+    $offset = max(0, $offset);
+
+    $conditions = [];
+    $params = [];
+
+    if (($filters['search'] ?? '') !== '') {
+        $conditions[] = 'sr.receipt_code LIKE :recent_search';
+        $params[':recent_search'] = '%' . $filters['search'] . '%';
+    }
+
+    if (($filters['date_from'] ?? null) !== null) {
+        $conditions[] = 'DATE(COALESCE(sr.posted_at, sr.created_at)) >= :recent_date_from';
+        $params[':recent_date_from'] = $filters['date_from'];
+    }
+
+    if (($filters['date_to'] ?? null) !== null) {
+        $conditions[] = 'DATE(COALESCE(sr.posted_at, sr.created_at)) <= :recent_date_to';
+        $params[':recent_date_to'] = $filters['date_to'];
+    }
+
+    $whereSql = '';
+    if (!empty($conditions)) {
+        $whereSql = 'WHERE ' . implode(' AND ', $conditions);
+    }
+
     $sql = '
         SELECT
             sr.id,
@@ -1519,11 +1790,20 @@ function fetchRecentReceipts(PDO $pdo): array
         FROM stock_receipts sr
         LEFT JOIN stock_receipt_items items ON items.receipt_id = sr.id
         LEFT JOIN users u ON u.id = sr.received_by_user_id
+        ' . $whereSql . '
         GROUP BY sr.id, sr.receipt_code, sr.supplier_name, sr.status, sr.created_at, sr.posted_at, u.name
-        ORDER BY sr.created_at DESC
-        LIMIT 10
+        ORDER BY COALESCE(sr.posted_at, sr.created_at) DESC, sr.id DESC
+        LIMIT :recent_limit OFFSET :recent_offset
     ';
-    $stmt = $pdo->query($sql);
+
+    $stmt = $pdo->prepare($sql);
+    foreach ($params as $name => $value) {
+        $stmt->bindValue($name, $value);
+    }
+    $stmt->bindValue(':recent_limit', $limit, PDO::PARAM_INT);
+    $stmt->bindValue(':recent_offset', $offset, PDO::PARAM_INT);
+    $stmt->execute();
+
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     foreach ($rows as &$row) {
