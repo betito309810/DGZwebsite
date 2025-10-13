@@ -610,6 +610,76 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
     <title>Checkout - DGZ Motorshop</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="<?= htmlspecialchars($checkoutStylesheet) ?>">
+    <style>
+        .checkout-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(17, 24, 39, 0.55);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            z-index: 2000;
+        }
+
+        .checkout-modal[hidden] {
+            display: none !important;
+        }
+
+        .checkout-modal__dialog {
+            background: #fff;
+            border-radius: 18px;
+            max-width: 420px;
+            width: 100%;
+            padding: 32px 28px;
+            box-shadow: 0 24px 60px rgba(15, 23, 42, 0.2);
+            text-align: center;
+        }
+
+        .checkout-modal__dialog h3 {
+            margin-bottom: 14px;
+            font-size: 22px;
+            color: #1f2937;
+            border: 0;
+        }
+
+        .checkout-modal__dialog p {
+            margin-bottom: 24px;
+            color: #4b5563;
+            line-height: 1.5;
+        }
+
+        .checkout-modal__actions {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .checkout-modal__button {
+            border: none;
+            border-radius: 999px;
+            padding: 12px 18px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .checkout-modal__button--primary {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: #fff;
+        }
+
+        .checkout-modal__button--secondary {
+            background: #e5e7eb;
+            color: #1f2937;
+        }
+
+        .checkout-modal__button:focus {
+            outline: 3px solid rgba(59, 130, 246, 0.5);
+            outline-offset: 2px;
+        }
+    </style>
 </head>
 <body>
     <header class="header">
@@ -794,6 +864,33 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
         </div>
     </div>
 
+    <div id="highValueConfirmModal" class="checkout-modal" hidden>
+        <div class="checkout-modal__dialog">
+            <h3>Large Transaction</h3>
+            <p>This transaction is too big, would you like to personally go to our store or would you like to proceed?</p>
+            <div class="checkout-modal__actions">
+                <button type="button" class="checkout-modal__button checkout-modal__button--primary" data-high-value-proceed>
+                    Yes, I would like to proceed
+                </button>
+                <button type="button" class="checkout-modal__button checkout-modal__button--secondary" data-high-value-cancel>
+                    Ok
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="highValueBlockedModal" class="checkout-modal" hidden>
+        <div class="checkout-modal__dialog">
+            <h3>Amount Too High</h3>
+            <p>This transaction is too big for our online ordering. We would advise you to personally go to our physical store to shop!</p>
+            <div class="checkout-modal__actions">
+                <button type="button" class="checkout-modal__button checkout-modal__button--primary" data-high-value-blocked-ok>
+                    Ok
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // File upload feedback
         document.getElementById('proof').addEventListener('change', function(e) {
@@ -826,12 +923,35 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
         const submitButton = document.querySelector('.submit-btn');
         const clearCartButton = document.getElementById('clearCartButton');
         const checkoutForm = document.querySelector('.checkout-form form');
+        const highValueConfirmModal = document.getElementById('highValueConfirmModal');
+        const highValueBlockedModal = document.getElementById('highValueBlockedModal');
+        const highValueProceedButton = document.querySelector('[data-high-value-proceed]');
+        const highValueCancelButton = document.querySelector('[data-high-value-cancel]');
+        const highValueBlockedOkButton = document.querySelector('[data-high-value-blocked-ok]');
 
         let cartState = [];
         try {
             cartState = JSON.parse(cartInput.value || '[]') || [];
         } catch (error) {
             cartState = [];
+        }
+
+        let currentTotals = { items: 0, subtotal: 0 };
+        let highValueOverride = false;
+        let pendingHighValueSubmission = null;
+
+        function openModal(modal) {
+            if (!modal) {
+                return;
+            }
+            modal.removeAttribute('hidden');
+        }
+
+        function closeModal(modal) {
+            if (!modal) {
+                return;
+            }
+            modal.setAttribute('hidden', 'hidden');
         }
 
         // Guard submission so blank required fields cannot slip through trimming
@@ -856,6 +976,33 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             if (invalidField) {
                 event.preventDefault();
                 invalidField.reportValidity();
+                return;
+            }
+
+            if (currentTotals.subtotal >= 100000) {
+                event.preventDefault();
+                highValueOverride = false;
+                pendingHighValueSubmission = null;
+                openModal(highValueBlockedModal);
+                return;
+            }
+
+            if (!highValueOverride && currentTotals.subtotal >= 70000) {
+                event.preventDefault();
+                pendingHighValueSubmission = () => {
+                    highValueOverride = true;
+                    if (typeof checkoutForm.requestSubmit === 'function') {
+                        checkoutForm.requestSubmit(submitButton ?? undefined);
+                    } else {
+                        checkoutForm.submit();
+                    }
+                };
+                openModal(highValueConfirmModal);
+                return;
+            }
+
+            if (highValueOverride) {
+                highValueOverride = false;
             }
         });
 
@@ -992,6 +1139,11 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             subtotalLabel.textContent = `Subtotal, ${totals.items} item${totals.items === 1 ? '' : 's'}`;
             subtotalValue.textContent = formatPeso(totals.subtotal);
             totalValue.textContent = formatPeso(totals.subtotal);
+
+            currentTotals = totals;
+            if (currentTotals.subtotal < 70000) {
+                highValueOverride = false;
+            }
 
             const hasItems = cartState.length > 0;
             submitButton.disabled = !hasItems;
@@ -1183,6 +1335,24 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             cartState = [];
             renderOrderItems();
             window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+
+        highValueProceedButton?.addEventListener('click', () => {
+            closeModal(highValueConfirmModal);
+            const resume = pendingHighValueSubmission;
+            pendingHighValueSubmission = null;
+            if (typeof resume === 'function') {
+                resume();
+            }
+        });
+
+        highValueCancelButton?.addEventListener('click', () => {
+            closeModal(highValueConfirmModal);
+            pendingHighValueSubmission = null;
+        });
+
+        highValueBlockedOkButton?.addEventListener('click', () => {
+            closeModal(highValueBlockedModal);
         });
 
         renderOrderItems();
