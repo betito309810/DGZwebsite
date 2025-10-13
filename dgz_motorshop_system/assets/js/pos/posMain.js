@@ -58,6 +58,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const variantModalEmpty = document.getElementById('variantModalEmpty');
             const variantModalTitle = document.getElementById('variantModalTitle');
             const variantModalSubtitle = document.getElementById('variantModalSubtitle');
+            // Queue storing products that still need variant selections so we can
+            // walk the user through them one at a time when multiple items are picked.
+            const pendingVariantProducts = [];
 
             const receiptModal = document.getElementById('receiptModal');
             const closeReceiptModalButton = document.getElementById('closeReceiptModal');
@@ -912,7 +915,7 @@ document.addEventListener('DOMContentLoaded', () => {
             function addProductById(productId) {
                 const product = productCatalog.find((item) => String(item.id) === String(productId));
                 if (!product) {
-                    return false;
+                    return { status: 'missing' };
                 }
 
                 const variants = Array.isArray(product.variants) ? product.variants : [];
@@ -924,17 +927,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     if (totalVariantQty <= 0) {
                         alert(`${product.name} is out of stock and cannot be added.`);
-                        return false;
+                        return { status: 'out_of_stock' };
                     }
 
-                    openVariantModal(product);
-                    return false;
+                    return { status: 'requires_variant', product };
                 }
 
                 const availableQty = Number(product.quantity) || 0;
                 if (availableQty <= 0) {
                     alert(`${product.name} is out of stock and cannot be added.`);
-                    return false;
+                    return { status: 'out_of_stock' };
                 }
 
                 const existingRow = posTableBody.querySelector(`[data-product-id="${product.id}"]:not([data-variant-id])`);
@@ -963,7 +965,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 recalcTotals();
                 persistTableState();
                 updateSettleButtonState();
-                return true;
+                return { status: 'added' };
             }
             // End POS add-product helper
 
@@ -1095,7 +1097,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 resetServiceForm();
             }
 
-            function closeVariantModal() {
+            // Helper that pulls the next product in the queue and opens the
+            // variant modal. Called after queueing from the product picker and
+            // after each successful variant selection.
+            function openNextVariantModal() {
+                if (!variantModal) {
+                    return;
+                }
+
+                const nextProduct = pendingVariantProducts.shift();
+                if (!nextProduct) {
+                    closeVariantModal();
+                    return;
+                }
+
+                openVariantModal(nextProduct);
+            }
+
+            function closeVariantModal(options = {}) {
                 if (!variantModal) {
                     return;
                 }
@@ -1108,6 +1127,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (variantModalEmpty) {
                     variantModalEmpty.style.display = 'none';
+                }
+
+                if (options.clearQueue !== false) {
+                    pendingVariantProducts.length = 0;
                 }
             }
 
@@ -1226,8 +1249,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 recalcTotals();
                 persistTableState();
                 updateSettleButtonState();
-                closeVariantModal();
-                closeProductModal();
+
+                // Keep the modal flow alive until all queued variant selections
+                // have been completed.
+                closeVariantModal({ clearQueue: false });
+                if (pendingVariantProducts.length > 0) {
+                    openNextVariantModal();
+                } else {
+                    closeProductModal();
+                }
             }
 
             // Begin POS product table renderer
@@ -1740,16 +1770,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
 
-                let requiresVariantSelection = false;
+                let queuedVariantSelection = false;
                 selected.forEach((checkbox) => {
-                    const added = addProductById(checkbox.dataset.id);
-                    if (added === false) {
-                        requiresVariantSelection = true;
+                    const result = addProductById(checkbox.dataset.id);
+
+                    if (result?.status === 'requires_variant' && result.product) {
+                        pendingVariantProducts.push(result.product);
+                        queuedVariantSelection = true;
                     }
+
                     checkbox.checked = false;
                 });
 
-                if (!requiresVariantSelection) {
+                if (queuedVariantSelection) {
+                    openNextVariantModal();
+                } else {
                     closeProductModal();
                 }
             });
