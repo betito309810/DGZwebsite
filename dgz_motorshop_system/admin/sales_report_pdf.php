@@ -73,14 +73,20 @@ if ($customer_type === 'walkin') {
 }
 
 $top_items_sql = "
-    SELECT p.name AS product_name, COALESCE(SUM(oi.qty),0) AS total_qty
+    SELECT
+        CASE
+            WHEN p.id IS NOT NULL AND TRIM(COALESCE(p.name, '')) <> '' THEN p.name
+            WHEN TRIM(COALESCE(oi.description, '')) <> '' THEN oi.description
+            ELSE 'Service'
+        END AS item_name,
+        COALESCE(SUM(oi.qty), 0) AS total_qty
     FROM order_items oi
     INNER JOIN orders o ON o.id = oi.order_id
-    INNER JOIN products p ON p.id = oi.product_id
+    LEFT JOIN products p ON p.id = oi.product_id
     WHERE o.status IN ('approved','completed')
     AND o.created_at >= :start AND o.created_at < :end
     $topItemsFilter
-    GROUP BY p.id, p.name
+    GROUP BY item_name
     ORDER BY total_qty DESC
     LIMIT 5
 ";
@@ -173,8 +179,14 @@ $html = '
 foreach ($top_items as $item) {
     $html .= '
                 <tr>
-                    <td>' . htmlspecialchars($item['product_name']) . '</td>
+                    <td>' . htmlspecialchars($item['item_name']) . '</td>
                     <td>' . number_format($item['total_qty']) . '</td>
+                </tr>';
+}
+if (empty($top_items)) {
+    $html .= '
+                <tr>
+                    <td colspan="2" style="text-align:center; color:#64748b;">No items recorded for this period.</td>
                 </tr>';
 }
 $html .= '
