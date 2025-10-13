@@ -36,32 +36,6 @@
     padding: 24px;
 }
 
-.panel-grid {
-    display: grid;
-    gap: 24px;
-    margin-bottom: 24px;
-}
-
-.panel-grid--two {
-    grid-template-columns: minmax(0, 1.65fr) minmax(320px, 1fr);
-    align-items: start;
-}
-
-.panel-grid--two > .panel {
-    margin-bottom: 0;
-    height: 100%;
-}
-
-@media (max-width: 980px) {
-    .panel-grid--two {
-        grid-template-columns: 1fr;
-    }
-
-    .panel-grid--two > .panel {
-        margin-bottom: 24px;
-    }
-}
-
 .panel-content {
     margin-top: 16px;
 }

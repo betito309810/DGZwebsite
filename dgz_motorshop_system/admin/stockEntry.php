@@ -521,270 +521,267 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                 </div>
             </section>
 
-            <div class="panel-grid panel-grid--two">
-                <section class="panel panel--stock-form" aria-labelledby="stockInFormTitle">
+            <section class="panel panel--recent-activity" aria-labelledby="recentReceiptsTitle">
                 <div class="panel-header">
                     <div>
-                        <h3 id="stockInFormTitle"><?= $formMode === 'edit' ? 'Edit Stock-In' : 'New Stock-In' ?></h3>
-                        <p class="panel-subtitle">
-                            <?= $formMode === 'edit'
-                                ? 'Update the draft receipt before posting to inventory.'
-                                : 'Capture supplier deliveries, attach proofs, and post directly to inventory.'
-                            ?>
-                            <?php if ($activeReceipt): ?>
-                                <span class="panel-subtext">Reference: <?= htmlspecialchars($activeReceipt['header']['receipt_code'] ?? '') ?> · Status: <?= htmlspecialchars(formatStockReceiptStatus($activeReceipt['header']['status'] ?? 'draft')) ?></span>
-                            <?php endif; ?>
-                        </p>
+                        <h3 id="recentReceiptsTitle">Recent Stock-In Activity</h3>
+                        <p class="panel-subtitle">Latest receipts with status and totals.</p>
                     </div>
                     <div class="panel-actions">
                         <button
                             type="button"
                             class="panel-toggle"
-                            data-toggle-target="stockInFormContainer"
-                            data-expanded-text="Hide Form"
-                            data-collapsed-text="Show Form"
+                            data-toggle-target="recentReceiptsContent"
+                            data-expanded-text="Hide Activity"
+                            data-collapsed-text="Show Activity"
                             data-start-collapsed="true"
                             aria-expanded="false"
                         >
                             <i class="fas fa-chevron-down panel-toggle__icon" aria-hidden="true"></i>
-                            <span class="panel-toggle__label">Show Form</span>
+                            <span class="panel-toggle__label">Show Activity</span>
                         </button>
                     </div>
                 </div>
-                <div id="stockInFormContainer" class="panel-content">
-                    <form id="stockInForm" method="POST" enctype="multipart/form-data" <?= $formLocked ? 'aria-disabled="true"' : '' ?>>
-                    <?php if ($editingReceiptId): ?>
-                        <input type="hidden" name="receipt_id" value="<?= (int)$editingReceiptId ?>">
+                <div id="recentReceiptsContent" class="panel-content">
+                    <?php if (!empty($recentReceipts)): ?>
+                    <div class="table-wrapper">
+                        <table class="data-table data-table--compact">
+                            <thead>
+                                <tr>
+                                    <th>Posted</th>
+                                    <th>Reference</th>
+                                    <th>Supplier</th>
+                                    <th>Received By</th>
+                                    <th>Status</th>
+                                    <th>Items</th>
+                                    <th>Total Qty</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($recentReceipts as $receipt): ?>
+                                    <tr>
+                                        <td><?= htmlspecialchars($receipt['posted_at_formatted'] ?? $receipt['created_at_formatted']) ?></td>
+                                        <td><?= htmlspecialchars($receipt['receipt_code']) ?></td>
+                                        <td><?= htmlspecialchars($receipt['supplier_name']) ?></td>
+                                        <td><?= htmlspecialchars($receipt['received_by_name'] ?? 'Pending') ?></td>
+                                        <td><span class="status-badge status-<?= htmlspecialchars($receipt['status']) ?>"><?= htmlspecialchars(formatStatusLabel($receipt['status'])) ?></span></td>
+                                        <td><?= (int)$receipt['item_count'] ?></td>
+                                        <td><?= (int)$receipt['total_received_qty'] ?></td>
+                                        <td class="table-actions">
+                                            <?php if ($receipt['status'] === 'draft'): ?>
+                                                <a href="stockEntry.php?receipt=<?= (int)$receipt['id'] ?>&mode=edit" class="table-link">Edit Draft</a>
+                                            <?php else: ?>
+                                                <a href="stockReceiptView.php?receipt=<?= (int)$receipt['id'] ?>" class="table-link">View</a>
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                    <?php else: ?>
+                        <p class="empty-state">No stock-in documents recorded yet.</p>
                     <?php endif; ?>
-                    <fieldset class="form-section" aria-labelledby="headerInfoTitle" <?= $formLocked ? 'disabled' : '' ?>>
-                        <legend id="headerInfoTitle">Header</legend>
-                        <div class="form-grid">
-                            <div class="form-group">
-                                <label for="supplier_name">Supplier <span class="required">*</span></label>
-                                <input type="text" id="supplier_name" name="supplier_name" list="supplierOptions" placeholder="Enter supplier name" value="<?= htmlspecialchars($formSupplier) ?>" required>
-                                <datalist id="supplierOptions">
-                                    <?php foreach ($suppliers as $supplier): ?>
-                                        <option value="<?= htmlspecialchars($supplier) ?>"></option>
-                                    <?php endforeach; ?>
-                                </datalist>
-                            </div>
-                            <div class="form-group">
-                                <label for="document_number">DR / Invoice No. <span class="required">*</span></label>
-                                <input type="text" id="document_number" name="document_number" placeholder="Delivery receipt or invoice number" value="<?= htmlspecialchars($formDocumentNumber) ?>" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="date_received">Date Received</label>
-                                <input type="date" id="date_received" name="date_received" value="<?= htmlspecialchars($formDateReceived) ?>">
-                            </div>
-                            <div class="form-group">
-                                <label for="received_by_name">Received By</label>
-                                <input type="text" id="received_by_name" value="<?= htmlspecialchars($currentUser['name'] ?? 'N/A') ?>" readonly>
-                            </div>
-                            <div class="form-group">
-                                <label for="related_reference">Related To</label>
-                                <input type="text" id="related_reference" name="related_reference" placeholder="Reference another stock-in if partial" value="<?= htmlspecialchars($formRelatedReference) ?>">
-                            </div>
+                </div>
+            </section>
+
+            <section class="panel panel--stock-form" aria-labelledby="stockInFormTitle">
+            <div class="panel-header">
+                <div>
+                    <h3 id="stockInFormTitle"><?= $formMode === 'edit' ? 'Edit Stock-In' : 'New Stock-In' ?></h3>
+                    <p class="panel-subtitle">
+                        <?= $formMode === 'edit'
+                            ? 'Update the draft receipt before posting to inventory.'
+                            : 'Capture supplier deliveries, attach proofs, and post directly to inventory.'
+                        ?>
+                        <?php if ($activeReceipt): ?>
+                            <span class="panel-subtext">Reference: <?= htmlspecialchars($activeReceipt['header']['receipt_code'] ?? '') ?> · Status: <?= htmlspecialchars(formatStockReceiptStatus($activeReceipt['header']['status'] ?? 'draft')) ?></span>
+                        <?php endif; ?>
+                    </p>
+                </div>
+                <div class="panel-actions">
+                    <button
+                        type="button"
+                        class="panel-toggle"
+                        data-toggle-target="stockInFormContainer"
+                        data-expanded-text="Hide Form"
+                        data-collapsed-text="Show Form"
+                        data-start-collapsed="true"
+                        aria-expanded="false"
+                    >
+                        <i class="fas fa-chevron-down panel-toggle__icon" aria-hidden="true"></i>
+                        <span class="panel-toggle__label">Show Form</span>
+                    </button>
+                </div>
+            </div>
+            <div id="stockInFormContainer" class="panel-content">
+                <form id="stockInForm" method="POST" enctype="multipart/form-data" <?= $formLocked ? 'aria-disabled="true"' : '' ?>>
+                <?php if ($editingReceiptId): ?>
+                    <input type="hidden" name="receipt_id" value="<?= (int)$editingReceiptId ?>">
+                <?php endif; ?>
+                <fieldset class="form-section" aria-labelledby="headerInfoTitle" <?= $formLocked ? 'disabled' : '' ?>>
+                    <legend id="headerInfoTitle">Header</legend>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="supplier_name">Supplier <span class="required">*</span></label>
+                            <input type="text" id="supplier_name" name="supplier_name" list="supplierOptions" placeholder="Enter supplier name" value="<?= htmlspecialchars($formSupplier) ?>" required>
+                            <datalist id="supplierOptions">
+                                <?php foreach ($suppliers as $supplier): ?>
+                                    <option value="<?= htmlspecialchars($supplier) ?>"></option>
+                                <?php endforeach; ?>
+                            </datalist>
                         </div>
                         <div class="form-group">
-                            <label for="notes">Notes</label>
-                            <textarea id="notes" name="notes" rows="3" placeholder="Any additional details"><?= htmlspecialchars($formNotes) ?></textarea>
+                            <label for="document_number">DR / Invoice No. <span class="required">*</span></label>
+                            <input type="text" id="document_number" name="document_number" placeholder="Delivery receipt or invoice number" value="<?= htmlspecialchars($formDocumentNumber) ?>" required>
                         </div>
-                       
-                    </fieldset>
-
-                    <?php if (!$formLocked): ?>
-                        <div class="line-items-controls">
-                            <button type="button" class="btn-secondary" id="addLineItemBtn">
-                                <i class="fas fa-plus"></i> Add Line Item
-                            </button>
-                            <span class="line-items-hint">Add rows for each product received.</span>
+                        <div class="form-group">
+                            <label for="date_received">Date Received</label>
+                            <input type="date" id="date_received" name="date_received" value="<?= htmlspecialchars($formDateReceived) ?>">
                         </div>
-                    <?php endif; ?>
+                        <div class="form-group">
+                            <label for="received_by_name">Received By</label>
+                            <input type="text" id="received_by_name" value="<?= htmlspecialchars($currentUser['name'] ?? 'N/A') ?>" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label for="related_reference">Related To</label>
+                            <input type="text" id="related_reference" name="related_reference" placeholder="Reference another stock-in if partial" value="<?= htmlspecialchars($formRelatedReference) ?>">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="notes">Notes</label>
+                        <textarea id="notes" name="notes" rows="3" placeholder="Any additional details"><?= htmlspecialchars($formNotes) ?></textarea>
+                    </div>
+                   
+                </fieldset>
 
-                    <fieldset class="form-section line-items-section" aria-labelledby="lineItemsTitle" <?= $formLocked ? 'disabled' : '' ?>>
-                        <legend id="lineItemsTitle">Line Items</legend>
-                        <p class="table-hint table-hint-inline">Tip: Use Qty Expected to highlight discrepancies before posting.</p>
-                        <div id="lineItemsBody" class="line-items-body">
-                            <?php foreach ($existingItems as $index => $item): ?>
-                                <?php
-                                    $productId = $item['product_id'];
-                                    $qtyExpected = $item['qty_expected'];
-                                    $qtyReceived = $item['qty_received'];
-                                    $unitCost = $item['unit_cost'];
-                                    $expiryDate = $item['expiry_date'];
-                                    $lotNumber = $item['lot_number'];
-                                    $rowHasDiscrepancy = !empty($item['has_discrepancy']);
-                                    $rowInvalidExpiry = !empty($item['invalid_expiry']);
-                                ?>
-                                <div class="line-item-row<?= $rowHasDiscrepancy ? ' has-discrepancy' : '' ?>" data-selected-product="<?= $productId ? (int)$productId : '' ?>">
-                                    <div class="line-item-header">
-                                        <h4 class="line-item-title">Item <?= $index + 1 ?></h4>
-                                        <button type="button" class="icon-btn remove-line-item" aria-label="Remove line item" <?= ($index === 0 || $formLocked) ? 'disabled' : '' ?>>
-                                            <i class="fas fa-trash"></i>
-                                        </button>
+                <?php if (!$formLocked): ?>
+                    <div class="line-items-controls">
+                        <button type="button" class="btn-secondary" id="addLineItemBtn">
+                            <i class="fas fa-plus"></i> Add Line Item
+                        </button>
+                        <span class="line-items-hint">Add rows for each product received.</span>
+                    </div>
+                <?php endif; ?>
+
+                <fieldset class="form-section line-items-section" aria-labelledby="lineItemsTitle" <?= $formLocked ? 'disabled' : '' ?>>
+                    <legend id="lineItemsTitle">Line Items</legend>
+                    <p class="table-hint table-hint-inline">Tip: Use Qty Expected to highlight discrepancies before posting.</p>
+                    <div id="lineItemsBody" class="line-items-body">
+                        <?php foreach ($existingItems as $index => $item): ?>
+                            <?php
+                                $productId = $item['product_id'];
+                                $qtyExpected = $item['qty_expected'];
+                                $qtyReceived = $item['qty_received'];
+                                $unitCost = $item['unit_cost'];
+                                $expiryDate = $item['expiry_date'];
+                                $lotNumber = $item['lot_number'];
+                                $rowHasDiscrepancy = !empty($item['has_discrepancy']);
+                                $rowInvalidExpiry = !empty($item['invalid_expiry']);
+                            ?>
+                            <div class="line-item-row<?= $rowHasDiscrepancy ? ' has-discrepancy' : '' ?>" data-selected-product="<?= $productId ? (int)$productId : '' ?>">
+                                <div class="line-item-header">
+                                    <h4 class="line-item-title">Item <?= $index + 1 ?></h4>
+                                    <button type="button" class="icon-btn remove-line-item" aria-label="Remove line item" <?= ($index === 0 || $formLocked) ? 'disabled' : '' ?>>
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                                <div class="line-item-grid">
+                                    <div class="line-item-field product-field">
+                                        <label>Product <span class="required">*</span></label>
+                                        <div class="product-selector">
+                                            <div class="product-search-wrapper">
+                                                <span class="product-search-icon" aria-hidden="true">
+                                                    <i class="fas fa-search"></i>
+                                                </span>
+                                                <input type="text" class="product-search" placeholder="Search name or code" value="">
+                                                <button type="button" class="product-clear" aria-label="Clear selected product" hidden>
+                                                    <i class="fas fa-times"></i>
+                                                </button>
+                                                <div class="product-suggestions"></div>
+                                            </div>
+                                            <select name="product_id[]" class="product-select" required>
+                                                <option value="">Select product</option>
+                                                <?php foreach ($products as $product): ?>
+                                                    <option value="<?= (int)$product['id'] ?>" <?= $productId == (int)$product['id'] ? 'selected' : '' ?>>
+                                                        <?= htmlspecialchars($product['name']) ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
                                     </div>
-                                    <div class="line-item-grid">
-                                        <div class="line-item-field product-field">
-                                            <label>Product <span class="required">*</span></label>
-                                            <div class="product-selector">
-                                                <div class="product-search-wrapper">
-                                                    <span class="product-search-icon" aria-hidden="true">
-                                                        <i class="fas fa-search"></i>
-                                                    </span>
-                                                    <input type="text" class="product-search" placeholder="Search name or code" value="">
-                                                    <button type="button" class="product-clear" aria-label="Clear selected product" hidden>
-                                                        <i class="fas fa-times"></i>
-                                                    </button>
-                                                    <div class="product-suggestions"></div>
-                                                </div>
-                                                <select name="product_id[]" class="product-select" required>
-                                                    <option value="">Select product</option>
-                                                    <?php foreach ($products as $product): ?>
-                                                        <option value="<?= (int)$product['id'] ?>" <?= $productId == (int)$product['id'] ? 'selected' : '' ?>>
-                                                            <?= htmlspecialchars($product['name']) ?>
-                                                        </option>
-                                                    <?php endforeach; ?>
-                                                </select>
-                                            </div>
+                                    <div class="line-item-field">
+                                        <label>Qty Expected</label>
+                                        <input type="number" name="qty_expected[]" min="0" step="1" placeholder="0" value="<?= $qtyExpected !== null ? htmlspecialchars((string)$qtyExpected) : '' ?>">
+                                    </div>
+                                    <div class="line-item-field">
+                                        <label>Qty Received <span class="required">*</span></label>
+                                        <input type="number" name="qty_received[]" min="0" step="1" placeholder="0" value="<?= $qtyReceived !== null ? htmlspecialchars((string)$qtyReceived) : '' ?>" <?= $formLocked ? 'readonly' : 'required' ?>>
+                                    </div>
+                                    <div class="line-item-field">
+                                        <label>Unit Cost</label>
+                                        <input type="number" name="unit_cost[]" min="0" step="0.01" placeholder="0.00" value="<?= $unitCost !== null ? htmlspecialchars(number_format((float)$unitCost, 2, '.', '')) : '' ?>">
+                                    </div>
+                                    <div class="line-item-field">
+                                        <label>Expiry</label>
+                                        <div>
+                                            <input type="date" name="expiry_date[]" value="<?= $expiryDate ? htmlspecialchars($expiryDate) : '' ?>">
+                                            <?php if ($rowInvalidExpiry): ?>
+                                                <small class="input-error">Use YYYY-MM-DD (e.g., <?= date('Y-m-d') ?>).</small>
+                                            <?php endif; ?>
                                         </div>
-                                        <div class="line-item-field">
-                                            <label>Qty Expected</label>
-                                            <input type="number" name="qty_expected[]" min="0" step="1" placeholder="0" value="<?= $qtyExpected !== null ? htmlspecialchars((string)$qtyExpected) : '' ?>">
-                                        </div>
-                                        <div class="line-item-field">
-                                            <label>Qty Received <span class="required">*</span></label>
-                                            <input type="number" name="qty_received[]" min="0" step="1" placeholder="0" value="<?= $qtyReceived !== null ? htmlspecialchars((string)$qtyReceived) : '' ?>" <?= $formLocked ? 'readonly' : 'required' ?>>
-                                        </div>
-                                        <div class="line-item-field">
-                                            <label>Unit Cost</label>
-                                            <input type="number" name="unit_cost[]" min="0" step="0.01" placeholder="0.00" value="<?= $unitCost !== null ? htmlspecialchars(number_format((float)$unitCost, 2, '.', '')) : '' ?>">
-                                        </div>
-                                        <div class="line-item-field">
-                                            <label>Expiry</label>
-                                            <div>
-                                                <input type="date" name="expiry_date[]" value="<?= $expiryDate ? htmlspecialchars($expiryDate) : '' ?>">
-                                                <?php if ($rowInvalidExpiry): ?>
-                                                    <small class="input-error">Use YYYY-MM-DD (e.g., <?= date('Y-m-d') ?>).</small>
-                                                <?php endif; ?>
-                                            </div>
-                                        </div>
-                                        <div class="line-item-field">
-                                            <label>Lot / Batch</label>
-                                            <input type="text" name="lot_number[]" placeholder="Lot or batch" value="<?= $lotNumber ? htmlspecialchars($lotNumber) : '' ?>">
-                                        </div>
+                                    </div>
+                                    <div class="line-item-field">
+                                        <label>Lot / Batch</label>
+                                        <input type="text" name="lot_number[]" placeholder="Lot or batch" value="<?= $lotNumber ? htmlspecialchars($lotNumber) : '' ?>">
                                     </div>
                                 </div>
-                            <?php endforeach; ?>
-                        </div>
-                         <div class="form-group" id="discrepancyNoteGroup" data-has-initial="<?= $hasPresetDiscrepancy ? '1' : '0' ?>" <?= $discrepancyGroupHiddenAttr ?> >
-                            <label for="discrepancy_note">Discrepancy Note <span class="required" data-discrepancy-required <?= $hasPresetDiscrepancy ? '' : 'hidden' ?>>*</span></label>
-                            <textarea id="discrepancy_note" name="discrepancy_note" rows="3" placeholder="Explain missing, damaged, or excess items"<?= $hasPresetDiscrepancy ? ' required' : '' ?>><?= htmlspecialchars($formDiscrepancyNote) ?></textarea>
-                        </div>
-                    </fieldset>
-
-                    <fieldset class="form-section" aria-labelledby="attachmentsTitle" <?= $formLocked ? 'disabled' : '' ?>>
-                        <legend id="attachmentsTitle">Attachments</legend>
-                        <div class="form-group">
-                            <label for="attachments">Upload Proof (PDF/JPG/PNG)</label>
-                            <input type="file" id="attachments" name="attachments[]" accept=".pdf,.jpg,.jpeg,.png" multiple <?= $formLocked ? 'disabled' : '' ?>>
-                            <small>Include delivery receipt or invoice images. Multiple files allowed.</small>
-                        </div>
-                        <ul id="attachmentList" class="attachment-list"></ul>
-                        <?php if (!empty($existingAttachments)): ?>
-                            <div class="existing-attachments">
-                                <h4>Existing Attachments</h4>
-                                <ul>
-                                    <?php foreach ($existingAttachments as $attachment): ?>
-                                        <li>
-                                            <a href="../<?= htmlspecialchars($attachment['file_path']) ?>" target="_blank" rel="noopener">
-                                                <i class="fas fa-paperclip"></i> <?= htmlspecialchars($attachment['original_name']) ?>
-                                            </a>
-                                            <span class="attachment-meta">Uploaded <?= htmlspecialchars(formatStockReceiptDateTime($attachment['created_at'])) ?></span>
-                                        </li>
-                                    <?php endforeach; ?>
-                                </ul>
                             </div>
-                        <?php endif; ?>
-                    </fieldset>
-
-                    <div class="form-footer">
-                        <input type="hidden" name="form_action" id="formAction" value="">
-                        <button type="button" class="btn-secondary" id="saveDraftBtn" <?= $formLocked ? 'disabled' : '' ?>>Save as Draft</button>
-                        <button type="button" class="btn-primary" id="postReceiptBtn" <?= $formLocked ? 'disabled' : '' ?>>Post &amp; Receive</button>
-                        <?php if ($formLocked && $activeReceipt): ?>
-                            <a class="btn-secondary" href="stockReceiptView.php?receipt=<?= (int)$activeReceipt['header']['id'] ?>">View Details</a>
-                        <?php endif; ?>
+                        <?php endforeach; ?>
                     </div>
-                    </form>
+                     <div class="form-group" id="discrepancyNoteGroup" data-has-initial="<?= $hasPresetDiscrepancy ? '1' : '0' ?>" <?= $discrepancyGroupHiddenAttr ?> >
+                        <label for="discrepancy_note">Discrepancy Note <span class="required" data-discrepancy-required <?= $hasPresetDiscrepancy ? '' : 'hidden' ?>>*</span></label>
+                        <textarea id="discrepancy_note" name="discrepancy_note" rows="3" placeholder="Explain missing, damaged, or excess items"<?= $hasPresetDiscrepancy ? ' required' : '' ?>><?= htmlspecialchars($formDiscrepancyNote) ?></textarea>
+                    </div>
+                </fieldset>
+
+                <fieldset class="form-section" aria-labelledby="attachmentsTitle" <?= $formLocked ? 'disabled' : '' ?>>
+                    <legend id="attachmentsTitle">Attachments</legend>
+                    <div class="form-group">
+                        <label for="attachments">Upload Proof (PDF/JPG/PNG)</label>
+                        <input type="file" id="attachments" name="attachments[]" accept=".pdf,.jpg,.jpeg,.png" multiple <?= $formLocked ? 'disabled' : '' ?>>
+                        <small>Include delivery receipt or invoice images. Multiple files allowed.</small>
+                    </div>
+                    <ul id="attachmentList" class="attachment-list"></ul>
+                    <?php if (!empty($existingAttachments)): ?>
+                        <div class="existing-attachments">
+                            <h4>Existing Attachments</h4>
+                            <ul>
+                                <?php foreach ($existingAttachments as $attachment): ?>
+                                    <li>
+                                        <a href="../<?= htmlspecialchars($attachment['file_path']) ?>" target="_blank" rel="noopener">
+                                            <i class="fas fa-paperclip"></i> <?= htmlspecialchars($attachment['original_name']) ?>
+                                        </a>
+                                        <span class="attachment-meta">Uploaded <?= htmlspecialchars(formatStockReceiptDateTime($attachment['created_at'])) ?></span>
+                                    </li>
+                                <?php endforeach; ?>
+                            </ul>
+                        </div>
+                    <?php endif; ?>
+                </fieldset>
+
+                <div class="form-footer">
+                    <input type="hidden" name="form_action" id="formAction" value="">
+                    <button type="button" class="btn-secondary" id="saveDraftBtn" <?= $formLocked ? 'disabled' : '' ?>>Save as Draft</button>
+                    <button type="button" class="btn-primary" id="postReceiptBtn" <?= $formLocked ? 'disabled' : '' ?>>Post &amp; Receive</button>
+                    <?php if ($formLocked && $activeReceipt): ?>
+                        <a class="btn-secondary" href="stockReceiptView.php?receipt=<?= (int)$activeReceipt['header']['id'] ?>">View Details</a>
+                    <?php endif; ?>
                 </div>
-                </section>
-
-                <section class="panel panel--recent-activity" aria-labelledby="recentReceiptsTitle">
-                    <div class="panel-header">
-                        <div>
-                            <h3 id="recentReceiptsTitle">Recent Stock-In Activity</h3>
-                            <p class="panel-subtitle">Latest receipts with status and totals.</p>
-                        </div>
-                        <div class="panel-actions">
-                            <button
-                                type="button"
-                                class="panel-toggle"
-                                data-toggle-target="recentReceiptsContent"
-                                data-expanded-text="Hide Activity"
-                                data-collapsed-text="Show Activity"
-                                data-start-collapsed="true"
-                                aria-expanded="false"
-                            >
-                                <i class="fas fa-chevron-down panel-toggle__icon" aria-hidden="true"></i>
-                                <span class="panel-toggle__label">Show Activity</span>
-                            </button>
-                        </div>
-                    </div>
-                    <div id="recentReceiptsContent" class="panel-content">
-                        <?php if (!empty($recentReceipts)): ?>
-                        <div class="table-wrapper">
-                            <table class="data-table data-table--compact">
-                                <thead>
-                                    <tr>
-                                        <th>Posted</th>
-                                        <th>Reference</th>
-                                        <th>Supplier</th>
-                                        <th>Received By</th>
-                                        <th>Status</th>
-                                        <th>Items</th>
-                                        <th>Total Qty</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($recentReceipts as $receipt): ?>
-                                        <tr>
-                                            <td><?= htmlspecialchars($receipt['posted_at_formatted'] ?? $receipt['created_at_formatted']) ?></td>
-                                            <td><?= htmlspecialchars($receipt['receipt_code']) ?></td>
-                                            <td><?= htmlspecialchars($receipt['supplier_name']) ?></td>
-                                            <td><?= htmlspecialchars($receipt['received_by_name'] ?? 'Pending') ?></td>
-                                            <td><span class="status-badge status-<?= htmlspecialchars($receipt['status']) ?>"><?= htmlspecialchars(formatStatusLabel($receipt['status'])) ?></span></td>
-                                            <td><?= (int)$receipt['item_count'] ?></td>
-                                            <td><?= (int)$receipt['total_received_qty'] ?></td>
-                                            <td class="table-actions">
-                                                <?php if ($receipt['status'] === 'draft'): ?>
-                                                    <a href="stockEntry.php?receipt=<?= (int)$receipt['id'] ?>&mode=edit" class="table-link">Edit Draft</a>
-                                                <?php else: ?>
-                                                    <a href="stockReceiptView.php?receipt=<?= (int)$receipt['id'] ?>" class="table-link">View</a>
-                                                <?php endif; ?>
-                                            </td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                        <?php else: ?>
-                            <p class="empty-state">No stock-in documents recorded yet.</p>
-                        <?php endif; ?>
-                    </div>
-                </section>
+                </form>
             </div>
-
+            </section>
             <!-- Stock-In report with filters, preview table, and export triggers -->
             <section class="panel" aria-labelledby="stockInReportTitle" id="stock-in-report">
                 <div class="panel-header">
