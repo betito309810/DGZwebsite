@@ -109,24 +109,37 @@ body {
 }
 
 
-/* Action Buttons Container */
+/* Filter + Action controls */
+.sales-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 16px;
+    padding: 0 20px;
+    margin: 25px 0 10px;
+}
+
 .action-buttons {
     display: flex;
     gap: 15px;
     align-items: center;
-    justify-content: flex-end;
-    margin: 25px 0;
-    padding: 0 20px;
+    margin: 0;
+}
+
+.sales-controls .action-buttons {
+    margin-left: auto;
 }
 
 .sales-search-form {
-    padding: 0 20px;
-    margin: -10px 0 10px;
+    padding: 0;
+    margin: 0;
     display: flex;
     align-items: flex-end;
     gap: 16px;
     flex-wrap: wrap;
-    justify-content: flex-end;
+    justify-content: flex-start;
+    flex: 1 1 420px;
+    min-width: 280px;
 }
 
 .sales-search-group {

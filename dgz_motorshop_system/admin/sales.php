@@ -512,52 +512,54 @@ $buildPageUrl = static function (int $page) use ($queryParams): string {
             </div>
         </header>
 
-        <!-- Export Button and PDF Report Generator -->
-        <div class="action-buttons">
-            <a href="<?=htmlspecialchars($exportUrl, ENT_QUOTES, 'UTF-8')?>" class="btn btn-export">
-                <i class="fas fa-file-export"></i>
-                Export to CSV
-            </a>
-            <button type="button" id="openSalesReport" class="btn btn-generate">
-                <i class="fas fa-chart-line"></i>
-                Generate Sales Report
-            </button>
-        </div>
+        <!-- Filters and Actions -->
+        <div class="sales-controls">
+            <form method="get" class="sales-search-form" id="salesSearchForm">
+                <div class="sales-search-group">
+                    <input
+                        type="text"
+                        id="salesInvoiceSearch"
+                        name="invoice"
+                        placeholder="Search by invoice number"
+                        value="<?=htmlspecialchars($invoiceSearch, ENT_QUOTES, 'UTF-8')?>"
+                        class="sales-search-input"
+                        data-sales-search-input
+                        autocomplete="off"
+                        aria-label="Search by invoice number"
+                    >
+                    <button
+                        type="button"
+                        class="sales-search-clear<?php if($hasInvoiceSearch) echo ' is-visible'; ?>"
+                        aria-label="Clear invoice search"
+                        data-sales-search-clear
+                    >&times;</button>
+                </div>
+                <div class="sales-filter-group">
+                    <label for="orderTypeFilter" class="sales-filter-label">Customer type</label>
+                    <select
+                        id="orderTypeFilter"
+                        name="order_type"
+                        class="sales-filter-select"
+                        onchange="this.form.submit()"
+                    >
+                        <option value="all"<?php if($orderTypeFilter === 'all') echo ' selected'; ?>>All orders</option>
+                        <option value="walkin"<?php if($orderTypeFilter === 'walkin') echo ' selected'; ?>>Walk-in orders</option>
+                        <option value="online"<?php if($orderTypeFilter === 'online') echo ' selected'; ?>>Online orders</option>
+                    </select>
+                </div>
+            </form>
 
-        <form method="get" class="sales-search-form" id="salesSearchForm">
-            <div class="sales-search-group">
-                <input
-                    type="text"
-                    id="salesInvoiceSearch"
-                    name="invoice"
-                    placeholder="Search by invoice number"
-                    value="<?=htmlspecialchars($invoiceSearch, ENT_QUOTES, 'UTF-8')?>"
-                    class="sales-search-input"
-                    data-sales-search-input
-                    autocomplete="off"
-                    aria-label="Search by invoice number"
-                >
-                <button
-                    type="button"
-                    class="sales-search-clear<?php if($hasInvoiceSearch) echo ' is-visible'; ?>"
-                    aria-label="Clear invoice search"
-                    data-sales-search-clear
-                >&times;</button>
+            <div class="action-buttons">
+                <a href="<?=htmlspecialchars($exportUrl, ENT_QUOTES, 'UTF-8')?>" class="btn btn-export">
+                    <i class="fas fa-file-export"></i>
+                    Export to CSV
+                </a>
+                <button type="button" id="openSalesReport" class="btn btn-generate">
+                    <i class="fas fa-chart-line"></i>
+                    Generate Sales Report
+                </button>
             </div>
-            <div class="sales-filter-group">
-                <label for="orderTypeFilter" class="sales-filter-label">Customer type</label>
-                <select
-                    id="orderTypeFilter"
-                    name="order_type"
-                    class="sales-filter-select"
-                    onchange="this.form.submit()"
-                >
-                    <option value="all"<?php if($orderTypeFilter === 'all') echo ' selected'; ?>>All orders</option>
-                    <option value="walkin"<?php if($orderTypeFilter === 'walkin') echo ' selected'; ?>>Walk-in orders</option>
-                    <option value="online"<?php if($orderTypeFilter === 'online') echo ' selected'; ?>>Online orders</option>
-                </select>
-            </div>
-        </form>
+        </div>
 
         <!-- Table Container -->
         <div class="table-container">
