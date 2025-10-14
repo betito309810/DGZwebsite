@@ -22,6 +22,8 @@ if (is_file($productVariantHelpers)) {
 $systemRoot = str_replace('\\', '/', realpath(__DIR__ . '/..'));
 $projectRoot = $systemRoot !== false ? str_replace('\\', '/', dirname($systemRoot)) : false;
 
+$DOCUMENT_ROOT_REALPATH = null;
+
 $documentRootCandidates = [];
 $addDocumentRoot = static function ($value) use (&$documentRootCandidates): void {
     if (!is_string($value) || $value === '') {
@@ -87,7 +89,6 @@ $APP_BASE_PATH = '';
 $SYSTEM_BASE_PATH = '';
 $SYSTEM_BASE_URL = '';
 $systemFolderName = $systemRoot !== false ? basename($systemRoot) : 'dgz_motorshop_system';
-$DOCUMENT_ROOT_REALPATH = null;
 $ADMIN_WEB_ROOT = realpath(__DIR__ . '/../admin') ?: null;
 $ADMIN_ASSET_PROXY_ROUTE = '';
 
