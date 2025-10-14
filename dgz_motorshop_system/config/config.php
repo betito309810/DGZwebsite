@@ -22,6 +22,8 @@ if (is_file($productVariantHelpers)) {
 $systemRoot = str_replace('\\', '/', realpath(__DIR__ . '/..'));
 $projectRoot = $systemRoot !== false ? str_replace('\\', '/', dirname($systemRoot)) : false;
 
+$DOCUMENT_ROOT_REALPATH = null;
+
 $documentRootCandidates = [];
 $addDocumentRoot = static function ($value) use (&$documentRootCandidates): void {
     if (!is_string($value) || $value === '') {
@@ -43,6 +45,7 @@ if (!empty($_SERVER['DOCUMENT_ROOT'])) {
 
     $resolved = realpath($_SERVER['DOCUMENT_ROOT']);
     if ($resolved !== false) {
+        $DOCUMENT_ROOT_REALPATH = $resolved;
         $addDocumentRoot($resolved);
     }
 }
@@ -86,6 +89,8 @@ $APP_BASE_PATH = '';
 $SYSTEM_BASE_PATH = '';
 $SYSTEM_BASE_URL = '';
 $systemFolderName = $systemRoot !== false ? basename($systemRoot) : 'dgz_motorshop_system';
+$ADMIN_WEB_ROOT = realpath(__DIR__ . '/../admin') ?: null;
+$ADMIN_ASSET_PROXY_ROUTE = '';
 
 $normalizeRelativePath = static function ($path) {
     if (!is_string($path)) {
@@ -203,6 +208,25 @@ if ($host !== '') {
     $SYSTEM_BASE_URL = $SYSTEM_BASE_PATH;
 }
 
+if ($ADMIN_WEB_ROOT !== null && is_dir($ADMIN_WEB_ROOT)) {
+    $proxyScript = $ADMIN_WEB_ROOT . '/asset.php';
+    if (is_file($proxyScript)) {
+        if ($DOCUMENT_ROOT_REALPATH !== null && $DOCUMENT_ROOT_REALPATH === $ADMIN_WEB_ROOT) {
+            $ADMIN_ASSET_PROXY_ROUTE = '/asset.php';
+        } else {
+            $normalizedBase = rtrim(str_replace('\\', '/', (string) $SYSTEM_BASE_PATH), '/');
+            if ($normalizedBase === '' || $normalizedBase === '/') {
+                $ADMIN_ASSET_PROXY_ROUTE = '/admin/asset.php';
+            } else {
+                $ADMIN_ASSET_PROXY_ROUTE = $normalizedBase . '/admin/asset.php';
+                if ($ADMIN_ASSET_PROXY_ROUTE === '' || $ADMIN_ASSET_PROXY_ROUTE[0] !== '/') {
+                    $ADMIN_ASSET_PROXY_ROUTE = '/' . ltrim($ADMIN_ASSET_PROXY_ROUTE, '/');
+                }
+            }
+        }
+    }
+}
+
 /**
  * Create or reuse the PDO instance used throughout the application.
  */
@@ -265,6 +289,8 @@ if (!function_exists('systemBaseUrl')) {
 if (!function_exists('assetUrl')) {
     function assetUrl(string $path): string
     {
+        global $DOCUMENT_ROOT_REALPATH, $ADMIN_ASSET_PROXY_ROUTE, $ADMIN_WEB_ROOT;
+
         $trimmed = trim($path);
 
         if ($trimmed === '') {
@@ -286,6 +312,38 @@ if (!function_exists('assetUrl')) {
 
         $normalized = ltrim($trimmed, '/');
         $basePath = systemBasePath();
+
+        $shouldProxy = false;
+        if ($normalized !== '') {
+            $documentRoot = $DOCUMENT_ROOT_REALPATH;
+            if ($documentRoot !== null && $documentRoot !== '') {
+                $documentRoot = rtrim(str_replace('\\', '/', $documentRoot), '/');
+                if ($documentRoot !== '') {
+                    $candidate = $documentRoot;
+                    $systemBase = str_replace('\\', '/', (string) $basePath);
+                    $systemBase = ltrim($systemBase, '/');
+                    if ($systemBase !== '') {
+                        $candidate .= '/' . $systemBase;
+                    }
+                    $candidate .= '/' . $normalized;
+
+                    if (!is_file($candidate)) {
+                        $shouldProxy = true;
+                    }
+                }
+            } elseif (!empty($_SERVER['SCRIPT_FILENAME']) && $ADMIN_WEB_ROOT !== null) {
+                $scriptPath = realpath($_SERVER['SCRIPT_FILENAME']);
+                $adminRoot = realpath($ADMIN_WEB_ROOT);
+                if ($scriptPath !== false && $adminRoot !== false && strpos($scriptPath, $adminRoot) === 0) {
+                    $shouldProxy = true;
+                }
+            }
+        }
+
+        if ($shouldProxy && $ADMIN_ASSET_PROXY_ROUTE !== '') {
+            $separator = strpos($ADMIN_ASSET_PROXY_ROUTE, '?') === false ? '?' : '&';
+            return $ADMIN_ASSET_PROXY_ROUTE . $separator . 'path=' . rawurlencode($normalized);
+        }
 
         if ($basePath === '' || $basePath === '/') {
             return '/' . $normalized;

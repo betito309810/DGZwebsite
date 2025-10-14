@@ -53,6 +53,11 @@ $totalQtyReceived = array_reduce($items, fn($carry, $item) => $carry + (int)($it
 $profile_name = $currentUser['name'] ?? 'N/A';
 $profile_role = !empty($currentUser['role']) ? ucfirst($currentUser['role']) : 'N/A';
 $profile_created = isset($currentUser['created_at']) ? formatStockReceiptDateTime($currentUser['created_at']) : 'N/A';
+
+$globalStylesheet = assetUrl('assets/css/style.css');
+$dashboardStylesheet = assetUrl('assets/css/dashboard/dashboard.css');
+$stockEntryStylesheet = assetUrl('assets/css/inventory/stockEntry.css');
+$notificationsScript = assetUrl('assets/js/notifications.js');
 ?>
 <!DOCTYPE html>
 <html>
@@ -60,9 +65,9 @@ $profile_created = isset($currentUser['created_at']) ? formatStockReceiptDateTim
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Stock-In Details - DGZ</title>
-    <link rel="stylesheet" href="../assets/css/style.css">
-    <link rel="stylesheet" href="../assets/css/dashboard/dashboard.css">
-    <link rel="stylesheet" href="../assets/css/inventory/stockEntry.css">
+    <link rel="stylesheet" href="<?= htmlspecialchars($globalStylesheet) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars($dashboardStylesheet) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars($stockEntryStylesheet) ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
@@ -303,6 +308,6 @@ $profile_created = isset($currentUser['created_at']) ? formatStockReceiptDateTim
         </div>
     </div>
 
-    <script src="../assets/js/notifications.js"></script>
+    <script src="<?= htmlspecialchars($notificationsScript) ?>"></script>
 </body>
 </html>

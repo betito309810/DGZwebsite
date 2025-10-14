@@ -588,7 +588,7 @@ if (isset($_GET['history']) && $_GET['history'] == '1') {
         <?php endif; ?>
     </tbody>
 </table>
-<link rel="stylesheet" href="../assets/css/products/products_history.css">
+<link rel="stylesheet" href="<?= htmlspecialchars($productsHistoryStylesheet) ?>">
 <?php
     exit;
 }
@@ -1050,8 +1050,24 @@ $nameSortIndicator = '';
 if ($currentSort === 'name') {
     $nameSortIndicator = $currentDirection === 'asc' ? '▲' : '▼';
 } else {
-    $nameSortIndicator = '↕';
+$nameSortIndicator = '↕';
 }
+?>
+<?php
+$globalStylesheet = assetUrl('assets/css/style.css');
+$salesStylesheet = assetUrl('assets/css/sales/sales.css');
+$productsStylesheet = assetUrl('assets/css/products/products.css');
+$productsHistoryStylesheet = assetUrl('assets/css/products/products_history.css');
+$variantsStylesheet = assetUrl('assets/css/products/variants.css');
+$productModalsStylesheet = assetUrl('assets/css/products/product_modals.css');
+$userMenuScript = assetUrl('assets/js/dashboard/userMenu.js');
+$fbSynchroniserScript = assetUrl('assets/js/products/fbSynchroniser.js');
+$tableFiltersScript = assetUrl('assets/js/products/tableFilters.js');
+$variantsFormScript = assetUrl('assets/js/products/variantsForm.js');
+$editModalScript = assetUrl('assets/js/products/editModal.js');
+$historyDomScript = assetUrl('assets/js/products/historyDOM.js');
+$notificationsScript = assetUrl('assets/js/notifications.js');
+$productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
 ?>
 <!doctype html>
 <html>
@@ -1061,11 +1077,11 @@ if ($currentSort === 'name') {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Products</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="../assets/css/style.css">
-<link rel="stylesheet" href="../assets/css/sales/sales.css">
-    <link rel="stylesheet" href="../assets/css/products/products.css">
-    <link rel="stylesheet" href="../assets/css/products/variants.css"> <!-- Added: styles for the variant editor grid. -->
-    <link rel="stylesheet" href="../assets/css/products/product_modals.css"> <!-- Added: widened horizontal modal layout. -->
+    <link rel="stylesheet" href="<?= htmlspecialchars($globalStylesheet) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars($salesStylesheet) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars($productsStylesheet) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars($variantsStylesheet) ?>"> <!-- Added: styles for the variant editor grid. -->
+    <link rel="stylesheet" href="<?= htmlspecialchars($productModalsStylesheet) ?>"> <!-- Added: widened horizontal modal layout. -->
 
 </head>
 
@@ -1131,7 +1147,7 @@ if ($currentSort === 'name') {
             </div>
         </div>
         <!-- user menu & sidebar-->
-       <script src="../assets/js/dashboard/userMenu.js"></script>
+       <script src="<?= htmlspecialchars($userMenuScript) ?>"></script>
 
         <!-- Add Product Modal -->
         <!-- Added: Modal overlay uses reusable class to inherit horizontal layout styles. -->
@@ -1215,7 +1231,7 @@ if ($currentSort === 'name') {
                             <label>Additional Gallery Images:
                                 <input name="gallery_images[]" type="file" accept="image/*" multiple>
                             </label>
-                            <img id="addImagePreview" class="modal-image-preview" src="../assets/img/product-placeholder.svg" alt="Preview">
+                            <img id="addImagePreview" class="modal-image-preview" src="<?= htmlspecialchars($productPlaceholder) ?>" alt="Preview">
                         </div>
                         <div class="product-modal__panel product-modal__variants">
                             <div class="variant-editor" data-variant-editor data-context="create" data-initial-variants="[]">
@@ -1272,8 +1288,8 @@ if ($currentSort === 'name') {
             </div>
         </div>
         <!-- Fallback Synchroniser -->
-       <script src="../assets/js/products/fbSynchroniser.js"></script>
-       <script src="../assets/js/products/tableFilters.js"></script>
+       <script src="<?= htmlspecialchars($fbSynchroniserScript) ?>"></script>
+       <script src="<?= htmlspecialchars($tableFiltersScript) ?>"></script>
 
         <!-- Products table displaying filtered/search results -->
         <div id="productsTable" class="table-container">
@@ -1352,7 +1368,7 @@ if ($currentSort === 'name') {
 
                         $rawImagePath = $p['image'] ?? '';
                         $normalisedImagePath = $rawImagePath !== '' ? ltrim(str_replace('\\', '/', $rawImagePath), '/') : '';
-                        $imageUrl = $normalisedImagePath !== '' ? '../' . $normalisedImagePath : '../assets/img/product-placeholder.svg';
+                        $imageUrl = $normalisedImagePath !== '' ? assetUrl($normalisedImagePath) : $productPlaceholder;
 
                         // Added: package the row payload so the detail modal can display read-only information.
                         $galleryImagesForProduct = array_values($productGalleryMap[$p['id']] ?? []);
@@ -1537,7 +1553,7 @@ if ($currentSort === 'name') {
                                 <p class="product-detail__gallery-title">Product images</p>
                                 <div class="product-detail__gallery-grid" data-detail-gallery-grid>
                                     <div class="product-detail__gallery-item product-detail__gallery-item--main" data-detail-main-item>
-                                        <img class="product-detail__gallery-thumb product-detail__gallery-thumb--main" data-detail-image src="../assets/img/product-placeholder.svg" alt="Product preview">
+                                        <img class="product-detail__gallery-thumb product-detail__gallery-thumb--main" data-detail-image src="<?= htmlspecialchars($productPlaceholder) ?>" alt="Product preview">
                                         <span class="product-detail__gallery-caption">Main product image</span>
                                     </div>
                                 </div>
@@ -1631,7 +1647,7 @@ if ($currentSort === 'name') {
                             <div class="product-modal__main" data-main-image-wrapper>
                                 <p class="product-modal__gallery-title">Product image</p>
                                 <div class="product-modal__gallery-item product-modal__gallery-item--main">
-                                    <img id="editImagePreview" class="modal-image-preview product-modal__main-thumb" src="../assets/img/product-placeholder.svg" alt="Product image preview">
+                                    <img id="editImagePreview" class="modal-image-preview product-modal__main-thumb" src="<?= htmlspecialchars($productPlaceholder) ?>" alt="Product image preview">
                                     <label class="product-modal__gallery-remove product-modal__gallery-remove--main" for="edit_remove_main_image" data-main-image-toggle hidden>
                                         <input type="checkbox" id="edit_remove_main_image" name="remove_main_image" value="1">
                                         <span>Remove current image</span>
@@ -1728,12 +1744,12 @@ if ($currentSort === 'name') {
         </div>
     </div>
     <!-- Edit modal fallback toggles -->
-    <script src="../assets/js/products/variantsForm.js"></script> <!-- Added: drives the variant add/edit UI. -->
-    <script src="../assets/js/products/editModal.js"></script>
+    <script src="<?= htmlspecialchars($variantsFormScript) ?>"></script> <!-- Added: drives the variant add/edit UI. -->
+    <script src="<?= htmlspecialchars($editModalScript) ?>"></script>
     <!-- History Modal -->
-     <script src="../assets/js/products/historyDOM.js"></script>
+     <script src="<?= htmlspecialchars($historyDomScript) ?>"></script>
     <!-- Notificaitons -->
-     <script src="../assets/js/notifications.js"></script>
+     <script src="<?= htmlspecialchars($notificationsScript) ?>"></script>
 
 </body>
 

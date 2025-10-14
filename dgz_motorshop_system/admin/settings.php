@@ -196,6 +196,12 @@ $userManagementUsers = [];
 if ($role === 'admin') {
     require __DIR__ . '/includes/user_management_data.php';
 }
+$globalStylesheet = assetUrl('assets/css/style.css');
+$dashboardStylesheet = assetUrl('assets/css/dashboard/dashboard.css');
+$userManagementStylesheet = assetUrl('assets/css/users/userManagement.css');
+$userMenuScript = assetUrl('assets/js/dashboard/userMenu.js');
+$userManagementScript = assetUrl('assets/js/users/userManagement.js');
+$notificationsScript = assetUrl('assets/js/notifications.js');
 ?>
 <!doctype html>
 <html>
@@ -204,10 +210,10 @@ if ($role === 'admin') {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Settings</title>
-    <link rel="stylesheet" href="../assets/css/style.css">
-    <link rel="stylesheet" href="../assets/css/dashboard/dashboard.css">
+    <link rel="stylesheet" href="<?= htmlspecialchars($globalStylesheet) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars($dashboardStylesheet) ?>">
     <?php if ($role === 'admin'): ?>
-    <link rel="stylesheet" href="../assets/css/users/userManagement.css">
+    <link rel="stylesheet" href="<?= htmlspecialchars($userManagementStylesheet) ?>">
     <?php endif; ?>
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -339,11 +345,11 @@ if ($role === 'admin') {
         </div>
     </main>
 
-    <script src="../assets/js/dashboard/userMenu.js"></script>
+    <script src="<?= htmlspecialchars($userMenuScript) ?>"></script>
     <?php if ($role === 'admin'): ?>
-    <script src="../assets/js/users/userManagement.js"></script>
+    <script src="<?= htmlspecialchars($userManagementScript) ?>"></script>
     <?php endif; ?>
-    <script src="../assets/js/notifications.js"></script>
+    <script src="<?= htmlspecialchars($notificationsScript) ?>"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             const toggleButtons = document.querySelectorAll('.settings-toggle');

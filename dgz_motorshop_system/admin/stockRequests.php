@@ -163,6 +163,12 @@ function getStatusClass(string $status): string
             return 'status-pending';
     }
 }
+$globalStylesheet = assetUrl('assets/css/style.css');
+$dashboardStylesheet = assetUrl('assets/css/dashboard/dashboard.css');
+$stockRequestsStylesheet = assetUrl('assets/css/inventory/stockRequests.css');
+$userMenuScript = assetUrl('assets/js/dashboard/userMenu.js');
+$stockRequestScript = assetUrl('assets/js/inventory/stockRequest.js');
+$notificationsScript = assetUrl('assets/js/notifications.js');
 ?>
 <!doctype html>
 <html>
@@ -170,9 +176,9 @@ function getStatusClass(string $status): string
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Stock Requests</title>
-    <link rel="stylesheet" href="../assets/css/style.css">
-    <link rel="stylesheet" href="../assets/css/dashboard/dashboard.css">
-    <link rel="stylesheet" href="../assets/css/inventory/stockRequests.css">
+    <link rel="stylesheet" href="<?= htmlspecialchars($globalStylesheet) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars($dashboardStylesheet) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars($stockRequestsStylesheet) ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
@@ -391,10 +397,10 @@ function getStatusClass(string $status): string
         </div>
     </div>
         <!-- User menu -->
-        <script src="../assets/js/dashboard/userMenu.js"></script>
+        <script src="<?= htmlspecialchars($userMenuScript) ?>"></script>
 
     <!-- Tab controls -->
-    <script src="../assets/js/inventory/stockRequest.js"></script>
-    <script src="../assets/js/notifications.js"></script>
+    <script src="<?= htmlspecialchars($stockRequestScript) ?>"></script>
+    <script src="<?= htmlspecialchars($notificationsScript) ?>"></script>
 </body>
 </html>

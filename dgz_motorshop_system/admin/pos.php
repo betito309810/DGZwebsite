@@ -1314,6 +1314,14 @@ if ($receiptDataJson === false) {
     $receiptDataJson = 'null';
 }
 ?>
+<?php
+$globalStylesheet = assetUrl('assets/css/style.css');
+$posStylesheet = assetUrl('assets/css/pos/pos.css');
+$userMenuScript = assetUrl('assets/js/dashboard/userMenu.js');
+$posMainScript = assetUrl('assets/js/pos/posMain.js');
+$orderDeclineScript = assetUrl('assets/js/pos/orderDecline.js');
+$notificationsScript = assetUrl('assets/js/notifications.js');
+?>
 <!doctype html>
 <html lang="en">
 
@@ -1322,8 +1330,8 @@ if ($receiptDataJson === false) {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <title>POS - DGZ</title>
-    <link rel="stylesheet" href="../assets/css/style.css">
-    <link rel="stylesheet" href="../assets/css/pos/pos.css">
+    <link rel="stylesheet" href="<?= htmlspecialchars($globalStylesheet) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars($posStylesheet) ?>">
 </head>
 
 <body>
@@ -1718,7 +1726,7 @@ if ($receiptDataJson === false) {
         </div>
     </div>
 <!-- user menu -->
-     <script src="../assets/js/dashboard/userMenu.js"></script>
+     <script src="<?= htmlspecialchars($userMenuScript) ?>"></script>
     
 
      
@@ -1907,8 +1915,8 @@ if ($receiptDataJson === false) {
         };
     </script>
     <!--POS main script-->
-    <script src="../assets/js/pos/posMain.js"></script>
-    <script src="../assets/js/pos/orderDecline.js"></script>
-    <script src="../assets/js/notifications.js"></script>
+    <script src="<?= htmlspecialchars($posMainScript) ?>"></script>
+    <script src="<?= htmlspecialchars($orderDeclineScript) ?>"></script>
+    <script src="<?= htmlspecialchars($notificationsScript) ?>"></script>
 </body>
 </html>

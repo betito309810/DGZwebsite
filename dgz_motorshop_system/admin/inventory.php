@@ -507,6 +507,12 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
     fclose($out);
     exit;
 }
+$globalStylesheet = assetUrl('assets/css/style.css');
+$inventoryStylesheet = assetUrl('assets/css/inventory/inventory.css');
+$restockStylesheet = assetUrl('assets/css/inventory/restockRequest.css');
+$userMenuScript = assetUrl('assets/js/dashboard/userMenu.js');
+$inventoryScript = assetUrl('assets/js/inventory/inventoryMain.js');
+$notificationsScript = assetUrl('assets/js/notifications.js');
 ?>
 <!doctype html>
 <html>
@@ -516,9 +522,9 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inventory Management</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="../assets/css/style.css">
-    <link rel="stylesheet" href="../assets/css/inventory/inventory.css">
-    <link rel="stylesheet" href="../assets/css/inventory/restockRequest.css">
+    <link rel="stylesheet" href="<?= htmlspecialchars($globalStylesheet) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars($inventoryStylesheet) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars($restockStylesheet) ?>">
     <style>
         .inventory-actions {
             margin: 20px 0;
@@ -1391,9 +1397,9 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
         </div>
     </div>
     <!-- user menu -->
-     <script src="../assets/js/dashboard/userMenu.js"></script>
+     <script src="<?= htmlspecialchars($userMenuScript) ?>"></script>
      <!-- Inventory JS -->
-      <script src="../assets/js/inventory/inventoryMain.js"></script>
-    <script src="../assets/js/notifications.js"></script>
+      <script src="<?= htmlspecialchars($inventoryScript) ?>"></script>
+    <script src="<?= htmlspecialchars($notificationsScript) ?>"></script>
 </body>
 </html>

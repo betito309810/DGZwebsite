@@ -66,11 +66,13 @@ $staffAllowedPages = [
     'stockEntry.php',
 ];
 
+$sidebarLogo = assetUrl('assets/logo.png');
+
 ?>
 <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
         <div class="logo">
-            <img src="../assets/logo.png" alt="Company Logo">
+            <img src="<?php echo htmlspecialchars($sidebarLogo); ?>" alt="Company Logo">
         </div>
     </div>
     <nav class="nav-menu">

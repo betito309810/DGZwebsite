@@ -128,6 +128,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
+    $globalStylesheet = assetUrl('assets/css/style.css');
+    $loginStylesheet = assetUrl('assets/css/login/login.css');
+    $logoAsset = assetUrl('assets/logo.png');
 ?>
 <!doctype html>
 <html>
@@ -135,12 +138,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Forgot Password</title>
-    <link rel="stylesheet" href="../assets/css/style.css">
-    <link rel="stylesheet" href="../assets/css/login/login.css">
+    <link rel="stylesheet" href="<?= htmlspecialchars($globalStylesheet) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars($loginStylesheet) ?>">
 </head>
 <body>
     <div class="logo">
-        <img src="../assets/logo.png" alt="Company Logo">
+        <img src="<?= htmlspecialchars($logoAsset) ?>" alt="Company Logo">
     </div>
 
     <div class="login-container">
