@@ -133,44 +133,131 @@ button {
     line-height: 1;
 }
 
-.notif-dropdown {
+.notif-modal {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1200;
+}
+
+.notif-modal.show {
+    display: flex;
+}
+
+.notif-modal__overlay {
     position: absolute;
-    top: 52px;
-    right: 0;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+}
+
+.notif-modal__dialog {
+    position: relative;
     background: #fff;
-    border-radius: 12px;
-    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
-    width: 320px;
-    opacity: 0;
-    visibility: hidden;
-    transform: translateY(-8px);
-    transition: all 0.2s ease;
+    border-radius: 16px;
+    box-shadow: 0 20px 48px rgba(15, 23, 42, 0.25);
+    width: min(460px, calc(100% - 32px));
+    max-height: 82vh;
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
-    z-index: 1100;
 }
 
-.notif-dropdown.show {
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(0);
-}
-
-.notif-head {
+.notif-modal__header {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 16px 20px;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 20px 24px;
     border-bottom: 1px solid #e5e7eb;
+}
+
+.notif-modal__actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.notif-modal__title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
     font-weight: 600;
+    font-size: 18px;
     color: #1f2937;
 }
 
-.notif-head i {
+.notif-modal__title i {
     color: #2563eb;
 }
 
+.notif-modal__close {
+    background: transparent;
+    border: none;
+    color: #6b7280;
+    font-size: 18px;
+    padding: 6px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease;
+    margin-left: auto;
+}
+
+.notif-modal__close:hover,
+.notif-modal__close:focus {
+    background: rgba(37, 99, 235, 0.08);
+    color: #1f2937;
+}
+
+.notif-modal__body {
+    padding: 0 0 8px;
+    overflow-y: auto;
+    max-height: calc(82vh - 160px);
+}
+
+.notif-modal__footer {
+    padding: 16px 24px 24px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.notif-mark-all {
+    background: #2563eb;
+    color: #fff;
+    border: none;
+    border-radius: 999px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s ease, opacity 0.2s ease;
+}
+
+.notif-mark-all:hover,
+.notif-mark-all:focus {
+    background: #1d4ed8;
+}
+
+.notif-mark-all.is-loading {
+    opacity: 0.7;
+    cursor: default;
+}
+
+.notif-mark-all:disabled,
+.notif-mark-all.is-disabled {
+    background: #cbd5f5;
+    color: #4b5563;
+    cursor: not-allowed;
+    opacity: 0.85;
+}
+
+body.notif-modal-open {
+    overflow: hidden;
+}
+
 .notif-list {
-    max-height: 320px;
+    max-height: inherit;
     overflow-y: auto;
     list-style: none;
     padding: 0;
@@ -178,7 +265,7 @@ button {
 }
 
 .notif-item {
-    padding: 14px 20px;
+    padding: 16px 24px;
     border-bottom: 1px solid #f1f5f9;
     display: flex;
     flex-direction: column;
@@ -187,6 +274,12 @@ button {
 
 .notif-item:last-child {
     border-bottom: none;
+}
+
+.notif-item.unread {
+    background: #eff6ff;
+    border-left: 4px solid #2563eb;
+    padding-left: 20px;
 }
 
 .notif-item:hover {
@@ -243,36 +336,54 @@ button {
 }
 
 .notif-empty {
-    padding: 30px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 24px;
     text-align: center;
     color: #6b7280;
+    gap: 12px;
 }
 
 .notif-empty i {
-    font-size: 26px;
+    font-size: 28px;
     color: #22c55e;
-    margin-bottom: 12px;
-}
-
-.notif-footer {
-    padding: 12px 20px;
-    background: #f8fafc;
-    border-top: 1px solid #e5e7eb;
 }
 
 .notif-link {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    justify-content: center;
     gap: 8px;
     color: #2563eb;
     text-decoration: none;
     font-weight: 600;
-    font-size: 13px;
+    font-size: 14px;
 }
 
 .notif-link:hover {
     color: #1d4ed8;
+}
+
+@media (max-width: 640px) {
+    .notif-modal__dialog {
+        width: calc(100% - 24px);
+    }
+
+    .notif-modal__header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .notif-modal__actions {
+        margin-left: 0;
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .notif-mark-all {
+        margin-top: 8px;
+    }
 }
 
 /* Profile modal styles - standardized across all pages */
