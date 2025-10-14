@@ -11,6 +11,13 @@ $checkoutStylesheet = assetUrl('assets/css/public/checkout.css');
 $checkoutModalStylesheet = assetUrl('assets/css/public/checkoutModals.css');
 $logoAsset = assetUrl('assets/logo.png');
 $qrAsset = assetUrl('assets/QR.png');
+$mayaQrAsset = assetUrl('assets/QR-maya.png'); // Maya QR asset (add the image at this path to enable the toggle)
+$selectedPaymentMethod = $_POST['payment_method'] ?? 'GCash';
+if (!in_array($selectedPaymentMethod, ['GCash', 'Maya'], true)) {
+    $selectedPaymentMethod = 'GCash';
+}
+$currentQrAsset = $selectedPaymentMethod === 'Maya' ? $mayaQrAsset : $qrAsset;
+$currentQrAlt = $selectedPaymentMethod === 'Maya' ? 'Maya payment QR code' : 'GCash payment QR code';
 $shopUrl = orderingUrl('index.php');
 
 
@@ -667,12 +674,12 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                     </h2>
                     <div class="form-row">
                         <div class="form-group">
-                            <label>First name</label>
+                            <label>First name <span class="required-indicator">*</span></label>
                             <input type="text" name="customer_name" value="<?= htmlspecialchars($_POST['customer_name'] ?? '') ?>" required>
                         </div>
                         <div class="form-group">
-                            <label>Last name</label>
-                            <input type="text" name="last_name" value="<?= htmlspecialchars($_POST['last_name'] ?? '') ?>">
+                            <label>Last name <span class="required-indicator">*</span></label>
+                            <input type="text" name="last_name" value="<?= htmlspecialchars($_POST['last_name'] ?? '') ?>" required>
                         </div>
                     </div>
                     <div class="form-group">
@@ -702,18 +709,41 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                         <i class="fas fa-credit-card"></i>
                         Payment
                     </h2>
-                    <div class="payment-methods">
-                        
+                    <div class="payment-methods" role="radiogroup" aria-label="Select a payment method">
                         <div class="payment-option">
-                            <input type="radio" name="payment_method" value="GCash" id="gcash" <?= (($_POST['payment_method'] ?? 'GCash') === 'GCash') ? 'checked' : '' ?>>
-                            <label for="gcash">
-                                <i class="fas fa-mobile-alt"></i>&nbsp; GCash
+                            <input
+                                type="radio"
+                                name="payment_method"
+                                value="GCash"
+                                id="payment_gcash"
+                                data-qr="<?= htmlspecialchars($qrAsset) ?>"
+                                data-qr-alt="GCash payment QR code"
+                                <?= $selectedPaymentMethod === 'GCash' ? 'checked' : '' ?>
+                            >
+                            <label for="payment_gcash">
+                                <i class="fas fa-mobile-alt" aria-hidden="true"></i>
+                                <span>GCash</span>
+                            </label>
+                        </div>
+                        <div class="payment-option">
+                            <input
+                                type="radio"
+                                name="payment_method"
+                                value="Maya"
+                                id="payment_maya"
+                                data-qr="<?= htmlspecialchars($mayaQrAsset) ?>"
+                                data-qr-alt="Maya payment QR code"
+                                <?= $selectedPaymentMethod === 'Maya' ? 'checked' : '' ?>
+                            >
+                            <label for="payment_maya">
+                                <i class="fas fa-wallet" aria-hidden="true"></i>
+                                <span>Maya</span>
                             </label>
                         </div>
                     </div>
-                    
-                    <div class="qr-code">
-                        <img src="<?= htmlspecialchars($qrAsset) ?>" alt="">
+
+                    <div class="qr-code" data-default-qr="<?= htmlspecialchars($qrAsset) ?>">
+                        <img id="paymentQrImage" src="<?= htmlspecialchars($currentQrAsset) ?>" alt="<?= htmlspecialchars($currentQrAlt) ?>">
                     </div>
 
                     <div class="form-group">
@@ -826,27 +856,77 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
     </div>
 
     <script>
+        const proofInput = document.getElementById('proof');
+        const proofLabel = document.querySelector('label[for="proof"]');
+        const qrImage = document.getElementById('paymentQrImage');
+        const paymentRadios = Array.from(document.querySelectorAll('input[name="payment_method"]'));
+        const referenceField = document.getElementById('reference_number');
+
+        const defaultProofLabel = proofLabel ? proofLabel.innerHTML : '';
+
+        function resetProofUploadAppearance() {
+            if (!proofLabel) {
+                return;
+            }
+            proofLabel.innerHTML = defaultProofLabel;
+            proofLabel.style.background = '';
+            proofLabel.style.color = '';
+        }
+
         // File upload feedback
-        document.getElementById('proof').addEventListener('change', function(e) {
-            const label = document.querySelector('label[for="proof"]');
-            if (e.target.files.length > 0) {
-                label.innerHTML = '<i class="fas fa-check"></i> ' + e.target.files[0].name;
-                label.style.background = '#00b894';
-                label.style.color = 'white';
+        proofInput?.addEventListener('change', (event) => {
+            if (!proofLabel) {
+                return;
+            }
+
+            if (event.target.files.length > 0) {
+                proofLabel.innerHTML = '<i class="fas fa-check"></i> ' + event.target.files[0].name;
+                proofLabel.style.background = '#00b894';
+                proofLabel.style.color = 'white';
+            } else {
+                resetProofUploadAppearance();
             }
         });
 
-        // Payment method toggle
-        document.querySelectorAll('input[name="payment_method"]').forEach(radio => {
-            radio.addEventListener('change', function() {
-                const proofSection = document.querySelector('.file-upload').parentElement;
-                if (this.value === 'GCash') {
-                    proofSection.style.display = 'block';
-                } else {
-                    proofSection.style.display = 'none';
+        const referencePlaceholders = {
+            GCash: 'e.g. GCASH123456',
+            Maya: 'e.g. MAYA123456',
+        };
+
+        function applyPaymentSelection(selectedRadio) {
+            if (!selectedRadio) {
+                return;
+            }
+
+            const paymentValue = selectedRadio.value;
+            if (qrImage) {
+                const newSrc = selectedRadio.getAttribute('data-qr');
+                if (newSrc) {
+                    qrImage.src = newSrc;
                 }
+                const newAlt = selectedRadio.getAttribute('data-qr-alt');
+                if (newAlt) {
+                    qrImage.alt = newAlt;
+                }
+            }
+
+            if (referenceField && referencePlaceholders[paymentValue]) {
+                referenceField.placeholder = referencePlaceholders[paymentValue];
+            }
+        }
+
+        // Payment method toggle
+        paymentRadios.forEach((radio) => {
+            radio.addEventListener('change', () => {
+                applyPaymentSelection(radio);
             });
         });
+
+        // Apply initial selection state on page load
+        const initiallyChecked = paymentRadios.find((radio) => radio.checked) ?? paymentRadios[0] ?? null;
+        if (initiallyChecked) {
+            applyPaymentSelection(initiallyChecked);
+        }
 
         const cartInput = document.querySelector('input[name="cart"]');
         const orderItemsContainer = document.getElementById('orderItemsContainer');
