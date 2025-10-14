@@ -6,6 +6,12 @@ $pdo = db();
 $role = $_SESSION['role'] ?? '';
 $isStaff = ($role === 'staff');
 enforceStaffAccess();
+
+$productFormError = null;
+if (isset($_SESSION['products_error'])) {
+    $productFormError = (string) $_SESSION['products_error'];
+    unset($_SESSION['products_error']);
+}
 // Added: helper utilities that manage product image uploads in a single place.
 if (!function_exists('ensureProductImageDirectory')) {
     /**
@@ -443,6 +449,32 @@ if (!function_exists('syncProductVariants')) {
     }
 }
 
+if (!function_exists('productCodeExists')) {
+    /**
+     * Determine whether a product code is already assigned to another product record.
+     */
+    function productCodeExists(PDO $pdo, string $code, ?int $excludeProductId = null): bool
+    {
+        $normalised = trim($code);
+        if ($normalised === '') {
+            return false;
+        }
+
+        $sql = 'SELECT 1 FROM products WHERE code = ?';
+        $params = [$normalised];
+        if ($excludeProductId !== null && $excludeProductId > 0) {
+            $sql .= ' AND id <> ?';
+            $params[] = $excludeProductId;
+        }
+        $sql .= ' LIMIT 1';
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+
+        return (bool) $stmt->fetchColumn();
+    }
+}
+
 // Product Add History for modal (HTML table, not JSON)
 if (isset($_GET['history']) && $_GET['history'] == '1') {
     $sql = "
@@ -710,6 +742,12 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_product'])){
     $low = isset($_POST['low_stock_threshold']) ? (int) $_POST['low_stock_threshold'] : 0;
     $id = isset($_POST['id']) ? (int) $_POST['id'] : 0;
 
+    if ($code !== '' && productCodeExists($pdo, $code, $id > 0 ? $id : null)) {
+        $_SESSION['products_error'] = sprintf('Product code "%s" is already in use. Please choose a different code.', $code);
+        header('Location: products.php');
+        exit;
+    }
+
     $mainImageFile = $_FILES['image'] ?? null;
     $galleryImageFiles = $_FILES['gallery_images'] ?? null;
     $removeMainImage = isset($_POST['remove_main_image']) && (string) $_POST['remove_main_image'] === '1';
@@ -950,6 +988,18 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_product'])){
 $brands = $pdo->query('SELECT DISTINCT brand FROM products WHERE brand IS NOT NULL AND brand != ""')->fetchAll(PDO::FETCH_COLUMN);
 $categories = $pdo->query('SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND category != ""')->fetchAll(PDO::FETCH_COLUMN);
 $suppliers = $pdo->query('SELECT DISTINCT supplier FROM products WHERE supplier IS NOT NULL AND supplier != ""')->fetchAll(PDO::FETCH_COLUMN);
+$productCodeIndexRows = $pdo->query('SELECT id, code FROM products WHERE code IS NOT NULL AND code != ""')->fetchAll(PDO::FETCH_ASSOC);
+$productCodeIndex = [];
+foreach ($productCodeIndexRows as $row) {
+    $code = isset($row['code']) ? trim((string) $row['code']) : '';
+    if ($code === '') {
+        continue;
+    }
+    $productCodeIndex[] = [
+        'id' => isset($row['id']) ? (int) $row['id'] : 0,
+        'code' => $code,
+    ];
+}
 
 /**
  * Handle product filtering, search, and pagination functionality (styled after sales.php).
@@ -1056,6 +1106,18 @@ if ($currentSort === 'name') {
     <link rel="stylesheet" href="../dgz_motorshop_system/assets/css/products/products.css">
     <link rel="stylesheet" href="../dgz_motorshop_system/assets/css/products/variants.css"> <!-- Added: styles for the variant editor grid. -->
     <link rel="stylesheet" href="../dgz_motorshop_system/assets/css/products/product_modals.css"> <!-- Added: widened horizontal modal layout. -->
+    <style>
+        .products-alert {
+            margin: 20px auto;
+            max-width: 1200px;
+            padding: 14px 18px;
+            border-radius: 6px;
+            border: 1px solid #f5c6cb;
+            background-color: #f8d7da;
+            color: #721c24;
+            font-size: 0.95rem;
+        }
+    </style>
 
 </head>
 
@@ -1093,6 +1155,9 @@ if ($currentSort === 'name') {
                 </div>
             </div>
         </header>
+        <?php if ($productFormError !== null && $productFormError !== ''): ?>
+        <div class="products-alert"><?= htmlspecialchars($productFormError) ?></div>
+        <?php endif; ?>
         <!-- Action buttons aligned to the right -->
         <div class="products-action-bar">
             <?php if (!$isStaff): ?>
@@ -1260,10 +1325,13 @@ if ($currentSort === 'name') {
                     <button name="save_product" type="submit">Add</button>
                 </form>
             </div>
-        </div>
-        <!-- Fallback Synchroniser -->
+       </div>
+       <!-- Fallback Synchroniser -->
        <script src="../dgz_motorshop_system/assets/js/products/fbSynchroniser.js"></script>
        <script src="../dgz_motorshop_system/assets/js/products/tableFilters.js"></script>
+        <script>
+            window.PRODUCT_CODE_INDEX = <?= json_encode($productCodeIndex, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]' ?>;
+        </script>
 
         <!-- Products table displaying filtered/search results -->
         <div id="productsTable" class="table-container">

@@ -1,5 +1,98 @@
 // Begin Products page DOM wiring
         document.addEventListener('DOMContentLoaded', () => {
+            const normaliseCode = (value) => {
+                return (value ?? '').toString().trim().toUpperCase();
+            };
+
+            const productCodeIndexRaw = Array.isArray(window.PRODUCT_CODE_INDEX)
+                ? window.PRODUCT_CODE_INDEX
+                : [];
+            const productCodeIndex = new Map();
+            productCodeIndexRaw.forEach((entry) => {
+                if (!entry) {
+                    return;
+                }
+                const code = normaliseCode(entry.code);
+                if (!code) {
+                    return;
+                }
+                const ownerId = Number.parseInt(entry.id, 10) || 0;
+                const bucket = productCodeIndex.get(code) ?? new Set();
+                if (ownerId > 0) {
+                    bucket.add(ownerId);
+                }
+                productCodeIndex.set(code, bucket);
+            });
+
+            const enforceUniqueProductCode = (form) => {
+                if (!form) {
+                    return true;
+                }
+
+                const codeField = form.querySelector('input[name="code"]');
+                if (!codeField) {
+                    return true;
+                }
+
+                const idField = form.querySelector('input[name="id"]');
+                const currentId = idField ? Number.parseInt(idField.value, 10) || 0 : 0;
+                const candidateCode = normaliseCode(codeField.value);
+
+                if (!candidateCode) {
+                    codeField.setCustomValidity('');
+                    return true;
+                }
+
+                const owners = productCodeIndex.get(candidateCode);
+                const hasConflict = owners
+                    ? Array.from(owners).some((ownerId) => ownerId !== currentId)
+                    : false;
+
+                if (hasConflict) {
+                    codeField.setCustomValidity('Product code is already in use. Please choose a different code.');
+                    if (typeof codeField.reportValidity === 'function') {
+                        codeField.reportValidity();
+                    }
+                    try {
+                        codeField.focus({ preventScroll: true });
+                    } catch (error) {
+                        codeField.focus();
+                    }
+                    return false;
+                }
+
+                codeField.setCustomValidity('');
+                return true;
+            };
+
+            const attachProductCodeValidation = (form) => {
+                if (!form) {
+                    return;
+                }
+
+                const codeField = form.querySelector('input[name="code"]');
+                if (!codeField) {
+                    return;
+                }
+
+                codeField.addEventListener('input', () => {
+                    codeField.setCustomValidity('');
+                });
+
+                form.addEventListener('submit', (event) => {
+                    if (!enforceUniqueProductCode(form)) {
+                        event.preventDefault();
+                        event.stopImmediatePropagation();
+                    }
+                });
+            };
+
+            const addProductForm = document.getElementById('addProductForm');
+            const editProductForm = document.getElementById('editProductForm');
+
+            attachProductCodeValidation(addProductForm);
+            attachProductCodeValidation(editProductForm);
+
             const historyModal = document.getElementById('historyModal');
             const historyList = document.getElementById('historyList');
             const openHistoryButton = document.getElementById('openHistoryModal');
