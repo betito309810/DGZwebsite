@@ -720,22 +720,12 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_product'])){
 
     $variantsPayloadJson = $_POST['variants_payload'] ?? '';
     $variantRecords = normaliseVariantPayload($variantsPayloadJson);
-    if (empty($variantRecords)) {
-        // Added: fallback so legacy submissions still create at least one sellable variant.
-        $variantRecords = [[
-            'id' => null,
-            'label' => $name !== '' ? $name : 'Standard',
-            'sku' => null,
-            'price' => $price,
-            'quantity' => $qty,
-            'is_default' => 1,
-            'sort_order' => 1,
-        ]];
+    if (!empty($variantRecords)) {
+        atLeastOneVariantIsDefault($variantRecords);
+        $variantSummary = summariseVariantStock($variantRecords);
+        $qty = (int) ($variantSummary['quantity'] ?? $qty);
+        $price = (float) ($variantSummary['price'] ?? $price);
     }
-    atLeastOneVariantIsDefault($variantRecords);
-    $variantSummary = summariseVariantStock($variantRecords);
-    $qty = (int) ($variantSummary['quantity'] ?? $qty);
-    $price = (float) ($variantSummary['price'] ?? $price);
     
     // Handle brand and category
     $brand = trim($_POST['brand'] ?? '');
