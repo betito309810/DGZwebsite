@@ -2590,8 +2590,6 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
                 </tbody>
             </table>
         </div>
-
-        <div class="footer">Prepared via DGZ Inventory System</div>
     </body>
     </html>
     <?php

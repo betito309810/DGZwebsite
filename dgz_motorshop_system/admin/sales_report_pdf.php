@@ -155,7 +155,7 @@ $html = '
             </tr>
             <tr>
                 <th>Total Sales Amount</th>
-<td>&#8369;' . number_format($total_sales, 2) . '</td>
+            <td> PHP; ' . number_format($total_sales, 2) . '</td>
             </tr>
         </table>
     </div>
@@ -177,7 +177,7 @@ foreach ($top_items as $item) {
                 <tr>
                     <td>' . htmlspecialchars($item['item_name']) . '</td>
                     <td>' . number_format($item['total_qty']) . '</td>
-                    <td>&#8369;' . number_format($item['total_sales'], 2) . '</td>
+                    <td> PHP ' . number_format($item['total_sales'], 2) . '</td>
                 </tr>';
 }
 if (empty($top_items)) {
@@ -190,10 +190,6 @@ $html .= '
             </tbody>
         </table>
     </div>
-
-        <div class="footer">
-            <p>This report was generated automatically by the DGZ Motorshop System.</p>
-        </div>
     </body>
     </html>';
 
