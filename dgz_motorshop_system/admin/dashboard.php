@@ -157,6 +157,13 @@ function format_profile_date(?string $datetime): string
 $profile_name = $current_user['name'] ?? 'N/A';
 $profile_role = !empty($current_user['role']) ? ucfirst($current_user['role']) : 'N/A';
 $profile_created = format_profile_date($current_user['created_at'] ?? null);
+
+$globalStylesheet = assetUrl('assets/css/style.css');
+$dashboardStylesheet = assetUrl('assets/css/dashboard/dashboard.css');
+$notificationsScript = assetUrl('assets/js/notifications.js');
+$periodFiltersScript = assetUrl('assets/js/sales/periodFilters.js');
+$topSellingFiltersScript = assetUrl('assets/js/dashboard/topSellingFilters.js');
+$userMenuScript = assetUrl('assets/js/dashboard/userMenu.js');
 ?>
 <!doctype html>
 <html>
@@ -165,8 +172,8 @@ $profile_created = format_profile_date($current_user['created_at'] ?? null);
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard</title>
-    <link rel="stylesheet" href="../assets/css/style.css">
-    <link rel="stylesheet" href="../assets/css/dashboard/dashboard.css">
+    <link rel="stylesheet" href="<?= htmlspecialchars($globalStylesheet) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars($dashboardStylesheet) ?>">
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
@@ -346,10 +353,10 @@ $profile_created = format_profile_date($current_user['created_at'] ?? null);
         </div>
     </div>
 
-    <script src="../assets/js/notifications.js"></script>
-    <script src="../assets/js/sales/periodFilters.js"></script>
-    <script src="../assets/js/dashboard/topSellingFilters.js"></script>
-    <script src="../assets/js/dashboard/userMenu.js"></script>
+    <script src="<?= htmlspecialchars($notificationsScript) ?>"></script>
+    <script src="<?= htmlspecialchars($periodFiltersScript) ?>"></script>
+    <script src="<?= htmlspecialchars($topSellingFiltersScript) ?>"></script>
+    <script src="<?= htmlspecialchars($userMenuScript) ?>"></script>
 
 </body>
 

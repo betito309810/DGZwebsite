@@ -462,6 +462,20 @@ $buildPageUrl = static function (int $page) use ($queryParams): string {
     $params['page'] = $page;
     return '?' . http_build_query($params);
 };
+
+$globalStylesheet = assetUrl('assets/css/style.css');
+$salesStylesheet = assetUrl('assets/css/sales/sales.css');
+$piechartStylesheet = assetUrl('assets/css/sales/piechart.css');
+$transactionModalStylesheet = assetUrl('assets/css/sales/transaction-modal.css');
+$notificationsScript = assetUrl('assets/js/notifications.js');
+$periodFiltersScript = assetUrl('assets/js/sales/periodFilters.js');
+$salesReportModalScript = assetUrl('assets/js/sales/salesReportModal.js');
+$salesAnalyticsScript = assetUrl('assets/js/sales/salesAnalytics.js');
+$pieChartScript = assetUrl('assets/js/sales/pieChart.js');
+$salesSearchScript = assetUrl('assets/js/sales/salesSearch.js');
+$transactionModalScript = assetUrl('assets/js/sales/transactionModal.js');
+$transactionDetailsScript = assetUrl('assets/js/transaction-details.js');
+$userMenuScript = assetUrl('assets/js/dashboard/userMenu.js');
 ?>
 <!doctype html>
 <html>
@@ -470,10 +484,10 @@ $buildPageUrl = static function (int $page) use ($queryParams): string {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="../assets/css/style.css">
-    <link rel="stylesheet" href="../assets/css/sales/sales.css">
-    <link rel="stylesheet" href="../assets/css/sales/piechart.css">
-    <link rel="stylesheet" href="../assets/css/sales/transaction-modal.css">
+    <link rel="stylesheet" href="<?= htmlspecialchars($globalStylesheet) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars($salesStylesheet) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars($piechartStylesheet) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars($transactionModalStylesheet) ?>">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <title>Sales</title>
 </head>
@@ -872,22 +886,22 @@ $buildPageUrl = static function (int $page) use ($queryParams): string {
         </div>
     </div>
     <!-- Sales period helpers -->
-    <script src="../assets/js/sales/periodFilters.js"></script>
+    <script src="<?= htmlspecialchars($periodFiltersScript) ?>"></script>
     <!-- Sales report modal -->
-    <script src="../assets/js/sales/salesReportModal.js"></script>
+    <script src="<?= htmlspecialchars($salesReportModalScript) ?>"></script>
     <!-- Sales analytics widget -->
-    <script src="../assets/js/sales/salesAnalytics.js"></script>
+    <script src="<?= htmlspecialchars($salesAnalyticsScript) ?>"></script>
     <!-- Pie chart widget -->
-    <script src="../assets/js/sales/pieChart.js"></script>
+    <script src="<?= htmlspecialchars($pieChartScript) ?>"></script>
     <!-- Sales search helpers -->
-    <script src="../assets/js/sales/salesSearch.js"></script>
+    <script src="<?= htmlspecialchars($salesSearchScript) ?>"></script>
     
         
     <!--Transaction modal-->
-    <script src="../assets/js/sales/transactionModal.js"></script>
-    <script src="../assets/js/notifications.js"></script>
-    <script src="../assets/js/transaction-details.js"></script>
-    <script src="../assets/js/dashboard/userMenu.js"></script>
+    <script src="<?= htmlspecialchars($transactionModalScript) ?>"></script>
+    <script src="<?= htmlspecialchars($notificationsScript) ?>"></script>
+    <script src="<?= htmlspecialchars($transactionDetailsScript) ?>"></script>
+    <script src="<?= htmlspecialchars($userMenuScript) ?>"></script>
 </body>
 
 </html>

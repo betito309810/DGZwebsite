@@ -55,6 +55,14 @@ $userManagementUsers = [];
 
 require __DIR__ . '/includes/user_management_data.php';
 ?>
+<?php
+$globalStylesheet = assetUrl('assets/css/style.css');
+$dashboardStylesheet = assetUrl('assets/css/dashboard/dashboard.css');
+$userManagementStylesheet = assetUrl('assets/css/users/userManagement.css');
+$userMenuScript = assetUrl('assets/js/dashboard/userMenu.js');
+$userManagementScript = assetUrl('assets/js/users/userManagement.js');
+$notificationsScript = assetUrl('assets/js/notifications.js');
+?>
 <!doctype html>
 <html>
 
@@ -63,9 +71,9 @@ require __DIR__ . '/includes/user_management_data.php';
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>User Management</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="../assets/css/style.css">
-    <link rel="stylesheet" href="../assets/css/dashboard/dashboard.css">
-    <link rel="stylesheet" href="../assets/css/users/userManagement.css">
+    <link rel="stylesheet" href="<?= htmlspecialchars($globalStylesheet) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars($dashboardStylesheet) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars($userManagementStylesheet) ?>">
 </head>
 
 <body>
@@ -129,9 +137,9 @@ require __DIR__ . '/includes/user_management_data.php';
         </div>
     </div>
 
-    <script src="../assets/js/dashboard/userMenu.js"></script>
-    <script src="../assets/js/users/userManagement.js"></script>
-    <script src="../assets/js/notifications.js"></script>
+    <script src="<?= htmlspecialchars($userMenuScript) ?>"></script>
+    <script src="<?= htmlspecialchars($userManagementScript) ?>"></script>
+    <script src="<?= htmlspecialchars($notificationsScript) ?>"></script>
 </body>
 
 </html>

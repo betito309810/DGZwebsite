@@ -402,6 +402,12 @@ if (trim((string)$formDiscrepancyNote) !== '') {
 }
 $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
 
+$globalStylesheet = assetUrl('assets/css/style.css');
+$dashboardStylesheet = assetUrl('assets/css/dashboard/dashboard.css');
+$stockEntryStylesheet = assetUrl('assets/css/inventory/stockEntry.css');
+$userMenuScript = assetUrl('assets/js/dashboard/userMenu.js');
+$stockEntryScript = assetUrl('assets/js/inventory/stockEntry.js');
+$notificationsScript = assetUrl('assets/js/notifications.js');
 ?>
 <!DOCTYPE html>
 <html>
@@ -409,9 +415,9 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Create Stock-In - DGZ</title>
-    <link rel="stylesheet" href="../assets/css/style.css">
-    <link rel="stylesheet" href="../assets/css/dashboard/dashboard.css">
-    <link rel="stylesheet" href="../assets/css/inventory/stockEntry.css">
+    <link rel="stylesheet" href="<?= htmlspecialchars($globalStylesheet) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars($dashboardStylesheet) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars($stockEntryStylesheet) ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
@@ -1203,9 +1209,9 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
             'formLocked' => $formLocked,
         ], JSON_PRETTY_PRINT) ?>
     </script>
-    <script src="../assets/js/dashboard/userMenu.js"></script>
-    <script src="../assets/js/inventory/stockEntry.js"></script>
-    <script src="../assets/js/notifications.js"></script>
+    <script src="<?= htmlspecialchars($userMenuScript) ?>"></script>
+    <script src="<?= htmlspecialchars($stockEntryScript) ?>"></script>
+    <script src="<?= htmlspecialchars($notificationsScript) ?>"></script>
 </body>
 </html>
 <?php

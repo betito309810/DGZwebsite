@@ -119,6 +119,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $validToken) {
         }
     }
 }
+    $globalStylesheet = assetUrl('assets/css/style.css');
+    $loginStylesheet = assetUrl('assets/css/login/login.css');
+    $logoAsset = assetUrl('assets/logo.png');
+    $resetScript = assetUrl('assets/js/login/reset-password.js');
 ?>
 <!doctype html>
 <html>
@@ -126,12 +130,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $validToken) {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reset Password</title>
-    <link rel="stylesheet" href="../assets/css/style.css">
-    <link rel="stylesheet" href="../assets/css/login/login.css">
+    <link rel="stylesheet" href="<?= htmlspecialchars($globalStylesheet) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars($loginStylesheet) ?>">
 </head>
 <body>
     <div class="logo">
-        <img src="../assets/logo.png" alt="Company Logo">
+        <img src="<?= htmlspecialchars($logoAsset) ?>" alt="Company Logo">
     </div>
 
     <div class="login-container">
@@ -170,6 +174,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $validToken) {
             <a href="login.php">Back to Login</a>
         </div>
     </div>
-    <script src="../assets/js/login/reset-password.js"></script>
+    <script src="<?= htmlspecialchars($resetScript) ?>"></script>
 </body>
 </html>

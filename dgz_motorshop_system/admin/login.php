@@ -44,6 +44,10 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
 }
 $hasMessage = $msg !== '';
 $alertClass = ($status === 'success') ? 'success-msg' : 'error-msg';
+
+$globalStylesheet = assetUrl('assets/css/style.css');
+$loginStylesheet = assetUrl('assets/css/login/login.css');
+$logoAsset = assetUrl('assets/logo.png');
 ?>
 <!doctype html>
 <html>
@@ -51,13 +55,13 @@ $alertClass = ($status === 'success') ? 'success-msg' : 'error-msg';
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Login</title>
-    <link rel="stylesheet" href="../assets/css/style.css">
-    <link rel="stylesheet" href="../assets/css/login/login.css">
+    <link rel="stylesheet" href="<?= htmlspecialchars($globalStylesheet) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars($loginStylesheet) ?>">
 </head>
 <body>
     <!-- Logo placeholder - replace src with your logo path -->
     <div class="logo">
-        <img src="../assets/logo.png" alt="Company Logo">
+        <img src="<?= htmlspecialchars($logoAsset) ?>" alt="Company Logo">
     </div>
     
     <div class="login-container">
