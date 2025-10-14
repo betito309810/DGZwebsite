@@ -1,7 +1,7 @@
 <?php
 // Database configuration
 $DB_HOST = 'localhost';
-$DB_NAME = 'dgz_db';
+$DB_NAME = 'dgzdb';
 $DB_USER = 'root';
 $DB_PASS = '';
 // Ensure all pages consistently render dates in Philippine time.

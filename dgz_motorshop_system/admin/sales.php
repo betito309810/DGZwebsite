@@ -749,7 +749,7 @@ $buildPageUrl = static function (int $page) use ($queryParams): string {
                 <div class="stats-container">
                     <div class="stat-card">
                         <div class="stat-icon">
-                            <i class="fas fa-dollar-sign"></i>
+                            <i class="fa-solid fa-peso-sign"></i>
                         </div>
                         <div class="stat-value" id="totalSales">₱0.00</div>
                         <div class="stat-label">Total Sales</div>
