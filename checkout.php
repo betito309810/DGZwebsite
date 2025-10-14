@@ -617,7 +617,9 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
     <header class="header">
         <div class="header-content">
             <div class="logo">
-                <img src="<?= htmlspecialchars($logoAsset) ?>" alt="Company Logo">
+                <a href="<?= htmlspecialchars($shopUrl) ?>" aria-label="Go to DGZ Motorshop home">
+                    <img src="<?= htmlspecialchars($logoAsset) ?>" alt="Company Logo">
+                </a>
             </div>
             <a href="<?= htmlspecialchars($shopUrl) ?>" class="continue-shopping-btn">
             <i class="fas fa-arrow-left"></i> Continue Shopping

@@ -57,7 +57,9 @@ natcasesort($categories);
                 <span class="sr-only">Toggle navigation</span>
             </button>
             <div class="logo">
-                <img src="<?= htmlspecialchars($logoAsset) ?>" alt="Company Logo">
+                <a href="<?= htmlspecialchars($homeUrl) ?>" aria-label="Go to DGZ Motorshop home">
+                    <img src="<?= htmlspecialchars($logoAsset) ?>" alt="Company Logo">
+                </a>
             </div>
 
             <div class="search-container">

@@ -171,3 +171,50 @@ if (!function_exists('atLeastOneVariantIsDefault')) {
         }
     }
 }
+
+if (!function_exists('findDefaultVariantId')) {
+    /**
+     * Resolve the default variant for a product or fall back to the first configured entry.
+     */
+    function findDefaultVariantId(PDO $pdo, int $productId): ?int
+    {
+        $stmt = $pdo->prepare(
+            'SELECT id
+             FROM product_variants
+             WHERE product_id = ?
+             ORDER BY is_default DESC, sort_order ASC, id ASC
+             LIMIT 1'
+        );
+        $stmt->execute([$productId]);
+        $variantId = $stmt->fetchColumn();
+
+        if ($variantId === false || $variantId === null) {
+            return null;
+        }
+
+        return (int) $variantId;
+    }
+}
+
+if (!function_exists('adjustDefaultVariantQuantity')) {
+    /**
+     * Mirror product-level inventory adjustments onto the default variant when present.
+     */
+    function adjustDefaultVariantQuantity(PDO $pdo, int $productId, int $quantityChange): void
+    {
+        if ($quantityChange === 0) {
+            return;
+        }
+
+        $variantId = findDefaultVariantId($pdo, $productId);
+        if ($variantId === null) {
+            return;
+        }
+
+        $update = $pdo->prepare('UPDATE product_variants SET quantity = quantity + :delta WHERE id = :variant_id');
+        $update->execute([
+            ':delta' => $quantityChange,
+            ':variant_id' => $variantId,
+        ]);
+    }
+}

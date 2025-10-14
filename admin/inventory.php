@@ -1,5 +1,6 @@
 <?php
 require __DIR__ . '/../config/config.php';
+require_once __DIR__ . '/../dgz_motorshop_system/includes/product_variants.php';
 if(empty($_SESSION['user_id'])){ header('Location: login.php'); exit; }
 $pdo = db();
 $role = $_SESSION['role'] ?? '';
@@ -239,6 +240,8 @@ if ($canManualAdjust && isset($_POST['update_stock'])) {
             $updateStmt = $pdo->prepare('UPDATE products SET quantity = quantity + ? WHERE id = ?');
             $updateStmt->execute([$change, $id]);
 
+            adjustDefaultVariantQuantity($pdo, $id, $change);
+
             $pdo->commit();
 
             $verb = $change > 0 ? 'added to' : 'removed from';
@@ -287,6 +290,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_stock'])) {
             $pdo->beginTransaction();
             $stmt = $pdo->prepare("UPDATE products SET quantity = quantity + ? WHERE id = ?");
             $stmt->execute([$quantity, $product_id]);
+
+            adjustDefaultVariantQuantity($pdo, (int) $product_id, $quantity);
             $stmt = $pdo->prepare("INSERT INTO stock_entries (product_id, quantity_added, purchase_price, supplier, notes, stock_in_by, stock_in_by_name, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())");
             $stmt->execute([
                 $product_id,

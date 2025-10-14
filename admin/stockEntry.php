@@ -10,6 +10,7 @@ $role = $_SESSION['role'] ?? '';
 enforceStaffAccess();
 $notificationManageLink = 'inventory.php';
 
+require_once __DIR__ . '/../dgz_motorshop_system/includes/product_variants.php';
 require_once __DIR__ . '/includes/inventory_notifications.php';
 require_once __DIR__ . '/includes/stock_receipt_helpers.php';
 $inventoryNotificationData = loadInventoryNotifications($pdo);
@@ -1665,6 +1666,8 @@ function applyInventoryMovements(PDO $pdo, int $receiptId, array $items, int $us
             ':qty' => $item['qty_received'],
             ':product_id' => $item['product_id'],
         ]);
+
+        adjustDefaultVariantQuantity($pdo, (int) $item['product_id'], (int) $item['qty_received']);
 
         $insertLedger->execute([
             ':product_id' => $item['product_id'],

@@ -37,7 +37,9 @@ $productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
                 <span class="sr-only">Toggle navigation</span>
             </button>
             <div class="logo">
-                <img src="<?= htmlspecialchars($logoAsset) ?>" alt="DGZ Motorshop Logo">
+                <a href="<?= htmlspecialchars($homeUrl) ?>" aria-label="Go to DGZ Motorshop home">
+                    <img src="<?= htmlspecialchars($logoAsset) ?>" alt="DGZ Motorshop Logo">
+                </a>
             </div>
 
             <div class="search-container">

@@ -314,13 +314,50 @@ if (!function_exists('systemBaseUrl')) {
     }
 }
 
+if (!function_exists('systemAssetBasePath')) {
+    function systemAssetBasePath(): string
+    {
+        $basePath = str_replace('\\', '/', systemBasePath());
+
+        if ($basePath === '' || $basePath === '/') {
+            $basePath = '/';
+        }
+
+        $firstChar = $basePath[0] ?? '';
+        $looksLikeFilesystemRoot = preg_match('#^[a-z]:#i', $basePath) === 1
+            || ($firstChar !== '/' && $firstChar !== '.');
+
+        if ($looksLikeFilesystemRoot) {
+            $basePath = '/';
+        }
+
+        if ($basePath === '/' || $basePath === './' || $basePath === '.') {
+            global $systemFolderName;
+            $folder = $systemFolderName ?: 'dgz_motorshop_system';
+            $appBase = appBasePath();
+
+            if ($appBase !== '' && $appBase !== '/') {
+                $basePath = rtrim($appBase, '/') . '/' . ltrim($folder, '/');
+            } else {
+                $basePath = '/' . ltrim($folder, '/');
+            }
+        }
+
+        if ($basePath !== '' && $basePath[0] !== '/') {
+            $basePath = '/' . ltrim($basePath, '/');
+        }
+
+        return rtrim($basePath, '/') ?: '/';
+    }
+}
+
 if (!function_exists('assetUrl')) {
     function assetUrl(string $path): string
     {
         $trimmed = trim($path);
 
         if ($trimmed === '') {
-            $base = systemBasePath();
+            $base = systemAssetBasePath();
             return $base === '' ? '/' : $base;
         }
 
@@ -337,7 +374,7 @@ if (!function_exists('assetUrl')) {
         }
 
         $normalized = ltrim($trimmed, '/');
-        $basePath = systemBasePath();
+        $basePath = systemAssetBasePath();
 
         if ($basePath === '' || $basePath === '/') {
             return '/' . $normalized;
