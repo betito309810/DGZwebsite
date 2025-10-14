@@ -385,8 +385,9 @@ body.notif-detail-open {
     position: fixed;
     inset: 0;
     display: none;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
+    padding: 48px 16px 32px;
     z-index: 1200;
 }
 
@@ -514,6 +515,10 @@ body.notif-detail-open {
 }
 
 @media (max-width: 640px) {
+    .notif-detail-modal {
+        padding: 32px 12px 24px;
+    }
+
     .notif-dropdown {
         right: -12px;
         width: min(92vw, 320px);
