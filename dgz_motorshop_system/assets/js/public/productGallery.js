@@ -24,6 +24,7 @@
     const cartButton = document.getElementById('productGalleryCartButton');
     const variantContainer = document.getElementById('productGalleryVariants');
     const variantList = document.getElementById('productGalleryVariantList');
+    const variantHelper = document.getElementById('productGalleryVariantHelper');
     const productsGrid = document.querySelector('.products-grid');
     const pathConfig = window.dgzPaths || {};
     const productImagesEndpoint = (typeof pathConfig.productImages === 'string' && pathConfig.productImages !== '')
@@ -37,6 +38,15 @@
         return;
     }
 
+    const DEFAULT_MODAL_OPTIONS = Object.freeze({
+        hideBuyButton: false,
+        forceVariantSelection: false,
+        focusVariantSelector: false,
+        presetQuantity: null,
+    });
+
+    let currentModalOptions = { ...DEFAULT_MODAL_OPTIONS };
+
     const state = {
         productId: null,
         productName: '',
@@ -49,9 +59,23 @@
         index: 0,
         variants: [],
         selectedVariant: null,
+        pendingQuantity: null,
     };
 
     let lastActiveElement = null;
+
+    function resetModalOptions() {
+        currentModalOptions = { ...DEFAULT_MODAL_OPTIONS };
+        if (buyButton) {
+            buyButton.hidden = false;
+        }
+    }
+
+    function applyModalOptions() {
+        if (buyButton) {
+            buyButton.hidden = Boolean(currentModalOptions.hideBuyButton);
+        }
+    }
 
     function setAriaHidden(isHidden) {
         modal.setAttribute('aria-hidden', String(isHidden));
@@ -124,26 +148,70 @@
 
         const hasKnownStock = typeof state.quantity === 'number';
         const requiresVariant = Array.isArray(state.variants) && state.variants.length > 0;
-        const hasVariantSelected = !requiresVariant || !!state.selectedVariant;
-        const canPurchase = hasVariantSelected && (!hasKnownStock || state.quantity > 0);
+        const variantSelectionRequired = requiresVariant && !state.selectedVariant;
+        const hasStockAvailable = !hasKnownStock || state.quantity > 0;
+        const canPurchase = !variantSelectionRequired && hasStockAvailable;
 
         buyButton.disabled = !canPurchase;
         cartButton.disabled = !canPurchase;
 
+        if (variantContainer) {
+            if (variantSelectionRequired) {
+                variantContainer.setAttribute('data-selection-required', 'true');
+            } else {
+                variantContainer.removeAttribute('data-selection-required');
+            }
+        }
+
+        if (variantHelper) {
+            variantHelper.hidden = !variantSelectionRequired;
+        }
+
         if (canPurchase) {
             quantityInput.disabled = false;
+            quantityInput.placeholder = '';
             quantityInput.min = '1';
             if (hasKnownStock) {
-                quantityInput.max = String(Math.max(1, state.quantity));
+                const max = Math.max(1, state.quantity);
+                quantityInput.max = String(max);
+                if (state.pendingQuantity !== null) {
+                    let desired = Number(state.pendingQuantity);
+                    if (!Number.isFinite(desired) || desired < 1) {
+                        desired = 1;
+                    }
+                    desired = Math.min(desired, max);
+                    quantityInput.value = String(desired);
+                    quantityInput.dataset.previousValidValue = String(desired);
+                    state.pendingQuantity = null;
+                }
             } else {
+                if (state.pendingQuantity !== null) {
+                    let desired = Number(state.pendingQuantity);
+                    if (!Number.isFinite(desired) || desired < 1) {
+                        desired = 1;
+                    }
+                    quantityInput.value = String(desired);
+                    quantityInput.dataset.previousValidValue = String(desired);
+                    state.pendingQuantity = null;
+                }
                 quantityInput.removeAttribute('max');
             }
             normaliseQuantityField({ suppressAlert: true });
         } else {
-            quantityInput.value = '0';
+            const fallbackQuantity = Number.isFinite(Number(state.pendingQuantity))
+                ? Math.max(1, Number(state.pendingQuantity))
+                : 1;
+            if (variantSelectionRequired) {
+                quantityInput.value = '';
+                quantityInput.placeholder = 'Select variant';
+                quantityInput.dataset.previousValidValue = String(fallbackQuantity);
+            } else {
+                quantityInput.value = '0';
+                quantityInput.placeholder = '';
+                quantityInput.dataset.previousValidValue = '0';
+            }
             quantityInput.setAttribute('disabled', 'disabled');
             quantityInput.removeAttribute('max');
-            quantityInput.dataset.previousValidValue = '0';
         }
     }
 
@@ -398,7 +466,7 @@
             });
     }
 
-    function openModalFromCard(card) {
+    function openModalFromCard(card, options = {}) {
         const productId = card.dataset.productId;
         const productName = card.dataset.productName || 'Product photo';
         const primaryImage = card.dataset.primaryImage || productPlaceholder;
@@ -408,6 +476,25 @@
         }
 
         lastActiveElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+        currentModalOptions = { ...DEFAULT_MODAL_OPTIONS, ...(options || {}) };
+        applyModalOptions();
+
+        const initialQuantity = (() => {
+            const preset = Number(currentModalOptions.presetQuantity);
+            if (Number.isFinite(preset) && preset > 0) {
+                return preset;
+            }
+            const existing = quantityInput
+                ? Number.parseInt(quantityInput.dataset.previousValidValue || quantityInput.value, 10)
+                : NaN;
+            if (Number.isFinite(existing) && existing > 0) {
+                return existing;
+            }
+            return 1;
+        })();
+
+        state.pendingQuantity = initialQuantity;
 
         state.productId = productId;
         state.productName = productName.trim() || 'Product photo';
@@ -425,6 +512,10 @@
             ? Number(defaultVariantIdAttr)
             : null;
         state.selectedVariant = pickInitialVariant(state.variants, defaultVariantId);
+        if (currentModalOptions.forceVariantSelection && state.variants.length > 0) {
+            state.selectedVariant = null;
+            state.quantity = null;
+        }
         if (state.selectedVariant) {
             if (state.selectedVariant.price !== undefined && state.selectedVariant.price !== null) {
                 state.price = Number(state.selectedVariant.price);
@@ -441,7 +532,17 @@
         renderThumbnails();
         updateStage();
         setAriaHidden(false);
-        modal.focus();
+        const shouldFocusVariant = Boolean(currentModalOptions.focusVariantSelector);
+        if (shouldFocusVariant && variantList) {
+            const firstVariant = variantList.querySelector('button:not(:disabled)');
+            if (firstVariant) {
+                firstVariant.focus();
+            } else {
+                modal.focus();
+            }
+        } else {
+            modal.focus();
+        }
 
         fetchGallery(productId, productName, primaryImage);
     }
@@ -456,11 +557,16 @@
         thumbs.innerHTML = '';
         state.variants = [];
         state.selectedVariant = null;
+        state.pendingQuantity = null;
         if (variantList) {
             variantList.innerHTML = '';
         }
         if (variantContainer) {
             variantContainer.hidden = true;
+            variantContainer.removeAttribute('data-selection-required');
+        }
+        if (variantHelper) {
+            variantHelper.hidden = true;
         }
 
         if (quantityInput) {
@@ -468,15 +574,19 @@
             quantityInput.disabled = false;
             quantityInput.removeAttribute('max');
             quantityInput.dataset.previousValidValue = '1';
+            quantityInput.placeholder = '';
         }
 
         if (buyButton) {
             buyButton.disabled = false;
+            buyButton.hidden = false;
         }
 
         if (cartButton) {
             cartButton.disabled = false;
         }
+
+        resetModalOptions();
 
         if (lastActiveElement) {
             lastActiveElement.focus({ preventScroll: true });
@@ -640,4 +750,14 @@
             window.addToCart(productId, state.productName, price, qty, variantId, variantLabel, variantPrice);
         }
     });
+
+    window.openProductModalFromCard = function openProductModalFromCardPublic(cardElement, options) {
+        const targetCard = cardElement instanceof HTMLElement
+            ? cardElement
+            : (typeof cardElement === 'string' ? document.querySelector(cardElement) : null);
+        if (!targetCard) {
+            return;
+        }
+        openModalFromCard(targetCard, options);
+    };
 })();

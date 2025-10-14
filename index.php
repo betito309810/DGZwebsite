@@ -229,11 +229,36 @@ natcasesort($categories);
                             <button class="add-cart-btn" data-gallery-ignore="true"
                                 onclick="(function(button) {
                                     const qtyInput = button.parentElement.querySelector('.qty-input');
-                                    const qty = qtyInput ? parseInt(qtyInput.value) || 1 : 1;
+                                    const qty = qtyInput ? parseInt(qtyInput.value, 10) || 1 : 1;
                                     if (qtyInput && !qtyInput.checkValidity()) {
                                         qtyInput.reportValidity();
                                         return false;
                                     }
+
+                                    const card = button.closest('.product-card');
+                                    let variants = [];
+                                    if (card) {
+                                        try {
+                                            variants = JSON.parse(card.dataset.productVariants || '[]');
+                                        } catch (error) {
+                                            variants = [];
+                                        }
+                                    }
+
+                                    if (Array.isArray(variants) && variants.length > 0) {
+                                        if (typeof window.openProductModalFromCard === 'function' && card) {
+                                            window.openProductModalFromCard(card, {
+                                                forceVariantSelection: true,
+                                                focusVariantSelector: true,
+                                                hideBuyButton: true,
+                                                presetQuantity: qty
+                                            });
+                                        } else {
+                                            alert('Please select a variant for this product before adding it to your cart.');
+                                        }
+                                        return false;
+                                    }
+
                                     addToCart(<?= $p['id'] ?>, '<?= htmlspecialchars(addslashes($p['name'])) ?>', <?= $displayPrice ?>, qty, <?= isset($defaultVariant['id']) ? (int)$defaultVariant['id'] : 'null' ?>, '<?= htmlspecialchars(addslashes($defaultVariant['label'] ?? '')) ?>', <?= isset($defaultVariant['price']) ? $defaultVariant['price'] : $displayPrice ?>);
                                 })(this)"
                                 <?= $displayQuantity == 0 ? 'disabled' : '' ?>>
@@ -309,6 +334,9 @@ natcasesort($categories);
                         <!-- Added: variant selector so buyers can choose size before adding to cart. -->
                         <span class="product-gallery-variants__label">Select variant</span>
                         <div class="product-gallery-variants__list" id="productGalleryVariantList"></div>
+                        <p class="product-gallery-variants__helper" id="productGalleryVariantHelper" hidden>
+                            Please select a variant to continue.
+                        </p>
                     </div>
                     <div class="product-gallery-meta">
                         <span id="productGalleryCategory"></span>
