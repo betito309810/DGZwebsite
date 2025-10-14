@@ -833,6 +833,46 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+if (!function_exists('enforceSingleActiveSession')) {
+    function enforceSingleActiveSession(): void
+    {
+        if (empty($_SESSION['user_id']) || empty($_SESSION['role'])) {
+            return;
+        }
+
+        $currentToken = $_SESSION['session_token'] ?? '';
+        $userId = (int) $_SESSION['user_id'];
+
+        try {
+            $pdo = db();
+            $stmt = $pdo->prepare('SELECT current_session_token FROM users WHERE id = ? LIMIT 1');
+            $stmt->execute([$userId]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        } catch (Throwable $e) {
+            error_log('Unable to verify active session token: ' . $e->getMessage());
+            return;
+        }
+
+        $storedToken = is_array($row) ? ($row['current_session_token'] ?? null) : null;
+
+        if (!is_string($storedToken) || $storedToken === '' || $currentToken === '' || !hash_equals($storedToken, $currentToken)) {
+            $message = "You’ve been logged out because your account was used to sign in on another device.";
+
+            $_SESSION = [
+                'forced_logout' => true,
+                'forced_logout_message' => $message,
+            ];
+
+            session_regenerate_id(true);
+
+            header('Location: ' . adminUrl('login.php'));
+            exit;
+        }
+    }
+}
+
+enforceSingleActiveSession();
+
 if (!function_exists('staffAllowedAdminPages')) {
     function staffAllowedAdminPages(): array
     {
