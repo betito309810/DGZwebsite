@@ -3,6 +3,13 @@ require __DIR__ . '/../config/config.php';
 $pdo = db();
 $msg = $_GET['msg'] ?? '';
 $status = $_GET['status'] ?? '';
+
+if (!empty($_SESSION['forced_logout'])) {
+    $msg = $_SESSION['forced_logout_message'] ?? "You’ve been logged out because your account was used to sign in on another device.";
+    $status = 'error';
+    unset($_SESSION['forced_logout'], $_SESSION['forced_logout_message']);
+}
+
 if($_SERVER['REQUEST_METHOD']==='POST'){
     $email = $_POST['email']; $pass = $_POST['password'];
     $stmt = $pdo->prepare('SELECT * FROM users WHERE email=?');
@@ -19,8 +26,30 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
         $msg='Invalid credentials';
         $status = 'error';
     } else {
+        session_regenerate_id(true);
+
+        try {
+            $newToken = bin2hex(random_bytes(32));
+        } catch (Throwable $e) {
+            error_log('Unable to generate new session token: ' . $e->getMessage());
+            try {
+                $newToken = bin2hex(random_bytes(16));
+            } catch (Throwable $fallbackException) {
+                error_log('Unable to generate fallback session token: ' . $fallbackException->getMessage());
+                $newToken = hash('sha256', microtime(true) . '-' . mt_rand());
+            }
+        }
+
+        try {
+            $updateToken = $pdo->prepare('UPDATE users SET current_session_token = ? WHERE id = ?');
+            $updateToken->execute([$newToken, $u['id']]);
+        } catch (Throwable $e) {
+            error_log('Unable to persist session token: ' . $e->getMessage());
+        }
+
         $_SESSION['user_id']=$u['id'];
         $_SESSION['role']=$u['role'];
+        $_SESSION['session_token'] = $newToken;
 
         // Persist commonly used profile information for faster access in
         // areas where the full database record is not required.
