@@ -97,12 +97,14 @@ button {
 
 .notif-menu {
     position: relative;
+    display: flex;
+    align-items: center;
 }
 
 .notif-bell {
     position: relative;
-    height: 42px;
-    width: 42px;
+    height: 40px;
+    width: 40px;
     border-radius: 50%;
     border: none;
     background: #f1f5f9;
@@ -122,116 +124,122 @@ button {
 
 .notif-bell .badge {
     position: absolute;
-    top: -4px;
-    right: -4px;
+    top: 6px;
+    right: 6px;
     background: #e74c3c;
     color: #fff;
     border-radius: 999px;
-    padding: 2px 6px;
+    padding: 0 6px;
+    min-width: 20px;
+    height: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     font-size: 11px;
     font-weight: 700;
     line-height: 1;
 }
 
-.notif-modal {
-    position: fixed;
-    inset: 0;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    z-index: 1200;
-}
-
-.notif-modal.show {
-    display: flex;
-}
-
-.notif-modal__overlay {
+.notif-dropdown {
     position: absolute;
-    inset: 0;
-    background: rgba(15, 23, 42, 0.45);
-}
-
-.notif-modal__dialog {
-    position: relative;
+    top: calc(100% + 12px);
+    right: 0;
+    width: 320px;
     background: #fff;
     border-radius: 16px;
-    box-shadow: 0 20px 48px rgba(15, 23, 42, 0.25);
-    width: min(460px, calc(100% - 32px));
-    max-height: 82vh;
-    display: flex;
+    box-shadow: 0 20px 40px rgba(15, 23, 42, 0.18);
+    border: 1px solid rgba(226, 232, 240, 0.9);
+    display: none;
     flex-direction: column;
-    overflow: hidden;
+    z-index: 1100;
 }
 
-.notif-modal__header {
+.notif-dropdown::before {
+    content: '';
+    position: absolute;
+    top: -8px;
+    right: 18px;
+    width: 16px;
+    height: 16px;
+    background: #fff;
+    border-left: 1px solid rgba(226, 232, 240, 0.9);
+    border-top: 1px solid rgba(226, 232, 240, 0.9);
+    transform: rotate(45deg);
+    box-shadow: -3px -3px 8px rgba(15, 23, 42, 0.04);
+}
+
+.notif-dropdown.show {
+    display: flex;
+}
+
+.notif-dropdown__header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    padding: 20px 24px;
+    padding: 16px 20px;
     border-bottom: 1px solid #e5e7eb;
+    position: relative;
+    z-index: 1;
 }
 
-.notif-modal__actions {
-    margin-left: auto;
+.notif-dropdown__title {
     display: flex;
     align-items: center;
-    gap: 12px;
-}
-
-.notif-modal__title {
-    display: flex;
-    align-items: center;
-    gap: 12px;
+    gap: 10px;
     font-weight: 600;
-    font-size: 18px;
+    font-size: 15px;
     color: #1f2937;
 }
 
-.notif-modal__title i {
+.notif-dropdown__title i {
     color: #2563eb;
+    font-size: 16px;
 }
 
-.notif-modal__close {
+.notif-dropdown__close {
     background: transparent;
     border: none;
     color: #6b7280;
-    font-size: 18px;
-    padding: 6px;
-    border-radius: 6px;
+    font-size: 16px;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
     cursor: pointer;
     transition: background 0.2s ease, color 0.2s ease;
-    margin-left: auto;
 }
 
-.notif-modal__close:hover,
-.notif-modal__close:focus {
+.notif-dropdown__close:hover,
+.notif-dropdown__close:focus {
     background: rgba(37, 99, 235, 0.08);
     color: #1f2937;
 }
 
-.notif-modal__body {
-    padding: 0 0 8px;
+.notif-dropdown__body {
+    max-height: 320px;
     overflow-y: auto;
-    max-height: calc(82vh - 160px);
 }
 
-.notif-modal__footer {
-    padding: 16px 24px 24px;
+.notif-dropdown__footer {
+    padding: 16px 20px 20px;
     border-top: 1px solid #e5e7eb;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    position: relative;
+    z-index: 1;
 }
 
 .notif-mark-all {
     background: #2563eb;
     color: #fff;
     border: none;
-    border-radius: 999px;
-    padding: 8px 16px;
+    border-radius: 8px;
+    padding: 10px 16px;
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
     transition: background 0.2s ease, opacity 0.2s ease;
+    width: 100%;
 }
 
 .notif-mark-all:hover,
@@ -252,10 +260,6 @@ button {
     opacity: 0.85;
 }
 
-body.notif-modal-open {
-    overflow: hidden;
-}
-
 .notif-list {
     max-height: inherit;
     overflow-y: auto;
@@ -265,11 +269,12 @@ body.notif-modal-open {
 }
 
 .notif-item {
-    padding: 16px 24px;
+    padding: 14px 20px;
     border-bottom: 1px solid #f1f5f9;
     display: flex;
     flex-direction: column;
     gap: 6px;
+    cursor: pointer;
 }
 
 .notif-item:last-child {
@@ -279,11 +284,16 @@ body.notif-modal-open {
 .notif-item.unread {
     background: #eff6ff;
     border-left: 4px solid #2563eb;
-    padding-left: 20px;
+    padding-left: 16px;
 }
 
 .notif-item:hover {
     background: #f8fafc;
+}
+
+.notif-item:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
 }
 
 .notif-item.resolved {
@@ -359,30 +369,169 @@ body.notif-modal-open {
     text-decoration: none;
     font-weight: 600;
     font-size: 14px;
+    width: 100%;
+    justify-content: flex-start;
 }
 
 .notif-link:hover {
     color: #1d4ed8;
 }
 
+body.notif-detail-open {
+    overflow: hidden;
+}
+
+.notif-detail-modal {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1200;
+}
+
+.notif-detail-modal.show {
+    display: flex;
+}
+
+.notif-detail-modal__overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+}
+
+.notif-detail-modal__dialog {
+    position: relative;
+    background: #fff;
+    border-radius: 20px;
+    box-shadow: 0 20px 48px rgba(15, 23, 42, 0.25);
+    width: min(520px, calc(100% - 32px));
+    padding: 36px 32px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    overflow: hidden;
+}
+
+.notif-detail-modal__close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: transparent;
+    border: none;
+    color: #6b7280;
+    font-size: 18px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.notif-detail-modal__close:hover,
+.notif-detail-modal__close:focus {
+    background: rgba(37, 99, 235, 0.08);
+    color: #1f2937;
+}
+
+.notif-detail-modal__content {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.notif-detail-modal__icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+    background: #eff6ff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #2563eb;
+    font-size: 24px;
+}
+
+.notif-detail-modal__header {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.notif-detail-modal__header h2 {
+    font-size: 20px;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0;
+}
+
+.notif-detail-status {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: #047857;
+}
+
+.notif-detail-status:empty {
+    display: none;
+}
+
+.notif-detail-status.is-resolved {
+    color: #374151;
+}
+
+.notif-detail-time {
+    font-size: 13px;
+    color: #6b7280;
+}
+
+.notif-detail-time:empty {
+    display: none;
+}
+
+.notif-detail-message {
+    font-size: 15px;
+    line-height: 1.6;
+    color: #1f2937;
+    white-space: pre-line;
+}
+
+.notif-detail-message:empty {
+    display: none;
+}
+
+.notif-detail-product {
+    font-size: 14px;
+    color: #374151;
+    background: #f9fafb;
+    padding: 12px 16px;
+    border-radius: 12px;
+}
+
+.notif-detail-product:empty {
+    display: none;
+}
+
 @media (max-width: 640px) {
-    .notif-modal__dialog {
-        width: calc(100% - 24px);
+    .notif-dropdown {
+        right: -12px;
+        width: min(92vw, 320px);
     }
 
-    .notif-modal__header {
-        align-items: flex-start;
-        flex-direction: column;
+    .notif-dropdown::before {
+        right: 36px;
     }
 
-    .notif-modal__actions {
-        margin-left: 0;
-        width: 100%;
-        justify-content: space-between;
+    .notif-detail-modal__dialog {
+        width: calc(100% - 28px);
+        padding: 28px 24px 24px;
     }
 
-    .notif-mark-all {
-        margin-top: 8px;
+    .notif-detail-modal__icon {
+        width: 48px;
+        height: 48px;
+        font-size: 22px;
     }
 }
 

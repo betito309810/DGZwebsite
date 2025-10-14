@@ -24,44 +24,25 @@ foreach ($inventoryNotifications as $note) {
         <span class="badge" aria-hidden="true"><?= htmlspecialchars($inventoryNotificationCount) ?></span>
         <?php endif; ?>
     </button>
-</div>
 
-<div
-    class="notif-modal"
-    id="notifModal"
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="notifModalTitle"
-    aria-hidden="true"
->
-    <div class="notif-modal__overlay" data-modal-close></div>
-    <div class="notif-modal__dialog">
-        <div class="notif-modal__header">
-            <div class="notif-modal__title" id="notifModalTitle">
+    <div
+        class="notif-dropdown"
+        id="notifDropdown"
+        role="dialog"
+        aria-labelledby="notifDropdownTitle"
+        aria-hidden="true"
+    >
+        <div class="notif-dropdown__header">
+            <div class="notif-dropdown__title" id="notifDropdownTitle">
                 <i class="fas fa-bell" aria-hidden="true"></i>
                 <span>Notifications</span>
             </div>
-            <div class="notif-modal__actions">
-                <?php if (!empty($inventoryNotifications)) : ?>
-                <button
-                    type="button"
-                    class="notif-mark-all<?= $hasUnreadNotifications ? '' : ' is-disabled' ?>"
-                    id="notifMarkAll"
-                    <?= $hasUnreadNotifications ? '' : 'disabled' ?>
-                    aria-disabled="<?= $hasUnreadNotifications ? 'false' : 'true' ?>"
-                    data-loading-label="Marking..."
-                    data-empty-label="All caught up"
-                >
-                    Mark all as read
-                </button>
-                <?php endif; ?>
-                <button type="button" class="notif-modal__close" id="notifModalClose" aria-label="Close notifications">
-                    <i class="fas fa-times" aria-hidden="true"></i>
-                </button>
-            </div>
+            <button type="button" class="notif-dropdown__close" id="notifDropdownClose" aria-label="Close notifications">
+                <i class="fas fa-times" aria-hidden="true"></i>
+            </button>
         </div>
 
-        <div class="notif-modal__body">
+        <div class="notif-dropdown__body">
             <?php if (empty($inventoryNotifications)) : ?>
             <div class="notif-empty">
                 <i class="fas fa-check-circle" aria-hidden="true"></i>
@@ -70,33 +51,92 @@ foreach ($inventoryNotifications as $note) {
             <?php else : ?>
             <ul class="notif-list">
                 <?php foreach ($inventoryNotifications as $note) : ?>
-                <li class="notif-item <?= $note['status'] === 'resolved' ? 'resolved' : ($note['is_read'] ? 'active read' : 'active unread') ?>">
+                <?php
+                    $noteTitle = htmlspecialchars($note['title'] ?? '', ENT_QUOTES, 'UTF-8');
+                    $noteMessage = htmlspecialchars($note['message'] ?? '', ENT_QUOTES, 'UTF-8');
+                    $noteProduct = htmlspecialchars($note['product_name'] ?? '', ENT_QUOTES, 'UTF-8');
+                    $noteTime = htmlspecialchars($note['time_ago'] ?? '', ENT_QUOTES, 'UTF-8');
+                    $noteStatus = htmlspecialchars($note['status'] ?? '', ENT_QUOTES, 'UTF-8');
+                ?>
+                <li
+                    class="notif-item <?= $note['status'] === 'resolved' ? 'resolved' : ($note['is_read'] ? 'active read' : 'active unread') ?>"
+                    data-note-title="<?= $noteTitle ?>"
+                    data-note-message="<?= $noteMessage ?>"
+                    data-note-product="<?= $noteProduct ?>"
+                    data-note-time="<?= $noteTime ?>"
+                    data-note-status="<?= $noteStatus ?>"
+                    role="button"
+                    tabindex="0"
+                    aria-haspopup="dialog"
+                    aria-label="View notification: <?= $noteTitle ?>"
+                >
                     <div class="notif-row">
                         <span class="notif-title">
-                            <?= htmlspecialchars($note['title']) ?>
+                            <?= $noteTitle ?>
                         </span>
                         <?php if ($note['status'] === 'resolved') : ?>
                         <span class="notif-status">Resolved</span>
                         <?php endif; ?>
                     </div>
                     <?php if (!empty($note['message'])) : ?>
-                    <p class="notif-message"><?= htmlspecialchars($note['message']) ?></p>
+                    <p class="notif-message"><?= $noteMessage ?></p>
                     <?php endif; ?>
                     <?php if (!empty($note['product_name'])) : ?>
-                    <span class="notif-product"><?= htmlspecialchars($note['product_name']) ?></span>
+                    <span class="notif-product"><?= $noteProduct ?></span>
                     <?php endif; ?>
-                    <span class="notif-time"><?= htmlspecialchars($note['time_ago'] ?? '') ?></span>
+                    <span class="notif-time"><?= $noteTime ?></span>
                 </li>
                 <?php endforeach; ?>
             </ul>
             <?php endif; ?>
         </div>
 
-        <div class="notif-modal__footer">
-            <a href="<?= htmlspecialchars($notificationManageLink) ?>" class="notif-link">
+        <div class="notif-dropdown__footer">
+            <a href="<?= htmlspecialchars($notificationManageLink, ENT_QUOTES, 'UTF-8') ?>" class="notif-link">
                 <i class="fas fa-arrow-right"></i>
                 Manage inventory
             </a>
+            <?php if (!empty($inventoryNotifications)) : ?>
+            <button
+                type="button"
+                class="notif-mark-all<?= $hasUnreadNotifications ? '' : ' is-disabled' ?>"
+                id="notifMarkAll"
+                <?= $hasUnreadNotifications ? '' : 'disabled' ?>
+                aria-disabled="<?= $hasUnreadNotifications ? 'false' : 'true' ?>"
+                data-loading-label="Marking..."
+                data-empty-label="All caught up"
+            >
+                Mark all as read
+            </button>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+
+<div
+    class="notif-detail-modal"
+    id="notifDetailModal"
+    role="dialog"
+    aria-modal="true"
+    aria-hidden="true"
+    aria-labelledby="notifDetailTitle"
+>
+    <div class="notif-detail-modal__overlay" data-detail-close></div>
+    <div class="notif-detail-modal__dialog">
+        <button type="button" class="notif-detail-modal__close" id="notifDetailClose" aria-label="Close notification details">
+            <i class="fas fa-times" aria-hidden="true"></i>
+        </button>
+        <div class="notif-detail-modal__content">
+            <div class="notif-detail-modal__icon">
+                <i class="fas fa-bell" aria-hidden="true"></i>
+            </div>
+            <div class="notif-detail-modal__header">
+                <h2 id="notifDetailTitle">Notification</h2>
+                <span class="notif-detail-status" id="notifDetailStatus"></span>
+                <span class="notif-detail-time" id="notifDetailTime"></span>
+            </div>
+            <div class="notif-detail-message" id="notifDetailMessage"></div>
+            <div class="notif-detail-product" id="notifDetailProduct"></div>
         </div>
     </div>
 </div>
