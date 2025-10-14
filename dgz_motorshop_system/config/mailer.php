@@ -4,7 +4,64 @@ use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\SMTP;
 use PHPMailer\PHPMailer\Exception;
 
-require_once __DIR__ . '/../vendor/autoload.php';
+if (!function_exists('dgzLocateComposerAutoload')) {
+    /**
+     * Attempt to locate the Composer autoload file regardless of where the
+     * project is deployed inside the web root. Shared hosting setups often
+     * move the public files around which can break simple relative requires.
+     */
+    function dgzLocateComposerAutoload(): ?string
+    {
+        static $resolved = null;
+
+        if ($resolved !== null) {
+            return $resolved;
+        }
+
+        $candidates = [];
+
+        // Common locations relative to this config directory.
+        $candidates[] = __DIR__ . '/../vendor/autoload.php';
+        $candidates[] = __DIR__ . '/../../vendor/autoload.php';
+        $candidates[] = dirname(__DIR__, 2) . '/vendor/autoload.php';
+        $candidates[] = dirname(__DIR__, 3) . '/vendor/autoload.php';
+
+        // Document root (public_html) deployments sometimes keep vendor beside
+        // the project folder, so probe that location as well.
+        if (!empty($_SERVER['DOCUMENT_ROOT'])) {
+            $docRoot = rtrim(str_replace('\\', '/', $_SERVER['DOCUMENT_ROOT']), '/');
+            if ($docRoot !== '') {
+                $candidates[] = $docRoot . '/vendor/autoload.php';
+                $candidates[] = $docRoot . '/dgz_motorshop_system/vendor/autoload.php';
+            }
+        }
+
+        foreach ($candidates as $candidate) {
+            if (!is_string($candidate) || $candidate === '') {
+                continue;
+            }
+
+            $normalized = str_replace('\\', '/', $candidate);
+            $normalized = preg_replace('#/+#', '/', $normalized);
+
+            if (is_file($normalized)) {
+                $resolved = $normalized;
+                return $resolved;
+            }
+        }
+
+        $resolved = null;
+        return $resolved;
+    }
+}
+
+$composerAutoload = dgzLocateComposerAutoload();
+
+if ($composerAutoload === null) {
+    throw new \RuntimeException('Unable to locate Composer autoload.php. Please run `composer install` in the project root.');
+}
+
+require_once $composerAutoload;
 
 // Load environment variables
 if (!function_exists('loadEnv')) {
