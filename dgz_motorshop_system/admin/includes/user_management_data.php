@@ -63,43 +63,60 @@ if ($role === 'admin') {
         }
     }
 
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_user'])) {
-        $userId = filter_input(INPUT_POST, 'delete_user_id', FILTER_VALIDATE_INT);
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_user_status'])) {
+        $userId = filter_input(INPUT_POST, 'toggle_user_id', FILTER_VALIDATE_INT);
+        $action = $_POST['toggle_action'] ?? '';
 
         if (!$userId) {
             $userManagementError = 'Invalid user selection.';
+        } elseif (!in_array($action, ['activate', 'deactivate'], true)) {
+            $userManagementError = 'Unknown account action requested.';
         } elseif ((int) $_SESSION['user_id'] === $userId) {
-            $userManagementError = 'You cannot delete your own account.';
+            $userManagementError = 'You cannot change the status of your own account.';
         } else {
             try {
                 $pdo->beginTransaction();
 
-                $stmt = $pdo->prepare('SELECT role FROM users WHERE id = ? FOR UPDATE');
+                $stmt = $pdo->prepare('SELECT role, deleted_at FROM users WHERE id = ? FOR UPDATE');
                 $stmt->execute([$userId]);
-                $userToDelete = $stmt->fetch(PDO::FETCH_ASSOC);
+                $userToToggle = $stmt->fetch(PDO::FETCH_ASSOC);
 
-                if (!$userToDelete) {
+                if (!$userToToggle) {
                     $pdo->rollBack();
                     $userManagementError = 'The selected user no longer exists.';
-                } elseif ($userToDelete['role'] !== 'staff') {
+                } elseif ($userToToggle['role'] !== 'staff') {
                     $pdo->rollBack();
-                    $userManagementError = 'Only staff accounts can be removed.';
+                    $userManagementError = 'Only staff accounts can be activated or deactivated.';
+                } elseif ($action === 'deactivate' && !empty($userToToggle['deleted_at'])) {
+                    $pdo->rollBack();
+                    $userManagementError = 'The staff account is already deactivated.';
+                } elseif ($action === 'activate' && empty($userToToggle['deleted_at'])) {
+                    $pdo->rollBack();
+                    $userManagementError = 'The staff account is already active.';
                 } else {
-                    $deleteStmt = $pdo->prepare('DELETE FROM users WHERE id = ?');
-                    $deleteStmt->execute([$userId]);
+                    if ($action === 'deactivate') {
+                        $toggleStmt = $pdo->prepare('UPDATE users SET deleted_at = NOW() WHERE id = ?');
+                        $toggleStmt->execute([$userId]);
+                    } else {
+                        $toggleStmt = $pdo->prepare('UPDATE users SET deleted_at = NULL WHERE id = ?');
+                        $toggleStmt->execute([$userId]);
+                    }
                     $pdo->commit();
-                    $userManagementSuccess = 'Staff account removed successfully.';
+
+                    $userManagementSuccess = ($action === 'deactivate')
+                        ? 'Staff account deactivated successfully.'
+                        : 'Staff account reactivated successfully.';
                 }
             } catch (Exception $e) {
                 if ($pdo->inTransaction()) {
                     $pdo->rollBack();
                 }
-                $userManagementError = 'Failed to remove staff account: ' . $e->getMessage();
+                $userManagementError = 'Failed to update staff account status: ' . $e->getMessage();
             }
         }
     }
 
     $userManagementUsers = $pdo
-        ->query('SELECT id, name, email, contact_number, role, created_at FROM users ORDER BY created_at DESC')
+        ->query('SELECT id, name, email, contact_number, role, created_at, deleted_at FROM users ORDER BY created_at DESC')
         ->fetchAll(PDO::FETCH_ASSOC);
 }

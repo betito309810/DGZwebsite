@@ -8,39 +8,45 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     $stmt = $pdo->prepare('SELECT * FROM users WHERE email=?');
     $stmt->execute([$email]);
     $u = $stmt->fetch();
-    if ($u) {
-        if (password_verify($pass, (string) $u['password'])) {
-            $_SESSION['user_id']=$u['id'];
-            $_SESSION['role']=$u['role'];
 
-            // Persist commonly used profile information for faster access in
-            // areas where the full database record is not required.
-            $resolvedName = null;
-            if (!empty($u['name'])) {
-                $resolvedName = $u['name'];
-            } elseif (!empty($u['full_name'])) {
-                $resolvedName = $u['full_name'];
-            } elseif (!empty($u['first_name']) || !empty($u['last_name'])) {
-                $first = trim((string) ($u['first_name'] ?? ''));
-                $last = trim((string) ($u['last_name'] ?? ''));
-                $resolvedName = trim($first . ' ' . $last);
-            }
+    if (!$u) {
+        $msg='Invalid credentials';
+        $status = 'error';
+    } elseif (!empty($u['deleted_at'])) {
+        $msg = 'Your account has been deactivated. Please contact an administrator.';
+        $status = 'error';
+    } elseif (!password_verify($pass, (string) $u['password'])) {
+        $msg='Invalid credentials';
+        $status = 'error';
+    } else {
+        $_SESSION['user_id']=$u['id'];
+        $_SESSION['role']=$u['role'];
 
-            if (!empty($resolvedName)) {
-                $_SESSION['user_name'] = $resolvedName;
-            }
-
-            if (!empty($u['created_at'])) {
-                $_SESSION['user_created_at'] = $u['created_at'];
-            } elseif (!empty($u['date_created'])) {
-                $_SESSION['user_created_at'] = $u['date_created'];
-            }
-
-            header('Location: dashboard.php'); exit;
+        // Persist commonly used profile information for faster access in
+        // areas where the full database record is not required.
+        $resolvedName = null;
+        if (!empty($u['name'])) {
+            $resolvedName = $u['name'];
+        } elseif (!empty($u['full_name'])) {
+            $resolvedName = $u['full_name'];
+        } elseif (!empty($u['first_name']) || !empty($u['last_name'])) {
+            $first = trim((string) ($u['first_name'] ?? ''));
+            $last = trim((string) ($u['last_name'] ?? ''));
+            $resolvedName = trim($first . ' ' . $last);
         }
+
+        if (!empty($resolvedName)) {
+            $_SESSION['user_name'] = $resolvedName;
+        }
+
+        if (!empty($u['created_at'])) {
+            $_SESSION['user_created_at'] = $u['created_at'];
+        } elseif (!empty($u['date_created'])) {
+            $_SESSION['user_created_at'] = $u['date_created'];
+        }
+
+        header('Location: dashboard.php'); exit;
     }
-    $msg='Invalid credentials';
-    $status = 'error';
 }
 $hasMessage = $msg !== '';
 $alertClass = ($status === 'success') ? 'success-msg' : 'error-msg';
