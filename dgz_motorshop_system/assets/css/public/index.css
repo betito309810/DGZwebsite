@@ -1031,13 +1031,6 @@ body.modal-open {
     gap: 10px;
 }
 
-.product-gallery-variants[data-selection-required="true"] {
-    border: 1px solid #fca5a5;
-    background: #fff5f5;
-    border-radius: 12px;
-    padding: 12px;
-}
-
 .product-gallery-variants__label {
     font-weight: 600;
     font-size: 14px;
@@ -1048,12 +1041,6 @@ body.modal-open {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-}
-
-.product-gallery-variants__helper {
-    font-size: 13px;
-    color: #dc2626;
-    margin: 0;
 }
 
 .product-gallery-variant-option {

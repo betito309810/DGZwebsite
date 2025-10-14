@@ -334,9 +334,6 @@ natcasesort($categories);
                         <!-- Added: variant selector so buyers can choose size before adding to cart. -->
                         <span class="product-gallery-variants__label">Select variant</span>
                         <div class="product-gallery-variants__list" id="productGalleryVariantList"></div>
-                        <p class="product-gallery-variants__helper" id="productGalleryVariantHelper" hidden>
-                            Please select a variant to continue.
-                        </p>
                     </div>
                     <div class="product-gallery-meta">
                         <span id="productGalleryCategory"></span>

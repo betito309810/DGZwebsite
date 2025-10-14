@@ -24,7 +24,6 @@
     const cartButton = document.getElementById('productGalleryCartButton');
     const variantContainer = document.getElementById('productGalleryVariants');
     const variantList = document.getElementById('productGalleryVariantList');
-    const variantHelper = document.getElementById('productGalleryVariantHelper');
     const productsGrid = document.querySelector('.products-grid');
     const pathConfig = window.dgzPaths || {};
     const productImagesEndpoint = (typeof pathConfig.productImages === 'string' && pathConfig.productImages !== '')
@@ -154,18 +153,6 @@
 
         buyButton.disabled = !canPurchase;
         cartButton.disabled = !canPurchase;
-
-        if (variantContainer) {
-            if (variantSelectionRequired) {
-                variantContainer.setAttribute('data-selection-required', 'true');
-            } else {
-                variantContainer.removeAttribute('data-selection-required');
-            }
-        }
-
-        if (variantHelper) {
-            variantHelper.hidden = !variantSelectionRequired;
-        }
 
         if (canPurchase) {
             quantityInput.disabled = false;
@@ -563,10 +550,6 @@
         }
         if (variantContainer) {
             variantContainer.hidden = true;
-            variantContainer.removeAttribute('data-selection-required');
-        }
-        if (variantHelper) {
-            variantHelper.hidden = true;
         }
 
         if (quantityInput) {
