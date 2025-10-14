@@ -7,6 +7,7 @@ $mobileNavScript = assetUrl('assets/js/public/mobileNav.js');
 $aboutStylesheet = assetUrl('assets/css/public/about.css');
 $faqStylesheet = assetUrl('assets/css/public/faq.css');
 $cartScript = assetUrl('assets/js/public/cart.js');
+$checkoutModalStylesheet = assetUrl('assets/css/public/checkoutModals.css');
 $homeUrl = orderingUrl('index.php');
 $aboutUrl = orderingUrl('about.php');
 $trackOrderUrl = orderingUrl('track-order.php');
@@ -22,6 +23,7 @@ $productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="<?= htmlspecialchars($aboutStylesheet) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars($faqStylesheet) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars($checkoutModalStylesheet) ?>">
 </head>
 <body>
     <!-- Header -->

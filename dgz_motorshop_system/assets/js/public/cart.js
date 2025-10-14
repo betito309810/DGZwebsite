@@ -11,8 +11,123 @@
             window.location.href = `${checkoutBaseUrl}${separator}cart=${cartData}`;
         }
 
+        const HIGH_VALUE_WARNING_THRESHOLD = 70000;
+        const HIGH_VALUE_BLOCK_THRESHOLD = 100000;
+
         let cartCount = 0;
         let cartItems = [];
+        const highValueState = {
+            warningShown: false,
+            blockedShown: false,
+        };
+
+        function ensureHighValueModals() {
+            const existingConfirm = document.getElementById('highValueConfirmModal');
+            const existingBlocked = document.getElementById('highValueBlockedModal');
+
+            let confirmModal = existingConfirm;
+            if (!confirmModal) {
+                confirmModal = document.createElement('div');
+                confirmModal.id = 'highValueConfirmModal';
+                confirmModal.className = 'checkout-modal';
+                confirmModal.setAttribute('hidden', 'hidden');
+                confirmModal.innerHTML = `
+                <div class="checkout-modal__dialog">
+                    <h3>Large Transaction</h3>
+                    <p>This transaction is too big, would you like to personally go to our store or would you like to proceed?</p>
+                    <div class="checkout-modal__actions">
+                        <button type="button" class="checkout-modal__button checkout-modal__button--primary" data-high-value-proceed>
+                            Yes, I would like to proceed
+                        </button>
+                        <button type="button" class="checkout-modal__button checkout-modal__button--secondary" data-high-value-cancel>
+                            Ok
+                        </button>
+                    </div>
+                </div>`;
+                document.body.appendChild(confirmModal);
+            }
+
+            let blockedModal = existingBlocked;
+            if (!blockedModal) {
+                blockedModal = document.createElement('div');
+                blockedModal.id = 'highValueBlockedModal';
+                blockedModal.className = 'checkout-modal';
+                blockedModal.setAttribute('hidden', 'hidden');
+                blockedModal.innerHTML = `
+                <div class="checkout-modal__dialog">
+                    <h3>Amount Too High</h3>
+                    <p>This transaction is too big for our online ordering. We would advise you to personally go to our physical store to shop!</p>
+                    <div class="checkout-modal__actions">
+                        <button type="button" class="checkout-modal__button checkout-modal__button--primary" data-high-value-blocked-ok>
+                            Ok
+                        </button>
+                    </div>
+                </div>`;
+                document.body.appendChild(blockedModal);
+            }
+
+            if (!confirmModal.dataset.highValueBound) {
+                const proceedButton = confirmModal.querySelector('[data-high-value-proceed]');
+                const cancelButton = confirmModal.querySelector('[data-high-value-cancel]');
+
+                const closeConfirm = () => {
+                    confirmModal.setAttribute('hidden', 'hidden');
+                };
+
+                proceedButton?.addEventListener('click', closeConfirm);
+                cancelButton?.addEventListener('click', closeConfirm);
+
+                confirmModal.dataset.highValueBound = 'true';
+            }
+
+            if (!blockedModal.dataset.highValueBound) {
+                const blockedOkButton = blockedModal.querySelector('[data-high-value-blocked-ok]');
+                const closeBlocked = () => {
+                    blockedModal.setAttribute('hidden', 'hidden');
+                };
+                blockedOkButton?.addEventListener('click', closeBlocked);
+                blockedModal.dataset.highValueBound = 'true';
+            }
+
+            return { confirmModal, blockedModal };
+        }
+
+        function openModal(modal) {
+            if (!modal) {
+                return;
+            }
+            modal.removeAttribute('hidden');
+        }
+
+        function calculateCartSubtotal() {
+            return cartItems.reduce((total, item) => {
+                const unitPriceRaw = (item.variantPrice !== undefined && item.variantPrice !== null)
+                    ? Number(item.variantPrice)
+                    : Number(item.price);
+                const unitPrice = Number.isFinite(unitPriceRaw) ? unitPriceRaw : 0;
+                const quantity = Number(item.quantity) || 0;
+                return total + unitPrice * quantity;
+            }, 0);
+        }
+
+        function evaluateHighValueCart() {
+            const subtotal = calculateCartSubtotal();
+            if (subtotal >= HIGH_VALUE_BLOCK_THRESHOLD) {
+                if (!highValueState.blockedShown) {
+                    const { blockedModal } = ensureHighValueModals();
+                    openModal(blockedModal);
+                    highValueState.blockedShown = true;
+                    highValueState.warningShown = true;
+                }
+                return;
+            }
+
+            if (subtotal >= HIGH_VALUE_WARNING_THRESHOLD && !highValueState.warningShown) {
+                const { confirmModal } = ensureHighValueModals();
+                openModal(confirmModal);
+                highValueState.warningShown = true;
+            }
+        }
 
         function updateCartBadge() {
             const badge = document.getElementById('cartCount');
@@ -66,6 +181,7 @@
             }
 
             updateCartBadge();
+            evaluateHighValueCart();
         }
         // End loadCart
 
@@ -115,6 +231,8 @@
 
             // Save to localStorage
             saveCart();
+
+            evaluateHighValueCart();
 
             // Show confirmation
             showToast(`${productName} added to cart!`);

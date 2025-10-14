@@ -8,6 +8,7 @@ $productVariantMap = fetchVariantsForProducts($pdo, array_column($products, 'id'
 $logoAsset = assetUrl('assets/logo.png');
 $indexStylesheet = assetUrl('assets/css/public/index.css');
 $productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
+$checkoutModalStylesheet = assetUrl('assets/css/public/checkoutModals.css');
 $cartScript = assetUrl('assets/js/public/cart.js');
 $searchScript = assetUrl('assets/js/public/search.js');
 $mobileNavScript = assetUrl('assets/js/public/mobileNav.js');
@@ -43,6 +44,7 @@ natcasesort($categories);
     <title>DGZ Motorshop - Motorcycle Parts & Accessories</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="<?= htmlspecialchars($indexStylesheet) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars($checkoutModalStylesheet) ?>">
     <style>
 
     </style>

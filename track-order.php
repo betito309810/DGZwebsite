@@ -14,6 +14,7 @@ $trackOrderUrl = orderingUrl('track-order.php');
 $checkoutUrl = orderingUrl('checkout.php');
 $orderStatusEndpoint = orderingUrl('order_status.php');
 $productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
+$checkoutModalStylesheet = assetUrl('assets/css/public/checkoutModals.css');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -27,6 +28,7 @@ $productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
     <link rel="stylesheet" href="<?= htmlspecialchars($indexStylesheet) ?>">
     <!-- Page specific stylesheet lives alongside the other public assets -->
     <link rel="stylesheet" href="<?= htmlspecialchars($trackStylesheet) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars($checkoutModalStylesheet) ?>">
 </head>
 <body>
     <!-- Header: mirrors the home page layout so the experience feels seamless -->
