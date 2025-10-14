@@ -20,6 +20,15 @@
             warningShown: false,
             blockedShown: false,
         };
+        const highValueDecision = {
+            onProceed: null,
+            onCancel: null,
+        };
+
+        function clearHighValueDecision() {
+            highValueDecision.onProceed = null;
+            highValueDecision.onCancel = null;
+        }
 
         function ensureHighValueModals() {
             const existingConfirm = document.getElementById('highValueConfirmModal');
@@ -70,12 +79,17 @@
                 const proceedButton = confirmModal.querySelector('[data-high-value-proceed]');
                 const cancelButton = confirmModal.querySelector('[data-high-value-cancel]');
 
-                const closeConfirm = () => {
+                const runDecision = (type) => {
                     confirmModal.setAttribute('hidden', 'hidden');
+                    const action = type === 'proceed' ? highValueDecision.onProceed : highValueDecision.onCancel;
+                    clearHighValueDecision();
+                    if (typeof action === 'function') {
+                        action();
+                    }
                 };
 
-                proceedButton?.addEventListener('click', closeConfirm);
-                cancelButton?.addEventListener('click', closeConfirm);
+                proceedButton?.addEventListener('click', () => runDecision('proceed'));
+                cancelButton?.addEventListener('click', () => runDecision('cancel'));
 
                 confirmModal.dataset.highValueBound = 'true';
             }
@@ -99,15 +113,103 @@
             modal.removeAttribute('hidden');
         }
 
+        function normaliseMoney(value) {
+            const numeric = Number(value);
+            return Number.isFinite(numeric) ? numeric : 0;
+        }
+
+        function normaliseProductId(value) {
+            const numeric = Number(value);
+            if (Number.isFinite(numeric)) {
+                return numeric;
+            }
+            return String(value);
+        }
+
         function calculateCartSubtotal() {
             return cartItems.reduce((total, item) => {
-                const unitPriceRaw = (item.variantPrice !== undefined && item.variantPrice !== null)
-                    ? Number(item.variantPrice)
-                    : Number(item.price);
-                const unitPrice = Number.isFinite(unitPriceRaw) ? unitPriceRaw : 0;
+                const unitPrice = normaliseMoney(
+                    item.variantPrice !== undefined && item.variantPrice !== null
+                        ? item.variantPrice
+                        : item.price,
+                );
                 const quantity = Number(item.quantity) || 0;
                 return total + unitPrice * quantity;
             }, 0);
+        }
+
+        function calculateProspectiveSubtotal(productId, variantId, addedQuantity, unitPrice) {
+            const normalisedVariantId = variantId ?? null;
+            const targetProductId = normaliseProductId(productId);
+            const safeQuantity = Number(addedQuantity) || 0;
+            const safeUnitPrice = normaliseMoney(unitPrice);
+
+            if (safeQuantity <= 0) {
+                return calculateCartSubtotal();
+            }
+
+            let matched = false;
+
+            const subtotal = cartItems.reduce((total, item) => {
+                const itemQuantity = Number(item.quantity) || 0;
+                const currentPrice = normaliseMoney(
+                    item.variantPrice !== undefined && item.variantPrice !== null
+                        ? item.variantPrice
+                        : item.price,
+                );
+                const itemProductId = normaliseProductId(item.id);
+                const isTarget = itemProductId === targetProductId && (item.variantId ?? null) === normalisedVariantId;
+
+                if (isTarget) {
+                    matched = true;
+                    const combinedQuantity = itemQuantity + safeQuantity;
+                    return total + safeUnitPrice * combinedQuantity;
+                }
+
+                return total + currentPrice * itemQuantity;
+            }, 0);
+
+            if (!matched) {
+                return subtotal + safeUnitPrice * safeQuantity;
+            }
+
+            return subtotal;
+        }
+
+        function handleHighValuePreflight({
+            productId,
+            variantId,
+            quantity,
+            unitPrice,
+            onProceed,
+        }) {
+            const projectedSubtotal = calculateProspectiveSubtotal(productId, variantId, quantity, unitPrice);
+
+            if (projectedSubtotal >= HIGH_VALUE_BLOCK_THRESHOLD) {
+                const { blockedModal } = ensureHighValueModals();
+                openModal(blockedModal);
+                highValueState.blockedShown = true;
+                highValueState.warningShown = true;
+                return 'blocked';
+            }
+
+            if (projectedSubtotal >= HIGH_VALUE_WARNING_THRESHOLD && !highValueState.warningShown) {
+                const { confirmModal } = ensureHighValueModals();
+
+                clearHighValueDecision();
+                highValueDecision.onProceed = () => {
+                    highValueState.warningShown = true;
+                    if (typeof onProceed === 'function') {
+                        onProceed();
+                    }
+                };
+                highValueDecision.onCancel = () => {};
+
+                openModal(confirmModal);
+                return 'pending';
+            }
+
+            return 'proceed';
         }
 
         function evaluateHighValueCart() {
@@ -202,49 +304,107 @@
         // End handleCartClick
 
         // Start addToCart: merge items into the cart, sync badge/localStorage, and notify the user
-        function addToCart(productId, productName, price, quantity = 1, variantId = null, variantLabel = '', variantPrice = null) {
+        function addToCart(
+            productId,
+            productName,
+            price,
+            quantity = 1,
+            variantId = null,
+            variantLabel = '',
+            variantPrice = null,
+            options = {},
+        ) {
             const normalisedVariantId = variantId !== undefined && variantId !== null ? Number(variantId) : null;
-            const effectivePrice = variantPrice !== null && variantPrice !== undefined ? Number(variantPrice) : Number(price);
+            const effectivePrice = normaliseMoney(
+                variantPrice !== null && variantPrice !== undefined ? variantPrice : price,
+            );
+            const safeQuantity = Number(quantity) || 0;
 
-            const existingItem = cartItems.find(item => item.id === productId && (item.variantId ?? null) === normalisedVariantId);
-
-            if (existingItem) {
-                existingItem.quantity += quantity;
-                existingItem.price = effectivePrice;
-                existingItem.variantLabel = variantLabel || '';
-                existingItem.variantId = normalisedVariantId;
-                existingItem.variantPrice = effectivePrice;
-            } else {
-                cartItems.push({
-                    id: productId,
-                    name: productName,
-                    price: effectivePrice,
-                    quantity: quantity,
-                    variantId: normalisedVariantId,
-                    variantLabel: variantLabel || '',
-                    variantPrice: effectivePrice
-                });
+            if (safeQuantity <= 0) {
+                return 'blocked';
             }
 
-            cartCount += quantity;
-            updateCartBadge();
+            const resolvedProductId = normaliseProductId(productId);
 
-            // Save to localStorage
-            saveCart();
+            const performAdd = () => {
+                const existingItem = cartItems.find(
+                    (item) => normaliseProductId(item.id) === resolvedProductId && (item.variantId ?? null) === normalisedVariantId,
+                );
 
-            evaluateHighValueCart();
+                if (existingItem) {
+                    existingItem.quantity = (Number(existingItem.quantity) || 0) + safeQuantity;
+                    existingItem.price = effectivePrice;
+                    existingItem.variantLabel = variantLabel || '';
+                    existingItem.variantId = normalisedVariantId;
+                    existingItem.variantPrice = effectivePrice;
+                } else {
+                    cartItems.push({
+                        id: resolvedProductId,
+                        name: productName,
+                        price: effectivePrice,
+                        quantity: safeQuantity,
+                        variantId: normalisedVariantId,
+                        variantLabel: variantLabel || '',
+                        variantPrice: effectivePrice,
+                    });
+                }
 
-            // Show confirmation
-            showToast(`${productName} added to cart!`);
+                cartCount += safeQuantity;
+                updateCartBadge();
+
+                saveCart();
+
+                evaluateHighValueCart();
+
+                showToast(`${productName} added to cart!`);
+
+                if (options && typeof options.postAdd === 'function') {
+                    options.postAdd();
+                }
+            };
+
+            const outcome = handleHighValuePreflight({
+                productId: resolvedProductId,
+                variantId: normalisedVariantId,
+                quantity: safeQuantity,
+                unitPrice: effectivePrice,
+                onProceed: performAdd,
+            });
+
+            if (outcome === 'proceed') {
+                performAdd();
+                return 'added';
+            }
+
+            if (outcome === 'pending') {
+                return 'pending';
+            }
+
+            return 'blocked';
         }
         // End addToCart
 
         // Start buyNow: reuse cart merging then jump straight to checkout with the composed cart contents
         function buyNow(productId, productName, price, quantity = 1, variantId = null, variantLabel = '', variantPrice = null) {
-            addToCart(productId, productName, price, quantity, variantId, variantLabel, variantPrice);
+            const outcome = addToCart(
+                productId,
+                productName,
+                price,
+                quantity,
+                variantId,
+                variantLabel,
+                variantPrice,
+                {
+                    postAdd: () => {
+                        const cartData = encodeURIComponent(JSON.stringify(cartItems));
+                        redirectToCheckout(cartData);
+                    },
+                },
+            );
 
-            const cartData = encodeURIComponent(JSON.stringify(cartItems));
-            redirectToCheckout(cartData);
+            if (outcome === 'added' || outcome === 'pending') {
+                return;
+            }
         }
         // End buyNow
 
