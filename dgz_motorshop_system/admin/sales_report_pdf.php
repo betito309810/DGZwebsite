@@ -155,7 +155,7 @@ $html = '
             </tr>
             <tr>
                 <th>Total Sales Amount</th>
-            <td> PHP; ' . number_format($total_sales, 2) . '</td>
+            <td> PHP ' . number_format($total_sales, 2) . '</td>
             </tr>
         </table>
     </div>
