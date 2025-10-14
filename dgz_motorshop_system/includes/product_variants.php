@@ -196,6 +196,24 @@ if (!function_exists('findDefaultVariantId')) {
     }
 }
 
+if (!function_exists('adjustVariantQuantity')) {
+    /**
+     * Increment or decrement a specific variant's on-hand count.
+     */
+    function adjustVariantQuantity(PDO $pdo, int $variantId, int $quantityChange): void
+    {
+        if ($quantityChange === 0 || $variantId <= 0) {
+            return;
+        }
+
+        $update = $pdo->prepare('UPDATE product_variants SET quantity = quantity + :delta WHERE id = :variant_id');
+        $update->execute([
+            ':delta' => $quantityChange,
+            ':variant_id' => $variantId,
+        ]);
+    }
+}
+
 if (!function_exists('adjustDefaultVariantQuantity')) {
     /**
      * Mirror product-level inventory adjustments onto the default variant when present.
@@ -211,10 +229,6 @@ if (!function_exists('adjustDefaultVariantQuantity')) {
             return;
         }
 
-        $update = $pdo->prepare('UPDATE product_variants SET quantity = quantity + :delta WHERE id = :variant_id');
-        $update->execute([
-            ':delta' => $quantityChange,
-            ':variant_id' => $variantId,
-        ]);
+        adjustVariantQuantity($pdo, $variantId, $quantityChange);
     }
 }

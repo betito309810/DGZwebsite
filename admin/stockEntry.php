@@ -75,6 +75,9 @@ if (isset($_GET['posted']) && $_GET['posted'] === '1') {
 }
 
 $products = fetchProductCatalog($pdo);
+$productIds = array_column($products, 'id');
+$productVariantsMap = !empty($productIds) ? fetchVariantsForProducts($pdo, $productIds) : [];
+$productVariantsBootstrap = [];
 $suppliers = fetchSuppliersList($pdo);
 // Recent stock-in activity filters (date range + pagination state)
 $recentActivityDateFromRaw = trim((string)($_GET['activity_date_from'] ?? ''));
@@ -124,6 +127,18 @@ $inventorySearchTerm = trim((string)($_GET['inv_search'] ?? ''));
 $inventoryBrandFilter = trim((string)($_GET['inv_brand'] ?? ''));
 $inventoryCategoryFilter = trim((string)($_GET['inv_category'] ?? ''));
 $inventorySupplierFilter = trim((string)($_GET['inv_supplier'] ?? ''));
+$inventoryStatusFilter = strtolower(trim((string)($_GET['inv_status'] ?? '')));
+$inventoryStatusFilter = str_replace('-', '_', $inventoryStatusFilter);
+$validInventoryStatusFilters = ['ok', 'low', 'no_stock'];
+if (!in_array($inventoryStatusFilter, $validInventoryStatusFilters, true)) {
+    $inventoryStatusFilter = '';
+}
+$inventoryStatusOptions = [
+    '' => 'All Statuses',
+    'ok' => 'OK',
+    'low' => 'Low',
+    'no_stock' => 'No stock',
+];
 $inventorySortField = isset($_GET['inv_sort']) ? trim((string)$_GET['inv_sort']) : 'name';
 if ($inventorySortField !== 'name') {
     $inventorySortField = 'name';
@@ -142,6 +157,7 @@ $inventoryFilters = [
     'brand' => $inventoryBrandFilter,
     'category' => $inventoryCategoryFilter,
     'supplier' => $inventorySupplierFilter,
+    'status' => $inventoryStatusFilter,
 ];
 
 
@@ -187,6 +203,9 @@ if ($inventoryCategoryFilter !== '') {
 }
 if ($inventorySupplierFilter !== '') {
     $inventoryFilterParams['inv_supplier'] = $inventorySupplierFilter;
+}
+if ($inventoryStatusFilter !== '') {
+    $inventoryFilterParams['inv_status'] = $inventoryStatusFilter;
 }
 if ($inventorySortDirection === 'desc') {
     $inventoryFilterParams['inv_sort'] = $inventorySortField;
@@ -362,6 +381,8 @@ if ($activeReceipt) {
             'expiry_date' => $item['expiry_date'],
             'expiry_value' => $item['expiry_date'],
             'lot_number' => $item['lot_number'],
+            'variant_id' => isset($item['variant_id']) ? (int)$item['variant_id'] : null,
+            'variant_label' => $item['variant_label'] ?? '',
             'has_discrepancy' => $item['qty_expected'] !== null && (int)$item['qty_expected'] !== (int)$item['qty_received'],
             'invalid_expiry' => false,
         ];
@@ -384,9 +405,46 @@ if (empty($existingItems)) {
         'expiry_date' => null,
         'expiry_value' => null,
         'lot_number' => null,
+        'variant_id' => null,
+        'variant_label' => '',
         'has_discrepancy' => false,
         'invalid_expiry' => false,
     ];
+}
+
+foreach ($existingItems as $item) {
+    $productId = isset($item['product_id']) ? (int) $item['product_id'] : 0;
+    $variantId = isset($item['variant_id']) ? (int) $item['variant_id'] : 0;
+    if ($productId <= 0 || $variantId <= 0) {
+        continue;
+    }
+
+    $variantsForProduct = $productVariantsMap[$productId] ?? [];
+    $variantExists = false;
+    foreach ($variantsForProduct as $variantRow) {
+        if ((int) ($variantRow['id'] ?? 0) === $variantId) {
+            $variantExists = true;
+            break;
+        }
+    }
+
+    if (!$variantExists) {
+        $fallbackLabel = trim((string) ($item['variant_label'] ?? ''));
+        $productVariantsMap[$productId][] = [
+            'id' => $variantId,
+            'product_id' => $productId,
+            'label' => $fallbackLabel !== '' ? $fallbackLabel : ('Variant #' . $variantId),
+            'sku' => null,
+            'price' => 0,
+            'quantity' => 0,
+            'is_default' => 0,
+            'sort_order' => 0,
+        ];
+    }
+}
+
+foreach ($productVariantsMap as $productId => $variantRows) {
+    $productVariantsBootstrap[(string) $productId] = array_values($variantRows);
 }
 
 $existingAttachments = $activeReceipt['attachments'] ?? [];
@@ -537,6 +595,13 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                                     </option>
                                 <?php endforeach; ?>
                             </select>
+                            <select name="inv_status" class="filter-select" aria-label="Filter by stock status">
+                                <?php foreach ($inventoryStatusOptions as $statusValue => $statusLabel): ?>
+                                    <option value="<?= htmlspecialchars($statusValue) ?>" <?= $inventoryStatusFilter === $statusValue ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars($statusLabel) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
                             <button type="submit" class="filter-submit" data-filter-submit>Filter</button>
                             <a class="filter-reset" href="<?= htmlspecialchars($inventoryResetUrl) ?>">Reset</a>
                         </div>
@@ -571,14 +636,16 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                                             <td><?= htmlspecialchars($inventoryRow['on_hand_display'] ?? '') ?></td>
                                             <td><?= htmlspecialchars($inventoryRow['last_received_display'] ?? '—') ?></td>
                                             <td>
-                                                <?php if (!empty($inventoryRow['is_low_stock'])): ?>
-                                                    <span class="status-badge status-with_discrepancy">Low</span>
-                                                <?php else: ?>
-                                                    <span class="status-badge status-posted">OK</span>
-                                                <?php endif; ?>
+                                                <?php
+                                                    $statusBadgeClass = $inventoryRow['status_badge_class'] ?? (!empty($inventoryRow['is_low_stock']) ? 'status-with_discrepancy' : 'status-posted');
+                                                    $statusLabel = $inventoryRow['status_label'] ?? (!empty($inventoryRow['is_low_stock']) ? 'LOW' : 'OK');
+                                                ?>
+                                                <span class="status-badge <?= htmlspecialchars($statusBadgeClass, ENT_QUOTES, 'UTF-8') ?>">
+                                                    <?= htmlspecialchars($statusLabel) ?>
+                                                </span>
                                             </td>
                                         </tr>
-                                    <?php endforeach; ?>
+                                <?php endforeach; ?>
                                 </tbody>
                             </table>
                         </div>
@@ -881,8 +948,13 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                                 $lotNumber = $item['lot_number'];
                                 $rowHasDiscrepancy = !empty($item['has_discrepancy']);
                                 $rowInvalidExpiry = !empty($item['invalid_expiry']);
+                                $selectedVariantId = isset($item['variant_id']) ? (int)$item['variant_id'] : null;
+                                $variantsForProduct = $productId ? ($productVariantsMap[$productId] ?? []) : [];
+                                $hasVariantsForProduct = !empty($variantsForProduct);
                             ?>
-                            <div class="line-item-row<?= $rowHasDiscrepancy ? ' has-discrepancy' : '' ?>" data-selected-product="<?= $productId ? (int)$productId : '' ?>">
+                            <div class="line-item-row<?= $rowHasDiscrepancy ? ' has-discrepancy' : '' ?>"
+                                 data-selected-product="<?= $productId ? (int)$productId : '' ?>"
+                                 data-selected-variant="<?= $selectedVariantId ? (int)$selectedVariantId : '' ?>">
                                 <div class="line-item-header">
                                     <h4 class="line-item-title">Item <?= $index + 1 ?></h4>
                                     <button type="button" class="icon-btn remove-line-item" aria-label="Remove line item" <?= ($index === 0 || $formLocked) ? 'disabled' : '' ?>>
@@ -912,6 +984,21 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                                                 <?php endforeach; ?>
                                             </select>
                                         </div>
+                                    </div>
+                                    <div class="line-item-field variant-field" data-variant-field <?= $hasVariantsForProduct ? '' : 'hidden' ?>>
+                                        <label>Variant <?= $hasVariantsForProduct ? '<span class="required">*</span>' : '' ?></label>
+                                        <select name="variant_id[]" class="variant-select" <?= $hasVariantsForProduct ? 'required' : 'disabled' ?>>
+                                            <option value="">Select variant</option>
+                                            <?php foreach ($variantsForProduct as $variantRow): ?>
+                                                <?php
+                                                    $variantId = (int)($variantRow['id'] ?? 0);
+                                                    $variantLabel = trim((string)($variantRow['label'] ?? 'Variant #' . $variantId));
+                                                ?>
+                                                <option value="<?= $variantId ?>" <?= $selectedVariantId === $variantId ? 'selected' : '' ?>>
+                                                    <?= htmlspecialchars($variantLabel) ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
                                     </div>
                                     <div class="line-item-field">
                                         <label>Qty Expected</label>
@@ -1202,6 +1289,7 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
             'currentUserId' => (int)($_SESSION['user_id'] ?? 0),
             'suppliers' => $suppliers,
             'formLocked' => $formLocked,
+            'variantsByProduct' => $productVariantsBootstrap,
         ], JSON_PRETTY_PRINT) ?>
     </script>
     <script src="../dgz_motorshop_system/assets/js/dashboard/userMenu.js"></script>
@@ -1368,6 +1456,45 @@ function handleStockReceiptSubmission(PDO $pdo, ?array $currentUser, array $post
         $response['errors'][] = 'Please add at least one valid product line.';
     }
 
+    if (!empty($items)) {
+        $productIdList = array_unique(array_map(static fn ($row) => (int) ($row['product_id'] ?? 0), $items));
+        $variantsByProduct = !empty($productIdList) ? fetchVariantsForProducts($pdo, $productIdList) : [];
+
+        foreach ($items as &$itemRow) {
+            $productId = (int) ($itemRow['product_id'] ?? 0);
+            $variantId = isset($itemRow['variant_id']) ? (int) $itemRow['variant_id'] : null;
+            $variantsForProduct = $variantsByProduct[$productId] ?? [];
+
+            if (!empty($variantsForProduct)) {
+                if ($variantId === null || $variantId <= 0) {
+                    $response['errors'][] = 'Please select a variant for each product that has variants.';
+                    break;
+                }
+
+                $matchedVariant = null;
+                foreach ($variantsForProduct as $variantRow) {
+                    if ((int) ($variantRow['id'] ?? 0) === $variantId) {
+                        $matchedVariant = $variantRow;
+                        break;
+                    }
+                }
+
+                if ($matchedVariant === null) {
+                    $response['errors'][] = 'One of the selected variants no longer matches the chosen product. Please refresh and try again.';
+                    break;
+                }
+
+                $itemRow['variant_id'] = $variantId;
+                $itemRow['variant_label'] = $matchedVariant['label'] ?? null;
+            } else {
+                // No variants configured; ensure we do not persist stale selection.
+                $itemRow['variant_id'] = null;
+                $itemRow['variant_label'] = null;
+            }
+        }
+        unset($itemRow);
+    }
+
     $hasDiscrepancy = false;
     foreach ($items as $item) {
         if (!empty($item['invalid_expiry'])) {
@@ -1466,16 +1593,34 @@ function handleStockReceiptSubmission(PDO $pdo, ?array $currentUser, array $post
                 ->execute([':receipt_id' => $receiptId]);
         }
 
-        $insertItem = $pdo->prepare('
-            INSERT INTO stock_receipt_items
-                (receipt_id, product_id, qty_expected, qty_received, unit_cost, expiry_date, lot_number)
-            VALUES
-                (:receipt_id, :product_id, :qty_expected, :qty_received, :unit_cost, :expiry_date, :lot_number)
-        ');
+        $includeVariantIdColumn = tableHasColumn($pdo, 'stock_receipt_items', 'variant_id');
+        $includeVariantLabelColumn = tableHasColumn($pdo, 'stock_receipt_items', 'variant_label');
+
+        $itemColumns = ['receipt_id', 'product_id'];
+        $itemPlaceholders = [':receipt_id', ':product_id'];
+
+        if ($includeVariantIdColumn) {
+            $itemColumns[] = 'variant_id';
+            $itemPlaceholders[] = ':variant_id';
+        }
+        if ($includeVariantLabelColumn) {
+            $itemColumns[] = 'variant_label';
+            $itemPlaceholders[] = ':variant_label';
+        }
+
+        $itemColumns = array_merge($itemColumns, ['qty_expected', 'qty_received', 'unit_cost', 'expiry_date', 'lot_number']);
+        $itemPlaceholders = array_merge($itemPlaceholders, [':qty_expected', ':qty_received', ':unit_cost', ':expiry_date', ':lot_number']);
+
+        $insertItemSql = sprintf(
+            'INSERT INTO stock_receipt_items (%s) VALUES (%s)',
+            implode(', ', $itemColumns),
+            implode(', ', $itemPlaceholders)
+        );
+        $insertItem = $pdo->prepare($insertItemSql);
 
         $totalQty = 0;
         foreach ($items as $item) {
-            $insertItem->execute([
+            $itemParams = [
                 ':receipt_id' => $receiptId,
                 ':product_id' => $item['product_id'],
                 ':qty_expected' => $item['qty_expected'],
@@ -1483,7 +1628,16 @@ function handleStockReceiptSubmission(PDO $pdo, ?array $currentUser, array $post
                 ':unit_cost' => $item['unit_cost'],
                 ':expiry_date' => $item['expiry_date'],
                 ':lot_number' => $item['lot_number'],
-            ]);
+            ];
+
+            if ($includeVariantIdColumn) {
+                $itemParams[':variant_id'] = $item['variant_id'] ?? null;
+            }
+            if ($includeVariantLabelColumn) {
+                $itemParams[':variant_label'] = $item['variant_label'] ?? null;
+            }
+
+            $insertItem->execute($itemParams);
             $totalQty += $item['qty_received'];
         }
 
@@ -1535,6 +1689,7 @@ function normalizeLineItems(array $post): array
     $unitCost = $post['unit_cost'] ?? [];
     $expiryDate = $post['expiry_date'] ?? [];
     $lotNumbers = $post['lot_number'] ?? [];
+    $variantIds = $post['variant_id'] ?? [];
 
     $items = [];
     foreach ($productIds as $index => $productIdRaw) {
@@ -1554,6 +1709,8 @@ function normalizeLineItems(array $post): array
         $expiry = $rawExpiry !== '' ? validateDateValue($rawExpiry) : null;
         $lot = isset($lotNumbers[$index]) ? trim((string)$lotNumbers[$index]) : null;
 
+        $variantId = isset($variantIds[$index]) && $variantIds[$index] !== '' ? (int)$variantIds[$index] : null;
+
         $items[] = [
             'product_id' => $productId,
             'qty_expected' => $expected,
@@ -1562,6 +1719,8 @@ function normalizeLineItems(array $post): array
             'expiry_date' => $expiry,
             'invalid_expiry' => $rawExpiry !== '' && $expiry === null,
             'lot_number' => $lot !== '' ? $lot : null,
+            'variant_id' => $variantId && $variantId > 0 ? $variantId : null,
+            'variant_label' => null,
         ];
     }
 
@@ -1579,6 +1738,7 @@ function normalizeLineItemsPreserveBlank(array $post): array
     $unitCost = $post['unit_cost'] ?? [];
     $expiryDate = $post['expiry_date'] ?? [];
     $lotNumbers = $post['lot_number'] ?? [];
+    $variantIds = $post['variant_id'] ?? [];
 
     $rowCount = max(
         count($productIds),
@@ -1586,7 +1746,8 @@ function normalizeLineItemsPreserveBlank(array $post): array
         count($qtyReceived),
         count($unitCost),
         count($expiryDate),
-        count($lotNumbers)
+        count($lotNumbers),
+        count($variantIds)
     );
 
     $items = [];
@@ -1597,6 +1758,7 @@ function normalizeLineItemsPreserveBlank(array $post): array
         $unitRaw = $unitCost[$index] ?? '';
         $expiryRaw = isset($expiryDate[$index]) ? trim((string)$expiryDate[$index]) : '';
         $lotRaw = isset($lotNumbers[$index]) ? trim((string)$lotNumbers[$index]) : '';
+        $variantRaw = isset($variantIds[$index]) && $variantIds[$index] !== '' ? (int)$variantIds[$index] : null;
 
         $expected = $expectedRaw === '' ? null : (int)$expectedRaw;
         $received = $receivedRaw === '' ? null : (int)$receivedRaw;
@@ -1612,6 +1774,8 @@ function normalizeLineItemsPreserveBlank(array $post): array
             'expiry_date' => $invalidExpiry ? null : $expiry,
             'expiry_value' => $invalidExpiry ? $expiryRaw : $expiry,
             'lot_number' => $lotRaw !== '' ? $lotRaw : null,
+            'variant_id' => $variantRaw && $variantRaw > 0 ? $variantRaw : null,
+            'variant_label' => null,
             'has_discrepancy' => $expected !== null && $received !== null && $expected !== $received,
             'invalid_expiry' => $invalidExpiry,
         ];
@@ -1667,7 +1831,12 @@ function applyInventoryMovements(PDO $pdo, int $receiptId, array $items, int $us
             ':product_id' => $item['product_id'],
         ]);
 
-        adjustDefaultVariantQuantity($pdo, (int) $item['product_id'], (int) $item['qty_received']);
+        $variantId = isset($item['variant_id']) ? (int) $item['variant_id'] : 0;
+        if ($variantId > 0) {
+            adjustVariantQuantity($pdo, $variantId, (int) $item['qty_received']);
+        } else {
+            adjustDefaultVariantQuantity($pdo, (int) $item['product_id'], (int) $item['qty_received']);
+        }
 
         $insertLedger->execute([
             ':product_id' => $item['product_id'],
@@ -2113,6 +2282,33 @@ function buildInventoryWhereClause(array $filters, array &$params): string
         $params[':inv_supplier'] = $filters['supplier'];
     }
 
+    if (isset($filters['status'])) {
+        $statusFilter = strtolower(trim((string)$filters['status']));
+        $statusFilter = str_replace('-', '_', $statusFilter);
+
+        switch ($statusFilter) {
+            case 'no_stock':
+                $clauses[] = 'COALESCE(p.quantity, 0) <= 0';
+                break;
+            case 'low':
+                $clauses[] = '(
+                    COALESCE(p.quantity, 0) > 0
+                    AND COALESCE(p.low_stock_threshold, 0) > 0
+                    AND COALESCE(p.quantity, 0) <= COALESCE(p.low_stock_threshold, 0)
+                )';
+                break;
+            case 'ok':
+                $clauses[] = '(
+                    COALESCE(p.quantity, 0) > 0
+                    AND (
+                        COALESCE(p.low_stock_threshold, 0) <= 0
+                        OR COALESCE(p.quantity, 0) > COALESCE(p.low_stock_threshold, 0)
+                    )
+                )';
+                break;
+        }
+    }
+
     return implode(' AND ', $clauses);
 }
 
@@ -2238,7 +2434,25 @@ function fetchCurrentInventorySnapshot(PDO $pdo, array $filters, int $limit, int
             $row['last_received_display'] = '—';
         }
 
-        $row['is_low_stock'] = $threshold > 0 ? $quantity <= $threshold : $quantity <= 0;
+        $isNoStock = $quantity <= 0;
+        $isLowStock = !$isNoStock && $threshold > 0 && $quantity <= $threshold;
+
+        if ($isNoStock) {
+            $row['status_key'] = 'no_stock';
+            $row['status_label'] = 'NO STOCK';
+            $row['status_badge_class'] = 'status-no_stock';
+        } elseif ($isLowStock) {
+            $row['status_key'] = 'low';
+            $row['status_label'] = 'LOW';
+            $row['status_badge_class'] = 'status-with_discrepancy';
+        } else {
+            $row['status_key'] = 'ok';
+            $row['status_label'] = 'OK';
+            $row['status_badge_class'] = 'status-posted';
+        }
+
+        $row['is_low_stock'] = $isLowStock;
+        $row['is_no_stock'] = $isNoStock;
     }
     unset($row);
 

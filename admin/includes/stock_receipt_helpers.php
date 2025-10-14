@@ -3,6 +3,44 @@
  * Shared helpers for fetching stock receipt data and formatting values.
  */
 
+if (!function_exists('tableHasColumn')) {
+    /**
+     * Quickly determine whether a table contains a specific column. Result is cached per request.
+     */
+    function tableHasColumn(PDO $pdo, string $table, string $column): bool
+    {
+        static $cache = [];
+        $key = strtolower($table) . ':' . strtolower($column);
+
+        if (array_key_exists($key, $cache)) {
+            return $cache[$key];
+        }
+
+        try {
+            $stmt = $pdo->prepare(
+                'SELECT 1
+                 FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE()
+                   AND TABLE_NAME = :table
+                   AND COLUMN_NAME = :column
+                 LIMIT 1'
+            );
+            if ($stmt && $stmt->execute([
+                ':table' => $table,
+                ':column' => $column,
+            ])) {
+                $cache[$key] = $stmt->fetchColumn() !== false;
+            } else {
+                $cache[$key] = false;
+            }
+        } catch (Throwable $e) {
+            $cache[$key] = false;
+        }
+
+        return $cache[$key];
+    }
+}
+
 if (!function_exists('loadStockReceiptWithItems')) {
     /**
      * Load a single stock receipt with its header, items, attachments, and audit log.
@@ -30,17 +68,38 @@ if (!function_exists('loadStockReceiptWithItems')) {
             return null;
         }
 
+        $hasVariantId = tableHasColumn($pdo, 'stock_receipt_items', 'variant_id');
+        $itemsSelectExtras = '';
+        $itemsJoins = '';
+
+        if ($hasVariantId) {
+            $itemsSelectExtras .= ', pv.label AS variant_current_label';
+            $itemsJoins .= ' LEFT JOIN product_variants pv ON pv.id = sri.variant_id';
+        }
+
         $itemsSql = '
             SELECT
-                sri.*, p.name AS product_name, p.code AS product_code
+                sri.*, p.name AS product_name, p.code AS product_code' . $itemsSelectExtras . '
             FROM stock_receipt_items sri
-            LEFT JOIN products p ON p.id = sri.product_id
+            LEFT JOIN products p ON p.id = sri.product_id' . $itemsJoins . '
             WHERE sri.receipt_id = :receipt_id
             ORDER BY sri.id ASC
         ';
         $stmt = $pdo->prepare($itemsSql);
         $stmt->execute([':receipt_id' => $receiptId]);
         $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if ($hasVariantId && !empty($items)) {
+            foreach ($items as &$itemRow) {
+                if (!empty($itemRow['variant_id']) && empty($itemRow['variant_label']) && !empty($itemRow['variant_current_label'])) {
+                    $itemRow['variant_label'] = $itemRow['variant_current_label'];
+                }
+                if (array_key_exists('variant_current_label', $itemRow)) {
+                    unset($itemRow['variant_current_label']);
+                }
+            }
+            unset($itemRow);
+        }
 
         $filesSql = '
             SELECT id, file_path, original_name, mime_type, created_at

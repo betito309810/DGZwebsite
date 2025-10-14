@@ -783,6 +783,13 @@ if (!function_exists('normalizePaymentProofPath')) {
             $relative = 'uploads/' . $relative;
         }
 
+        if ($defaultPrefix === '../') {
+            $assetUrl = assetUrl($relative);
+            if ($assetUrl !== '') {
+                return $assetUrl;
+            }
+        }
+
         $prefix = rtrim($defaultPrefix, '/');
         if ($prefix === '') {
             return $relative;

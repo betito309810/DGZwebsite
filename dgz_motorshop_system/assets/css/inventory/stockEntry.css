@@ -746,6 +746,11 @@
     color: #92400e;
 }
 
+.status-no_stock {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
 .panel-subtext {
     display: inline-block;
     margin-left: 8px;

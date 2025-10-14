@@ -263,6 +263,24 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     });
 
+    const variantsByProduct = new Map();
+    if (bootstrapData.variantsByProduct && typeof bootstrapData.variantsByProduct === 'object') {
+        Object.entries(bootstrapData.variantsByProduct).forEach(([productId, variants]) => {
+            if (!Array.isArray(variants)) {
+                variantsByProduct.set(String(productId), []);
+                return;
+            }
+
+            const normalised = variants.map((variant) => ({
+                id: String(variant.id ?? ''),
+                label: variant.label ?? '',
+                sku: variant.sku ?? '',
+                is_default: Number(variant.is_default ?? 0),
+            }));
+            variantsByProduct.set(String(productId), normalised);
+        });
+    }
+
     const lineTemplates = {
         row: lineItemsBody.querySelector('.line-item-row'),
     };
@@ -373,6 +391,7 @@ document.addEventListener('DOMContentLoaded', () => {
         clone.classList.remove('suggestions-open');
         clone.dataset.selectedProduct = '';
         clone.dataset.selectedLabel = '';
+        clone.dataset.selectedVariant = '';
         clone.querySelectorAll('input').forEach((input) => {
             if (input.classList.contains('product-search')) {
                 return;
@@ -399,6 +418,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const productSearch = row.querySelector('.product-search');
         const suggestions = row.querySelector('.product-suggestions');
         const clearBtn = row.querySelector('.product-clear');
+        const variantSelect = row.querySelector('select[name="variant_id[]"]');
 
         expectedInput?.addEventListener('input', () => {
             evaluateRowDiscrepancy(row);
@@ -448,6 +468,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             productSelect.addEventListener('change', () => {
                 const productId = productSelect.value;
+                row.dataset.selectedVariant = '';
                 applyProductSelection(row, productId, { skipFocus: true });
             });
 
@@ -457,11 +478,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const presetId = row.dataset.selectedProduct;
             if (presetId) {
-                applyProductSelection(row, presetId, { skipFocus: true, renderSuggestions: false, skipDirty: true });
+                applyProductSelection(row, presetId, {
+                    skipFocus: true,
+                    renderSuggestions: false,
+                    skipDirty: true,
+                    presetVariantId: row.dataset.selectedVariant || '',
+                });
             } else if (productSelect.value) {
-                applyProductSelection(row, productSelect.value, { skipFocus: true, renderSuggestions: false, skipDirty: true });
+                applyProductSelection(row, productSelect.value, {
+                    skipFocus: true,
+                    renderSuggestions: false,
+                    skipDirty: true,
+                    presetVariantId: row.dataset.selectedVariant || '',
+                });
             }
         }
+
+        variantSelect?.addEventListener('change', () => {
+            row.dataset.selectedVariant = variantSelect.value || '';
+            if (!formLocked) {
+                markDirty();
+            }
+        });
     }
 
     function evaluateRowDiscrepancy(row) {
@@ -592,6 +630,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 button.innerHTML = `<span class="product-suggestion-name">${escapeHtml(name)}</span>`;
             }
             button.addEventListener('click', () => {
+                row.dataset.selectedVariant = '';
                 applyProductSelection(row, entry.id);
             });
             suggestions.appendChild(button);
@@ -617,6 +656,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const hadSelection = !!row.dataset.selectedProduct;
             row.dataset.selectedProduct = '';
             row.dataset.selectedLabel = '';
+            row.dataset.selectedVariant = '';
+            resetVariantField(row, { skipDirty: true });
             if (suggestions && !options.keepSuggestions) {
                 suggestions.innerHTML = '';
             }
@@ -643,6 +684,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         row.classList.remove('suggestions-open');
         clearBtn?.removeAttribute('hidden');
+        populateVariantSelect(row, product.id, {
+            presetVariantId: options.presetVariantId ?? row.dataset.selectedVariant ?? '',
+            skipDirty: options.skipDirty,
+        });
         if (!options.skipFocus) {
             searchInput.blur();
         }
@@ -663,6 +708,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         row.dataset.selectedProduct = '';
         row.dataset.selectedLabel = '';
+        row.dataset.selectedVariant = '';
+        resetVariantField(row, { skipDirty: true });
 
         if (searchInput && !options.keepInputValue) {
             searchInput.value = '';
@@ -709,6 +756,82 @@ document.addEventListener('DOMContentLoaded', () => {
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
+    }
+
+    function buildVariantOptions(variants) {
+        const options = ['<option value="">Select variant</option>'];
+        variants.forEach((variant) => {
+            const titleParts = [];
+            if (variant.label) {
+                titleParts.push(variant.label);
+            }
+            if (variant.sku) {
+                titleParts.push(`SKU: ${variant.sku}`);
+            }
+            const optionText = titleParts.length ? titleParts.join(' • ') : `Variant #${variant.id}`;
+            options.push(`<option value="${escapeHtml(variant.id)}">${escapeHtml(optionText)}</option>`);
+        });
+        return options.join('');
+    }
+
+    function resetVariantField(row, { skipDirty = false } = {}) {
+        const variantSelect = row.querySelector('select[name="variant_id[]"]');
+        const variantField = row.querySelector('[data-variant-field]');
+        const hadSelection = !!row.dataset.selectedVariant;
+
+        if (variantSelect) {
+            variantSelect.innerHTML = '<option value="">Select variant</option>';
+            variantSelect.value = '';
+            variantSelect.disabled = true;
+            variantSelect.removeAttribute('required');
+        }
+        if (variantField) {
+            variantField.hidden = true;
+        }
+
+        row.dataset.selectedVariant = '';
+
+        if (hadSelection && !skipDirty) {
+            markDirty();
+        }
+    }
+
+    function populateVariantSelect(row, productId, { presetVariantId = '', skipDirty = false } = {}) {
+        const variantSelect = row.querySelector('select[name="variant_id[]"]');
+        const variantField = row.querySelector('[data-variant-field]');
+        if (!variantSelect || !variantField) {
+            return;
+        }
+
+        const variants = variantsByProduct.get(String(productId)) || [];
+        if (!variants.length) {
+            resetVariantField(row, { skipDirty: true });
+            return;
+        }
+
+        variantSelect.disabled = false;
+        variantSelect.required = true;
+        variantField.hidden = false;
+        variantSelect.innerHTML = buildVariantOptions(variants);
+
+        let targetVariantId = presetVariantId || row.dataset.selectedVariant || '';
+        if (targetVariantId && !variants.some((variant) => String(variant.id) === String(targetVariantId))) {
+            targetVariantId = '';
+        }
+
+        if (!targetVariantId) {
+            const defaultVariant = variants.find((variant) => Number(variant.is_default) === 1);
+            if (defaultVariant) {
+                targetVariantId = String(defaultVariant.id);
+            }
+        }
+
+        variantSelect.value = targetVariantId;
+        row.dataset.selectedVariant = targetVariantId;
+
+        if (targetVariantId && !skipDirty) {
+            markDirty();
+        }
     }
 
     // Intercept navigation clicks so unsaved Stock-In forms prompt before leaving the page.

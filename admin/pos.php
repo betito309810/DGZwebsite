@@ -64,8 +64,8 @@ function generateReceiptPDF(array $data): ?string {
             $html .= '<tr>';
             $html .= '<td style="border: 1px solid #ddd; padding: 8px;">' . htmlspecialchars($item['name']) . '</td>';
             $html .= '<td style="border: 1px solid #ddd; padding: 8px; text-align: center;">' . htmlspecialchars($item['quantity']) . '</td>';
-            $html .= '<td style="border: 1px solid #ddd; padding: 8px; text-align: right;">₱' . number_format($item['price'], 2) . '</td>';
-            $html .= '<td style="border: 1px solid #ddd; padding: 8px; text-align: right;">₱' . number_format($item['total'], 2) . '</td>';
+            $html .= '<td style="border: 1px solid #ddd; padding: 8px; text-align: right;">PHP ' . number_format($item['price'], 2) . '</td>';
+            $html .= '<td style="border: 1px solid #ddd; padding: 8px; text-align: right;">PHP ' . number_format($item['total'], 2) . '</td>';
             $html .= '</tr>';
         }
 
@@ -76,11 +76,11 @@ function generateReceiptPDF(array $data): ?string {
 
         // Left side: Vatable and VAT
         $html .= '<div style="width: 50%;">';
-        $html .= '<p style="margin: 4px 0;"><strong>Vatable:</strong> ₱' . number_format($data['vatable'], 2) . '</p>';
-        $html .= '<p style="margin: 4px 0;"><strong>VAT:</strong> ₱' . number_format($data['vat'], 2) . '</p>';
-        $html .= '<p style="margin: 4px 0; font-weight: bold;">Total: ₱' . number_format($data['sales_total'], 2) . '</p>';
-        $html .= '<p style="margin: 4px 0;">Amount Paid: ₱' . number_format($data['amount_paid'], 2) . '</p>';
-        $html .= '<p style="margin: 4px 0;">Change: ₱' . number_format($data['change'], 2) . '</p>';
+        $html .= '<p style="margin: 4px 0;"><strong>Vatable:</strong> PHP ' . number_format($data['vatable'], 2) . '</p>';
+        $html .= '<p style="margin: 4px 0;"><strong>VAT:</strong> PHP ' . number_format($data['vat'], 2) . '</p>';
+        $html .= '<p style="margin: 4px 0; font-weight: bold;">Total: PHP ' . number_format($data['sales_total'], 2) . '</p>';
+        $html .= '<p style="margin: 4px 0;">Amount Paid: PHP ' . number_format($data['amount_paid'], 2) . '</p>';
+        $html .= '<p style="margin: 4px 0;">Change: PHP ' . number_format($data['change'], 2) . '</p>';
         $html .= '</div>';
 
         
