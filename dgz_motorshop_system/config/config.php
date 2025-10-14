@@ -813,6 +813,22 @@ if (!function_exists('countOnlineOrdersByStatus')) {
     }
 }
 
+if (!function_exists('countPendingRestockRequests')) {
+    /**
+     * Count restock requests that still need attention from the admin team.
+     */
+    function countPendingRestockRequests(PDO $pdo): int
+    {
+        try {
+            $stmt = $pdo->query("SELECT COUNT(*) FROM restock_requests WHERE LOWER(status) = 'pending'");
+            return (int) $stmt->fetchColumn();
+        } catch (Throwable $e) {
+            error_log('Unable to count pending restock requests: ' . $e->getMessage());
+            return 0;
+        }
+    }
+}
+
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
