@@ -18,7 +18,6 @@ $restockFormDefaults = [
     'supplier' => '',
     'supplier_new' => '',
     'priority' => '',
-    'needed_by' => '',
     'notes' => '',
 ];
 $restockFormData = $restockFormDefaults;
@@ -72,13 +71,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_restock_reques
         'supplier' => $_POST['restock_supplier'] ?? '',
         'supplier_new' => $_POST['restock_supplier_new'] ?? '',
         'priority' => $_POST['restock_priority'] ?? '',
-        'needed_by' => $_POST['restock_needed_by'] ?? '',
         'notes' => $_POST['restock_notes'] ?? '',
     ];
     $productId = intval($_POST['restock_product'] ?? 0);
     $requestedQuantity = intval($_POST['restock_quantity'] ?? 0);
     $priority = strtolower(trim($_POST['restock_priority'] ?? ''));
-    $neededByRaw = trim($_POST['restock_needed_by'] ?? '');
     $notes = trim($_POST['restock_notes'] ?? '');
     $categoryChoice = trim($_POST['restock_category'] ?? '');
     $categoryNew = trim($_POST['restock_category_new'] ?? '');
@@ -108,16 +105,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_restock_reques
     } elseif (!in_array($priority, $allowedPriorities, true)) {
         $error_message = 'Please choose a valid priority level.';
     } else {
-        $neededBy = null;
-        if ($neededByRaw !== '') {
-            $date = DateTime::createFromFormat('Y-m-d', $neededByRaw);
-            if ($date && $date->format('Y-m-d') === $neededByRaw) {
-                $neededBy = $date->format('Y-m-d');
-            } else {
-                $error_message = 'Invalid date provided for "Needed By".';
-            }
-        }
-
         if (!isset($error_message)) {
             try {
                 $productStmt = $pdo->prepare('SELECT category, brand, supplier FROM products WHERE id = ?');
@@ -136,14 +123,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_restock_reques
 
         if (!isset($error_message)) {
             try {
-                $stmt = $pdo->prepare('INSERT INTO restock_requests (product_id, requested_by, requested_by_name, quantity_requested, priority_level, needed_by, notes, category, brand, supplier) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                $stmt = $pdo->prepare('INSERT INTO restock_requests (product_id, requested_by, requested_by_name, quantity_requested, priority_level, notes, category, brand, supplier) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
                 $stmt->execute([
                     $productId,
                     $userId,
                     $currentUserName,
                     $requestedQuantity,
                     $priority,
-                    $neededBy,
                     $notes,
                     $category === '' ? null : $category,
                     $brand === '' ? null : $brand,
@@ -450,10 +436,9 @@ if (!empty($pendingRestockRequests)) {
 }
 
 $restockHistory = $pdo->query('
-    SELECT h.*, 
+    SELECT h.*,
            rr.quantity_requested AS request_quantity,
            rr.priority_level AS request_priority,
-           rr.needed_by AS request_needed_by,
            rr.notes AS request_notes,
            rr.category AS request_category,
            rr.brand AS request_brand,
@@ -937,7 +922,6 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                 data-initial-supplier="<?php echo htmlspecialchars($restockFormData['supplier']); ?>"
                 data-initial-supplier-new="<?php echo htmlspecialchars($restockFormData['supplier_new']); ?>"
                 data-initial-priority="<?php echo htmlspecialchars($restockFormData['priority']); ?>"
-                data-initial-needed-by="<?php echo htmlspecialchars($restockFormData['needed_by']); ?>"
                 data-initial-notes="<?php echo htmlspecialchars($restockFormData['notes']); ?>">
                 <input type="hidden" name="submit_restock_request" value="1">
                 <div class="restock-grid">
@@ -1024,10 +1008,6 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                         <label for="restock_notes">Reason / Notes</label>
                         <textarea id="restock_notes" name="restock_notes" placeholder="Provide additional details for the restock request..."><?php echo htmlspecialchars($restockFormData['notes']); ?></textarea>
                     </div>
-                    <div class="form-group needed-group">
-                        <label for="restock_needed_by">Needed By</label>
-                        <input type="date" id="restock_needed_by" name="restock_needed_by" value="<?php echo htmlspecialchars($restockFormData['needed_by']); ?>">
-                    </div>
                     <div class="restock-actions span-three">
                         <button type="submit" class="submit-btn">
                             <i class="fas fa-paper-plane"></i> Submit Request
@@ -1071,7 +1051,6 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                                         <th>Product</th>
                                         <th>Quantity</th>
                                         <th>Priority</th>
-                                        <th>Needed By</th>
                                         <th>Status</th>
                                         <th>Requested By</th>
                                         <th>Last Update</th>
@@ -1083,7 +1062,6 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                                         <?php
                                             $status = strtolower($request['status'] ?? 'pending');
                                             $priority = strtolower($request['priority_level'] ?? '');
-                                            $neededBy = $request['needed_by'] ?? null;
                                             $updatedAt = $request['updated_at'] ?? null;
                                             $lastTimestamp = $updatedAt ?: ($request['created_at'] ?? null);
                                         ?>
@@ -1103,13 +1081,6 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                                             <td>
                                                 <?php if ($priority !== ''): ?>
                                                     <span class="priority-badge <?php echo getPriorityClass($priority); ?>"><?php echo ucfirst($priority); ?></span>
-                                                <?php else: ?>
-                                                    <span class="muted">Not set</span>
-                                                <?php endif; ?>
-                                            </td>
-                                            <td>
-                                                <?php if (!empty($neededBy)): ?>
-                                                    <?php echo date('M d, Y', strtotime($neededBy)); ?>
                                                 <?php else: ?>
                                                     <span class="muted">Not set</span>
                                                 <?php endif; ?>
@@ -1145,7 +1116,6 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                                         <th>Supplier</th>
                                         <th>Quantity</th>
                                         <th>Priority</th>
-                                        <th>Needed By</th>
                                         <th>Requested By</th>
                                         <th>Status</th>
                                         <th>Logged By</th>
@@ -1172,13 +1142,6 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                                             <td>
                                                 <?php $priority = strtolower($entry['request_priority'] ?? ''); ?>
                                                 <span class="priority-badge <?php echo getPriorityClass($priority); ?>"><?php echo ucfirst($priority); ?></span>
-                                            </td>
-                                            <td>
-                                                <?php if (!empty($entry['request_needed_by'])): ?>
-                                                    <?php echo date('M d, Y', strtotime($entry['request_needed_by'])); ?>
-                                                <?php else: ?>
-                                                    <span class="muted">Not set</span>
-                                                <?php endif; ?>
                                             </td>
                                             <td><?php echo htmlspecialchars($entry['requester_name'] ?? 'Unknown'); ?></td>
                                             <td>

@@ -42,12 +42,6 @@
     min-height: 180px;
 }
 
-.needed-group {
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-}
-
 .restock-form label {
     display: block;
     font-weight: 600;

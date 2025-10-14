@@ -252,7 +252,6 @@
             const statusButton = document.getElementById('restockStatusButton');
             const quantityInput = document.getElementById('restock_quantity');
             const prioritySelect = document.getElementById('restock_priority');
-            const neededByInput = document.getElementById('restock_needed_by');
             const notesTextarea = document.getElementById('restock_notes');
 
             function handleSelectChange(selectEl, inputEl) {
@@ -650,7 +649,7 @@
                 if (
                     data.initialProduct || data.initialQuantity || initialCategoryValue ||
                     initialBrandValue || initialSupplierValue || data.initialPriority ||
-                    data.initialNeededBy || data.initialNotes
+                    data.initialNotes
                 ) {
                     hasInitialFormData = true;
                     if (productSelect) {
@@ -676,9 +675,6 @@
                     }
                     if (prioritySelect) {
                         prioritySelect.value = data.initialPriority || '';
-                    }
-                    if (neededByInput) {
-                        neededByInput.value = data.initialNeededBy || '';
                     }
                     if (notesTextarea) {
                         notesTextarea.value = data.initialNotes || '';

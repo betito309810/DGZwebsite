@@ -120,7 +120,6 @@ $resolvedRequests = array_values(array_filter($requests, function ($row) {
 $historyEntries = $pdo->query('
     SELECT h.*, rr.quantity_requested AS request_quantity,
            rr.priority_level AS request_priority,
-           rr.needed_by AS request_needed_by,
            rr.category AS request_category,
            rr.brand AS request_brand,
            rr.supplier AS request_supplier,
@@ -248,7 +247,6 @@ function getStatusClass(string $status): string
                                             <th>Supplier</th>
                                             <th>Quantity</th>
                                             <th>Priority</th>
-                                            <th>Needed By</th>
                                             <th>Requested By</th>
                                             <th>Notes</th>
                                             <?php if ($role === 'admin'): ?>
@@ -275,13 +273,6 @@ function getStatusClass(string $status): string
                                                 <td>
                                                     <?php $priority = strtolower($request['priority_level'] ?? ''); ?>
                                                     <span class="priority-badge <?php echo getPriorityClass($priority); ?>"><?php echo ucfirst($priority); ?></span>
-                                                </td>
-                                                <td>
-                                                    <?php if (!empty($request['needed_by'])): ?>
-                                                        <?php echo date('M d, Y', strtotime($request['needed_by'])); ?>
-                                                    <?php else: ?>
-                                                        <span class="muted">Not set</span>
-                                                    <?php endif; ?>
                                                 </td>
                                                 <td><?php echo htmlspecialchars($request['requester_name'] ?? 'Unknown'); ?></td>
                                                 <td class="notes-cell">
@@ -332,7 +323,6 @@ function getStatusClass(string $status): string
                                             <th>Supplier</th>
                                             <th>Quantity</th>
                                             <th>Priority</th>
-                                            <th>Needed By</th>
                                             <th>Requested By</th>
                                             <th>Status</th>
                                             <th>Logged By</th>
@@ -359,13 +349,6 @@ function getStatusClass(string $status): string
                                                 <td>
                                                     <?php $priority = strtolower($entry['request_priority'] ?? ''); ?>
                                                     <span class="priority-badge <?php echo getPriorityClass($priority); ?>"><?php echo ucfirst($priority); ?></span>
-                                                </td>
-                                                <td>
-                                                    <?php if (!empty($entry['request_needed_by'])): ?>
-                                                        <?php echo date('M d, Y', strtotime($entry['request_needed_by'])); ?>
-                                                    <?php else: ?>
-                                                        <span class="muted">Not set</span>
-                                                    <?php endif; ?>
                                                 </td>
                                                 <td><?php echo htmlspecialchars($entry['requester_name'] ?? 'Unknown'); ?></td>
                                                 <td>
