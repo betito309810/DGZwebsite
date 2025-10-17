@@ -10,6 +10,9 @@ $role = $_SESSION['role'] ?? '';
 enforceStaffAccess();
 $userId = $_SESSION['user_id'];
 
+require_once __DIR__ . '/includes/restock_request_helpers.php';
+ensureRestockVariantColumns($pdo);
+
 require_once __DIR__ . '/includes/inventory_notifications.php';
 $notificationManageLink = 'inventory.php';
 $inventoryNotificationData = loadInventoryNotifications($pdo);
@@ -101,15 +104,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_action'], $_P
 // Fetch restock requests with product and user details
 $stmt = $pdo->query('
     SELECT rr.*, p.name AS product_name, p.code AS product_code,
+           rr.variant_label,
+           pv.label AS variant_current_label,
            COALESCE(requester.name, rr.requested_by_name) AS requester_name,
            COALESCE(reviewer.name, rr.reviewed_by_name) AS reviewer_name
     FROM restock_requests rr
     LEFT JOIN products p ON p.id = rr.product_id
+    LEFT JOIN product_variants pv ON pv.id = rr.variant_id
     LEFT JOIN users requester ON requester.id = rr.requested_by
     LEFT JOIN users reviewer ON reviewer.id = rr.reviewed_by
     ORDER BY rr.created_at DESC
 ');
 $requests = $stmt->fetchAll(PDO::FETCH_ASSOC);
+foreach ($requests as &$requestRow) {
+    if (empty($requestRow['variant_label']) && !empty($requestRow['variant_current_label'])) {
+        $requestRow['variant_label'] = $requestRow['variant_current_label'];
+    }
+}
+unset($requestRow);
 $pendingRequests = array_values(array_filter($requests, function ($row) {
     return strtolower($row['status'] ?? 'pending') === 'pending';
 }));
@@ -125,6 +137,8 @@ $historyEntries = $pdo->query('
            rr.category AS request_category,
            rr.brand AS request_brand,
            rr.supplier AS request_supplier,
+           rr.variant_label,
+           pv.label AS variant_current_label,
            p.name AS product_name, p.code AS product_code,
            COALESCE(requester.name, rr.requested_by_name) AS requester_name,
            COALESCE(status_user.name, h.noted_by_name) AS status_user_name,
@@ -132,11 +146,18 @@ $historyEntries = $pdo->query('
     FROM restock_request_history h
     JOIN restock_requests rr ON rr.id = h.request_id
     LEFT JOIN products p ON p.id = rr.product_id
+    LEFT JOIN product_variants pv ON pv.id = rr.variant_id
     LEFT JOIN users requester ON requester.id = rr.requested_by
     LEFT JOIN users status_user ON status_user.id = h.noted_by
     LEFT JOIN users reviewer ON reviewer.id = rr.reviewed_by
     ORDER BY h.created_at DESC
 ')->fetchAll(PDO::FETCH_ASSOC);
+foreach ($historyEntries as &$historyRow) {
+    if (empty($historyRow['variant_label']) && !empty($historyRow['variant_current_label'])) {
+        $historyRow['variant_label'] = $historyRow['variant_current_label'];
+    }
+}
+unset($historyRow);
 
 // Helper to format priority badge classes
 function getPriorityClass(string $priority): string
@@ -263,6 +284,9 @@ function getStatusClass(string $status): string
                                                 <td>
                                                     <div class="product-cell">
                                                         <span class="product-name"><?php echo htmlspecialchars($request['product_name'] ?? 'Product removed'); ?></span>
+                                                        <?php if (!empty($request['variant_label'])): ?>
+                                                            <span class="product-variant">Variant: <?php echo htmlspecialchars($request['variant_label']); ?></span>
+                                                        <?php endif; ?>
                                                         <?php if (!empty($request['product_code'])): ?>
                                                             <span class="product-code">Code: <?php echo htmlspecialchars($request['product_code']); ?></span>
                                                         <?php endif; ?>
@@ -339,6 +363,9 @@ function getStatusClass(string $status): string
                                                 <td>
                                                     <div class="product-cell">
                                                         <span class="product-name"><?php echo htmlspecialchars($entry['product_name'] ?? 'Product removed'); ?></span>
+                                                        <?php if (!empty($entry['variant_label'])): ?>
+                                                            <span class="product-variant">Variant: <?php echo htmlspecialchars($entry['variant_label']); ?></span>
+                                                        <?php endif; ?>
                                                         <?php if (!empty($entry['product_code'])): ?>
                                                             <span class="product-code">Code: <?php echo htmlspecialchars($entry['product_code']); ?></span>
                                                         <?php endif; ?>

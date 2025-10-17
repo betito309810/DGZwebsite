@@ -215,6 +215,9 @@ natcasesort($categories);
                             <div class="stock <?= $displayQuantity <= 5 ? ($displayQuantity == 0 ? 'out' : 'low') : '' ?>" data-stock="<?= (int) $displayQuantity ?>">
                                 <?php if ($displayQuantity == 0): ?>
                                     <span class="stock-status-text">Out of stock</span>
+                                <?php elseif ($displayQuantity <= 5): ?>
+                                    <span class="stock-indicator" aria-hidden="true"></span>
+                                    <span class="stock-status-text">Low stock</span>
                                 <?php else: ?>
                                     <span class="stock-indicator" aria-hidden="true"></span>
                                     <span class="stock-status-text">In stock</span>

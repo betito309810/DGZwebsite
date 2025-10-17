@@ -77,7 +77,9 @@ if ($trackingCodeInput === null) {
 }
 
 $trackingCodeInput = is_string($trackingCodeInput) ? trim($trackingCodeInput) : '';
-$normalizedTrackingCode = strtoupper(preg_replace('/[^A-Z0-9]/', '', $trackingCodeInput));
+// Accept lowercase letters by stripping non-alphanumerics case-insensitively,
+// then uppercase the remaining characters.
+$normalizedTrackingCode = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $trackingCodeInput));
 
 // Tracking codes follow the DGZ-XXXX-XXXX pattern (11 significant characters without hyphens).
 if (strlen($normalizedTrackingCode) !== 11 || strpos($normalizedTrackingCode, 'DGZ') !== 0) {

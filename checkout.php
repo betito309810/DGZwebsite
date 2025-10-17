@@ -10,6 +10,7 @@ $trackingCodeForRedirect = null;
 $checkoutStylesheet = assetUrl('assets/css/public/checkout.css');
 $checkoutModalStylesheet = assetUrl('assets/css/public/checkoutModals.css');
 $logoAsset = assetUrl('assets/logo.png');
+$productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
 $qrAsset = assetUrl('assets/QR.png');
 $mayaQrAsset = assetUrl('assets/QR-maya.png'); // Maya QR asset (add the image at this path to enable the toggle)
 $selectedPaymentMethod = $_POST['payment_method'] ?? 'GCash';
@@ -211,6 +212,8 @@ if (!function_exists('normaliseCartItems')) {
                 $variantLabel = trim((string) $item['variant_label']);
             }
             $variantPrice = $item['variantPrice'] ?? $item['variant_price'] ?? null;
+            $image = isset($item['image']) ? trim((string) $item['image']) : null;
+            $stock = isset($item['stock']) ? (int) $item['stock'] : null;
             if ($variantPrice !== null) {
                 $price = (float) $variantPrice;
             }
@@ -227,6 +230,8 @@ if (!function_exists('normaliseCartItems')) {
                 'variant_id' => $variantId !== null ? (int) $variantId : null,
                 'variant_label' => $variantLabel,
                 'variant_price' => $variantPrice !== null ? (float) $variantPrice : $price,
+                'image' => $image !== null && $image !== '' ? $image : null,
+                'stock' => $stock !== null ? $stock : null,
             ];
         }
 
@@ -250,6 +255,36 @@ if (isset($_GET['cart'])) {
     }
 
     $cartItems = normaliseCartItems($cartItems);
+
+    // Enrich with stock and image from DB so UI can enforce limits and show thumbnails
+    foreach ($cartItems as &$item) {
+        try {
+            $productStmt = $pdo->prepare('SELECT id, image, quantity FROM products WHERE id = ?');
+            $productStmt->execute([(int) $item['id']]);
+            $productRow = $productStmt->fetch();
+
+            // Resolve product image
+            if ($productRow && !empty($productRow['image'])) {
+                $item['image'] = publicAsset($productRow['image']);
+            }
+
+            // Resolve stock depending on variant
+            $variantId = $item['variant_id'] ?? null;
+            if ($variantId) {
+                $vStmt = $pdo->prepare('SELECT quantity FROM product_variants WHERE id = ?');
+                $vStmt->execute([(int) $variantId]);
+                $vRow = $vStmt->fetch();
+                $item['stock'] = $vRow ? (int) $vRow['quantity'] : ($item['stock'] ?? null);
+            } else {
+                if ($productRow) {
+                    $item['stock'] = isset($productRow['quantity']) ? (int) $productRow['quantity'] : ($item['stock'] ?? null);
+                }
+            }
+        } catch (Throwable $e) {
+            // Best-effort enrichment; ignore failures
+        }
+    }
+    unset($item);
 }
 
 // Check if we have a single product but no cart
@@ -277,12 +312,17 @@ if ($product_id > 0 && empty($cartItems)) {
         } else {
             $unitStock = isset($p['quantity']) ? (int) $p['quantity'] : null;
         }
+        $imageUrl = '';
+        if (!empty($p['image'])) {
+            $imageUrl = publicAsset($p['image']);
+        }
         $cartItems = [[
             'id' => $p['id'],
             'name' => $p['name'],
             'price' => $unitPrice,
             'quantity' => $qty,
             'stock' => $unitStock,
+            'image' => $imageUrl !== '' ? $imageUrl : null,
             'variant_id' => $defaultVariant['id'] ?? null,
             'variant_label' => $defaultVariant['label'] ?? '',
             'variant_price' => $defaultVariant ? (float) $defaultVariant['price'] : (float) $p['price'],
@@ -298,7 +338,7 @@ if (isset($_POST['cart'])) {
         $cartItems = [];
     }
 
-    // Fetch stock quantity for each cart item from database and add to cartItems
+    // Fetch stock quantity and image for each cart item from database and add to cartItems
     foreach ($cartItems as &$item) {
         $variantId = $item['variant_id'] ?? $item['variantId'] ?? null;
         if ($variantId) {
@@ -311,6 +351,18 @@ if (isset($_POST['cart'])) {
             $stmt->execute([$item['id']]);
             $product = $stmt->fetch();
             $item['stock'] = $product ? (int)$product['quantity'] : null;
+        }
+
+        // Attach product image if available
+        try {
+            $imgStmt = $pdo->prepare('SELECT image FROM products WHERE id = ?');
+            $imgStmt->execute([(int) $item['id']]);
+            $imgRow = $imgStmt->fetch();
+            if ($imgRow && !empty($imgRow['image'])) {
+                $item['image'] = publicAsset($imgRow['image']);
+            }
+        } catch (Throwable $e) {
+            // ignore
         }
     }
     unset($item);
@@ -336,6 +388,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
     $last_name = trim((string) ($_POST['last_name'] ?? ''));
     $email = trim($_POST['email'] ?? '');
     $phone = trim($_POST['phone'] ?? '');
+    $facebookAccount = trim($_POST['facebook_account'] ?? '');
     $address = trim($_POST['address']);
     $customerNote = trim((string) ($_POST['customer_note'] ?? '')); // Added capture for optional cashier note
     if (mb_strlen($customerNote) > 500) {
@@ -348,6 +401,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
     // Validate required email
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $errors[] = 'A valid email address is required.';
+    }
+
+    // Basic required checks for phone and facebook account
+    if ($phone === '') {
+        $errors[] = 'Mobile number is required.';
+    } elseif (mb_strlen(preg_replace('/\D+/', '', $phone)) > 12) {
+        $errors[] = 'Mobile number must be at most 12 digits.';
+    }
+
+    if ($facebookAccount === '') {
+        $errors[] = 'Facebook account is required.';
     }
 
     $referenceNumber = preg_replace('/[^A-Za-z0-9\- ]/', '', $referenceInput);
@@ -424,6 +488,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
                 }
             }
         }
+    } else {
+        // Require proof of payment image upload
+        $errors[] = 'Proof of payment image is required.';
     }
 
     // Calculate total from cart items
@@ -474,6 +541,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
         try { $hasEmailColumn = ordersHasColumn($pdo, 'email'); } catch (Exception $e) { $hasEmailColumn = false; }
         try { $hasPhoneColumn = ordersHasColumn($pdo, 'phone'); } catch (Exception $e) { $hasPhoneColumn = false; }
         try { $hasLegacyContact = ordersHasColumn($pdo, 'contact'); } catch (Exception $e) { $hasLegacyContact = false; }
+        try { $hasFacebookColumn = ordersHasColumn($pdo, 'facebook_account'); } catch (Exception $e) { $hasFacebookColumn = false; }
         try { $hasCustomerNoteColumn = ordersHasColumn($pdo, 'customer_note'); } catch (Exception $e) { $hasCustomerNoteColumn = false; } // Added detection for dedicated notes column
         try { $hasLegacyNotesColumn = ordersHasColumn($pdo, 'notes'); } catch (Exception $e) { $hasLegacyNotesColumn = false; } // Added fallback for legacy installs using generic notes
 
@@ -483,6 +551,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
 
         if ($hasReferenceColumn) { $columns[] = 'reference_no'; $values[] = $referenceNumber; }
         if ($supportsTrackingCodes && $trackingCodeForRedirect !== null) { $columns[] = 'tracking_code'; $values[] = $trackingCodeForRedirect; }
+        if ($hasFacebookColumn) { $columns[] = 'facebook_account'; $values[] = $facebookAccount; }
         if ($hasCustomerNoteColumn) { $columns[] = 'customer_note'; $values[] = $customerNote !== '' ? $customerNote : null; } // Added storage for cashier notes when column exists
         elseif ($hasLegacyNotesColumn) { $columns[] = 'notes'; $values[] = $customerNote !== '' ? $customerNote : null; } // Added fallback storage for systems that already expose a generic notes column
 
@@ -657,12 +726,17 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                         Contact
                     </h2>
                     <div class="form-group">
+                        <!-- Required indicator styling hook: edit .required-indicator in dgz_motorshop_system/assets/css/public/checkout.css -->
                         <label>Email <span class="required-indicator">*</span></label>
                         <input type="email" name="email" placeholder="you@example.com" value="<?= htmlspecialchars($_POST['email'] ?? '') ?>" required>
                     </div>
                     <div class="form-group">
-                        <label>Mobile number (optional)</label>
-                        <input type="tel" name="phone" placeholder="Mobile No." value="<?= htmlspecialchars($_POST['phone'] ?? '') ?>">
+                        <label>Mobile number <span class="required-indicator">*</span></label>
+                        <input type="tel" name="phone" placeholder="Mobile No." inputmode="numeric" maxlength="12" value="<?= htmlspecialchars($_POST['phone'] ?? '') ?>" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Facebook account <span class="required-indicator">*</span></label>
+                        <input type="text" name="facebook_account" placeholder="Facebook profile or link" value="<?= htmlspecialchars($_POST['facebook_account'] ?? '') ?>" required>
                     </div>
                 </div>
 
@@ -688,12 +762,12 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Postal code</label>
-                            <input type="text" name="postal_code" value="<?= htmlspecialchars($_POST['postal_code'] ?? '') ?>">
+                            <label>Postal code <span class="required-indicator">*</span></label>
+                            <input type="text" name="postal_code" value="<?= htmlspecialchars($_POST['postal_code'] ?? '') ?>" required>
                         </div>
                         <div class="form-group">
-                            <label>City</label>
-                            <input type="text" name="city" value="<?= htmlspecialchars($_POST['city'] ?? '') ?>">
+                            <label>City <span class="required-indicator">*</span></label>
+                            <input type="text" name="city" value="<?= htmlspecialchars($_POST['city'] ?? '') ?>" required>
                         </div>
                     </div>
                     <div class="form-group">
@@ -752,7 +826,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                     </div>
 
                     <div class="file-upload">
-                        <input type="file" name="proof" id="proof" accept="image/*">
+                        <input type="file" name="proof" id="proof" accept="image/*" required>
                         <label for="proof">
                             <i class="fas fa-cloud-upload-alt"></i>
                             Upload Proof of Payment
@@ -775,7 +849,8 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                 <?php foreach ($cartItems as $index => $item): ?>
                 <div class="order-item" data-index="<?= $index ?>">
                     <div class="item-image">
-                        <i class="fas fa-box"></i>
+                        <?php $imgSrc = !empty($item['image']) ? $item['image'] : $productPlaceholder; ?>
+                        <img src="<?= htmlspecialchars($imgSrc) ?>" alt="<?= htmlspecialchars($item['name']) ?>">
                     </div>
                     <div class="item-details">
                         <div class="item-header">
@@ -785,6 +860,9 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                         <div class="item-category">
                             <?= htmlspecialchars($item['variant_label'] !== '' ? 'Variant: ' . $item['variant_label'] : 'Product') ?>
                         </div>
+                        <?php if (isset($item['stock']) && $item['stock'] !== null): ?>
+                        <div class="item-stock">Stock: <?= (int) $item['stock'] ?></div>
+                        <?php endif; ?>
                     </div>
                     <div class="item-meta">
                         <!-- Quantity input remains editable so buyers can adjust before checkout -->
@@ -792,7 +870,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                             <button type="button" class="qty-btn qty-btn--decrease" data-index="<?= $index ?>" aria-label="Decrease quantity">
                                 <i class="fas fa-minus" aria-hidden="true"></i>
                             </button>
-                            <input type="number" class="quantity-input" min="1" value="<?= $item['quantity'] ?>" data-index="<?= $index ?>">
+                            <input type="number" class="quantity-input" min="1" <?= isset($item['stock']) && $item['stock'] !== null ? 'max="'.(int)$item['stock'].'"' : '' ?> value="<?= $item['quantity'] ?>" data-index="<?= $index ?>">
                             <button type="button" class="qty-btn qty-btn--increase" data-index="<?= $index ?>" aria-label="Increase quantity">
                                 <i class="fas fa-plus" aria-hidden="true"></i>
                             </button>
@@ -1027,6 +1105,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             const variantId = rawItem.variantId ?? rawItem.variant_id ?? null;
             const variantLabelRaw = rawItem.variantLabel ?? rawItem.variant_label ?? '';
             const stockValue = rawItem.stock ?? null;
+            const imageValue = rawItem.image ?? null;
 
             return {
                 id: rawItem.id ?? null,
@@ -1037,6 +1116,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                 variantLabel: variantLabelRaw ? String(variantLabelRaw) : '',
                 variantPrice: Number.isFinite(price) ? price : 0,
                 stock: stockValue !== undefined ? stockValue : null,
+                image: imageValue ?? null,
             };
         }
 
@@ -1175,7 +1255,8 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
 
             const image = document.createElement('div');
             image.className = 'item-image';
-            image.innerHTML = '<i class="fas fa-box"></i>';
+            const imgSrc = item && item.image ? String(item.image) : '<?= htmlspecialchars($productPlaceholder) ?>';
+            image.innerHTML = `<img src="${imgSrc}" alt="${(item && item.name) ? String(item.name).replace(/"/g, '&quot;') : 'Product'}">`;
             row.appendChild(image);
 
             const details = document.createElement('div');
@@ -1201,6 +1282,13 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             category.textContent = item.variantLabel ? `Variant: ${item.variantLabel}` : 'Product';
             details.appendChild(category);
 
+            if (item.stock !== undefined && item.stock !== null) {
+                const stock = document.createElement('div');
+                stock.className = 'item-stock';
+                stock.textContent = `Stock: ${item.stock}`;
+                details.appendChild(stock);
+            }
+
             row.appendChild(details);
 
             const meta = document.createElement('div');
@@ -1225,6 +1313,9 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             qty.value = item.quantity;
             qty.dataset.index = String(index);
             qty.dataset.previousValidValue = String(item.quantity);
+            if (item.stock !== undefined && item.stock !== null && Number(item.stock) > 0) {
+                qty.max = String(item.stock);
+            }
 
             const increaseBtn = document.createElement('button');
             increaseBtn.type = 'button';

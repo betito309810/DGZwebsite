@@ -1,6 +1,7 @@
 <?php
 require __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../dgz_motorshop_system/includes/product_variants.php';
+require_once __DIR__ . '/includes/restock_request_helpers.php';
 if(empty($_SESSION['user_id'])){ header('Location: login.php'); exit; }
 $pdo = db();
 $role = $_SESSION['role'] ?? '';
@@ -9,8 +10,11 @@ $canManualAdjust = in_array($role, ['admin', 'staff'], true);
 $userId = $_SESSION['user_id'] ?? 0;
 $allowedPriorities = ['low', 'medium', 'high'];
 
+ensureRestockVariantColumns($pdo);
+
 $restockFormDefaults = [
     'product' => '',
+    'variant' => '',
     'quantity' => '',
     'category' => '',
     'category_new' => '',
@@ -60,10 +64,35 @@ $profile_name = $current_user['name'] ?? 'N/A';
 $profile_role = !empty($current_user['role']) ? ucfirst($current_user['role']) : 'N/A';
 $profile_created = format_profile_date($current_user['created_at'] ?? null);
 
+// Load products and their variants ahead of the restock workflow so validation can reference them.
+$allProducts = $pdo->query('SELECT * FROM products ORDER BY created_at DESC')->fetchAll(PDO::FETCH_ASSOC);
+$productVariantsMap = [];
+if (!empty($allProducts)) {
+    $productIds = array_column($allProducts, 'id');
+    $variantRowsByProduct = !empty($productIds) ? fetchVariantsForProducts($pdo, $productIds) : [];
+
+    foreach ($variantRowsByProduct as $productId => $variantRows) {
+        $productVariantsMap[(int) $productId] = array_map(static function (array $variant): array {
+            return [
+                'id' => (int) ($variant['id'] ?? 0),
+                'label' => (string) ($variant['label'] ?? ''),
+                'sku' => (string) ($variant['sku'] ?? ''),
+                'is_default' => (int) ($variant['is_default'] ?? 0),
+            ];
+        }, $variantRows);
+    }
+}
+
+$productVariantsBootstrap = [];
+foreach ($productVariantsMap as $productId => $variants) {
+    $productVariantsBootstrap[(string) $productId] = $variants;
+}
+
 // Handle restock request submission (available to any authenticated user)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_restock_request'])) {
     $restockFormData = [
         'product' => $_POST['restock_product'] ?? '',
+        'variant' => $_POST['restock_variant'] ?? '',
         'quantity' => $_POST['restock_quantity'] ?? '',
         'category' => $_POST['restock_category'] ?? '',
         'category_new' => $_POST['restock_category_new'] ?? '',
@@ -75,6 +104,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_restock_reques
         'notes' => $_POST['restock_notes'] ?? '',
     ];
     $productId = intval($_POST['restock_product'] ?? 0);
+    $variantId = intval($_POST['restock_variant'] ?? 0);
     $requestedQuantity = intval($_POST['restock_quantity'] ?? 0);
     $priority = strtolower(trim($_POST['restock_priority'] ?? ''));
     $notes = trim($_POST['restock_notes'] ?? '');
@@ -122,11 +152,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_restock_reques
             }
         }
 
+        $variantLabel = null;
+        if (!isset($error_message)) {
+            $variantsForProduct = $productVariantsMap[$productId] ?? [];
+            if (!empty($variantsForProduct)) {
+                if ($variantId <= 0) {
+                    $error_message = 'Please select a variant for the chosen product before submitting the request.';
+                } else {
+                    $matchedVariant = null;
+                    foreach ($variantsForProduct as $variantRow) {
+                        if ((int) ($variantRow['id'] ?? 0) === $variantId) {
+                            $matchedVariant = $variantRow;
+                            break;
+                        }
+                    }
+
+                    if ($matchedVariant === null) {
+                        $error_message = 'The selected variant is no longer available. Refresh the page and try again.';
+                    } else {
+                        $variantLabel = trim((string) ($matchedVariant['label'] ?? ''));
+                        if ($variantLabel === '') {
+                            $variantLabel = 'Variant #' . $variantId;
+                        }
+                    }
+                }
+            } else {
+                $variantId = 0;
+            }
+        }
+
         if (!isset($error_message)) {
             try {
-                $stmt = $pdo->prepare('INSERT INTO restock_requests (product_id, requested_by, requested_by_name, quantity_requested, priority_level, notes, category, brand, supplier) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                $stmt = $pdo->prepare('INSERT INTO restock_requests (product_id, variant_id, variant_label, requested_by, requested_by_name, quantity_requested, priority_level, notes, category, brand, supplier) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
                 $stmt->execute([
                     $productId,
+                    $variantId > 0 ? $variantId : null,
+                    $variantLabel,
                     $userId,
                     $currentUserName,
                     $requestedQuantity,
@@ -314,9 +375,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_stock'])) {
 
 }
 
-// Get all products for auxiliary lookups (restock form, exports, etc.)
-$allProducts = $pdo->query('SELECT * FROM products ORDER BY created_at DESC')->fetchAll();
-
 // Lookups for restock request form selects
 $categoryOptions = $pdo->query('SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND category != "" ORDER BY category ASC')->fetchAll(PDO::FETCH_COLUMN);
 $brandOptions = $pdo->query('SELECT DISTINCT brand FROM products WHERE brand IS NOT NULL AND brand != "" ORDER BY brand ASC')->fetchAll(PDO::FETCH_COLUMN);
@@ -418,14 +476,24 @@ $exportUrl = 'inventory.php' . ($exportQuery ? '?' . $exportQuery : '?export=csv
 // Restock requests overview data
 $restockRequests = $pdo->query('
     SELECT rr.*, p.name AS product_name, p.code AS product_code,
+           rr.variant_label,
+           pv.label AS variant_current_label,
            COALESCE(requester.name, rr.requested_by_name) AS requester_name,
            COALESCE(reviewer.name, rr.reviewed_by_name) AS reviewer_name
     FROM restock_requests rr
     LEFT JOIN products p ON p.id = rr.product_id
+    LEFT JOIN product_variants pv ON pv.id = rr.variant_id
     LEFT JOIN users requester ON requester.id = rr.requested_by
     LEFT JOIN users reviewer ON reviewer.id = rr.reviewed_by
     ORDER BY rr.created_at DESC
 ')->fetchAll(PDO::FETCH_ASSOC);
+
+foreach ($restockRequests as &$restockRow) {
+    if (empty($restockRow['variant_label']) && !empty($restockRow['variant_current_label'])) {
+        $restockRow['variant_label'] = $restockRow['variant_current_label'];
+    }
+}
+unset($restockRow);
 
 $pendingRestockRequests = array_values(array_filter($restockRequests, function ($row) {
     return strtolower($row['status'] ?? 'pending') === 'pending';
@@ -448,6 +516,8 @@ $restockHistory = $pdo->query('
            rr.category AS request_category,
            rr.brand AS request_brand,
            rr.supplier AS request_supplier,
+           rr.variant_label,
+           pv.label AS variant_current_label,
            p.name AS product_name, p.code AS product_code,
            COALESCE(requester.name, rr.requested_by_name) AS requester_name,
            COALESCE(reviewer.name, rr.reviewed_by_name) AS reviewer_name,
@@ -455,11 +525,19 @@ $restockHistory = $pdo->query('
     FROM restock_request_history h
     JOIN restock_requests rr ON rr.id = h.request_id
     LEFT JOIN products p ON p.id = rr.product_id
+    LEFT JOIN product_variants pv ON pv.id = rr.variant_id
     LEFT JOIN users requester ON requester.id = rr.requested_by
     LEFT JOIN users reviewer ON reviewer.id = rr.reviewed_by
     LEFT JOIN users status_user ON status_user.id = h.noted_by
     ORDER BY h.created_at DESC
 ')->fetchAll(PDO::FETCH_ASSOC);
+
+foreach ($restockHistory as &$historyRow) {
+    if (empty($historyRow['variant_label']) && !empty($historyRow['variant_current_label'])) {
+        $historyRow['variant_label'] = $historyRow['variant_current_label'];
+    }
+}
+unset($historyRow);
 
 if (!function_exists('getPriorityClass')) {
     function getPriorityClass(string $priority): string
@@ -919,6 +997,7 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
             </div>
             <form method="post" class="restock-form"
                 data-initial-product="<?php echo htmlspecialchars($restockFormData['product']); ?>"
+                data-initial-variant="<?php echo htmlspecialchars($restockFormData['variant']); ?>"
                 data-initial-quantity="<?php echo htmlspecialchars($restockFormData['quantity']); ?>"
                 data-initial-category="<?php echo htmlspecialchars($restockFormData['category']); ?>"
                 data-initial-category-new="<?php echo htmlspecialchars($restockFormData['category_new']); ?>"
@@ -929,6 +1008,11 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                 data-initial-priority="<?php echo htmlspecialchars($restockFormData['priority']); ?>"
                 data-initial-notes="<?php echo htmlspecialchars($restockFormData['notes']); ?>">
                 <input type="hidden" name="submit_restock_request" value="1">
+                <?php
+                    $selectedProductId = isset($restockFormData['product']) ? (int) $restockFormData['product'] : 0;
+                    $selectedProductVariants = $selectedProductId > 0 ? ($productVariantsMap[$selectedProductId] ?? []) : [];
+                    $selectedVariantId = isset($restockFormData['variant']) ? (int) $restockFormData['variant'] : 0;
+                ?>
                 <div class="restock-grid">
                     <div class="form-group">
                         <label for="restock_product">Product</label>
@@ -948,19 +1032,43 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                         <select id="restock_product" name="restock_product" required>
                             <option value="">Select Product</option>
                             <?php foreach ($allProducts as $product): ?>
+                                <?php
+                                    $restockProductId = (int) ($product['id'] ?? 0);
+                                    $variantCount = isset($productVariantsMap[$restockProductId]) ? count($productVariantsMap[$restockProductId]) : 0;
+                                ?>
                                 <option 
-                                    value="<?php echo $product['id']; ?>"
+                                    value="<?php echo $restockProductId; ?>"
                                     data-name="<?php echo htmlspecialchars($product['name'] ?? ''); ?>"
                                     data-category="<?php echo htmlspecialchars($product['category'] ?? ''); ?>"
                                     data-brand="<?php echo htmlspecialchars($product['brand'] ?? ''); ?>"
                                     data-supplier="<?php echo htmlspecialchars($product['supplier'] ?? ''); ?>"
                                     data-code="<?php echo htmlspecialchars($product['code'] ?? ''); ?>"
-                                    <?php echo ($restockFormData['product'] === (string) $product['id']) ? 'selected' : ''; ?>
+                                    data-variant-count="<?php echo $variantCount; ?>"
+                                    <?php echo ($restockFormData['product'] === (string) $restockProductId) ? 'selected' : ''; ?>
                                 >
                                     <?php echo htmlspecialchars($product['name']); ?>
                                     (Current: <?php echo $product['quantity']; ?>)
                                 </option>
                             <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="form-group" data-restock-variant-field>
+                        <label for="restock_variant">Variant</label>
+                        <select id="restock_variant" name="restock_variant" <?php echo empty($selectedProductVariants) ? 'disabled' : 'required'; ?>>
+                            <?php if (empty($selectedProductVariants)): ?>
+                                <option value="">No variants available</option>
+                            <?php else: ?>
+                                <option value="">Select variant</option>
+                                <?php foreach ($selectedProductVariants as $variantRow): ?>
+                                    <?php
+                                        $variantId = (int) ($variantRow['id'] ?? 0);
+        	                            $variantLabel = trim((string) ($variantRow['label'] ?? 'Variant #' . $variantId));
+                                    ?>
+                                    <option value="<?php echo $variantId; ?>" <?php echo $selectedVariantId === $variantId ? 'selected' : ''; ?>>
+                                        <?php echo htmlspecialchars($variantLabel !== '' ? $variantLabel : 'Variant #' . $variantId); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
                         </select>
                     </div>
                     <div class="form-group">
@@ -1000,6 +1108,10 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                         <label for="restock_quantity">Requested Quantity</label>
                         <input type="number" id="restock_quantity" name="restock_quantity" min="1" placeholder="Enter quantity" required value="<?php echo htmlspecialchars($restockFormData['quantity']); ?>">
                     </div>
+                    <div class="form-group notes-group span-two">
+                        <label for="restock_notes">Reason / Notes</label>
+                        <textarea id="restock_notes" name="restock_notes" placeholder="Provide additional details for the restock request..."><?php echo htmlspecialchars($restockFormData['notes']); ?></textarea>
+                    </div>
                     <div class="form-group">
                         <label for="restock_priority">Priority Level</label>
                         <select id="restock_priority" name="restock_priority" required>
@@ -1008,10 +1120,6 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                             <option value="medium" <?php echo ($restockFormData['priority'] === 'medium') ? 'selected' : ''; ?>>Medium</option>
                             <option value="high" <?php echo ($restockFormData['priority'] === 'high') ? 'selected' : ''; ?>>High</option>
                         </select>
-                    </div>
-                    <div class="form-group notes-group span-two">
-                        <label for="restock_notes">Reason / Notes</label>
-                        <textarea id="restock_notes" name="restock_notes" placeholder="Provide additional details for the restock request..."><?php echo htmlspecialchars($restockFormData['notes']); ?></textarea>
                     </div>
                     <div class="restock-actions span-three">
                         <button type="submit" class="submit-btn">
@@ -1077,6 +1185,9 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                                             <td>
                                                 <div class="product-cell">
                                                     <span class="product-name"><?php echo htmlspecialchars($request['product_name'] ?? 'Product removed'); ?></span>
+                                                    <?php if (!empty($request['variant_label'])): ?>
+                                                        <span class="product-variant">Variant: <?php echo htmlspecialchars($request['variant_label']); ?></span>
+                                                    <?php endif; ?>
                                                     <?php if (!empty($request['product_code'])): ?>
                                                         <span class="product-code">Code: <?php echo htmlspecialchars($request['product_code']); ?></span>
                                                     <?php endif; ?>
@@ -1135,6 +1246,9 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                                             <td>
                                                 <div class="product-cell">
                                                     <span class="product-name"><?php echo htmlspecialchars($entry['product_name'] ?? 'Product removed'); ?></span>
+                                                    <?php if (!empty($entry['variant_label'])): ?>
+                                                        <span class="product-variant">Variant: <?php echo htmlspecialchars($entry['variant_label']); ?></span>
+                                                    <?php endif; ?>
                                                     <?php if (!empty($entry['product_code'])): ?>
                                                         <span class="product-code">Code: <?php echo htmlspecialchars($entry['product_code']); ?></span>
                                                     <?php endif; ?>
@@ -1397,6 +1511,9 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
     </div>
     <!-- user menu -->
      <script src="../dgz_motorshop_system/assets/js/dashboard/userMenu.js"></script>
+     <script type="application/json" id="inventoryVariants">
+        <?php echo json_encode($productVariantsBootstrap, JSON_PRETTY_PRINT); ?>
+     </script>
      <!-- Inventory JS -->
       <script src="../dgz_motorshop_system/assets/js/inventory/inventoryMain.js"></script>
     <script src="../dgz_motorshop_system/assets/js/notifications.js"></script>
