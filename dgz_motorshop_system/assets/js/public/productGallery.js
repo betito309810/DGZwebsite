@@ -81,6 +81,10 @@
         document.body.classList.toggle('modal-open', !isHidden);
     }
 
+    function isModalOpen() {
+        return modal.getAttribute('aria-hidden') === 'false';
+    }
+
     function formatCurrency(value) {
         const numeric = Number(value);
         if (Number.isFinite(numeric)) {
@@ -437,6 +441,102 @@
         return variants[0];
     }
 
+    function capturePendingQuantity() {
+        if (!quantityInput) {
+            return null;
+        }
+
+        const previous = Number.parseInt(quantityInput.dataset.previousValidValue || '', 10);
+        if (Number.isInteger(previous) && previous > 0) {
+            return previous;
+        }
+
+        const current = Number.parseInt(quantityInput.value || '', 10);
+        if (Number.isInteger(current) && current > 0) {
+            return current;
+        }
+
+        return null;
+    }
+
+    function synchroniseModalWithCard(card, detail = {}) {
+        if (!isModalOpen()) {
+            return;
+        }
+
+        if (!(card instanceof HTMLElement)) {
+            return;
+        }
+
+        const productIdAttr = card.dataset.productId || '';
+        if (!productIdAttr || String(productIdAttr) !== String(state.productId)) {
+            return;
+        }
+
+        const variantsPayload = Array.isArray(detail.variants)
+            ? parseVariantsPayload(JSON.stringify(detail.variants))
+            : parseVariantsPayload(card.dataset.productVariants || '[]');
+
+        const defaultVariantIdSource = detail.defaultVariantId ?? card.dataset.productDefaultVariantId ?? null;
+        const defaultVariantId = defaultVariantIdSource !== null && defaultVariantIdSource !== ''
+            ? Number(defaultVariantIdSource)
+            : null;
+
+        const previousSelectedId = state.selectedVariant && state.selectedVariant.id !== undefined
+            ? Number(state.selectedVariant.id)
+            : null;
+
+        state.pendingQuantity = capturePendingQuantity();
+        state.variants = variantsPayload;
+
+        let nextSelectedVariant = null;
+        if (Number.isFinite(previousSelectedId)) {
+            nextSelectedVariant = variantsPayload.find((variant) => Number(variant?.id) === previousSelectedId) || null;
+        }
+
+        if (!nextSelectedVariant) {
+            nextSelectedVariant = pickInitialVariant(variantsPayload, defaultVariantId);
+        }
+
+        state.selectedVariant = nextSelectedVariant || null;
+
+        const detailHasPrice = typeof detail.price === 'number' && Number.isFinite(detail.price);
+        const cardPrice = Number(card.dataset.productPrice);
+        const resolvedPrice = detailHasPrice
+            ? detail.price
+            : (Number.isFinite(cardPrice) ? cardPrice : state.price);
+
+        const detailHasQuantity = typeof detail.quantity === 'number' && Number.isFinite(detail.quantity);
+        const cardQuantity = Number.parseInt(card.dataset.productQuantity || '', 10);
+        const resolvedQuantity = detailHasQuantity
+            ? detail.quantity
+            : (Number.isNaN(cardQuantity) ? null : cardQuantity);
+
+        if (state.selectedVariant) {
+            if (state.selectedVariant.price !== undefined && state.selectedVariant.price !== null
+                && Number.isFinite(Number(state.selectedVariant.price))) {
+                state.price = Number(state.selectedVariant.price);
+            } else {
+                state.price = resolvedPrice;
+            }
+
+            if (state.selectedVariant.quantity !== undefined && state.selectedVariant.quantity !== null
+                && Number.isFinite(Number(state.selectedVariant.quantity))) {
+                state.quantity = Number(state.selectedVariant.quantity);
+            } else if (resolvedQuantity !== null) {
+                state.quantity = resolvedQuantity;
+            } else {
+                state.quantity = null;
+            }
+        } else {
+            state.price = resolvedPrice;
+            state.quantity = resolvedQuantity;
+        }
+
+        renderVariantOptions();
+        updateDetails();
+    }
+
     function fetchGallery(productId, productName, primaryImage) {
         const separator = productImagesEndpoint.includes('?') ? '&' : '?';
         fetch(`${productImagesEndpoint}${separator}product_id=${encodeURIComponent(productId)}`)
@@ -743,4 +843,15 @@
         }
         openModalFromCard(targetCard, options);
     };
+
+    document.addEventListener('dgz:inventory-updated', (event) => {
+        const payload = event?.detail && typeof event.detail === 'object' ? event.detail : {};
+        const target = event.target instanceof HTMLElement
+            ? event.target.closest('.product-card')
+            : null;
+        if (!target) {
+            return;
+        }
+        synchroniseModalWithCard(target, payload);
+    });
 })();

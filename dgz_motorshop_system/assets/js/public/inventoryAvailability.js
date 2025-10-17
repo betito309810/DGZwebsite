@@ -256,9 +256,10 @@
 
         const variants = parseVariantsFromCard(card);
         let aggregatedQuantity = 0;
+        let updatedVariants = null;
 
         if (variants.length > 0) {
-            const updatedVariants = variants.map((variant) => {
+            updatedVariants = variants.map((variant) => {
                 const variantId = Number(variant?.id ?? 0);
                 let stock = Number(variant?.quantity ?? 0);
                 if (Number.isFinite(variantId) && variantId > 0 && state.variants.has(variantId)) {
@@ -296,6 +297,25 @@
 
         updateCardStockUi(card, aggregatedQuantity);
         updateQuantityControls(card, aggregatedQuantity);
+
+        const cardPrice = Number(card.dataset.productPrice);
+        const defaultVariantIdAttr = card.dataset.productDefaultVariantId;
+        const defaultVariantId = defaultVariantIdAttr !== undefined && defaultVariantIdAttr !== ''
+            ? Number(defaultVariantIdAttr)
+            : null;
+
+        const detail = {
+            productId,
+            quantity: aggregatedQuantity,
+            price: Number.isFinite(cardPrice) ? cardPrice : null,
+            variants: Array.isArray(updatedVariants) ? updatedVariants : null,
+            defaultVariantId: Number.isFinite(defaultVariantId) ? defaultVariantId : null,
+        };
+
+        card.dispatchEvent(new CustomEvent('dgz:inventory-updated', {
+            bubbles: true,
+            detail,
+        }));
     }
 
     function updateAllCards() {
