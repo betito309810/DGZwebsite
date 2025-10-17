@@ -1,4 +1,33 @@
 (function() {
+    function decrementBadgeCount(bell) {
+        if (!bell) return;
+        var badge = bell.querySelector('.badge');
+        if (!badge) return;
+        var current = parseInt((badge.textContent || '').trim(), 10);
+        if (!isNaN(current)) {
+            var next = Math.max(0, current - 1);
+            if (next <= 0) {
+                badge.remove();
+            } else {
+                badge.textContent = String(next);
+            }
+        }
+    }
+
+    function markSingleNotificationRead(id) {
+        if (!id) return Promise.resolve();
+        return fetch('markNotificationRead.php', {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: 'id=' + encodeURIComponent(id)
+        }).catch(function() {
+            // Silently ignore; UI already updated optimistically.
+        });
+    }
+
     function markNotificationsRead(bell, container, button, onComplete) {
         if (!button) {
             return;
@@ -175,8 +204,20 @@
                 productEl.textContent = productName ? 'Product: ' + productName : '';
             }
 
-            item.classList.remove('unread');
-            updateMarkAllState();
+            // Optimistically mark as read in UI and persist server-side.
+            if (item.classList.contains('unread')) {
+                item.classList.remove('unread');
+                // Only decrement badge for active items (not resolved)
+                var rawStatusForCount = (item.dataset.noteStatus || '').toLowerCase();
+                if (rawStatusForCount !== 'resolved') {
+                    decrementBadgeCount(bell);
+                }
+                updateMarkAllState();
+                var noteId = item.dataset.noteId || '';
+                if (noteId) {
+                    markSingleNotificationRead(noteId);
+                }
+            }
 
             lastFocusedElement = item;
 

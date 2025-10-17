@@ -60,6 +60,7 @@ foreach ($inventoryNotifications as $note) {
                 ?>
                 <li
                     class="notif-item <?= $note['status'] === 'resolved' ? 'resolved' : ($note['is_read'] ? 'active read' : 'active unread') ?>"
+                    data-note-id="<?= (int) ($note['id'] ?? 0) ?>"
                     data-note-title="<?= $noteTitle ?>"
                     data-note-message="<?= $noteMessage ?>"
                     data-note-product="<?= $noteProduct ?>"
