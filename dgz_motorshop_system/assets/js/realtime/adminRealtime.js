@@ -149,29 +149,58 @@
         toneFilter.connect(context.destination);
 
         [
-            { frequency: 880, gain: 0.75, shimmer: 0.58 },
-            { frequency: 1318.5, gain: 0.5, shimmer: 0.52 },
-            { frequency: 1760, gain: 0.28, shimmer: 0.46 },
-            { frequency: 2093, gain: 0.18, shimmer: 0.4 },
-        ].forEach(function (partial) {
+            { type: 'triangle', frequency: 880, detune: -6, gain: 0.62, shimmer: 0.56, release: 0.26 },
+            { type: 'triangle', frequency: 1318.5, detune: 4, gain: 0.46, shimmer: 0.5, release: 0.24 },
+            { type: 'square', frequency: 1975.5, detune: 2, gain: 0.24, shimmer: 0.44, release: 0.22 },
+            { type: 'triangle', frequency: 2349.3, detune: 0, gain: 0.16, shimmer: 0.42, release: 0.2 },
+        ].forEach(function (layer) {
             const oscillator = context.createOscillator();
-            const partialGain = context.createGain();
+            const layerGain = context.createGain();
 
-            oscillator.type = 'sine';
-            oscillator.frequency.setValueAtTime(partial.frequency, startTime);
-            oscillator.frequency.exponentialRampToValueAtTime(partial.frequency * 0.99, endTime);
+            oscillator.type = layer.type;
+            oscillator.frequency.setValueAtTime(layer.frequency, startTime);
+            if (layer.detune) {
+                oscillator.detune.setValueAtTime(layer.detune, startTime);
+            }
+            oscillator.frequency.exponentialRampToValueAtTime(layer.frequency * 0.995, endTime);
 
-            partialGain.gain.setValueAtTime(0.00001, startTime);
-            partialGain.gain.linearRampToValueAtTime(partial.gain, startTime + attackTime);
-            partialGain.gain.setTargetAtTime(partial.gain * partial.shimmer, startTime + shimmerTime, 0.45);
-            partialGain.gain.setTargetAtTime(0.00001, startTime + duration - 0.25, 0.18);
+            layerGain.gain.setValueAtTime(0.00001, startTime);
+            layerGain.gain.linearRampToValueAtTime(layer.gain, startTime + attackTime);
+            layerGain.gain.setTargetAtTime(layer.gain * layer.shimmer, startTime + shimmerTime, 0.42);
+            layerGain.gain.setTargetAtTime(0.00001, startTime + duration - layer.release, 0.16);
 
-            oscillator.connect(partialGain);
-            partialGain.connect(masterGain);
+            oscillator.connect(layerGain);
+            layerGain.connect(masterGain);
 
             oscillator.start(startTime);
             oscillator.stop(endTime);
         });
+
+        const noiseSource = context.createBufferSource();
+        const noiseBuffer = context.createBuffer(1, Math.ceil(context.sampleRate * duration), context.sampleRate);
+        const noiseData = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < noiseData.length; i += 1) {
+            const fade = Math.pow(1 - (i / noiseData.length), 3.5);
+            noiseData[i] = (Math.random() * 2 - 1) * fade;
+        }
+
+        const noiseFilter = context.createBiquadFilter();
+        noiseFilter.type = 'bandpass';
+        noiseFilter.frequency.setValueAtTime(3200, startTime);
+        noiseFilter.Q.setValueAtTime(6, startTime);
+
+        const noiseGain = context.createGain();
+        noiseGain.gain.setValueAtTime(0.00001, startTime);
+        noiseGain.gain.linearRampToValueAtTime(0.12, startTime + attackTime * 0.6);
+        noiseGain.gain.setTargetAtTime(0.00001, startTime + duration - 0.4, 0.12);
+
+        noiseSource.buffer = noiseBuffer;
+        noiseSource.connect(noiseFilter);
+        noiseFilter.connect(noiseGain);
+        noiseGain.connect(masterGain);
+
+        noiseSource.start(startTime);
+        noiseSource.stop(endTime);
     }
 
     function sanitizeSnapshotSection(section) {
