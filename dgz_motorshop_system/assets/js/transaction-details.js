@@ -10,7 +10,7 @@ function escapeHtml(value = '') {
 document.addEventListener('DOMContentLoaded', () => {
     // Transaction details modal logic
     const transactionModal = document.getElementById('transactionModal');
-    const modalCloseBtn = transactionModal.querySelector('.close');
+    const modalCloseBtn = transactionModal.querySelector('.modal-close');
 
     // Event listener for transaction row clicks
     document.querySelectorAll('.transaction-row').forEach(row => {
@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const orderId = this.getAttribute('data-order-id');
             if (orderId) {
                 loadTransactionDetails(orderId);
-                transactionModal.style.display = 'block';
+                transactionModal.style.display = 'flex';
             }
         });
     });
@@ -57,6 +57,12 @@ async function loadTransactionDetails(orderId) {
         const orderDate = new Date(order.created_at).toLocaleString();
         const cashierName = (order.cashier_display_name || order.cashier_name || order.cashier_username || '').trim() || 'Unassigned';
         const customerName = (order.customer_name || '').trim() || 'N/A';
+        const email = (order.email || '').toString();
+        const phone = (order.phone || '').toString();
+        const facebook = ((order.facebook_account ?? '') + '').trim();
+        const address = ((order.address ?? '') + '').trim();
+        const postal = ((order.postal_code ?? '') + '').trim();
+        const city = ((order.city ?? '') + '').trim();
         
         // Debug: log items data to console
         console.log('Transaction items:', items);
@@ -103,47 +109,60 @@ async function loadTransactionDetails(orderId) {
             `;
         }).join('');
 
-        // Update modal content with new design matching POS
+        // Update modal content with layout mirroring POS modal (cashier first)
         modalBody.innerHTML = `
-            <div class="transaction-details">
-                <h2>Transaction Details</h2>
-                
-                <div class="order-info-grid">
-                    <div class="info-group">
+            <div class="transaction-info">
+                <h4>Order Information</h4>
+                <div class="info-grid">
+                    <div class="info-item">
                         <label>Cashier:</label>
                         <span>${escapeHtml(cashierName)}</span>
                     </div>
-                    <div class="info-group">
+                    <div class="info-item">
                         <label>Customer:</label>
                         <span>${escapeHtml(customerName)}</span>
                     </div>
-                    <div class="info-group">
+                    <div class="info-item">
                         <label>Invoice #:</label>
                         <span>${escapeHtml(order.invoice_number || 'N/A')}</span>
                     </div>
-                    <div class="info-group">
+                    <div class="info-item">
                         <label>Date:</label>
                         <span>${orderDate}</span>
                     </div>
-                    
-                    <div class="info-group">
+                    <div class="info-item">
                         <label>Status:</label>
                         <span class="status-${statusKey}">${statusLabel}</span>
                     </div>
-                    <div class="info-group">
+                    <div class="info-item">
                         <label>Payment Method:</label>
                         <span>${order.payment_method}</span>
                     </div>
-                    <div class="info-group">
+                    <div class="info-item">
                         <label>Email:</label>
-                        <span>${order.email || 'N/A'}</span>
+                        <span>${email || 'N/A'}</span>
                     </div>
-                    
-                    <div class="info-group">
+                    <div class="info-item">
                         <label>Phone:</label>
-                        <span>${order.phone || 'N/A'}</span>
+                        <span>${phone || 'N/A'}</span>
                     </div>
-                    <div class="info-group">
+                    <div class="info-item">
+                        <label>Facebook:</label>
+                        <span>${facebook || 'N/A'}</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Address:</label>
+                        <span>${address || 'N/A'}</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Postal code:</label>
+                        <span>${postal || 'N/A'}</span>
+                    </div>
+                    <div class="info-item">
+                        <label>City:</label>
+                        <span>${city || 'N/A'}</span>
+                    </div>
+                    <div class="info-item">
                         <label>Reference:</label>
                         <span>${order.reference_number || 'N/A'}</span>
                     </div>
@@ -151,29 +170,35 @@ async function loadTransactionDetails(orderId) {
 
                 ${disapprovalHtml}
 
-                <div class="order-items-section">
-                    <h3>Order Items</h3>
-                    <div class="table-responsive">
-                        <table class="items-table">
-                            <thead>
-                                <tr>
-                                    <th>Product</th>
-                                    <th>Quantity</th>
-                                    <th>Price</th>
-                                    <th>Subtotal</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${itemsHtml}
-                            </tbody>
-                            <tfoot>
-                                <tr>
-                                    <td colspan="3" class="total-label">Total:</td>
-                                    <td class="total-amount">₱${parseFloat(order.total).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                                </tr>
-                            </tfoot>
-                        </table>
-                    </div>
+                ${(order.customer_note ?? '').toString().trim() !== '' ? `
+                <div class="info-item note-item" style="display:block;">
+                    <label>Customer Note:</label>
+                    <span>${escapeHtml((order.customer_note || '').toString())}</span>
+                </div>` : ''}
+            </div>
+
+            <div class="order-items">
+                <h4>Order Items</h4>
+                <div class="table-responsive">
+                    <table class="items-table">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>Quantity</th>
+                                <th>Price</th>
+                                <th>Subtotal</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${itemsHtml}
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <td colspan="3"><strong>Total:</strong></td>
+                                <td>₱${parseFloat(order.total).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
                 </div>
             </div>
         `;

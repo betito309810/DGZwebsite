@@ -4,6 +4,14 @@
     $msg = $_GET['msg'] ?? '';
     $status = $_GET['status'] ?? '';
 
+    if (isset($_GET['logout'])) {
+    logoutUser($pdo);
+
+    $redirect = 'login.php?status=success&msg=' . urlencode('You have been logged out.');
+    header('Location: ' . $redirect);
+    exit;
+}
+
     if (!empty($_SESSION['forced_logout'])) {
         $msg = $_SESSION['forced_logout_message'] ?? "You’ve been logged out because your account was used to sign in on another device.";
         $status = 'error';

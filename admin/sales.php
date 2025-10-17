@@ -801,11 +801,13 @@ $buildPageUrl = static function (int $page) use ($queryParams): string {
         </div>
     </main>
 
-    <!-- Transaction Details Modal -->
-        <!-- Transaction Details Modal -->
-    <div id="transactionModal" class="modal">
-        <div class="modal-content">
-            <span class="close">&times;</span>
+    <!-- Transaction Details Modal (styled like POS order details) -->
+    <div id="transactionModal" class="modal-overlay" style="display:none;">
+        <div class="modal-content transaction-modal">
+            <div class="modal-header">
+                <h3>Order Details</h3>
+                <button type="button" class="modal-close" aria-label="Close transaction details">&times;</button>
+            </div>
             <div class="modal-body">
                 <!-- Content will be dynamically inserted here -->
             </div>

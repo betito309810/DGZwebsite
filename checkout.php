@@ -384,12 +384,14 @@ if (empty($cartItems) && !(isset($_GET['success']) && $_GET['success'] === '1'))
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
+    // Treat customer_name as full name
     $customer_name = trim($_POST['customer_name']);
-    $last_name = trim((string) ($_POST['last_name'] ?? ''));
     $email = trim($_POST['email'] ?? '');
     $phone = trim($_POST['phone'] ?? '');
     $facebookAccount = trim($_POST['facebook_account'] ?? '');
     $address = trim($_POST['address']);
+    $postalCode = trim((string)($_POST['postal_code'] ?? ''));
+    $city = trim((string)($_POST['city'] ?? ''));
     $customerNote = trim((string) ($_POST['customer_note'] ?? '')); // Added capture for optional cashier note
     if (mb_strlen($customerNote) > 500) {
         $customerNote = mb_substr($customerNote, 0, 500); // Added guard to keep notes reasonably short
@@ -422,6 +424,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
 
     if ($payment_method === '') {
         $errors[] = 'Please select a payment method.';
+    }
+
+    // Basic server-side validation for required address parts
+    if ($address === '') {
+        $errors[] = 'Address is required.';
+    }
+    if ($postalCode === '') {
+        $errors[] = 'Postal code is required.';
+    }
+    if ($city === '') {
+        $errors[] = 'City is required.';
     }
 
     if (!empty($_FILES['proof']['tmp_name'])) {
@@ -544,6 +557,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
         try { $hasFacebookColumn = ordersHasColumn($pdo, 'facebook_account'); } catch (Exception $e) { $hasFacebookColumn = false; }
         try { $hasCustomerNoteColumn = ordersHasColumn($pdo, 'customer_note'); } catch (Exception $e) { $hasCustomerNoteColumn = false; } // Added detection for dedicated notes column
         try { $hasLegacyNotesColumn = ordersHasColumn($pdo, 'notes'); } catch (Exception $e) { $hasLegacyNotesColumn = false; } // Added fallback for legacy installs using generic notes
+        try { $hasPostalCodeColumn = ordersHasColumn($pdo, 'postal_code'); } catch (Exception $e) { $hasPostalCodeColumn = false; }
+        try { $hasCityColumn = ordersHasColumn($pdo, 'city'); } catch (Exception $e) { $hasCityColumn = false; }
 
         if ($hasEmailColumn) { $columns[] = 'email'; $values[] = $email; }
         if ($hasPhoneColumn) { $columns[] = 'phone'; $values[] = $phone; }
@@ -554,6 +569,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
         if ($hasFacebookColumn) { $columns[] = 'facebook_account'; $values[] = $facebookAccount; }
         if ($hasCustomerNoteColumn) { $columns[] = 'customer_note'; $values[] = $customerNote !== '' ? $customerNote : null; } // Added storage for cashier notes when column exists
         elseif ($hasLegacyNotesColumn) { $columns[] = 'notes'; $values[] = $customerNote !== '' ? $customerNote : null; } // Added fallback storage for systems that already expose a generic notes column
+        if ($hasPostalCodeColumn) { $columns[] = 'postal_code'; $values[] = $postalCode; }
+        if ($hasCityColumn) { $columns[] = 'city'; $values[] = $city; }
 
         if (ordersHasColumn($pdo, 'order_type')) {
             $columns[] = 'order_type';
@@ -610,7 +627,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
         if ($supportsTrackingCodes && $trackingCodeForRedirect !== null && filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $nameParts = array_filter([
                 trim($customer_name),
-                $last_name,
             ], static function ($value) {
                 return $value !== '';
             });
@@ -746,15 +762,9 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                         <i class="fas fa-map-marker-alt"></i>
                         Billing Address
                     </h2>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>First name <span class="required-indicator">*</span></label>
-                            <input type="text" name="customer_name" value="<?= htmlspecialchars($_POST['customer_name'] ?? '') ?>" required>
-                        </div>
-                        <div class="form-group">
-                            <label>Last name <span class="required-indicator">*</span></label>
-                            <input type="text" name="last_name" value="<?= htmlspecialchars($_POST['last_name'] ?? '') ?>" required>
-                        </div>
+                    <div class="form-group">
+                        <label>Full name <span class="required-indicator">*</span></label>
+                        <input type="text" name="customer_name" value="<?= htmlspecialchars($_POST['customer_name'] ?? '') ?>" required>
                     </div>
                     <div class="form-group">
                         <label>Address <span class="required-indicator">*</span></label>

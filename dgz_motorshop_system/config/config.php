@@ -277,6 +277,15 @@ if (!function_exists('db')) {
         ];
 
         $pdo = new PDO($dsn, $DB_USER, $DB_PASS, $options);
+         try {
+            // Align MySQL's session timezone with the PHP runtime. PHP's
+            // date_default_timezone_set() only affects PHP date functions; MySQL
+            // will continue to use the server's timezone for CURRENT_TIMESTAMP
+            // and related values unless we override the session explicitly.
+            $pdo->exec("SET time_zone = '+08:00'");
+        } catch (Throwable $e) {
+            error_log('Unable to set MySQL time_zone: ' . $e->getMessage());
+        }
 
         return $pdo;
     }
@@ -875,6 +884,52 @@ if (!function_exists('countPendingRestockRequests')) {
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
+}
+//Logout
+if (!function_exists('logoutUser')) {
+    function logoutUser(?PDO $pdo = null): void
+    {
+        $userId = isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : 0;
+
+        if ($userId > 0) {
+            if (!$pdo instanceof PDO) {
+                try {
+                    $pdo = db();
+                } catch (Throwable $e) {
+                    $pdo = null;
+                    error_log('Unable to acquire database connection for logout: ' . $e->getMessage());
+                }
+            }
+
+            if ($pdo instanceof PDO) {
+                try {
+                    $clearToken = $pdo->prepare('UPDATE users SET current_session_token = NULL WHERE id = ?');
+                    $clearToken->execute([$userId]);
+                } catch (Throwable $e) {
+                    error_log('Unable to clear session token on logout: ' . $e->getMessage());
+                }
+            }
+        }
+
+        $_SESSION = [];
+
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            if (ini_get('session.use_cookies')) {
+                $params = session_get_cookie_params();
+                setcookie(
+                    session_name(),
+                    '',
+                    time() - 42000,
+                    $params['path'] ?? '/',
+                    $params['domain'] ?? '',
+                    !empty($params['secure']),
+                    !empty($params['httponly'])
+                );
+            }
+
+            session_destroy();
+        }
+    }
 }
 
 if (!function_exists('enforceSingleActiveSession')) {

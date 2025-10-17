@@ -83,6 +83,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const onlineOrderPayment = document.getElementById('onlineOrderPayment');
             const onlineOrderEmail = document.getElementById('onlineOrderEmail');
             const onlineOrderPhone = document.getElementById('onlineOrderPhone');
+            const onlineOrderFacebook = document.getElementById('onlineOrderFacebook');
+            const onlineOrderAddress = document.getElementById('onlineOrderAddress');
+            const onlineOrderPostal = document.getElementById('onlineOrderPostal');
+            const onlineOrderCity = document.getElementById('onlineOrderCity');
             const onlineOrderNoteContainer = document.getElementById('onlineOrderNoteContainer');
             const onlineOrderNote = document.getElementById('onlineOrderNote');
             const onlineOrderReferenceWrapper = document.getElementById('onlineOrderReferenceWrapper');
@@ -215,6 +219,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 onlineOrderPayment.textContent = safePayment !== '' ? safePayment : 'N/A';
                 onlineOrderEmail.textContent = (order.email || '').toString();
                 onlineOrderPhone.textContent = (order.phone || '').toString();
+
+                if (onlineOrderFacebook) {
+                    const fb = (order.facebook_account || '').toString().trim();
+                    onlineOrderFacebook.textContent = fb !== '' ? fb : 'N/A';
+                }
+                if (onlineOrderAddress) {
+                    const addr = (order.address || '').toString().trim();
+                    onlineOrderAddress.textContent = addr !== '' ? addr : 'N/A';
+                }
+                if (onlineOrderPostal) {
+                    const pc = (order.postal_code || '').toString().trim();
+                    onlineOrderPostal.textContent = pc !== '' ? pc : 'N/A';
+                }
+                if (onlineOrderCity) {
+                    const city = (order.city || '').toString().trim();
+                    onlineOrderCity.textContent = city !== '' ? city : 'N/A';
+                }
 
                 if (onlineOrderNoteContainer && onlineOrderNote) {
                     const noteText = ((order.customer_note ?? order.notes) || '').toString().trim();

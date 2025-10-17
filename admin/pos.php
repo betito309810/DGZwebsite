@@ -1619,7 +1619,7 @@ if ($receiptDataJson === false) {
     <div id="onlineOrderModal" class="modal-overlay" style="display:none;">
         <div class="modal-content transaction-modal">
             <div class="modal-header">
-                <h3>Transaction Details</h3>
+                <h3>Order Details</h3>
                 <button type="button" class="modal-close" id="closeOnlineOrderModal" aria-label="Close order details">&times;</button>
             </div>
             <div class="modal-body">
@@ -1653,6 +1653,22 @@ if ($receiptDataJson === false) {
                         <div class="info-item">
                             <label>Phone:</label>
                             <span id="onlineOrderPhone"></span>
+                        </div>
+                        <div class="info-item">
+                            <label>Facebook:</label>
+                            <span id="onlineOrderFacebook"></span>
+                        </div>
+                        <div class="info-item">
+                            <label>Address:</label>
+                            <span id="onlineOrderAddress"></span>
+                        </div>
+                        <div class="info-item">
+                            <label>Postal code:</label>
+                            <span id="onlineOrderPostal"></span>
+                        </div>
+                        <div class="info-item">
+                            <label>City:</label>
+                            <span id="onlineOrderCity"></span>
                         </div>
                         <div class="info-item" id="onlineOrderReferenceWrapper" style="display:none;">
                             <label>Reference:</label>
