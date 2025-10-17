@@ -1,41 +1,152 @@
 (function () {
-    const POLL_INTERVAL_MS = 10000;
-    const tableBody = document.querySelector('[data-orders-table-body]');
-    const table = document.querySelector('[data-orders-table]');
+    var POLL_INTERVAL_MS = 10000;
+    var tableBody = document.querySelector('[data-orders-table-body]');
+    var table = document.querySelector('[data-orders-table]');
+    var errorBanner = document.querySelector('[data-orders-error]');
+    var errorText = errorBanner ? errorBanner.querySelector('[data-orders-error-text]') : null;
+    var retryLink = errorBanner ? errorBanner.querySelector('[data-orders-retry]') : null;
+
     if (!tableBody || !table) {
         return;
     }
 
-    const feedUrl = table.dataset.ordersFeedUrl;
+    if (typeof window.Promise !== 'function') {
+        return;
+    }
+
+    var feedUrl = table.dataset.ordersFeedUrl;
     if (!feedUrl) {
         return;
     }
 
-    let lastPayloadSignature = '';
+    var resolvedFeedUrl = resolveFeedUrl(feedUrl);
+    var defaultErrorMessage = errorText ? errorText.textContent : '';
+    var lastPayloadSignature = '';
+    var pollTimeoutId = null;
+    var isPolling = false;
+
+    if (retryLink) {
+        retryLink.addEventListener('click', function (event) {
+            event.preventDefault();
+            poll(true);
+        });
+    }
 
     /**
-     * Request the latest order and restock data from the server.
-     * Converts the relative feed URL to an absolute URL before calling fetch.
+     * Normalize the feed URL so it works across localhost installs and hosted deployments.
+     *
+     * @param {string} rawUrl Original data attribute from the table element.
+     * @returns {string} Absolute URL used for AJAX requests.
      */
-    async function fetchOrders() {
-        const url = new URL(feedUrl, window.location.href).toString();
-        const response = await fetch(url, {
-            credentials: 'same-origin',
-            headers: {
-                'Accept': 'application/json'
+    function resolveFeedUrl(rawUrl) {
+        try {
+            return new URL(rawUrl, window.location.href).toString();
+        } catch (error) {
+            var link = document.createElement('a');
+            link.href = rawUrl;
+            return link.href;
+        }
+    }
+
+    /**
+     * Perform an HTTP request that always returns JSON regardless of the browser's Fetch support.
+     *
+     * @param {string} url Fully qualified endpoint to contact.
+     * @returns {Promise<object>} Resolves with the parsed JSON payload.
+     */
+    function requestJson(url) {
+        if (typeof window.fetch === 'function') {
+            return window.fetch(url, {
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json' }
+            }).then(function (response) {
+                if (!response.ok) {
+                    var error = new Error('HTTP ' + response.status);
+                    error.status = response.status;
+                    throw error;
+                }
+
+                return response.json();
+            });
+        }
+
+        return new Promise(function (resolve, reject) {
+            if (typeof window.XMLHttpRequest !== 'function') {
+                reject(new Error('Browser does not support AJAX.'));
+                return;
             }
+
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', url, true);
+            xhr.withCredentials = true;
+            xhr.setRequestHeader('Accept', 'application/json');
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState !== XMLHttpRequest.DONE) {
+                    return;
+                }
+
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    try {
+                        resolve(JSON.parse(xhr.responseText));
+                    } catch (parseError) {
+                        reject(parseError);
+                    }
+                } else {
+                    reject(new Error('HTTP ' + xhr.status));
+                }
+            };
+            xhr.onerror = function () {
+                reject(new Error('Network error while loading orders feed.'));
+            };
+            xhr.send();
         });
+    }
 
-        if (!response.ok) {
-            throw new Error('Failed to retrieve orders feed');
+    /**
+     * Hide the inline banner that alerts staff about polling issues.
+     */
+    function hideError() {
+        if (!errorBanner) {
+            return;
         }
 
-        const payload = await response.json();
-        if (!payload.success || !Array.isArray(payload.data)) {
-            throw new Error('Orders feed returned an unexpected payload');
+        if (errorText) {
+            errorText.textContent = defaultErrorMessage || 'Live updates are temporarily unavailable.';
         }
 
-        return payload.data;
+        errorBanner.hidden = true;
+    }
+
+    /**
+     * Surface an inline banner that explains why the table failed to refresh.
+     *
+     * @param {string} message Human-readable explanation for the failure.
+     */
+    function showError(message) {
+        if (!errorBanner) {
+            return;
+        }
+
+        if (errorText) {
+            errorText.textContent = message || defaultErrorMessage || 'Live updates are temporarily unavailable.';
+        }
+
+        errorBanner.hidden = false;
+    }
+
+    /**
+     * Retrieve the latest order and restock data from the server.
+     *
+     * @returns {Promise<Array<object>>} Resolves with an array of order rows.
+     */
+    function fetchOrders() {
+        return requestJson(resolvedFeedUrl).then(function (payload) {
+            if (!payload || payload.success !== true || !Array.isArray(payload.data)) {
+                throw new Error('Orders feed returned an unexpected payload.');
+            }
+
+            return payload.data;
+        });
     }
 
     /**
@@ -45,20 +156,25 @@
      * @returns {string} HTML table row.
      */
     function buildRowMarkup(order) {
-        const typeBadge = order.order_type === 'incoming'
+        var orderType = typeof order.order_type === 'string' ? order.order_type.toLowerCase() : '';
+        var typeBadge = orderType === 'incoming'
             ? "<span class=\"badge badge-success\">Incoming</span>"
             : "<span class=\"badge badge-warning\">Restock</span>";
+        var productName = order && order.product_name ? order.product_name : '';
+        var requester = order && order.username ? order.username : '';
+        var createdAt = order && order.created_at ? order.created_at : '';
+        var quantity = order && typeof order.quantity !== 'undefined' ? order.quantity : '';
 
-        return `
-            <tr>
-                <td>${order.id}</td>
-                <td>${escapeHtml(order.product_name ?? '')}</td>
-                <td>${order.quantity}</td>
-                <td>${typeBadge}</td>
-                <td>${escapeHtml(order.username ?? '')}</td>
-                <td>${order.created_at}</td>
-            </tr>
-        `;
+        return [
+            '<tr>',
+            '    <td>' + String(order && order.id ? order.id : '') + '</td>',
+            '    <td>' + escapeHtml(productName) + '</td>',
+            '    <td>' + String(quantity) + '</td>',
+            '    <td>' + typeBadge + '</td>',
+            '    <td>' + escapeHtml(requester) + '</td>',
+            '    <td>' + escapeHtml(createdAt) + '</td>',
+            '</tr>'
+        ].join('');
     }
 
     /**
@@ -67,13 +183,13 @@
      * @param {Array<Object>} orders The latest orders from the feed.
      */
     function renderOrders(orders) {
-        const signature = JSON.stringify(orders);
+        var signature = JSON.stringify(orders);
         if (signature === lastPayloadSignature) {
             return;
         }
 
         lastPayloadSignature = signature;
-        const rows = orders.map(buildRowMarkup).join('');
+        var rows = orders.map(buildRowMarkup).join('');
         tableBody.innerHTML = rows;
     }
 
@@ -84,23 +200,55 @@
      * @returns {string} Escaped string for safe HTML insertion.
      */
     function escapeHtml(value) {
-        const div = document.createElement('div');
-        div.textContent = value;
+        var div = document.createElement('div');
+        div.textContent = value || '';
         return div.innerHTML;
     }
 
     /**
-     * Poll the server for updates and push them into the table.
+     * Schedule the next poll tick to avoid overlapping requests.
      */
-    async function poll() {
-        try {
-            const orders = await fetchOrders();
-            renderOrders(orders);
-        } catch (error) {
-            console.error(error);
+    function scheduleNextPoll() {
+        if (pollTimeoutId) {
+            clearTimeout(pollTimeoutId);
         }
+
+        pollTimeoutId = window.setTimeout(function () {
+            poll(false);
+        }, POLL_INTERVAL_MS);
     }
 
-    poll();
-    setInterval(poll, POLL_INTERVAL_MS);
+    /**
+     * Poll the server for updates and push them into the table.
+     *
+     * @param {boolean} isManual Whether the poll was triggered by the retry link.
+     */
+    function poll(isManual) {
+        if (isPolling) {
+            return;
+        }
+
+        if (isManual && pollTimeoutId) {
+            clearTimeout(pollTimeoutId);
+            pollTimeoutId = null;
+        }
+
+        isPolling = true;
+
+        fetchOrders()
+            .then(function (orders) {
+                hideError();
+                renderOrders(orders);
+            })
+            .catch(function (error) {
+                console.error(error);
+                showError('Live updates are temporarily unavailable. ' + (error && error.message ? '(' + error.message + ')' : ''));
+            })
+            .then(function () {
+                isPolling = false;
+                scheduleNextPoll();
+            });
+    }
+
+    poll(true);
 })();

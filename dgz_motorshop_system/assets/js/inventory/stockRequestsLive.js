@@ -1,54 +1,164 @@
 (function () {
-    const POLL_INTERVAL_MS = 10000;
-    const root = document.querySelector('[data-restock-requests-root]');
+    var POLL_INTERVAL_MS = 10000;
+    var root = document.querySelector('[data-restock-requests-root]');
     if (!root) {
         return;
     }
 
-    const feedUrl = root.dataset.restockFeedUrl;
+    if (typeof window.Promise !== 'function') {
+        return;
+    }
+
+    var feedUrl = root.getAttribute('data-restock-feed-url');
     if (!feedUrl) {
         return;
     }
 
-    const canManage = root.dataset.canManage === '1';
-    const tabsSection = root.querySelector('[data-restock-tabs]');
-    const allEmpty = root.querySelector('[data-restock-empty-all]');
-    const pendingBody = root.querySelector('[data-restock-pending-body]');
-    const pendingEmpty = root.querySelector('[data-restock-pending-empty]');
-    const pendingTableWrapper = root.querySelector('[data-restock-pending-table-wrapper]');
-    const historyBody = root.querySelector('[data-restock-history-body]');
-    const historyEmpty = root.querySelector('[data-restock-history-empty]');
-    const historyTableWrapper = root.querySelector('[data-restock-history-table-wrapper]');
+    var resolvedFeedUrl = resolveFeedUrl(feedUrl);
+    var canManage = root.getAttribute('data-can-manage') === '1';
+    var tabsSection = root.querySelector('[data-restock-tabs]');
+    var allEmpty = root.querySelector('[data-restock-empty-all]');
+    var pendingBody = root.querySelector('[data-restock-pending-body]');
+    var pendingEmpty = root.querySelector('[data-restock-pending-empty]');
+    var pendingTableWrapper = root.querySelector('[data-restock-pending-table-wrapper]');
+    var historyBody = root.querySelector('[data-restock-history-body]');
+    var historyEmpty = root.querySelector('[data-restock-history-empty]');
+    var historyTableWrapper = root.querySelector('[data-restock-history-table-wrapper]');
+    var errorBanner = root.querySelector('[data-restock-error]');
+    var errorText = errorBanner ? errorBanner.querySelector('[data-restock-error-text]') : null;
+    var retryLink = errorBanner ? errorBanner.querySelector('[data-restock-retry]') : null;
 
     if (!tabsSection || !allEmpty || !pendingBody || !pendingEmpty || !pendingTableWrapper || !historyBody || !historyEmpty || !historyTableWrapper) {
         return;
     }
 
-    let lastPayloadSignature = '';
+    var defaultErrorMessage = errorText ? errorText.textContent : '';
+    var lastPayloadSignature = '';
+    var pollTimeoutId = null;
+    var isPolling = false;
+
+    if (retryLink) {
+        retryLink.addEventListener('click', function (event) {
+            event.preventDefault();
+            poll(true);
+        });
+    }
 
     /**
-     * Retrieve the latest restock request data from the server.
-     * Converts the feed URL to an absolute path so the script works on every route.
+     * Normalize feed URLs so polling works when the project is hosted in a subdirectory.
+     *
+     * @param {string} rawUrl Data attribute pulled from the markup.
+     * @returns {string} Absolute URL.
      */
-    async function fetchRestockData() {
-        const url = new URL(feedUrl, window.location.href).toString();
-        const response = await fetch(url, {
-            credentials: 'same-origin',
-            headers: {
-                'Accept': 'application/json'
+    function resolveFeedUrl(rawUrl) {
+        try {
+            return new URL(rawUrl, window.location.href).toString();
+        } catch (error) {
+            var link = document.createElement('a');
+            link.href = rawUrl;
+            return link.href;
+        }
+    }
+
+    /**
+     * Perform an HTTP request that always returns JSON regardless of Fetch availability.
+     *
+     * @param {string} url Endpoint to call.
+     * @returns {Promise<object>} Resolves with parsed JSON.
+     */
+    function requestJson(url) {
+        if (typeof window.fetch === 'function') {
+            return window.fetch(url, {
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json' }
+            }).then(function (response) {
+                if (!response.ok) {
+                    var error = new Error('HTTP ' + response.status);
+                    error.status = response.status;
+                    throw error;
+                }
+
+                return response.json();
+            });
+        }
+
+        return new Promise(function (resolve, reject) {
+            if (typeof window.XMLHttpRequest !== 'function') {
+                reject(new Error('Browser does not support AJAX.'));
+                return;
             }
+
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', url, true);
+            xhr.withCredentials = true;
+            xhr.setRequestHeader('Accept', 'application/json');
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState !== XMLHttpRequest.DONE) {
+                    return;
+                }
+
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    try {
+                        resolve(JSON.parse(xhr.responseText));
+                    } catch (parseError) {
+                        reject(parseError);
+                    }
+                } else {
+                    reject(new Error('HTTP ' + xhr.status));
+                }
+            };
+            xhr.onerror = function () {
+                reject(new Error('Network error while loading restock requests.'));
+            };
+            xhr.send();
         });
+    }
 
-        if (!response.ok) {
-            throw new Error('Failed to load restock requests feed.');
+    /**
+     * Hide the error banner whenever a poll succeeds.
+     */
+    function hideError() {
+        if (!errorBanner) {
+            return;
         }
 
-        const payload = await response.json();
-        if (!payload.success || typeof payload.data !== 'object') {
-            throw new Error('Restock feed returned an unexpected payload.');
+        if (errorText) {
+            errorText.textContent = defaultErrorMessage || 'Live updates are temporarily unavailable.';
         }
 
-        return payload.data;
+        errorBanner.hidden = true;
+    }
+
+    /**
+     * Display the inline error banner with an optional custom message.
+     *
+     * @param {string} message Human-readable explanation of the failure.
+     */
+    function showError(message) {
+        if (!errorBanner) {
+            return;
+        }
+
+        if (errorText) {
+            errorText.textContent = message || defaultErrorMessage || 'Live updates are temporarily unavailable.';
+        }
+
+        errorBanner.hidden = false;
+    }
+
+    /**
+     * Retrieve the latest restock request payload from the server.
+     *
+     * @returns {Promise<object>} Resolves with the pending/history data structure.
+     */
+    function fetchRestockData() {
+        return requestJson(resolvedFeedUrl).then(function (payload) {
+            if (!payload || payload.success !== true || typeof payload.data !== 'object') {
+                throw new Error('Restock feed returned an unexpected payload.');
+            }
+
+            return payload.data;
+        });
     }
 
     /**
@@ -58,8 +168,8 @@
      * @returns {string} HTML-safe version of the string.
      */
     function escapeHtml(value) {
-        const div = document.createElement('div');
-        div.textContent = value;
+        var div = document.createElement('div');
+        div.textContent = value || '';
         return div.innerHTML;
     }
 
@@ -84,17 +194,17 @@
      * @returns {string} HTML markup representing the product cell.
      */
     function buildProductCell(row) {
-        const sections = [`<span class="product-name">${escapeHtml(row.product_name || 'Product removed')}</span>`];
+        var sections = ['<span class="product-name">' + escapeHtml(row && row.product_name ? row.product_name : 'Product removed') + '</span>'];
 
-        if (row.variant_label) {
-            sections.push(`<span class="product-variant">Variant: ${escapeHtml(row.variant_label)}</span>`);
+        if (row && row.variant_label) {
+            sections.push('<span class="product-variant">Variant: ' + escapeHtml(row.variant_label) + '</span>');
         }
 
-        if (row.product_code) {
-            sections.push(`<span class="product-code">Code: ${escapeHtml(row.product_code)}</span>`);
+        if (row && row.product_code) {
+            sections.push('<span class="product-code">Code: ' + escapeHtml(row.product_code) + '</span>');
         }
 
-        return `<div class="product-cell">${sections.join('')}</div>`;
+        return '<div class="product-cell">' + sections.join('') + '</div>';
     }
 
     /**
@@ -108,70 +218,86 @@
             return '';
         }
 
-        const idValue = String(row.id ?? '');
-        return `
-            <td class="action-cell">
-                <form method="post" class="inline-form">
-                    <input type="hidden" name="request_id" value="${idValue}">
-                    <input type="hidden" name="request_action" value="approve">
-                    <button type="submit" class="btn-approve">
-                        <i class="fas fa-check"></i> Approve
-                    </button>
-                </form>
-                <form method="post" class="inline-form">
-                    <input type="hidden" name="request_id" value="${idValue}">
-                    <input type="hidden" name="request_action" value="decline">
-                    <button type="submit" class="btn-decline">
-                        <i class="fas fa-times"></i> Decline
-                    </button>
-                </form>
-            </td>
-        `;
+        var idValue = row && typeof row.id !== 'undefined' ? String(row.id) : '';
+
+        return [
+            '<td class="action-cell">',
+            '    <form method="post" class="inline-form">',
+            '        <input type="hidden" name="request_id" value="' + idValue + '">',
+            '        <input type="hidden" name="request_action" value="approve">',
+            '        <button type="submit" class="btn-approve">',
+            '            <i class="fas fa-check"></i> Approve',
+            '        </button>',
+            '    </form>',
+            '    <form method="post" class="inline-form">',
+            '        <input type="hidden" name="request_id" value="' + idValue + '">',
+            '        <input type="hidden" name="request_action" value="decline">',
+            '        <button type="submit" class="btn-decline">',
+            '            <i class="fas fa-times"></i> Decline',
+            '        </button>',
+            '    </form>',
+            '</td>'
+        ].join('');
+    }
+
+    /**
+     * Parse a numeric value from the feed, falling back to zero when invalid.
+     *
+     * @param {*} value Potential numeric value.
+     * @returns {number} Safe integer representation.
+     */
+    function toQuantity(value) {
+        var number = Number(value);
+        if (!isFinite(number)) {
+            return 0;
+        }
+
+        return number;
     }
 
     /**
      * Convert a pending row into the HTML structure expected by the table body.
      */
     function buildPendingRow(row) {
-        const cells = [
-            `<td>${escapeHtml(row.created_at_display || 'N/A')}</td>`,
-            `<td>${buildProductCell(row)}</td>`,
-            `<td>${escapeHtml(row.category || '')}</td>`,
-            `<td>${escapeHtml(row.brand || '')}</td>`,
-            `<td>${escapeHtml(row.supplier || '')}</td>`,
-            `<td>${Number.isFinite(row.quantity_requested) ? row.quantity_requested : 0}</td>`,
-            `<td><span class="priority-badge ${escapeHtml(row.priority_class || '')}">${escapeHtml(row.priority_label || '')}</span></td>`,
-            `<td>${escapeHtml(row.requester_name || 'Unknown')}</td>`,
-            `<td class="notes-cell">${buildNotesCell(row.notes || '')}</td>`
+        var cells = [
+            '<td>' + escapeHtml(row && row.created_at_display ? row.created_at_display : 'N/A') + '</td>',
+            '<td>' + buildProductCell(row) + '</td>',
+            '<td>' + escapeHtml(row && row.category ? row.category : '') + '</td>',
+            '<td>' + escapeHtml(row && row.brand ? row.brand : '') + '</td>',
+            '<td>' + escapeHtml(row && row.supplier ? row.supplier : '') + '</td>',
+            '<td>' + toQuantity(row && row.quantity_requested) + '</td>',
+            '<td><span class="priority-badge ' + escapeHtml(row && row.priority_class ? row.priority_class : '') + '">' + escapeHtml(row && row.priority_label ? row.priority_label : '') + '</span></td>',
+            '<td>' + escapeHtml(row && row.requester_name ? row.requester_name : 'Unknown') + '</td>',
+            '<td class="notes-cell">' + buildNotesCell(row && row.notes ? row.notes : '') + '</td>'
         ];
 
-        const actionCell = buildActionCell(row);
+        var actionCell = buildActionCell(row);
         if (actionCell) {
             cells.push(actionCell);
         }
 
-        return `<tr>${cells.join('')}</tr>`;
+        return '<tr>' + cells.join('') + '</tr>';
     }
 
     /**
      * Convert a history entry into the HTML structure expected by the history table body.
      */
     function buildHistoryRow(row) {
-        const cells = [
-            `<td>${escapeHtml(row.created_at_display || 'N/A')}</td>`,
-            `<td>${buildProductCell(row)}</td>`,
-            `<td>${escapeHtml(row.category || '')}</td>`,
-            `<td>${escapeHtml(row.brand || '')}</td>`,
-            `<td>${escapeHtml(row.supplier || '')}</td>`,
-            `<td>${Number.isFinite(row.quantity_requested) ? row.quantity_requested : 0}</td>`,
-            `<td><span class="priority-badge ${escapeHtml(row.priority_class || '')}">${escapeHtml(row.priority_label || '')}</span></td>`,
-            `<td>${escapeHtml(row.requester_name || 'Unknown')}</td>`,
-            `<td><span class="status-badge ${escapeHtml(row.status_class || '')}">${escapeHtml(row.status_label || '')}</span></td>`,
-            `<td>${escapeHtml(row.status_user_name || 'System')}</td>`,
-            `<td>${escapeHtml(row.reviewer_name || '')}</td>`
+        var cells = [
+            '<td>' + escapeHtml(row && row.created_at_display ? row.created_at_display : 'N/A') + '</td>',
+            '<td>' + buildProductCell(row) + '</td>',
+            '<td>' + escapeHtml(row && row.category ? row.category : '') + '</td>',
+            '<td>' + escapeHtml(row && row.brand ? row.brand : '') + '</td>',
+            '<td>' + escapeHtml(row && row.supplier ? row.supplier : '') + '</td>',
+            '<td>' + toQuantity(row && row.quantity_requested) + '</td>',
+            '<td><span class="priority-badge ' + escapeHtml(row && row.priority_class ? row.priority_class : '') + '">' + escapeHtml(row && row.priority_label ? row.priority_label : '') + '</span></td>',
+            '<td>' + escapeHtml(row && row.requester_name ? row.requester_name : 'Unknown') + '</td>',
+            '<td><span class="status-badge ' + escapeHtml(row && row.status_class ? row.status_class : '') + '">' + escapeHtml(row && row.status_label ? row.status_label : '') + '</span></td>',
+            '<td>' + escapeHtml(row && row.status_user_name ? row.status_user_name : 'System') + '</td>',
+            '<td>' + escapeHtml(row && row.reviewer_name ? row.reviewer_name : '') + '</td>'
         ];
 
-        return `<tr>${cells.join('')}</tr>`;
+        return '<tr>' + cells.join('') + '</tr>';
     }
 
     /**
@@ -192,45 +318,75 @@
      * Push the server data into the DOM when the payload changes.
      */
     function renderRestockData(data) {
-        if (!Array.isArray(data.pending) || !Array.isArray(data.history)) {
+        if (!data || !Array.isArray(data.pending) || !Array.isArray(data.history)) {
             throw new Error('Restock feed data is incomplete.');
         }
 
-        const signature = JSON.stringify({ pending: data.pending, history: data.history });
+        var signature = JSON.stringify({ pending: data.pending, history: data.history });
         if (signature === lastPayloadSignature) {
             return;
         }
 
         lastPayloadSignature = signature;
 
-        const pendingRows = data.pending.map(buildPendingRow).join('');
-        pendingBody.innerHTML = pendingRows;
+        pendingBody.innerHTML = data.pending.map(buildPendingRow).join('');
+        historyBody.innerHTML = data.history.map(buildHistoryRow).join('');
 
-        const historyRows = data.history.map(buildHistoryRow).join('');
-        historyBody.innerHTML = historyRows;
-
-        const hasAnyRequests = data.pending.length > 0 || data.history.length > 0;
+        var hasAnyRequests = data.pending.length > 0 || data.history.length > 0;
         toggleSections(hasAnyRequests, data.pending.length, data.history.length);
 
-        const badge = document.querySelector('[data-sidebar-stock-count]');
+        var badge = document.querySelector('[data-sidebar-stock-count]');
         if (badge) {
-            badge.textContent = String(data.badge_count ?? data.pending.length ?? 0);
+            var count = typeof data.badge_count !== 'undefined' ? data.badge_count : data.pending.length;
+            badge.textContent = String(count);
             badge.hidden = !badge.textContent || badge.textContent === '0';
         }
     }
 
     /**
-     * Poll the server for updates and render the response.
+     * Schedule the next poll tick to avoid overlapping requests.
      */
-    async function poll() {
-        try {
-            const data = await fetchRestockData();
-            renderRestockData(data);
-        } catch (error) {
-            console.error(error);
+    function scheduleNextPoll() {
+        if (pollTimeoutId) {
+            clearTimeout(pollTimeoutId);
         }
+
+        pollTimeoutId = window.setTimeout(function () {
+            poll(false);
+        }, POLL_INTERVAL_MS);
     }
 
-    poll();
-    setInterval(poll, POLL_INTERVAL_MS);
+    /**
+     * Poll the server for updates and render the response.
+     *
+     * @param {boolean} isManual Whether the poll came from the retry link.
+     */
+    function poll(isManual) {
+        if (isPolling) {
+            return;
+        }
+
+        if (isManual && pollTimeoutId) {
+            clearTimeout(pollTimeoutId);
+            pollTimeoutId = null;
+        }
+
+        isPolling = true;
+
+        fetchRestockData()
+            .then(function (data) {
+                hideError();
+                renderRestockData(data);
+            })
+            .catch(function (error) {
+                console.error(error);
+                showError('Live updates are temporarily unavailable. ' + (error && error.message ? '(' + error.message + ')' : ''));
+            })
+            .then(function () {
+                isPolling = false;
+                scheduleNextPoll();
+            });
+    }
+
+    poll(true);
 })();

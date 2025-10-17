@@ -245,7 +245,7 @@ function getStatusClass(string $status): string
             <div
                 class="requests-card"
                 data-restock-requests-root
-                data-restock-feed-url="restockRequestsFeed.php"
+                data-restock-feed-url="<?= htmlspecialchars(appBaseUrl() . '/admin/restockRequestsFeed.php'); ?>"
                 data-can-manage="<?= $role === 'admin' ? '1' : '0' ?>"
             >
                 <p
@@ -255,6 +255,12 @@ function getStatusClass(string $status): string
                 >
                     <i class="fas fa-inbox"></i> No restock requests found.
                 </p>
+
+                <div class="alert alert-error" data-restock-error hidden>
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span data-restock-error-text>Live updates are temporarily unavailable.</span>
+                    <a href="#" data-restock-retry>Try again</a> or refresh the page manually.
+                </div>
 
                 <div
                     class="restock-tabs"
