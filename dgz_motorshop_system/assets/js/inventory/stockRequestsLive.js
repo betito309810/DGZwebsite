@@ -45,6 +45,16 @@
     }
 
     /**
+     * Cancel any pending poll timer so we can safely pause polling.
+     */
+    function cancelScheduledPoll() {
+        if (pollTimeoutId) {
+            clearTimeout(pollTimeoutId);
+            pollTimeoutId = null;
+        }
+    }
+
+    /**
      * Normalize feed URLs so polling works when the project is hosted in a subdirectory.
      *
      * @param {string} rawUrl Data attribute pulled from the markup.
@@ -347,8 +357,10 @@
      * Schedule the next poll tick to avoid overlapping requests.
      */
     function scheduleNextPoll() {
-        if (pollTimeoutId) {
-            clearTimeout(pollTimeoutId);
+        cancelScheduledPoll();
+
+        if (typeof document !== 'undefined' && document.hidden) {
+            return;
         }
 
         pollTimeoutId = window.setTimeout(function () {
@@ -387,6 +399,33 @@
                 scheduleNextPoll();
             });
     }
+
+    /**
+     * Resume polling when the document becomes visible again.
+     */
+    function handleVisibilityChange() {
+        if (typeof document !== 'undefined' && document.hidden) {
+            cancelScheduledPoll();
+            return;
+        }
+
+        poll(true);
+    }
+
+    /**
+     * Trigger a refresh when the window regains focus, covering older browsers.
+     */
+    function handleWindowFocus() {
+        if (typeof document !== 'undefined' && document.hidden) {
+            return;
+        }
+
+        poll(true);
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleWindowFocus);
+    window.addEventListener('beforeunload', cancelScheduledPoll);
 
     poll(true);
 })();
