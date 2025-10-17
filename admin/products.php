@@ -83,7 +83,9 @@ if (!function_exists('moveUploadedProductImage')) {
             }
         }
 
-        return 'uploads/products/' . $productId . '/main.' . $extension;
+        // Store a project-relative path that matches the actual upload location.
+        // Existing rows may still contain 'uploads/products/...'; we handle both when rendering.
+        return 'dgz_motorshop_system/uploads/products/' . $productId . '/main.' . $extension;
     }
 }
 
@@ -165,7 +167,8 @@ if (!function_exists('persistGalleryUploads')) {
             }
 
             @chmod($targetPath, 0644);
-            $storedPaths[] = 'uploads/products/' . $productId . '/' . $fileName;
+            // Persist the project-relative path to where files are saved on disk.
+            $storedPaths[] = 'dgz_motorshop_system/uploads/products/' . $productId . '/' . $fileName;
         }
 
         if (empty($storedPaths)) {
@@ -200,7 +203,11 @@ if (!function_exists('productImageAbsolutePath')) {
             return null;
         }
 
-        if (strpos($normalised, 'uploads/products/') !== 0) {
+        // Accept both legacy 'uploads/products/…' and current 'dgz_motorshop_system/uploads/products/…'
+        if (
+            strpos($normalised, 'dgz_motorshop_system/uploads/products/') !== 0 &&
+            strpos($normalised, 'uploads/products/') !== 0
+        ) {
             return null;
         }
 
@@ -343,6 +350,10 @@ if (!function_exists('fetchGalleryImagesForProducts')) {
 
             $rawPath = $row['file_path'] ?? '';
             $normalisedPath = ltrim(str_replace('\\', '/', trim((string) $rawPath)), '/');
+            if ($normalisedPath !== '' && strpos($normalisedPath, 'dgz_motorshop_system/') !== 0) {
+                // Back-compat for rows saved with 'uploads/products/...'
+                $normalisedPath = 'dgz_motorshop_system/' . $normalisedPath;
+            }
             $url = $normalisedPath !== '' ? '../' . $normalisedPath : '';
 
             $gallery[$productId][] = [
@@ -1410,6 +1421,10 @@ if ($currentSort === 'name') {
 
                         $rawImagePath = $p['image'] ?? '';
                         $normalisedImagePath = $rawImagePath !== '' ? ltrim(str_replace('\\', '/', $rawImagePath), '/') : '';
+                        if ($normalisedImagePath !== '' && strpos($normalisedImagePath, 'dgz_motorshop_system/') !== 0) {
+                            // Back-compat for older rows without the system prefix
+                            $normalisedImagePath = 'dgz_motorshop_system/' . $normalisedImagePath;
+                        }
                         $imageUrl = $normalisedImagePath !== '' ? '../' . $normalisedImagePath : '../dgz_motorshop_system/assets/img/product-placeholder.svg';
 
                         // Added: package the row payload so the detail modal can display read-only information.
