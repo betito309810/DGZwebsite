@@ -82,6 +82,7 @@ if (!empty($allProducts)) {
                 'id' => (int) ($variant['id'] ?? 0),
                 'label' => (string) ($variant['label'] ?? ''),
                 'sku' => (string) ($variant['sku'] ?? ''),
+                'quantity' => isset($variant['quantity']) ? (int) $variant['quantity'] : 0,
                 'is_default' => (int) ($variant['is_default'] ?? 0),
             ];
         }, $variantRows);
@@ -1547,6 +1548,29 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                             if ($isFlashProduct && isset($manualAdjustFeedback['variant_id'])) {
                                 $lastAdjustedVariantId = (int) ($manualAdjustFeedback['variant_id'] ?? 0);
                             }
+                            $displayQuantityValue = $quantityValue;
+                            $quantityContextText = 'All variants total';
+                            $quantityContextState = 'product';
+                            if ($hasVariants && $lastAdjustedVariantId > 0) {
+                                foreach ($variantsForProduct as $variantRow) {
+                                    $variantRowId = isset($variantRow['id']) ? (int) $variantRow['id'] : 0;
+                                    if ($variantRowId !== $lastAdjustedVariantId) {
+                                        continue;
+                                    }
+                                    $displayQuantityValue = isset($variantRow['quantity']) ? max(0, (int) $variantRow['quantity']) : 0;
+                                    $variantLabelText = trim((string) ($variantRow['label'] ?? ''));
+                                    $variantSkuText = trim((string) ($variantRow['sku'] ?? ''));
+                                    if ($variantLabelText === '' && $variantSkuText !== '') {
+                                        $variantLabelText = $variantSkuText;
+                                    }
+                                    if ($variantLabelText === '') {
+                                        $variantLabelText = 'Variant #' . $variantRowId;
+                                    }
+                                    $quantityContextText = $variantLabelText !== '' ? 'Variant qty — ' . $variantLabelText : 'Variant qty';
+                                    $quantityContextState = 'variant';
+                                    break;
+                                }
+                            }
                             $rowClasses = [];
                             if ($low) {
                                 $rowClasses[] = 'low-stock';
@@ -1556,7 +1580,7 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                             }
                             $rowClassAttribute = empty($rowClasses) ? '' : ' class="' . implode(' ', $rowClasses) . '"';
                         ?>
-                        <tr<?= $rowClassAttribute ?> id="product-<?= (int) $p['id'] ?>" data-product-id="<?= (int) $p['id'] ?>" data-flash-product="<?= $isFlashProduct ? 'true' : 'false' ?>">
+                        <tr<?= $rowClassAttribute ?> id="product-<?= (int) $p['id'] ?>" data-product-id="<?= (int) $p['id'] ?>" data-flash-product="<?= $isFlashProduct ? 'true' : 'false' ?>" data-last-variant-id="<?= $lastAdjustedVariantId ?>">
                             <td><?= htmlspecialchars($p['code']) ?></td>
                             <td>
                                 <div class="product-info">
@@ -1576,7 +1600,14 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                                     <?php endif; ?>
                                 </div>
                             </td>
-                            <td><?= $quantityValue ?></td>
+                            <td>
+                                <div class="inventory-quantity" data-product-quantity>
+                                    <span class="inventory-quantity__value" data-quantity-display data-default-quantity="<?= $quantityValue ?>"><?= $displayQuantityValue ?></span>
+                                    <?php if ($hasVariants): ?>
+                                    <span class="inventory-quantity__context" data-quantity-context data-context-state="<?= htmlspecialchars($quantityContextState) ?>" title="<?= htmlspecialchars($quantityContextText) ?>"><?= htmlspecialchars($quantityContextText) ?></span>
+                                    <?php endif; ?>
+                                </div>
+                            </td>
                             <td>₱<?= number_format($productPrice, 2) ?></td>
                             <?php if ($canManualAdjust): ?>
                             <td>
@@ -1600,6 +1631,7 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                                                     }
                                                     $variantLabelText = trim((string) ($variant['label'] ?? ''));
                                                     $variantSkuText = trim((string) ($variant['sku'] ?? ''));
+                                                    $variantQuantityValue = isset($variant['quantity']) ? (int) $variant['quantity'] : 0;
                                                     if ($variantLabelText === '' && $variantSkuText !== '') {
                                                         $variantLabelText = $variantSkuText;
                                                     }
@@ -1614,7 +1646,7 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                                                     $optionLabel = $variantLabelText . $skuNote . $defaultNote;
                                                     $isSelected = $lastAdjustedVariantId === $variantOptionId;
                                                 ?>
-                                                <option value="<?= $variantOptionId ?>"<?= $isSelected ? ' selected' : '' ?>><?= htmlspecialchars($optionLabel) ?></option>
+                                                <option value="<?= $variantOptionId ?>" data-variant-quantity="<?= $variantQuantityValue ?>"<?= $isSelected ? ' selected' : '' ?>><?= htmlspecialchars($optionLabel) ?></option>
                                                 <?php endforeach; ?>
                                             </select>
                                         </div>

@@ -1002,6 +1002,138 @@
                 });
             });
 
+            const variantsBootstrapScript = document.getElementById('inventoryVariants');
+            let variantInventoryLookup = {};
+            if (variantsBootstrapScript) {
+                try {
+                    const bootstrapText = variantsBootstrapScript.textContent || variantsBootstrapScript.innerText || '';
+                    if (bootstrapText.trim() !== '') {
+                        variantInventoryLookup = JSON.parse(bootstrapText);
+                    }
+                } catch (error) {
+                    variantInventoryLookup = {};
+                }
+            }
+
+            const manualVariantSelects = document.querySelectorAll('.manual-adjust-select');
+
+            const deriveVariantLabel = (variantEntry) => {
+                if (!variantEntry || typeof variantEntry !== 'object') {
+                    return '';
+                }
+                const label = typeof variantEntry.label === 'string' ? variantEntry.label.trim() : '';
+                const sku = typeof variantEntry.sku === 'string' ? variantEntry.sku.trim() : '';
+                if (label !== '') {
+                    return label;
+                }
+                if (sku !== '') {
+                    return sku;
+                }
+                if (typeof variantEntry.id === 'number' && Number.isFinite(variantEntry.id)) {
+                    return `Variant #${variantEntry.id}`;
+                }
+                return '';
+            };
+
+            const parseQuantity = (rawValue) => {
+                if (typeof rawValue === 'number' && Number.isFinite(rawValue)) {
+                    return rawValue;
+                }
+                if (typeof rawValue === 'string' && rawValue.trim() !== '') {
+                    const parsed = parseInt(rawValue, 10);
+                    if (!Number.isNaN(parsed)) {
+                        return parsed;
+                    }
+                }
+                return null;
+            };
+
+            const updateQuantityDisplay = (row, variantId, optionElement) => {
+                if (!row) {
+                    return;
+                }
+                const quantityDisplay = row.querySelector('[data-quantity-display]');
+                if (!quantityDisplay) {
+                    return;
+                }
+                const contextDisplay = row.querySelector('[data-quantity-context]');
+                const defaultQuantityRaw = quantityDisplay.dataset.defaultQuantity || '0';
+                const defaultQuantity = parseQuantity(defaultQuantityRaw) ?? 0;
+
+                let nextQuantity = defaultQuantity;
+                let nextContext = contextDisplay ? 'All variants total' : '';
+
+                const productId = row.dataset.productId || '';
+                const resolvedVariantId = parseQuantity(variantId);
+
+                if (resolvedVariantId && resolvedVariantId > 0) {
+                    let variantQuantity = null;
+                    if (optionElement) {
+                        variantQuantity = parseQuantity(optionElement.dataset.variantQuantity || '');
+                    }
+                    const productVariants = Array.isArray(variantInventoryLookup[productId])
+                        ? variantInventoryLookup[productId]
+                        : [];
+                    let variantEntry = null;
+                    if (productVariants.length > 0) {
+                        variantEntry = productVariants.find((entry) => {
+                            if (!entry) {
+                                return false;
+                            }
+                            if (typeof entry.id === 'number' || typeof entry.id === 'string') {
+                                return String(entry.id) === String(resolvedVariantId);
+                            }
+                            return false;
+                        }) || null;
+                    }
+
+                    if (variantQuantity === null && variantEntry) {
+                        variantQuantity = parseQuantity(variantEntry.quantity);
+                    }
+
+                    if (variantQuantity === null) {
+                        variantQuantity = defaultQuantity;
+                    }
+
+                    nextQuantity = Math.max(0, variantQuantity);
+
+                    if (contextDisplay) {
+                        const variantLabel = variantEntry ? deriveVariantLabel(variantEntry) : '';
+                        nextContext = variantLabel ? `Variant qty — ${variantLabel}` : 'Variant qty';
+                        contextDisplay.dataset.contextState = 'variant';
+                    }
+                } else if (contextDisplay) {
+                    contextDisplay.dataset.contextState = 'product';
+                }
+
+                quantityDisplay.textContent = String(nextQuantity);
+                if (contextDisplay) {
+                    contextDisplay.textContent = nextContext;
+                    contextDisplay.setAttribute('title', nextContext);
+                }
+            };
+
+            manualVariantSelects.forEach((select) => {
+                const row = select.closest('tr[data-product-id]');
+                if (!row) {
+                    return;
+                }
+
+                const applySelection = () => {
+                    const selectedOption = select.options[select.selectedIndex] || null;
+                    updateQuantityDisplay(row, select.value || '0', selectedOption);
+                };
+
+                select.addEventListener('change', applySelection);
+
+                const lastVariantId = row.dataset.lastVariantId || '';
+                if (lastVariantId && lastVariantId !== '0') {
+                    applySelection();
+                } else {
+                    updateQuantityDisplay(row, '0', select.options[select.selectedIndex] || null);
+                }
+            });
+
             let restoredScroll = false;
             if (sessionStore) {
                 const storedScroll = sessionStore.getItem(scrollStorageKey);
