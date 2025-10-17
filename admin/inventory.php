@@ -225,6 +225,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_restock_reques
 if ($canManualAdjust && isset($_POST['update_stock'])) {
     $id = intval($_POST['id'] ?? 0);
     $change = intval($_POST['change'] ?? 0);
+    $variantId = intval($_POST['variant_id'] ?? 0);
     $redirectTarget = 'inventory.php';
 
     $returnViewRaw = $_POST['return_view'] ?? '';
@@ -291,6 +292,43 @@ if ($canManualAdjust && isset($_POST['update_stock'])) {
         $redirectTarget .= '#product-' . $id;
     }
 
+    $variantsForProduct = $id ? ($productVariantsMap[$id] ?? []) : [];
+    $selectedVariantMeta = null;
+    if (!empty($variantsForProduct)) {
+        if ($variantId <= 0) {
+            $_SESSION['manual_adjust_message'] = [
+                'type' => 'warning',
+                'text' => 'Select a variant before adjusting stock for this product.',
+                'product_id' => $id,
+                'variant_id' => null,
+            ];
+
+            header('Location: ' . $redirectTarget);
+            exit;
+        }
+
+        foreach ($variantsForProduct as $variantRow) {
+            if ((int) ($variantRow['id'] ?? 0) === $variantId) {
+                $selectedVariantMeta = $variantRow;
+                break;
+            }
+        }
+
+        if ($variantId > 0 && $selectedVariantMeta === null) {
+            $_SESSION['manual_adjust_message'] = [
+                'type' => 'error',
+                'text' => 'The selected variant is no longer available. Refresh and try again.',
+                'product_id' => $id,
+                'variant_id' => null,
+            ];
+
+            header('Location: ' . $redirectTarget);
+            exit;
+        }
+    } else {
+        $variantId = 0;
+    }
+
     if ($id && $change !== 0) {
         try {
             $pdo->beginTransaction();
@@ -306,30 +344,120 @@ if ($canManualAdjust && isset($_POST['update_stock'])) {
             $currentQuantity = isset($productRow['quantity']) ? (int) $productRow['quantity'] : 0;
             $proposedQuantity = $currentQuantity + $change;
             $boundedQuantity = max(0, $proposedQuantity);
-            $effectiveChange = $boundedQuantity - $currentQuantity;
+            $productEffectiveChange = $boundedQuantity - $currentQuantity;
+
+            $variantEffectiveChange = $change;
+            $variantLimitedChange = false;
+            if ($selectedVariantMeta !== null && $variantId > 0) {
+                $variantLookup = $pdo->prepare('SELECT quantity FROM product_variants WHERE id = ? AND product_id = ? LIMIT 1');
+                $variantLookup->execute([$variantId, $id]);
+                $variantRow = $variantLookup->fetch(PDO::FETCH_ASSOC);
+
+                if (!$variantRow) {
+                    throw new RuntimeException('The selected variant could not be found.');
+                }
+
+                $variantCurrentQuantity = isset($variantRow['quantity']) ? (int) $variantRow['quantity'] : 0;
+                if ($change < 0) {
+                    $variantProposedQuantity = $variantCurrentQuantity + $change;
+                    $variantBoundedQuantity = max(0, $variantProposedQuantity);
+                    $variantEffectiveChange = $variantBoundedQuantity - $variantCurrentQuantity;
+                    if ($variantEffectiveChange !== $change) {
+                        $variantLimitedChange = true;
+                    }
+                } else {
+                    $variantEffectiveChange = $change;
+                }
+            }
+
+            $productLimitedChange = ($change < 0 && $productEffectiveChange !== $change);
+
+            $effectiveChange = $productEffectiveChange;
+            if ($selectedVariantMeta !== null && $variantId > 0) {
+                if ($change < 0) {
+                    $effectiveChange = max($productEffectiveChange, $variantEffectiveChange);
+                } else {
+                    $effectiveChange = min($productEffectiveChange, $variantEffectiveChange);
+                }
+                $boundedQuantity = $currentQuantity + $effectiveChange;
+            }
 
             if ($effectiveChange !== 0) {
                 $updateStmt = $pdo->prepare('UPDATE products SET quantity = ? WHERE id = ?');
                 $updateStmt->execute([$boundedQuantity, $id]);
 
-                adjustDefaultVariantQuantity($pdo, $id, $effectiveChange);
+                if ($selectedVariantMeta !== null && $variantId > 0) {
+                    adjustVariantQuantity($pdo, $variantId, $effectiveChange);
+                } else {
+                    adjustDefaultVariantQuantity($pdo, $id, $effectiveChange);
+                }
             }
 
             $pdo->commit();
 
             if ($effectiveChange === 0) {
+                $noChangeText = 'No stock was adjusted because the product is already at zero.';
+                if ($selectedVariantMeta !== null && $variantId > 0 && $change < 0 && $variantLimitedChange && $variantEffectiveChange === 0) {
+                    $variantLabel = trim((string) ($selectedVariantMeta['label'] ?? ''));
+                    $variantSku = trim((string) ($selectedVariantMeta['sku'] ?? ''));
+                    if ($variantLabel === '' && $variantSku !== '') {
+                        $variantLabel = $variantSku;
+                    }
+                    if ($variantLabel === '') {
+                        $variantLabel = 'Variant #' . $variantId;
+                    } elseif ($variantSku !== '' && stripos($variantLabel, $variantSku) === false) {
+                        $variantLabel .= ' (' . $variantSku . ')';
+                    }
+                    $noChangeText = sprintf('No stock was adjusted because the selected variant (%s) is already at zero.', $variantLabel);
+                }
+
                 $_SESSION['manual_adjust_message'] = [
                     'type' => 'warning',
-                    'text' => 'No stock was adjusted because the product is already at zero.',
+                    'text' => $noChangeText,
+                    'product_id' => $id,
+                    'variant_id' => $variantId > 0 ? $variantId : null,
                 ];
             } else {
                 $verb = $effectiveChange > 0 ? 'added to' : 'removed from';
                 $quantityChanged = abs($effectiveChange);
-                $limitedNote = ($change < 0 && $effectiveChange !== $change) ? ' (limited by available stock)' : '';
+                $limitedNotes = [];
+                if ($change < 0) {
+                    if ($productLimitedChange && $effectiveChange === $productEffectiveChange) {
+                        $limitedNotes[] = 'limited by available product stock';
+                    }
+                    if ($variantLimitedChange && $selectedVariantMeta !== null && $effectiveChange === $variantEffectiveChange) {
+                        $limitedNotes[] = 'limited by selected variant stock';
+                    }
+                }
+
+                $variantLabel = '';
+                if ($selectedVariantMeta !== null && $variantId > 0) {
+                    $variantName = trim((string) ($selectedVariantMeta['label'] ?? ''));
+                    $variantSku = trim((string) ($selectedVariantMeta['sku'] ?? ''));
+                    if ($variantName === '' && $variantSku !== '') {
+                        $variantName = $variantSku;
+                    }
+                    if ($variantName === '') {
+                        $variantName = 'Variant #' . $variantId;
+                    } elseif ($variantSku !== '' && stripos($variantName, $variantSku) === false) {
+                        $variantName .= ' (' . $variantSku . ')';
+                    }
+                    $variantLabel = $variantName;
+                }
+
+                $message = sprintf('%dpcs %s "%s"', $quantityChanged, $verb, $productRow['name']);
+                if ($variantLabel !== '') {
+                    $message .= ' — Variant: ' . $variantLabel;
+                }
+                if (!empty($limitedNotes)) {
+                    $message .= ' (' . implode('; ', $limitedNotes) . ')';
+                }
+
                 $_SESSION['manual_adjust_message'] = [
                     'type' => 'success',
-                    'text' => sprintf('%dpcs %s "%s"%s', $quantityChanged, $verb, $productRow['name'], $limitedNote),
+                    'text' => $message,
                     'product_id' => $id,
+                    'variant_id' => $variantId > 0 ? $variantId : null,
                 ];
             }
         } catch (Throwable $e) {
@@ -340,12 +468,16 @@ if ($canManualAdjust && isset($_POST['update_stock'])) {
             $_SESSION['manual_adjust_message'] = [
                 'type' => 'error',
                 'text' => 'Unable to update the product quantity. Please try again.',
+                'product_id' => $id,
+                'variant_id' => $variantId > 0 ? $variantId : null,
             ];
         }
     } else {
         $_SESSION['manual_adjust_message'] = [
             'type' => 'warning',
             'text' => 'Enter a quantity before submitting a manual adjustment.',
+            'product_id' => $id,
+            'variant_id' => $variantId > 0 ? $variantId : null,
         ];
     }
 
@@ -1409,6 +1541,12 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                             $categoryLabel = trim((string) ($p['category'] ?? ''));
                             // New: flag the row that just received a manual adjustment so we can highlight it
                             $isFlashProduct = $manualAdjustFeedback && isset($manualAdjustFeedback['product_id']) && intval($manualAdjustFeedback['product_id']) === intval($p['id']);
+                            $variantsForProduct = $productVariantsMap[(int) $p['id']] ?? [];
+                            $hasVariants = !empty($variantsForProduct);
+                            $lastAdjustedVariantId = 0;
+                            if ($isFlashProduct && isset($manualAdjustFeedback['variant_id'])) {
+                                $lastAdjustedVariantId = (int) ($manualAdjustFeedback['variant_id'] ?? 0);
+                            }
                             $rowClasses = [];
                             if ($low) {
                                 $rowClasses[] = 'low-stock';
@@ -1446,15 +1584,57 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                                     <form method="post" class="manual-adjust-form">
                                         <input type="hidden" name="id" value="<?= (int) $p['id'] ?>">
                                         <input type="hidden" name="return_view" value="<?= htmlspecialchars($manualAdjustReturnView) ?>">
-                                        <input
-                                            type="number"
-                                            id="manualAdjust<?= (int) $p['id'] ?>"
-                                            name="change"
-                                            value="0"
-                                            step="1"
-                                            class="manual-adjust-input"
-                                            aria-label="Adjust quantity for <?= htmlspecialchars($p['name']) ?>"
-                                        >
+                                        <?php if ($hasVariants): ?>
+                                        <div class="manual-adjust-field manual-adjust-field--variant">
+                                            <label class="manual-adjust-field__hint" for="manualAdjustVariant<?= (int) $p['id'] ?>">Variant</label>
+                                            <select
+                                                id="manualAdjustVariant<?= (int) $p['id'] ?>"
+                                                name="variant_id"
+                                                class="manual-adjust-select"
+                                            >
+                                                <option value=""<?= $lastAdjustedVariantId === 0 ? ' selected' : '' ?>>Select variant</option>
+                                                <?php foreach ($variantsForProduct as $variant):
+                                                    $variantOptionId = (int) ($variant['id'] ?? 0);
+                                                    if ($variantOptionId <= 0) {
+                                                        continue;
+                                                    }
+                                                    $variantLabelText = trim((string) ($variant['label'] ?? ''));
+                                                    $variantSkuText = trim((string) ($variant['sku'] ?? ''));
+                                                    if ($variantLabelText === '' && $variantSkuText !== '') {
+                                                        $variantLabelText = $variantSkuText;
+                                                    }
+                                                    if ($variantLabelText === '') {
+                                                        $variantLabelText = 'Variant #' . $variantOptionId;
+                                                    }
+                                                    $skuNote = '';
+                                                    if ($variantSkuText !== '' && strcasecmp($variantSkuText, $variantLabelText) !== 0) {
+                                                        $skuNote = ' — SKU: ' . $variantSkuText;
+                                                    }
+                                                    $defaultNote = !empty($variant['is_default']) ? ' (Default)' : '';
+                                                    $optionLabel = $variantLabelText . $skuNote . $defaultNote;
+                                                    $isSelected = $lastAdjustedVariantId === $variantOptionId;
+                                                ?>
+                                                <option value="<?= $variantOptionId ?>"<?= $isSelected ? ' selected' : '' ?>><?= htmlspecialchars($optionLabel) ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                        <?php else: ?>
+                                        <input type="hidden" name="variant_id" value="0">
+                                        <div class="manual-adjust-field manual-adjust-field--variant-note">
+                                            <span class="manual-adjust-variant-note">Single SKU</span>
+                                        </div>
+                                        <?php endif; ?>
+                                        <div class="manual-adjust-field manual-adjust-field--quantity">
+                                            <label class="manual-adjust-field__hint" for="manualAdjust<?= (int) $p['id'] ?>">Quantity</label>
+                                            <input
+                                                type="number"
+                                                id="manualAdjust<?= (int) $p['id'] ?>"
+                                                name="change"
+                                                value="0"
+                                                step="1"
+                                                class="manual-adjust-input"
+                                            >
+                                        </div>
                                         <button type="submit" name="update_stock" class="manual-adjust-button">Manual Adjust</button>
                                     </form>
                                     <div class="manual-adjust-meta">
