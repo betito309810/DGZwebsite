@@ -610,6 +610,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 onlineOrdersPollTimer = window.setInterval(fetchOnlineOrders, ONLINE_ORDER_POLL_MS);
             };
 
+            window.addEventListener('dgz:online-orders-refresh', () => {
+                fetchOnlineOrders();
+            });
+
             // Begin POS currency formatter
             function formatPeso(value) {
                 const amount = Number(value) || 0;

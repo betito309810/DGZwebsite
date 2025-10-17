@@ -121,3 +121,4 @@ $staffAllowedPages = [
         <?php endforeach; ?>
     </nav>
 </aside>
+<script src="../dgz_motorshop_system/assets/js/realtime/adminRealtime.js" defer></script>
