@@ -127,80 +127,206 @@
             return;
         }
 
-        const startTime = context.currentTime + 0.01;
-        const duration = 1.3;
-        const endTime = startTime + duration;
-        const attackTime = 0.08;
-        const shimmerTime = 0.28;
-
+        const startTime = context.currentTime + 0.02;
+        const duration = 1.35;
         const masterGain = context.createGain();
+        const panner = typeof context.createStereoPanner === 'function'
+            ? context.createStereoPanner()
+            : null;
+        const highpass = context.createBiquadFilter();
         const toneFilter = context.createBiquadFilter();
 
+        masterGain.gain.setValueAtTime(0.00001, startTime - 0.02);
+        masterGain.gain.exponentialRampToValueAtTime(0.72, startTime + 0.05);
+        masterGain.gain.setTargetAtTime(0.32, startTime + 0.24, 0.32);
+        masterGain.gain.setTargetAtTime(0.00001, startTime + duration - 0.28, 0.22);
+
+        highpass.type = 'highpass';
+        highpass.frequency.setValueAtTime(320, startTime);
+        highpass.Q.setValueAtTime(0.7, startTime);
+
         toneFilter.type = 'lowpass';
-        toneFilter.frequency.setValueAtTime(4800, startTime);
-        toneFilter.Q.setValueAtTime(0.6, startTime);
+        toneFilter.frequency.setValueAtTime(8200, startTime);
+        toneFilter.Q.setValueAtTime(0.9, startTime);
 
-        masterGain.gain.setValueAtTime(0.00001, context.currentTime);
-        masterGain.gain.linearRampToValueAtTime(0.55, startTime + attackTime);
-        masterGain.gain.setTargetAtTime(0.25, startTime + shimmerTime, 0.35);
-        masterGain.gain.setTargetAtTime(0.00001, startTime + duration - 0.35, 0.2);
+        if (panner) {
+            masterGain.connect(panner);
+            panner.connect(highpass);
+            panner.pan.setValueAtTime(-0.12, startTime);
+            panner.pan.linearRampToValueAtTime(0.18, startTime + 0.55);
+        } else {
+            masterGain.connect(highpass);
+        }
 
-        masterGain.connect(toneFilter);
+        highpass.connect(toneFilter);
         toneFilter.connect(context.destination);
 
-        [
-            { type: 'triangle', frequency: 880, detune: -6, gain: 0.62, shimmer: 0.56, release: 0.26 },
-            { type: 'triangle', frequency: 1318.5, detune: 4, gain: 0.46, shimmer: 0.5, release: 0.24 },
-            { type: 'square', frequency: 1975.5, detune: 2, gain: 0.24, shimmer: 0.44, release: 0.22 },
-            { type: 'triangle', frequency: 2349.3, detune: 0, gain: 0.16, shimmer: 0.42, release: 0.2 },
-        ].forEach(function (layer) {
+        const delay = context.createDelay();
+        const delayFilter = context.createBiquadFilter();
+        const delayFeedback = context.createGain();
+        const delayMix = context.createGain();
+
+        delay.delayTime.setValueAtTime(0.18, startTime);
+        delayFilter.type = 'lowpass';
+        delayFilter.frequency.setValueAtTime(7200, startTime);
+        delayFeedback.gain.setValueAtTime(0.24, startTime);
+        delayMix.gain.setValueAtTime(0.34, startTime);
+        delayFeedback.gain.setTargetAtTime(0.00001, startTime + duration, 0.4);
+        delayMix.gain.setTargetAtTime(0.00001, startTime + duration + 0.1, 0.35);
+
+        toneFilter.connect(delay);
+        delay.connect(delayFilter);
+        delayFilter.connect(delayFeedback);
+        delayFeedback.connect(delay);
+        delayFilter.connect(delayMix);
+        delayMix.connect(context.destination);
+
+        const chimeReal = new Float32Array([0, 0.85, 0.3, 0.18, 0.12, 0.08]);
+        const chimeImag = new Float32Array(chimeReal.length);
+        const shimmerReal = new Float32Array([0, 0.4, 0.28, 0.2, 0.16, 0.1, 0.06]);
+        const shimmerImag = new Float32Array(shimmerReal.length);
+        const chimeWave = context.createPeriodicWave(chimeReal, chimeImag);
+        const shimmerWave = context.createPeriodicWave(shimmerReal, shimmerImag);
+
+        function scheduleLayer(options) {
             const oscillator = context.createOscillator();
-            const layerGain = context.createGain();
+            const gainNode = context.createGain();
+            const layerOffset = options.offset || 0;
+            const layerStart = startTime + layerOffset;
+            const layerLength = Math.max(0, (options.length || (duration - layerOffset)));
+            const stopTime = layerStart + layerLength + (options.release || 0.28);
+            const attack = options.attack || 0.015;
+            const decay = options.decay || 0.24;
+            const sustainLevel = typeof options.sustain === 'number'
+                ? options.sustain
+                : options.gain * 0.58;
 
-            oscillator.type = layer.type;
-            oscillator.frequency.setValueAtTime(layer.frequency, startTime);
-            if (layer.detune) {
-                oscillator.detune.setValueAtTime(layer.detune, startTime);
+            if (options.wave) {
+                oscillator.setPeriodicWave(options.wave);
+            } else {
+                oscillator.type = options.type || 'triangle';
             }
-            oscillator.frequency.exponentialRampToValueAtTime(layer.frequency * 0.995, endTime);
 
-            layerGain.gain.setValueAtTime(0.00001, startTime);
-            layerGain.gain.linearRampToValueAtTime(layer.gain, startTime + attackTime);
-            layerGain.gain.setTargetAtTime(layer.gain * layer.shimmer, startTime + shimmerTime, 0.42);
-            layerGain.gain.setTargetAtTime(0.00001, startTime + duration - layer.release, 0.16);
+            oscillator.frequency.setValueAtTime(options.frequency, layerStart);
+            if (options.detune) {
+                oscillator.detune.setValueAtTime(options.detune, layerStart);
+            }
+            if (options.pitchAmount && options.pitchDecay) {
+                oscillator.frequency.setValueAtTime(options.frequency * options.pitchAmount, layerStart);
+                oscillator.frequency.exponentialRampToValueAtTime(
+                    options.frequency,
+                    layerStart + options.pitchDecay
+                );
+            }
 
-            oscillator.connect(layerGain);
-            layerGain.connect(masterGain);
+            gainNode.gain.setValueAtTime(0.00001, layerStart);
+            gainNode.gain.linearRampToValueAtTime(options.gain, layerStart + attack);
+            gainNode.gain.linearRampToValueAtTime(sustainLevel, layerStart + attack + decay);
+            if (options.hold) {
+                gainNode.gain.setValueAtTime(sustainLevel, layerStart + attack + decay + options.hold);
+            }
+            gainNode.gain.linearRampToValueAtTime(0.00001, stopTime);
 
-            oscillator.start(startTime);
-            oscillator.stop(endTime);
-        });
+            oscillator.connect(gainNode);
+            gainNode.connect(masterGain);
+
+            oscillator.start(layerStart);
+            oscillator.stop(stopTime);
+        }
+
+        [
+            {
+                wave: chimeWave,
+                frequency: 1174.66,
+                gain: 0.42,
+                attack: 0.02,
+                decay: 0.25,
+                sustain: 0.18,
+                release: 0.5,
+                pitchAmount: 1.018,
+                pitchDecay: 0.22,
+            },
+            {
+                type: 'sawtooth',
+                frequency: 1567.98,
+                detune: 3,
+                gain: 0.3,
+                offset: 0.025,
+                attack: 0.018,
+                decay: 0.28,
+                sustain: 0.14,
+                release: 0.45,
+                pitchAmount: 1.012,
+                pitchDecay: 0.26,
+            },
+            {
+                wave: shimmerWave,
+                frequency: 2093,
+                gain: 0.22,
+                offset: 0.08,
+                attack: 0.015,
+                decay: 0.22,
+                sustain: 0.1,
+                release: 0.4,
+            },
+            {
+                type: 'triangle',
+                frequency: 880,
+                detune: -5,
+                gain: 0.2,
+                offset: 0.14,
+                attack: 0.018,
+                decay: 0.24,
+                sustain: 0.08,
+                release: 0.35,
+            },
+        ].forEach(scheduleLayer);
+
+        const accent = context.createOscillator();
+        const accentGain = context.createGain();
+        const accentStart = startTime + 0.18;
+        const accentStop = accentStart + 0.9;
+
+        accent.type = 'square';
+        accent.frequency.setValueAtTime(2637.02, accentStart);
+        accent.frequency.exponentialRampToValueAtTime(2793.83, accentStart + 0.08);
+
+        accentGain.gain.setValueAtTime(0.00001, accentStart);
+        accentGain.gain.linearRampToValueAtTime(0.12, accentStart + 0.02);
+        accentGain.gain.linearRampToValueAtTime(0.00001, accentStop + 0.25);
+
+        accent.connect(accentGain);
+        accentGain.connect(masterGain);
+        accent.start(accentStart);
+        accent.stop(accentStop + 0.3);
 
         const noiseSource = context.createBufferSource();
-        const noiseBuffer = context.createBuffer(1, Math.ceil(context.sampleRate * duration), context.sampleRate);
+        const noiseDuration = duration + 0.3;
+        const noiseBuffer = context.createBuffer(1, Math.ceil(context.sampleRate * noiseDuration), context.sampleRate);
         const noiseData = noiseBuffer.getChannelData(0);
         for (let i = 0; i < noiseData.length; i += 1) {
-            const fade = Math.pow(1 - (i / noiseData.length), 3.5);
-            noiseData[i] = (Math.random() * 2 - 1) * fade;
+            const t = i / noiseData.length;
+            const fade = Math.pow(1 - t, 4.2);
+            noiseData[i] = (Math.random() * 2 - 1) * fade * 0.8;
         }
 
         const noiseFilter = context.createBiquadFilter();
-        noiseFilter.type = 'bandpass';
-        noiseFilter.frequency.setValueAtTime(3200, startTime);
-        noiseFilter.Q.setValueAtTime(6, startTime);
-
         const noiseGain = context.createGain();
+
+        noiseFilter.type = 'bandpass';
+        noiseFilter.frequency.setValueAtTime(5400, startTime);
+        noiseFilter.Q.setValueAtTime(5, startTime);
+
         noiseGain.gain.setValueAtTime(0.00001, startTime);
-        noiseGain.gain.linearRampToValueAtTime(0.12, startTime + attackTime * 0.6);
-        noiseGain.gain.setTargetAtTime(0.00001, startTime + duration - 0.4, 0.12);
+        noiseGain.gain.linearRampToValueAtTime(0.16, startTime + 0.05);
+        noiseGain.gain.linearRampToValueAtTime(0.00001, startTime + duration - 0.35);
 
         noiseSource.buffer = noiseBuffer;
         noiseSource.connect(noiseFilter);
         noiseFilter.connect(noiseGain);
         noiseGain.connect(masterGain);
-
         noiseSource.start(startTime);
-        noiseSource.stop(endTime);
+        noiseSource.stop(startTime + noiseDuration);
     }
 
     function sanitizeSnapshotSection(section) {
@@ -220,12 +346,21 @@
     }
 
     function hasNewRealtimeActivity(previous, current) {
-        if (!previous || !current) {
+        if (!current) {
             return false;
         }
 
         const metrics = ['pendingCount', 'latestId', 'latestCreatedAt'];
         const channels = ['pos', 'stock'];
+
+        if (!previous) {
+            return channels.some(function (channel) {
+                const currentSection = current[channel] || {};
+                return metrics.some(function (metric) {
+                    return Number(currentSection[metric] || 0) > 0;
+                });
+            });
+        }
 
         return channels.some(function (channel) {
             const currentSection = current[channel] || {};
