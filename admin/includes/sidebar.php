@@ -62,27 +62,16 @@ $navItems = [
     ],
 ];
 
-if (!empty($onlineOrderBadgeCount)) {
-    foreach ($navItems as &$navItem) {
-        if ($navItem['href'] === 'pos.php') {
-            $navItem['badge'] = (int) $onlineOrderBadgeCount;
-            $navItem['badge_attr'] = 'data-sidebar-pos-count';
-            break;
-        }
+foreach ($navItems as &$navItem) {
+    if ($navItem['href'] === 'pos.php') {
+        $navItem['badge'] = (int) $onlineOrderBadgeCount;
+        $navItem['badge_attr'] = 'data-sidebar-pos-count';
+    } elseif ($navItem['href'] === 'stockRequests.php') {
+        $navItem['badge'] = (int) $stockRequestBadgeCount;
+        $navItem['badge_attr'] = 'data-sidebar-stock-count';
     }
-    unset($navItem);
 }
-
-if (!empty($stockRequestBadgeCount)) {
-    foreach ($navItems as &$navItem) {
-        if ($navItem['href'] === 'stockRequests.php') {
-            $navItem['badge'] = (int) $stockRequestBadgeCount;
-            $navItem['badge_attr'] = 'data-sidebar-stock-count';
-            break;
-        }
-    }
-    unset($navItem);
-}
+unset($navItem);
 
 $staffAllowedPages = [
     'dashboard.php',
@@ -94,7 +83,11 @@ $staffAllowedPages = [
 ];
 
 ?>
-<aside class="sidebar" id="sidebar">
+<aside
+    class="sidebar"
+    id="sidebar"
+    data-sidebar-counts-feed="<?= htmlspecialchars(appBaseUrl() . '/admin/sidebarCountsFeed.php', ENT_QUOTES, 'UTF-8'); ?>"
+>
     <div class="sidebar-header">
         <div class="logo">
             <img src="../dgz_motorshop_system/assets/logo.png" alt="Company Logo">
@@ -113,8 +106,14 @@ $staffAllowedPages = [
                 <a href="<?php echo htmlspecialchars($href); ?>" class="nav-link<?php echo $isActive ? ' active' : ''; ?>">
                     <i class="<?php echo htmlspecialchars($item['icon']); ?>"></i>
                     <span class="nav-text"><?php echo htmlspecialchars($item['label']); ?></span>
-                    <?php if (!empty($item['badge']) && !$isActive): ?>
-                        <span class="nav-badge" <?= isset($item['badge_attr']) ? htmlspecialchars($item['badge_attr'], ENT_QUOTES, 'UTF-8') : 'data-sidebar-badge' ?>><?= (int) $item['badge'] ?></span>
+                    <?php if (!empty($item['badge_attr'])): ?>
+                        <?php
+                            $badgeAttr = htmlspecialchars($item['badge_attr'], ENT_QUOTES, 'UTF-8');
+                            $badgeCount = (int) ($item['badge'] ?? 0);
+                            $badgeText = $badgeCount > 0 ? (string) $badgeCount : '';
+                            $badgeHidden = $badgeText === '' ? ' hidden' : '';
+                        ?>
+                        <span class="nav-badge" <?= $badgeAttr ?><?= $badgeHidden ?>><?= htmlspecialchars($badgeText, ENT_QUOTES, 'UTF-8') ?></span>
                     <?php endif; ?>
                 </a>
             </div>
