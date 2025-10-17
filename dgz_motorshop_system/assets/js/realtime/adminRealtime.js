@@ -130,28 +130,41 @@
         const startTime = context.currentTime + 0.01;
         const duration = 1.3;
         const endTime = startTime + duration;
+        const attackTime = 0.08;
+        const shimmerTime = 0.28;
 
         const masterGain = context.createGain();
-        masterGain.gain.setValueAtTime(0.0001, context.currentTime);
-        masterGain.gain.exponentialRampToValueAtTime(0.6, startTime + 0.05);
-        masterGain.gain.exponentialRampToValueAtTime(0.00001, endTime);
-        masterGain.connect(context.destination);
+        const toneFilter = context.createBiquadFilter();
+
+        toneFilter.type = 'lowpass';
+        toneFilter.frequency.setValueAtTime(4800, startTime);
+        toneFilter.Q.setValueAtTime(0.6, startTime);
+
+        masterGain.gain.setValueAtTime(0.00001, context.currentTime);
+        masterGain.gain.linearRampToValueAtTime(0.55, startTime + attackTime);
+        masterGain.gain.setTargetAtTime(0.25, startTime + shimmerTime, 0.35);
+        masterGain.gain.setTargetAtTime(0.00001, startTime + duration - 0.35, 0.2);
+
+        masterGain.connect(toneFilter);
+        toneFilter.connect(context.destination);
 
         [
-            { frequency: 880, gain: 0.9 },
-            { frequency: 1320, gain: 0.55 },
-            { frequency: 1760, gain: 0.35 },
-            { frequency: 2340, gain: 0.18 },
+            { frequency: 880, gain: 0.75, shimmer: 0.58 },
+            { frequency: 1318.5, gain: 0.5, shimmer: 0.52 },
+            { frequency: 1760, gain: 0.28, shimmer: 0.46 },
+            { frequency: 2093, gain: 0.18, shimmer: 0.4 },
         ].forEach(function (partial) {
             const oscillator = context.createOscillator();
             const partialGain = context.createGain();
 
             oscillator.type = 'sine';
             oscillator.frequency.setValueAtTime(partial.frequency, startTime);
-            oscillator.frequency.exponentialRampToValueAtTime(partial.frequency * 0.985, endTime);
+            oscillator.frequency.exponentialRampToValueAtTime(partial.frequency * 0.99, endTime);
 
-            partialGain.gain.setValueAtTime(partial.gain, startTime);
-            partialGain.gain.exponentialRampToValueAtTime(0.0001, endTime);
+            partialGain.gain.setValueAtTime(0.00001, startTime);
+            partialGain.gain.linearRampToValueAtTime(partial.gain, startTime + attackTime);
+            partialGain.gain.setTargetAtTime(partial.gain * partial.shimmer, startTime + shimmerTime, 0.45);
+            partialGain.gain.setTargetAtTime(0.00001, startTime + duration - 0.25, 0.18);
 
             oscillator.connect(partialGain);
             partialGain.connect(masterGain);
