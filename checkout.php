@@ -20,6 +20,7 @@ if (!in_array($selectedPaymentMethod, ['GCash', 'Maya'], true)) {
 $currentQrAsset = $selectedPaymentMethod === 'Maya' ? $mayaQrAsset : $qrAsset;
 $currentQrAlt = $selectedPaymentMethod === 'Maya' ? 'Maya payment QR code' : 'GCash payment QR code';
 $shopUrl = orderingUrl('index.php');
+$inventoryAvailabilityApi = orderingUrl('api/inventory-availability.php');
 
 
 if (!function_exists('ensureOrdersTrackingCodeColumn')) {
@@ -897,6 +898,8 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                 <a href="<?= htmlspecialchars($shopUrl) ?>" class="order-empty-link">Continue shopping</a>
             </div>
 
+            <div id="inventoryAdjustmentNotice" class="inventory-notice" role="alert" aria-live="polite"></div>
+
             <?php
             $subtotal = 0;
             foreach ($cartItems as $item) {
@@ -1030,6 +1033,9 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
         const highValueProceedButton = document.querySelector('[data-high-value-proceed]');
         const highValueCancelButton = document.querySelector('[data-high-value-cancel]');
         const highValueBlockedOkButton = document.querySelector('[data-high-value-blocked-ok]');
+        const inventoryNotice = document.getElementById('inventoryAdjustmentNotice');
+        const inventoryCheckUrl = <?= json_encode($inventoryAvailabilityApi) ?>;
+        const inventoryRefreshIntervalMs = 30000;
 
         let cartState = [];
         try {
@@ -1041,6 +1047,8 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
         let currentTotals = { items: 0, subtotal: 0 };
         let highValueOverride = false;
         let pendingHighValueSubmission = null;
+        let inventoryRefreshTimer = null;
+        let inventoryFetchPromise = null;
 
         function openModal(modal) {
             if (!modal) {
@@ -1054,6 +1062,50 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                 return;
             }
             modal.setAttribute('hidden', 'hidden');
+        }
+
+        function escapeHtml(value) {
+            return String(value || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function showInventoryNotice(messages) {
+            if (!inventoryNotice) {
+                return;
+            }
+
+            if (!Array.isArray(messages) || messages.length === 0) {
+                inventoryNotice.innerHTML = '';
+                inventoryNotice.classList.remove('inventory-notice--visible');
+                return;
+            }
+
+            const list = messages
+                .map((message) => `<li>${escapeHtml(message)}</li>`)
+                .join('');
+            inventoryNotice.innerHTML = `<ul>${list}</ul>`;
+            inventoryNotice.classList.add('inventory-notice--visible');
+        }
+
+        function formatItemLabel(item) {
+            if (!item) {
+                return 'This item';
+            }
+            const name = item.name ? String(item.name) : 'This item';
+            const variant = item.variantLabel ? ` (${item.variantLabel})` : '';
+            return `${name}${variant}`;
+        }
+
+        function makeInventoryKey(item) {
+            const productId = item && item.id ? Number(item.id) : 0;
+            const variantId = item && item.variantId !== undefined && item.variantId !== null
+                ? Number(item.variantId)
+                : null;
+            return `${productId}:${variantId !== null ? variantId : 'base'}`;
         }
 
         // Guard submission so blank required fields cannot slip through trimming
@@ -1111,21 +1163,44 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
         function normaliseItem(rawItem = {}) {
             const basePrice = rawItem.price ?? rawItem.variant_price;
             const price = Number(basePrice);
-            const quantity = Number(rawItem.quantity);
+            let quantity = Number(rawItem.quantity);
             const variantId = rawItem.variantId ?? rawItem.variant_id ?? null;
             const variantLabelRaw = rawItem.variantLabel ?? rawItem.variant_label ?? '';
             const stockValue = rawItem.stock ?? null;
             const imageValue = rawItem.image ?? null;
+            const stock = stockValue === null || stockValue === undefined
+                ? null
+                : Math.max(0, Math.floor(Number(stockValue)));
+            const isUnavailable = rawItem.unavailable === true || (stock !== null && stock <= 0);
+
+            if (!Number.isFinite(quantity)) {
+                quantity = isUnavailable ? 0 : 1;
+            }
+
+            quantity = Math.floor(quantity);
+
+            if (quantity < 0) {
+                quantity = 0;
+            }
+
+            if (isUnavailable) {
+                quantity = 0;
+            } else if (stock !== null && quantity > stock) {
+                quantity = Math.max(1, stock);
+            } else if (!isUnavailable && quantity === 0) {
+                quantity = stock !== null && stock > 0 ? 1 : 0;
+            }
 
             return {
                 id: rawItem.id ?? null,
                 name: rawItem.name ?? 'Product',
                 price: Number.isFinite(price) ? price : 0,
-                quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1,
+                quantity,
                 variantId: variantId !== null ? Number(variantId) : null,
                 variantLabel: variantLabelRaw ? String(variantLabelRaw) : '',
                 variantPrice: Number.isFinite(price) ? price : 0,
-                stock: stockValue !== undefined ? stockValue : null,
+                stock,
+                unavailable: isUnavailable,
                 image: imageValue ?? null,
             };
         }
@@ -1146,7 +1221,10 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
         function syncBrowserStorage() {
             try {
                 localStorage.setItem('cartItems', JSON.stringify(cartState));
-                const totalItems = cartState.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+                const totalItems = cartState.reduce((sum, item) => {
+                    const quantity = Number(item.quantity);
+                    return sum + (Number.isFinite(quantity) && quantity > 0 ? quantity : 0);
+                }, 0);
                 localStorage.setItem('cartCount', String(totalItems));
             } catch (error) {
                 console.error('Unable to persist cart to localStorage.', error);
@@ -1170,11 +1248,18 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                 return;
             }
 
+            if (cartItem.unavailable) {
+                input.value = '0';
+                input.dataset.previousValidValue = '0';
+                return;
+            }
+
             const rawValue = String(input.value).trim();
             const stockRaw = cartItem.stock;
             const stockQuantity = stockRaw !== undefined && stockRaw !== null
                 ? Number(stockRaw)
                 : null;
+            const minimumQuantity = stockQuantity !== null && stockQuantity <= 0 ? 0 : 1;
 
             if (rawValue === '') {
                 if (allowEmpty) {
@@ -1182,14 +1267,17 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                 }
 
                 const previous = Number.parseInt(input.dataset.previousValidValue || '', 10);
-                let fallback = Number.isFinite(previous) && previous >= 1 ? previous : 1;
+                let fallback = Number.isFinite(previous) && previous >= minimumQuantity ? previous : minimumQuantity;
                 if (stockQuantity !== null) {
-                    fallback = Math.min(fallback, Math.max(1, stockQuantity));
+                    fallback = Math.min(fallback, Math.max(minimumQuantity, stockQuantity));
                 }
 
                 input.value = String(fallback);
                 input.dataset.previousValidValue = String(fallback);
                 cartState[index].quantity = fallback;
+                if (fallback === 0) {
+                    cartState[index].unavailable = true;
+                }
                 updateSummary();
                 syncCartInput();
                 syncBrowserStorage();
@@ -1197,11 +1285,11 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             }
 
             let parsed = Number.parseInt(rawValue, 10);
-            if (!Number.isFinite(parsed) || parsed < 1) {
+            if (!Number.isFinite(parsed) || parsed < minimumQuantity) {
                 if (!enforceMax) {
                     return;
                 }
-                parsed = 1;
+                parsed = minimumQuantity;
             }
 
             if (stockQuantity !== null && parsed > stockQuantity) {
@@ -1215,10 +1303,10 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
 
                 const previous = Number.parseInt(input.dataset.previousValidValue || '', 10);
                 let fallback;
-                if (Number.isFinite(previous) && previous >= 1 && previous <= stockQuantity) {
+                if (Number.isFinite(previous) && previous >= minimumQuantity && previous <= stockQuantity) {
                     fallback = previous;
                 } else {
-                    fallback = Math.max(1, stockQuantity);
+                    fallback = Math.max(minimumQuantity, stockQuantity);
                 }
 
                 parsed = fallback;
@@ -1227,6 +1315,9 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             input.value = String(parsed);
             input.dataset.previousValidValue = String(parsed);
             cartState[index].quantity = parsed;
+            if (parsed === 0) {
+                cartState[index].unavailable = true;
+            }
             updateSummary();
             syncCartInput();
             syncBrowserStorage();
@@ -1235,8 +1326,10 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
         function updateSummary() {
             const totals = cartState.reduce((acc, item) => {
                 const { price, quantity } = normaliseItem(item);
-                acc.items += quantity;
-                acc.subtotal += price * quantity;
+                if (quantity > 0) {
+                    acc.items += quantity;
+                    acc.subtotal += price * quantity;
+                }
                 return acc;
             }, { items: 0, subtotal: 0 });
 
@@ -1250,11 +1343,16 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             }
 
             const hasItems = cartState.length > 0;
-            submitButton.disabled = !hasItems;
+            const hasPurchasableItems = cartState.some((item) => normaliseItem(item).quantity > 0);
+            submitButton.disabled = !hasPurchasableItems;
             emptyState.style.display = hasItems ? 'none' : 'block';
             if (clearCartButton) {
                 clearCartButton.style.display = hasItems ? 'block' : 'none';
                 clearCartButton.disabled = !hasItems;
+            }
+
+            if (!hasItems) {
+                showInventoryNotice([]);
             }
         }
 
@@ -1292,11 +1390,21 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             category.textContent = item.variantLabel ? `Variant: ${item.variantLabel}` : 'Product';
             details.appendChild(category);
 
-            if (item.stock !== undefined && item.stock !== null) {
+            const stockValue = item.stock !== undefined && item.stock !== null ? Number(item.stock) : null;
+            const isUnavailable = item.unavailable === true || (stockValue !== null && stockValue <= 0);
+
+            if (stockValue !== null) {
                 const stock = document.createElement('div');
                 stock.className = 'item-stock';
-                stock.textContent = `Stock: ${item.stock}`;
+                stock.textContent = isUnavailable ? 'Stock: 0' : `Stock: ${stockValue}`;
                 details.appendChild(stock);
+            }
+
+            if (isUnavailable) {
+                const status = document.createElement('div');
+                status.className = 'item-status item-status--unavailable';
+                status.textContent = 'This item is currently out of stock.';
+                details.appendChild(status);
             }
 
             row.appendChild(details);
@@ -1319,12 +1427,14 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             const qty = document.createElement('input');
             qty.type = 'number';
             qty.className = 'quantity-input';
-            qty.min = 1;
+            qty.min = isUnavailable ? 0 : 1;
             qty.value = item.quantity;
             qty.dataset.index = String(index);
             qty.dataset.previousValidValue = String(item.quantity);
-            if (item.stock !== undefined && item.stock !== null && Number(item.stock) > 0) {
-                qty.max = String(item.stock);
+            if (stockValue !== null && stockValue > 0) {
+                qty.max = String(stockValue);
+            } else if (isUnavailable) {
+                qty.max = '0';
             }
 
             const increaseBtn = document.createElement('button');
@@ -1337,6 +1447,13 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             qtyWrapper.appendChild(decreaseBtn);
             qtyWrapper.appendChild(qty);
             qtyWrapper.appendChild(increaseBtn);
+
+            if (isUnavailable) {
+                qty.disabled = true;
+                decreaseBtn.disabled = true;
+                increaseBtn.disabled = true;
+                qtyWrapper.classList.add('quantity-control--disabled');
+            }
 
             meta.appendChild(qtyWrapper);
 
@@ -1367,6 +1484,186 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             updateSummary();
             syncCartInput();
             syncBrowserStorage();
+        }
+
+        function applyInventorySnapshot(snapshotItems) {
+            if (!Array.isArray(snapshotItems) || snapshotItems.length === 0) {
+                return;
+            }
+
+            const updateMap = new Map();
+            snapshotItems.forEach((entry) => {
+                const productId = Number(entry.product_id ?? entry.productId ?? 0);
+                if (!Number.isFinite(productId) || productId <= 0) {
+                    return;
+                }
+                const variantRaw = entry.variant_id ?? entry.variantId ?? null;
+                const variantId = variantRaw !== null && variantRaw !== undefined
+                    ? Number(variantRaw)
+                    : null;
+                const stockRaw = entry.stock ?? null;
+                const stock = stockRaw === null || stockRaw === undefined
+                    ? 0
+                    : Math.max(0, Math.floor(Number(stockRaw)));
+                const key = `${productId}:${variantId !== null ? variantId : 'base'}`;
+                updateMap.set(key, {
+                    productId,
+                    variantId,
+                    stock,
+                });
+            });
+
+            if (updateMap.size === 0) {
+                return;
+            }
+
+            const adjustmentMessages = [];
+            let shouldRender = false;
+
+            cartState = cartState.map((item) => {
+                const key = makeInventoryKey(item);
+                if (!updateMap.has(key)) {
+                    return item;
+                }
+
+                const update = updateMap.get(key);
+                const previousStock = item.stock ?? null;
+                const previousQuantity = Number(item.quantity) || 0;
+                const wasUnavailable = Boolean(item.unavailable);
+                const nextStock = update.stock;
+                const updatedItem = { ...item, stock: nextStock };
+
+                if (nextStock <= 0) {
+                    if (previousQuantity !== 0 || !wasUnavailable) {
+                        adjustmentMessages.push(`${formatItemLabel(item)} is now out of stock. Quantity set to 0.`);
+                    }
+                    updatedItem.quantity = 0;
+                    updatedItem.unavailable = true;
+                    if (!wasUnavailable || previousQuantity !== 0 || previousStock !== nextStock) {
+                        shouldRender = true;
+                    }
+                } else {
+                    const maxAllowed = Math.max(1, nextStock);
+                    let nextQuantity = previousQuantity;
+
+                    if (previousQuantity <= 0 || wasUnavailable) {
+                        nextQuantity = Math.min(maxAllowed, Math.max(1, previousQuantity || 1));
+                        if (wasUnavailable) {
+                            adjustmentMessages.push(`${formatItemLabel(item)} is back in stock. Quantity set to ${nextQuantity}.`);
+                        }
+                    }
+
+                    if (nextQuantity > maxAllowed) {
+                        nextQuantity = maxAllowed;
+                        adjustmentMessages.push(`${formatItemLabel(item)} quantity reduced to ${maxAllowed} due to limited stock.`);
+                    }
+
+                    updatedItem.quantity = nextQuantity;
+                    updatedItem.unavailable = false;
+
+                    if (nextQuantity !== previousQuantity || wasUnavailable || previousStock !== nextStock) {
+                        shouldRender = true;
+                    }
+                }
+
+                if (previousStock !== nextStock && nextStock <= 0 && !wasUnavailable) {
+                    shouldRender = true;
+                }
+
+                return updatedItem;
+            });
+
+            if (shouldRender) {
+                renderOrderItems();
+            } else {
+                updateSummary();
+                syncCartInput();
+                syncBrowserStorage();
+            }
+
+            if (adjustmentMessages.length > 0) {
+                showInventoryNotice(adjustmentMessages);
+            }
+        }
+
+        function refreshInventoryAvailability(options = {}) {
+            const { force = false } = options;
+
+            if (!inventoryCheckUrl || typeof inventoryCheckUrl !== 'string' || inventoryCheckUrl === '') {
+                return;
+            }
+
+            if (cartState.length === 0) {
+                return;
+            }
+
+            if (!force && document.hidden) {
+                return;
+            }
+
+            if (inventoryFetchPromise) {
+                return;
+            }
+
+            const payloadItems = cartState
+                .map((item) => {
+                    const productId = Number(item.id ?? item.productId ?? 0);
+                    if (!Number.isFinite(productId) || productId <= 0) {
+                        return null;
+                    }
+                    const variantId = item.variantId !== null && item.variantId !== undefined
+                        ? Number(item.variantId)
+                        : null;
+                    return {
+                        product_id: productId,
+                        variant_id: variantId,
+                    };
+                })
+                .filter((value) => value !== null);
+
+            if (payloadItems.length === 0) {
+                return;
+            }
+
+            inventoryFetchPromise = fetch(inventoryCheckUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ items: payloadItems }),
+            })
+                .then((response) => {
+                    if (!response.ok) {
+                        throw new Error(`Unexpected status ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then((data) => {
+                    if (data && Array.isArray(data.items)) {
+                        applyInventorySnapshot(data.items);
+                    }
+                })
+                .catch((error) => {
+                    console.error('Unable to refresh inventory availability.', error);
+                })
+                .finally(() => {
+                    inventoryFetchPromise = null;
+                });
+        }
+
+        function scheduleInventoryRefresh() {
+            if (!inventoryCheckUrl || typeof inventoryCheckUrl !== 'string' || inventoryCheckUrl === '') {
+                return;
+            }
+
+            if (inventoryRefreshTimer) {
+                clearInterval(inventoryRefreshTimer);
+            }
+
+            inventoryRefreshTimer = setInterval(() => {
+                if (document.hidden) {
+                    return;
+                }
+                refreshInventoryAvailability();
+            }, inventoryRefreshIntervalMs);
         }
 
         orderItemsContainer?.addEventListener('click', (event) => {
@@ -1450,6 +1747,18 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             cartState = [];
             renderOrderItems();
             window.scrollTo({ top: 0, behavior: 'smooth' });
+            showInventoryNotice([]);
+        });
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                return;
+            }
+            refreshInventoryAvailability({ force: true });
+        });
+
+        window.addEventListener('focus', () => {
+            refreshInventoryAvailability({ force: true });
         });
 
         highValueProceedButton?.addEventListener('click', () => {
@@ -1471,6 +1780,8 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
         });
 
         renderOrderItems();
+        scheduleInventoryRefresh();
+        refreshInventoryAvailability({ force: true });
     </script>
 </body>
 </html>

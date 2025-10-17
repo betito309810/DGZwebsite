@@ -419,6 +419,17 @@ textarea {
     color: #475569;
 }
 
+.item-status {
+    margin-top: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.item-status--unavailable {
+    color: #b91c1c;
+}
+
 /* Align price with product name */
 .order-item {
     display: grid;
@@ -476,6 +487,19 @@ textarea {
     font-weight: 600;
     background: transparent;
     box-shadow: none;
+}
+
+.quantity-control--disabled {
+    opacity: 0.6;
+}
+
+.quantity-control--disabled .qty-btn,
+.quantity-control--disabled .quantity-input {
+    cursor: not-allowed;
+}
+
+.quantity-control--disabled .qty-btn {
+    color: #94a3b8;
 }
 
 .quantity-control .quantity-input:focus {
@@ -603,6 +627,27 @@ textarea {
     color: #2563eb;
     margin-bottom: 16px;
     background: rgba(37, 99, 235, 0.06);
+}
+
+.inventory-notice {
+    display: none;
+    margin-bottom: 18px;
+    padding: 16px 18px;
+    border-radius: 12px;
+    border: 1px solid #facc15;
+    background: #fffbeb;
+    color: #92400e;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.inventory-notice ul {
+    margin: 0;
+    padding-left: 18px;
+}
+
+.inventory-notice--visible {
+    display: block;
 }
 
 .order-empty i {
