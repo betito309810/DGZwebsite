@@ -242,10 +242,25 @@ function getStatusClass(string $status): string
                 </div>
             <?php endif; ?>
 
-            <div class="requests-card">
-                <?php if (empty($requests)): ?>
-                    <p class="empty-state"><i class="fas fa-inbox"></i> No restock requests found.</p>
-                <?php else: ?>
+            <div
+                class="requests-card"
+                data-restock-requests-root
+                data-restock-feed-url="restockRequestsFeed.php"
+                data-can-manage="<?= $role === 'admin' ? '1' : '0' ?>"
+            >
+                <p
+                    class="empty-state"
+                    data-restock-empty-all
+                    <?php echo empty($requests) ? '' : 'hidden'; ?>
+                >
+                    <i class="fas fa-inbox"></i> No restock requests found.
+                </p>
+
+                <div
+                    class="restock-tabs"
+                    data-restock-tabs
+                    <?php echo empty($requests) ? 'hidden' : ''; ?>
+                >
                     <div class="tab-controls">
                         <button type="button" class="tab-btn active" data-target="pending-tab">
                             <i class="fas fa-hourglass-half"></i> Pending Requests
@@ -255,144 +270,160 @@ function getStatusClass(string $status): string
                         </button>
                     </div>
 
-                    <div id="pending-tab" class="tab-panel active">
-                        <?php if (empty($pendingRequests)): ?>
-                            <p class="empty-state"><i class="fas fa-check-circle"></i> No pending restock requests.</p>
-                        <?php else: ?>
-                            <div class="table-wrapper">
-                                <table class="requests-table">
-                                    <thead>
+                    <div id="pending-tab" class="tab-panel active" data-restock-pending-panel>
+                        <p
+                            class="empty-state"
+                            data-restock-pending-empty
+                            <?php echo empty($pendingRequests) ? '' : 'hidden'; ?>
+                        >
+                            <i class="fas fa-check-circle"></i> No pending restock requests.
+                        </p>
+
+                        <div
+                            class="table-wrapper"
+                            data-restock-pending-table-wrapper
+                            <?php echo empty($pendingRequests) ? 'hidden' : ''; ?>
+                        >
+                            <table class="requests-table">
+                                <thead>
+                                    <tr>
+                                        <th>Submitted</th>
+                                        <th>Product</th>
+                                        <th>Category</th>
+                                        <th>Brand</th>
+                                        <th>Supplier</th>
+                                        <th>Quantity</th>
+                                        <th>Priority</th>
+                                        <th>Requested By</th>
+                                        <th>Notes</th>
+                                        <?php if ($role === 'admin'): ?>
+                                            <th>Actions</th>
+                                        <?php endif; ?>
+                                    </tr>
+                                </thead>
+                                <tbody data-restock-pending-body>
+                                    <?php foreach ($pendingRequests as $request): ?>
+                                        <?php $priority = strtolower($request['priority_level'] ?? ''); ?>
                                         <tr>
-                                            <th>Submitted</th>
-                                            <th>Product</th>
-                                            <th>Category</th>
-                                            <th>Brand</th>
-                                            <th>Supplier</th>
-                                            <th>Quantity</th>
-                                            <th>Priority</th>
-                                            <th>Requested By</th>
-                                            <th>Notes</th>
+                                            <td><?php echo date('M d, Y H:i', strtotime($request['created_at'])); ?></td>
+                                            <td>
+                                                <div class="product-cell">
+                                                    <span class="product-name"><?php echo htmlspecialchars($request['product_name'] ?? 'Product removed'); ?></span>
+                                                    <?php if (!empty($request['variant_label'])): ?>
+                                                        <span class="product-variant">Variant: <?php echo htmlspecialchars($request['variant_label']); ?></span>
+                                                    <?php endif; ?>
+                                                    <?php if (!empty($request['product_code'])): ?>
+                                                        <span class="product-code">Code: <?php echo htmlspecialchars($request['product_code']); ?></span>
+                                                    <?php endif; ?>
+                                                </div>
+                                            </td>
+                                            <td><?php echo htmlspecialchars($request['category'] ?? ''); ?></td>
+                                            <td><?php echo htmlspecialchars($request['brand'] ?? ''); ?></td>
+                                            <td><?php echo htmlspecialchars($request['supplier'] ?? ''); ?></td>
+                                            <td><?php echo (int) $request['quantity_requested']; ?></td>
+                                            <td>
+                                                <span class="priority-badge <?php echo getPriorityClass($priority); ?>"><?php echo ucfirst($priority); ?></span>
+                                            </td>
+                                            <td><?php echo htmlspecialchars($request['requester_name'] ?? 'Unknown'); ?></td>
+                                            <td class="notes-cell">
+                                                <?php if (!empty($request['notes'])): ?>
+                                                    <?php echo nl2br(htmlspecialchars($request['notes'])); ?>
+                                                <?php else: ?>
+                                                    <span class="muted">No notes</span>
+                                                <?php endif; ?>
+                                            </td>
                                             <?php if ($role === 'admin'): ?>
-                                                <th>Actions</th>
+                                                <td class="action-cell">
+                                                    <form method="post" class="inline-form">
+                                                        <input type="hidden" name="request_id" value="<?php echo (int) $request['id']; ?>">
+                                                        <input type="hidden" name="request_action" value="approve">
+                                                        <button type="submit" class="btn-approve">
+                                                            <i class="fas fa-check"></i> Approve
+                                                        </button>
+                                                    </form>
+                                                    <form method="post" class="inline-form">
+                                                        <input type="hidden" name="request_id" value="<?php echo (int) $request['id']; ?>">
+                                                        <input type="hidden" name="request_action" value="decline">
+                                                        <button type="submit" class="btn-decline">
+                                                            <i class="fas fa-times"></i> Decline
+                                                        </button>
+                                                    </form>
+                                                </td>
                                             <?php endif; ?>
                                         </tr>
-                                    </thead>
-                                    <tbody>
-                                        <?php foreach ($pendingRequests as $request): ?>
-                                            <tr>
-                                                <td><?php echo date('M d, Y H:i', strtotime($request['created_at'])); ?></td>
-                                                <td>
-                                                    <div class="product-cell">
-                                                        <span class="product-name"><?php echo htmlspecialchars($request['product_name'] ?? 'Product removed'); ?></span>
-                                                        <?php if (!empty($request['variant_label'])): ?>
-                                                            <span class="product-variant">Variant: <?php echo htmlspecialchars($request['variant_label']); ?></span>
-                                                        <?php endif; ?>
-                                                        <?php if (!empty($request['product_code'])): ?>
-                                                            <span class="product-code">Code: <?php echo htmlspecialchars($request['product_code']); ?></span>
-                                                        <?php endif; ?>
-                                                    </div>
-                                                </td>
-                                                <td><?php echo htmlspecialchars($request['category'] ?? ''); ?></td>
-                                                <td><?php echo htmlspecialchars($request['brand'] ?? ''); ?></td>
-                                                <td><?php echo htmlspecialchars($request['supplier'] ?? ''); ?></td>
-                                                <td><?php echo (int) $request['quantity_requested']; ?></td>
-                                                <td>
-                                                    <?php $priority = strtolower($request['priority_level'] ?? ''); ?>
-                                                    <span class="priority-badge <?php echo getPriorityClass($priority); ?>"><?php echo ucfirst($priority); ?></span>
-                                                </td>
-                                                <td><?php echo htmlspecialchars($request['requester_name'] ?? 'Unknown'); ?></td>
-                                                <td class="notes-cell">
-                                                    <?php if (!empty($request['notes'])): ?>
-                                                        <?php echo nl2br(htmlspecialchars($request['notes'])); ?>
-                                                    <?php else: ?>
-                                                        <span class="muted">No notes</span>
-                                                    <?php endif; ?>
-                                                </td>
-                                                <?php if ($role === 'admin'): ?>
-                                                    <td class="action-cell">
-                                                        <form method="post" class="inline-form">
-                                                            <input type="hidden" name="request_id" value="<?php echo (int) $request['id']; ?>">
-                                                            <input type="hidden" name="request_action" value="approve">
-                                                            <button type="submit" class="btn-approve">
-                                                                <i class="fas fa-check"></i> Approve
-                                                            </button>
-                                                        </form>
-                                                        <form method="post" class="inline-form">
-                                                            <input type="hidden" name="request_id" value="<?php echo (int) $request['id']; ?>">
-                                                            <input type="hidden" name="request_action" value="decline">
-                                                            <button type="submit" class="btn-decline">
-                                                                <i class="fas fa-times"></i> Decline
-                                                            </button>
-                                                        </form>
-                                                    </td>
-                                                <?php endif; ?>
-                                            </tr>
-                                        <?php endforeach; ?>
-                                    </tbody>
-                                </table>
-                            </div>
-                        <?php endif; ?>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
 
-                    <div id="status-tab" class="tab-panel">
-                        <?php if (empty($historyEntries)): ?>
-                            <p class="empty-state"><i class="fas fa-inbox"></i> No request history logged yet.</p>
-                        <?php else: ?>
-                            <div class="table-wrapper">
-                                <table class="requests-table">
-                                    <thead>
+                    <div id="status-tab" class="tab-panel" data-restock-history-panel>
+                        <p
+                            class="empty-state"
+                            data-restock-history-empty
+                            <?php echo empty($historyEntries) ? '' : 'hidden'; ?>
+                        >
+                            <i class="fas fa-inbox"></i> No request history logged yet.
+                        </p>
+
+                        <div
+                            class="table-wrapper"
+                            data-restock-history-table-wrapper
+                            <?php echo empty($historyEntries) ? 'hidden' : ''; ?>
+                        >
+                            <table class="requests-table">
+                                <thead>
+                                    <tr>
+                                        <th>Logged At</th>
+                                        <th>Product</th>
+                                        <th>Category</th>
+                                        <th>Brand</th>
+                                        <th>Supplier</th>
+                                        <th>Quantity</th>
+                                        <th>Priority</th>
+                                        <th>Requested By</th>
+                                        <th>Status</th>
+                                        <th>Logged By</th>
+                                        <th>Approved / Declined By</th>
+                                    </tr>
+                                </thead>
+                                <tbody data-restock-history-body>
+                                    <?php foreach ($historyEntries as $entry): ?>
+                                        <?php $status = strtolower($entry['status'] ?? 'pending'); ?>
+                                        <?php $priority = strtolower($entry['request_priority'] ?? ''); ?>
                                         <tr>
-                                            <th>Logged At</th>
-                                            <th>Product</th>
-                                            <th>Category</th>
-                                            <th>Brand</th>
-                                            <th>Supplier</th>
-                                            <th>Quantity</th>
-                                            <th>Priority</th>
-                                            <th>Requested By</th>
-                                            <th>Status</th>
-                                            <th>Logged By</th>
-                                            <th>Approved / Declined By</th>
+                                            <td><?php echo date('M d, Y H:i', strtotime($entry['created_at'])); ?></td>
+                                            <td>
+                                                <div class="product-cell">
+                                                    <span class="product-name"><?php echo htmlspecialchars($entry['product_name'] ?? 'Product removed'); ?></span>
+                                                    <?php if (!empty($entry['variant_label'])): ?>
+                                                        <span class="product-variant">Variant: <?php echo htmlspecialchars($entry['variant_label']); ?></span>
+                                                    <?php endif; ?>
+                                                    <?php if (!empty($entry['product_code'])): ?>
+                                                        <span class="product-code">Code: <?php echo htmlspecialchars($entry['product_code']); ?></span>
+                                                    <?php endif; ?>
+                                                </div>
+                                            </td>
+                                            <td><?php echo htmlspecialchars($entry['request_category'] ?? ''); ?></td>
+                                            <td><?php echo htmlspecialchars($entry['request_brand'] ?? ''); ?></td>
+                                            <td><?php echo htmlspecialchars($entry['request_supplier'] ?? ''); ?></td>
+                                            <td><?php echo (int) $entry['request_quantity']; ?></td>
+                                            <td>
+                                                <span class="priority-badge <?php echo getPriorityClass($priority); ?>"><?php echo ucfirst($priority); ?></span>
+                                            </td>
+                                            <td><?php echo htmlspecialchars($entry['requester_name'] ?? 'Unknown'); ?></td>
+                                            <td>
+                                                <span class="status-badge <?php echo getStatusClass($status); ?>"><?php echo ucfirst($status); ?></span>
+                                            </td>
+                                            <td><?php echo htmlspecialchars($entry['status_user_name'] ?? 'System'); ?></td>
+                                            <td><?php echo htmlspecialchars($entry['reviewer_name'] ?? ($entry['status'] === 'pending' ? '—' : 'Unknown')); ?></td>
                                         </tr>
-                                    </thead>
-                                    <tbody>
-                                        <?php foreach ($historyEntries as $entry): ?>
-                                            <?php $status = strtolower($entry['status'] ?? 'pending'); ?>
-                                            <tr>
-                                                <td><?php echo date('M d, Y H:i', strtotime($entry['created_at'])); ?></td>
-                                                <td>
-                                                    <div class="product-cell">
-                                                        <span class="product-name"><?php echo htmlspecialchars($entry['product_name'] ?? 'Product removed'); ?></span>
-                                                        <?php if (!empty($entry['variant_label'])): ?>
-                                                            <span class="product-variant">Variant: <?php echo htmlspecialchars($entry['variant_label']); ?></span>
-                                                        <?php endif; ?>
-                                                        <?php if (!empty($entry['product_code'])): ?>
-                                                            <span class="product-code">Code: <?php echo htmlspecialchars($entry['product_code']); ?></span>
-                                                        <?php endif; ?>
-                                                    </div>
-                                                </td>
-                                                <td><?php echo htmlspecialchars($entry['request_category'] ?? ''); ?></td>
-                                                <td><?php echo htmlspecialchars($entry['request_brand'] ?? ''); ?></td>
-                                                <td><?php echo htmlspecialchars($entry['request_supplier'] ?? ''); ?></td>
-                                                <td><?php echo (int) $entry['request_quantity']; ?></td>
-                                                <td>
-                                                    <?php $priority = strtolower($entry['request_priority'] ?? ''); ?>
-                                                    <span class="priority-badge <?php echo getPriorityClass($priority); ?>"><?php echo ucfirst($priority); ?></span>
-                                                </td>
-                                                <td><?php echo htmlspecialchars($entry['requester_name'] ?? 'Unknown'); ?></td>
-                                                <td>
-                                                    <span class="status-badge <?php echo getStatusClass($status); ?>"><?php echo ucfirst($status); ?></span>
-                                                </td>
-                                                <td><?php echo htmlspecialchars($entry['status_user_name'] ?? 'System'); ?></td>
-                                                <td><?php echo htmlspecialchars($entry['reviewer_name'] ?? ($entry['status'] === 'pending' ? '—' : 'Unknown')); ?></td>
-                                            </tr>
-                                        <?php endforeach; ?>
-                                    </tbody>
-                                </table>
-                            </div>
-                        <?php endif; ?>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                <?php endif; ?>
+                </div>
             </div>
         </section>
     </main>
@@ -423,6 +454,7 @@ function getStatusClass(string $status): string
         <script src="../dgz_motorshop_system/assets/js/dashboard/userMenu.js"></script>
 
     <!-- Tab controls -->
+    <script src="../dgz_motorshop_system/assets/js/inventory/stockRequestsLive.js"></script>
     <script src="../dgz_motorshop_system/assets/js/inventory/stockRequest.js"></script>
     <script src="../dgz_motorshop_system/assets/js/notifications.js"></script>
 </body>
