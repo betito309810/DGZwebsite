@@ -127,22 +127,38 @@
             return;
         }
 
-        const now = context.currentTime;
-        const oscillator = context.createOscillator();
-        const gainNode = context.createGain();
+        const startTime = context.currentTime + 0.01;
+        const duration = 1.3;
+        const endTime = startTime + duration;
 
-        oscillator.type = 'triangle';
-        oscillator.frequency.setValueAtTime(880, now);
+        const masterGain = context.createGain();
+        masterGain.gain.setValueAtTime(0.0001, context.currentTime);
+        masterGain.gain.exponentialRampToValueAtTime(0.6, startTime + 0.05);
+        masterGain.gain.exponentialRampToValueAtTime(0.00001, endTime);
+        masterGain.connect(context.destination);
 
-        gainNode.gain.setValueAtTime(0, now);
-        gainNode.gain.linearRampToValueAtTime(0.18, now + 0.01);
-        gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+        [
+            { frequency: 880, gain: 0.9 },
+            { frequency: 1320, gain: 0.55 },
+            { frequency: 1760, gain: 0.35 },
+            { frequency: 2340, gain: 0.18 },
+        ].forEach(function (partial) {
+            const oscillator = context.createOscillator();
+            const partialGain = context.createGain();
 
-        oscillator.connect(gainNode);
-        gainNode.connect(context.destination);
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(partial.frequency, startTime);
+            oscillator.frequency.exponentialRampToValueAtTime(partial.frequency * 0.985, endTime);
 
-        oscillator.start(now);
-        oscillator.stop(now + 0.4);
+            partialGain.gain.setValueAtTime(partial.gain, startTime);
+            partialGain.gain.exponentialRampToValueAtTime(0.0001, endTime);
+
+            oscillator.connect(partialGain);
+            partialGain.connect(masterGain);
+
+            oscillator.start(startTime);
+            oscillator.stop(endTime);
+        });
     }
 
     function sanitizeSnapshotSection(section) {
