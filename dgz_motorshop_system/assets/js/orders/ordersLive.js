@@ -1,5 +1,6 @@
 (function () {
     var POLL_INTERVAL_MS = 10000;
+    var BACKGROUND_POLL_INTERVAL_MS = 30000;
     var tableBody = document.querySelector('[data-orders-table-body]');
     var table = document.querySelector('[data-orders-table]');
     var errorBanner = document.querySelector('[data-orders-error]');
@@ -221,13 +222,14 @@
     function scheduleNextPoll() {
         cancelScheduledPoll();
 
+        var interval = POLL_INTERVAL_MS;
         if (typeof document !== 'undefined' && document.hidden) {
-            return;
+            interval = BACKGROUND_POLL_INTERVAL_MS;
         }
 
         pollTimeoutId = window.setTimeout(function () {
             poll(false);
-        }, POLL_INTERVAL_MS);
+        }, interval);
     }
 
     /**
@@ -263,11 +265,11 @@
     }
 
     /**
-     * When the document becomes visible again, immediately refresh the data.
+     * React to visibility changes by slowing background polling and forcing a refresh on return.
      */
     function handleVisibilityChange() {
         if (typeof document !== 'undefined' && document.hidden) {
-            cancelScheduledPoll();
+            scheduleNextPoll();
             return;
         }
 
