@@ -236,6 +236,33 @@
                 }, 5000);
             });
 
+            const variantBootstrapNode = document.getElementById('inventoryVariants');
+            const variantsByProduct = new Map();
+            if (variantBootstrapNode) {
+                try {
+                    const raw = JSON.parse(variantBootstrapNode.textContent || '{}');
+                    if (raw && typeof raw === 'object') {
+                        Object.entries(raw).forEach(([productId, variants]) => {
+                            if (!Array.isArray(variants)) {
+                                variantsByProduct.set(String(productId), []);
+                                return;
+                            }
+
+                            const normalisedVariants = variants.map((variant) => ({
+                                id: String(variant?.id ?? ''),
+                                label: variant?.label ? String(variant.label) : '',
+                                sku: variant?.sku ? String(variant.sku) : '',
+                                is_default: Number(variant?.is_default ?? 0),
+                            }));
+
+                            variantsByProduct.set(String(productId), normalisedVariants);
+                        });
+                    }
+                } catch (error) {
+                    console.warn('Unable to parse inventory variant bootstrap data.', error);
+                }
+            }
+
             const restockFormEl = document.querySelector('.restock-form');
             const productSelect = document.getElementById('restock_product');
             const categorySelect = document.getElementById('restock_category');
@@ -253,6 +280,15 @@
             const quantityInput = document.getElementById('restock_quantity');
             const prioritySelect = document.getElementById('restock_priority');
             const notesTextarea = document.getElementById('restock_notes');
+            const variantField = document.querySelector('[data-restock-variant-field]');
+            const variantSelect = document.getElementById('restock_variant');
+
+            let initialVariantValue = '';
+            let pendingInitialVariant = false;
+            if (restockFormEl) {
+                initialVariantValue = (restockFormEl.dataset.initialVariant || '').toString();
+                pendingInitialVariant = initialVariantValue !== '';
+            }
 
             function handleSelectChange(selectEl, inputEl) {
                 if (!selectEl || !inputEl) {
@@ -290,6 +326,74 @@
                     inputEl.value = '';
                 }
             }
+
+            const getVariantsForProduct = (productId) => {
+                if (!productId) {
+                    return [];
+                }
+
+                return variantsByProduct.get(String(productId)) || [];
+            };
+
+            const resetVariantField = () => {
+                if (!variantSelect) {
+                    return;
+                }
+
+                variantSelect.innerHTML = '<option value="">No variants available</option>';
+                variantSelect.value = '';
+                variantSelect.disabled = true;
+                variantSelect.required = false;
+                pendingInitialVariant = false;
+                initialVariantValue = '';
+            };
+
+            const populateVariantField = (productId, { presetVariant = '' } = {}) => {
+                if (!variantSelect || !variantField) {
+                    return;
+                }
+
+                const variants = getVariantsForProduct(productId);
+                if (!variants.length) {
+                    resetVariantField();
+                    return;
+                }
+
+                const previousValue = variantSelect.value;
+                variantSelect.innerHTML = '<option value="">Select variant</option>';
+
+                variants.forEach((variant) => {
+                    const option = document.createElement('option');
+                    option.value = variant.id;
+                    const baseLabel = variant.label && variant.label.trim() !== ''
+                        ? variant.label
+                        : `Variant #${variant.id}`;
+                    option.textContent = baseLabel;
+                    variantSelect.appendChild(option);
+                });
+
+                variantSelect.disabled = false;
+                variantSelect.required = true;
+
+                let targetVariant = presetVariant || '';
+
+                if (!targetVariant && previousValue && variants.some((variant) => String(variant.id) === String(previousValue))) {
+                    targetVariant = previousValue;
+                }
+
+                if (!targetVariant && pendingInitialVariant && initialVariantValue) {
+                    if (variants.some((variant) => String(variant.id) === String(initialVariantValue))) {
+                        targetVariant = initialVariantValue;
+                    }
+                    pendingInitialVariant = false;
+                }
+
+                if (targetVariant && !variants.some((variant) => String(variant.id) === String(targetVariant))) {
+                    targetVariant = '';
+                }
+
+                variantSelect.value = targetVariant;
+            };
 
             const metadataOverrides = {
                 category: false,
@@ -374,6 +478,9 @@
                         category: option.dataset.category || '',
                         brand: option.dataset.brand || '',
                         supplier: option.dataset.supplier || '',
+                        variantCount: option.dataset.variantCount !== undefined
+                            ? Number(option.dataset.variantCount)
+                            : getVariantsForProduct(option.value).length,
                     }));
 
                 productOptionsSnapshot = { placeholder, entries };
@@ -497,6 +604,9 @@
                 }
                 if (data.name !== undefined) {
                     option.setAttribute('data-name', data.name);
+                }
+                if (data.variantCount !== undefined) {
+                    option.setAttribute('data-variant-count', String(data.variantCount));
                 }
                 return option;
             }
@@ -631,12 +741,19 @@
                     syncMetadataField(categorySelect, categoryNewInput, 'category', '');
                     syncMetadataField(brandSelect, brandNewInput, 'brand', '');
                     syncMetadataField(supplierSelect, supplierNewInput, 'supplier', '');
+                    resetVariantField();
                     return;
                 }
 
                 syncMetadataField(categorySelect, categoryNewInput, 'category', selectedOption.getAttribute('data-category') || '');
                 syncMetadataField(brandSelect, brandNewInput, 'brand', selectedOption.getAttribute('data-brand') || '');
                 syncMetadataField(supplierSelect, supplierNewInput, 'supplier', selectedOption.getAttribute('data-supplier') || '');
+                const productId = selectedOption.value || '';
+                if (productId) {
+                    populateVariantField(productId);
+                } else {
+                    resetVariantField();
+                }
             }
 
             let hasInitialFormData = false;
@@ -679,6 +796,8 @@
                     if (notesTextarea) {
                         notesTextarea.value = data.initialNotes || '';
                     }
+
+                    updateProductMeta();
                 }
             }
 
@@ -691,6 +810,10 @@
                     updateProductMeta();
                 }
             }
+
+            variantSelect?.addEventListener('change', () => {
+                pendingInitialVariant = false;
+            });
 
             productSearchInput?.addEventListener('input', () => {
                 updateProductSuggestions();

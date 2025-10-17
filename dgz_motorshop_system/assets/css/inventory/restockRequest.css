@@ -136,6 +136,13 @@
     flex-wrap: wrap;
 }
 
+.product-cell .product-variant {
+    font-size: 0.85rem;
+    color: #475569;
+    display: block;
+    margin-top: 4px;
+}
+
 .product-picker-actions {
     display: flex;
     flex-wrap: wrap;

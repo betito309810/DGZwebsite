@@ -97,6 +97,13 @@ body {
     font-size: 0.85rem;
 }
 
+.product-variant {
+    color: #495057;
+    font-size: 0.85rem;
+    display: block;
+    margin-top: 4px;
+}
+
 .priority-badge,
 .status-badge {
     display: inline-block;
