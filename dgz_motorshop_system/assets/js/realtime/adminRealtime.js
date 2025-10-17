@@ -73,8 +73,17 @@
         }
     }
 
+    function getSidebarLink(href) {
+        return document.querySelector(`.nav-menu .nav-link[href="${href}"]`);
+    }
+
+    function isSidebarLinkActive(href) {
+        const link = getSidebarLink(href);
+        return !!(link && link.classList.contains('active'));
+    }
+
     function createSidebarBadge(href, attr, count) {
-        const link = document.querySelector(`.nav-menu .nav-link[href="${href}"]`);
+        const link = getSidebarLink(href);
         if (!link) {
             return;
         }
@@ -84,6 +93,13 @@
         badge.setAttribute(attr, '');
         badge.textContent = String(count);
         link.appendChild(badge);
+    }
+
+    function removeSidebarBadge(selector) {
+        const badge = document.querySelector(selector);
+        if (badge) {
+            badge.remove();
+        }
     }
 
     function updateSidebarBadge(selector, count, create) {
@@ -131,13 +147,21 @@
         const pos = payload.pos || {};
         const stock = payload.stock || {};
 
-        updateSidebarBadge('[data-sidebar-pos-count]', pos.pendingCount, function (count) {
-            createSidebarBadge('pos.php', 'data-sidebar-pos-count', count);
-        });
+        if (isSidebarLinkActive('pos.php')) {
+            removeSidebarBadge('[data-sidebar-pos-count]');
+        } else {
+            updateSidebarBadge('[data-sidebar-pos-count]', pos.pendingCount, function (count) {
+                createSidebarBadge('pos.php', 'data-sidebar-pos-count', count);
+            });
+        }
 
-        updateSidebarBadge('[data-sidebar-stock-count]', stock.pendingCount, function (count) {
-            createSidebarBadge('stockRequests.php', 'data-sidebar-stock-count', count);
-        });
+        if (isSidebarLinkActive('stockRequests.php')) {
+            removeSidebarBadge('[data-sidebar-stock-count]');
+        } else {
+            updateSidebarBadge('[data-sidebar-stock-count]', stock.pendingCount, function (count) {
+                createSidebarBadge('stockRequests.php', 'data-sidebar-stock-count', count);
+            });
+        }
 
         try {
             window.dispatchEvent(new CustomEvent('dgz:online-orders-refresh', { detail: pos }));
