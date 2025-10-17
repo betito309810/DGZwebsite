@@ -141,3 +141,5 @@ foreach ($inventoryNotifications as $note) {
         </div>
     </div>
 </div>
+
+<script src="../dgz_motorshop_system/assets/js/admin/sidebarCountsLive.js" defer></script>

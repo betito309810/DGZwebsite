@@ -79,7 +79,11 @@ $orders = $pdo->query($sql)->fetchAll();
     <div class="card shadow mb-4">
         <div class="card-header">Orders & Requests</div>
         <div class="card-body">
-            <table class="table table-bordered">
+            <table
+                class="table table-bordered"
+                data-orders-table
+                data-orders-feed-url="<?= htmlspecialchars(appBaseUrl() . '/admin/ordersFeed.php'); ?>"
+            >
                 <thead>
                     <tr>
                         <th>ID</th>
@@ -90,7 +94,7 @@ $orders = $pdo->query($sql)->fetchAll();
                         <th>Date</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="ordersTableBody" data-orders-table-body>
                     <?php foreach ($orders as $o): ?>
                     <tr>
                         <td><?= $o['id'] ?></td>
@@ -107,7 +111,14 @@ $orders = $pdo->query($sql)->fetchAll();
                     <?php endforeach; ?>
                 </tbody>
             </table>
+            <p class="text-danger small mt-3" data-orders-error hidden>
+                <i class="fas fa-exclamation-triangle"></i>
+                <span data-orders-error-text>Live updates are temporarily unavailable.</span>
+                <a href="#" data-orders-retry>Try again</a> or refresh the page manually.
+            </p>
         </div>
     </div>
 
 </div>
+
+<script src="../dgz_motorshop_system/assets/js/orders/ordersLive.js"></script>
