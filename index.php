@@ -15,6 +15,8 @@ $mobileNavScript = assetUrl('assets/js/public/mobileNav.js');
 $mobileFiltersScript = assetUrl('assets/js/public/mobileFilters.js');
 $galleryScript = assetUrl('assets/js/public/productGallery.js');
 $termsScript = assetUrl('assets/js/public/termsNotice.js');
+$inventoryAvailabilityScript = assetUrl('assets/js/public/inventoryAvailability.js');
+$inventoryAvailabilityApi = orderingUrl('api/inventory-availability.php');
 $homeUrl = orderingUrl('index.php');
 $aboutUrl = orderingUrl('about.php');
 $trackOrderUrl = orderingUrl('track-order.php');
@@ -368,7 +370,8 @@ natcasesort($categories);
         window.dgzPaths = Object.assign({}, window.dgzPaths || {}, {
             checkout: <?= json_encode($checkoutUrl) ?>,
             productImages: <?= json_encode($productImagesEndpoint) ?>,
-            productPlaceholder: <?= json_encode($productPlaceholder) ?>
+            productPlaceholder: <?= json_encode($productPlaceholder) ?>,
+            inventoryAvailability: <?= json_encode($inventoryAvailabilityApi) ?>
         });
     </script>
     <script src="<?= htmlspecialchars($cartScript) ?>"></script>
@@ -382,6 +385,8 @@ natcasesort($categories);
     <script src="<?= htmlspecialchars($galleryScript) ?>"></script>
     <!-- Terms acknowledgement overlay -->
     <script src="<?= htmlspecialchars($termsScript) ?>"></script>
+    <!-- Live inventory watcher -->
+    <script src="<?= htmlspecialchars($inventoryAvailabilityScript) ?>"></script>
     </div>
    <footer class="footer">
     <div class="footer-content">

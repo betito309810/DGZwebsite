@@ -1,0 +1,390 @@
+(function () {
+    'use strict';
+
+    const dgzPaths = window.dgzPaths || {};
+    const inventoryUrl = typeof dgzPaths.inventoryAvailability === 'string'
+        ? dgzPaths.inventoryAvailability
+        : '';
+
+    const REFRESH_INTERVAL_MS = 30000;
+    const MAX_BATCH_SIZE = 45;
+
+    const productCards = Array.from(document.querySelectorAll('.product-card'));
+    if (!inventoryUrl || productCards.length === 0) {
+        return;
+    }
+
+    const inventoryState = new Map();
+    let refreshTimer = null;
+    let pendingRequest = null;
+
+    function parseVariantsFromCard(card) {
+        if (!card) {
+            return [];
+        }
+
+        const raw = card.dataset.productVariants || '[]';
+        try {
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed.slice() : [];
+        } catch (error) {
+            return [];
+        }
+    }
+
+    function chunkArray(items, size) {
+        const chunks = [];
+        for (let index = 0; index < items.length; index += size) {
+            chunks.push(items.slice(index, index + size));
+        }
+        return chunks;
+    }
+
+    function gatherRequestItems() {
+        const seen = new Set();
+        const requestItems = [];
+
+        productCards.forEach((card) => {
+            const productId = Number(card.dataset.productId);
+            if (!Number.isFinite(productId) || productId <= 0) {
+                return;
+            }
+
+            const variants = parseVariantsFromCard(card);
+            if (variants.length === 0) {
+                const key = `${productId}:base`;
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    requestItems.push({ product_id: productId, variant_id: null });
+                }
+                return;
+            }
+
+            variants.forEach((variant) => {
+                const variantId = Number(variant?.id ?? null);
+                if (!Number.isFinite(variantId) || variantId <= 0) {
+                    return;
+                }
+                const key = `${productId}:${variantId}`;
+                if (seen.has(key)) {
+                    return;
+                }
+                seen.add(key);
+                requestItems.push({ product_id: productId, variant_id: variantId });
+            });
+        });
+
+        return requestItems;
+    }
+
+    function normaliseStock(value) {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric) || numeric < 0) {
+            return 0;
+        }
+        return Math.floor(numeric);
+    }
+
+    function applyInventorySnapshot(entries) {
+        entries.forEach((entry) => {
+            const productId = Number(entry?.product_id ?? 0);
+            if (!Number.isFinite(productId) || productId <= 0) {
+                return;
+            }
+
+            const variantIdRaw = entry?.variant_id;
+            const variantId = variantIdRaw === null || variantIdRaw === undefined
+                ? null
+                : Number(variantIdRaw);
+            const stock = normaliseStock(entry?.stock ?? 0);
+
+            let state = inventoryState.get(productId);
+            if (!state) {
+                state = { base: null, variants: new Map() };
+                inventoryState.set(productId, state);
+            }
+
+            if (variantId === null || !Number.isFinite(variantId)) {
+                state.base = stock;
+            } else {
+                state.variants.set(variantId, stock);
+            }
+        });
+
+        updateAllCards();
+    }
+
+    function pickDefaultVariant(variants) {
+        if (!Array.isArray(variants) || variants.length === 0) {
+            return null;
+        }
+
+        let preferred = variants.find((variant) => Number(variant?.is_default ?? 0) === 1) || variants[0];
+        if (preferred && Number(preferred.quantity ?? 0) <= 0) {
+            const fallback = variants.find((variant) => Number(variant?.quantity ?? 0) > 0);
+            if (fallback) {
+                preferred = fallback;
+            }
+        }
+
+        return preferred || null;
+    }
+
+    function formatCurrency(value) {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) {
+            return '0.00';
+        }
+
+        try {
+            return numeric.toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+            });
+        } catch (error) {
+            return numeric.toFixed(2);
+        }
+    }
+
+    function updateDefaultVariantData(card, variant) {
+        if (!card) {
+            return;
+        }
+
+        if (!variant) {
+            card.dataset.productDefaultVariantId = '';
+            card.dataset.productDefaultVariantLabel = '';
+            card.dataset.productDefaultVariantPrice = '';
+            card.dataset.productDefaultVariantQuantity = '';
+            return;
+        }
+
+        if (variant.id !== undefined && variant.id !== null) {
+            card.dataset.productDefaultVariantId = String(variant.id);
+        } else {
+            card.dataset.productDefaultVariantId = '';
+        }
+
+        card.dataset.productDefaultVariantLabel = variant.label ? String(variant.label) : '';
+
+        if (variant.price !== undefined && variant.price !== null && Number.isFinite(Number(variant.price))) {
+            const priceValue = Number(variant.price);
+            card.dataset.productDefaultVariantPrice = priceValue.toFixed(2);
+            card.dataset.productPrice = priceValue.toFixed(2);
+
+            const priceDisplay = card.querySelector('.price');
+            if (priceDisplay) {
+                priceDisplay.textContent = `₱${formatCurrency(priceValue)}`;
+            }
+        } else {
+            card.dataset.productDefaultVariantPrice = '';
+        }
+
+        if (variant.quantity !== undefined && variant.quantity !== null && Number.isFinite(Number(variant.quantity))) {
+            card.dataset.productDefaultVariantQuantity = String(Math.max(0, Number(variant.quantity)));
+        } else {
+            card.dataset.productDefaultVariantQuantity = '';
+        }
+    }
+
+    function renderStockMarkup(quantity) {
+        if (quantity <= 0) {
+            return '<span class="stock-status-text">Out of stock</span>';
+        }
+
+        const status = quantity <= 5 ? 'Low stock' : 'In stock';
+        return '<span class="stock-indicator" aria-hidden="true"></span>'
+            + `<span class="stock-status-text">${status}</span>`;
+    }
+
+    function updateCardStockUi(card, quantity) {
+        const stockElement = card.querySelector('.stock');
+        if (!stockElement) {
+            return;
+        }
+
+        stockElement.dataset.stock = String(quantity);
+        stockElement.classList.remove('low', 'out');
+        if (quantity <= 0) {
+            stockElement.classList.add('out');
+        } else if (quantity <= 5) {
+            stockElement.classList.add('low');
+        }
+
+        stockElement.innerHTML = renderStockMarkup(quantity);
+    }
+
+    function updateQuantityControls(card, quantity) {
+        const qtyInput = card.querySelector('.qty-input');
+        if (qtyInput) {
+            const maxQuantity = Math.max(1, quantity);
+            qtyInput.max = String(maxQuantity);
+
+            if (quantity <= 0) {
+                qtyInput.setAttribute('disabled', 'disabled');
+            } else {
+                qtyInput.removeAttribute('disabled');
+                const currentValue = Number(qtyInput.value);
+                if (!Number.isFinite(currentValue) || currentValue <= 0) {
+                    qtyInput.value = '1';
+                } else if (currentValue > quantity) {
+                    qtyInput.value = String(quantity);
+                }
+            }
+        }
+
+        const addButton = card.querySelector('.add-cart-btn');
+        if (addButton) {
+            if (quantity <= 0) {
+                addButton.setAttribute('disabled', 'disabled');
+            } else {
+                addButton.removeAttribute('disabled');
+            }
+        }
+    }
+
+    function updateCardFromState(card) {
+        const productId = Number(card.dataset.productId);
+        if (!Number.isFinite(productId) || productId <= 0) {
+            return;
+        }
+
+        const state = inventoryState.get(productId);
+        if (!state) {
+            return;
+        }
+
+        const variants = parseVariantsFromCard(card);
+        let aggregatedQuantity = 0;
+
+        if (variants.length > 0) {
+            const updatedVariants = variants.map((variant) => {
+                const variantId = Number(variant?.id ?? 0);
+                let stock = Number(variant?.quantity ?? 0);
+                if (Number.isFinite(variantId) && variantId > 0 && state.variants.has(variantId)) {
+                    stock = state.variants.get(variantId);
+                }
+                return {
+                    ...variant,
+                    quantity: normaliseStock(stock),
+                };
+            });
+
+            aggregatedQuantity = updatedVariants.reduce((total, variant) => {
+                const quantity = Number(variant.quantity ?? 0);
+                return total + (Number.isFinite(quantity) ? Math.max(0, quantity) : 0);
+            }, 0);
+
+            card.dataset.productVariants = JSON.stringify(updatedVariants);
+            updateDefaultVariantData(card, pickDefaultVariant(updatedVariants));
+        } else {
+            if (state.base !== null && state.base !== undefined) {
+                aggregatedQuantity = normaliseStock(state.base);
+            } else if (state.variants.size > 0) {
+                aggregatedQuantity = 0;
+                state.variants.forEach((stock) => {
+                    aggregatedQuantity += normaliseStock(stock);
+                });
+            } else {
+                const existing = Number(card.dataset.productQuantity ?? 0);
+                aggregatedQuantity = Number.isFinite(existing) ? Math.max(0, existing) : 0;
+            }
+        }
+
+        aggregatedQuantity = normaliseStock(aggregatedQuantity);
+        card.dataset.productQuantity = String(aggregatedQuantity);
+
+        updateCardStockUi(card, aggregatedQuantity);
+        updateQuantityControls(card, aggregatedQuantity);
+    }
+
+    function updateAllCards() {
+        productCards.forEach(updateCardFromState);
+    }
+
+    async function fetchBatch(batch) {
+        const response = await fetch(inventoryUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items: batch }),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Unexpected status ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (!data || !Array.isArray(data.items)) {
+            return [];
+        }
+
+        return data.items;
+    }
+
+    function refreshInventory(options = {}) {
+        const { force = false } = options;
+
+        if (pendingRequest) {
+            return;
+        }
+
+        if (!force && document.hidden) {
+            return;
+        }
+
+        const requestItems = gatherRequestItems();
+        if (requestItems.length === 0) {
+            return;
+        }
+
+        const batches = chunkArray(requestItems, MAX_BATCH_SIZE);
+        pendingRequest = (async () => {
+            const aggregated = [];
+
+            for (const batch of batches) {
+                try {
+                    const items = await fetchBatch(batch);
+                    aggregated.push(...items);
+                } catch (error) {
+                    console.error('Unable to refresh storefront inventory availability.', error);
+                    break;
+                }
+            }
+
+            if (aggregated.length > 0) {
+                applyInventorySnapshot(aggregated);
+            }
+        })()
+            .finally(() => {
+                pendingRequest = null;
+            });
+    }
+
+    function scheduleRefresh() {
+        if (refreshTimer) {
+            clearInterval(refreshTimer);
+        }
+
+        refreshTimer = setInterval(() => {
+            if (document.hidden) {
+                return;
+            }
+            refreshInventory();
+        }, REFRESH_INTERVAL_MS);
+    }
+
+    refreshInventory({ force: true });
+    scheduleRefresh();
+
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+            refreshInventory({ force: true });
+        }
+    });
+
+    window.dgzInventoryWatcher = {
+        refresh: () => {
+            refreshInventory({ force: true });
+        },
+    };
+})();
