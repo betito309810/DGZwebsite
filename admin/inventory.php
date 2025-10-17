@@ -9,6 +9,11 @@ enforceStaffAccess();
 $canManualAdjust = in_array($role, ['admin', 'staff'], true);
 $userId = $_SESSION['user_id'] ?? 0;
 $allowedPriorities = ['low', 'medium', 'high'];
+$sortableColumns = [
+    'name' => 'name',
+    'quantity' => 'quantity',
+];
+$allowedSortKeys = array_keys($sortableColumns);
 
 ensureRestockVariantColumns($pdo);
 
@@ -247,7 +252,7 @@ if ($canManualAdjust && isset($_POST['update_stock'])) {
 
             if (isset($returnViewData['sort'])) {
                 $sortValue = (string) $returnViewData['sort'];
-                if ($sortValue !== 'name') {
+                if (!in_array($sortValue, $allowedSortKeys, true)) {
                     unset($returnViewData['sort'], $returnViewData['direction']);
                 } else {
                     $returnViewData['sort'] = $sortValue;
@@ -290,7 +295,7 @@ if ($canManualAdjust && isset($_POST['update_stock'])) {
         try {
             $pdo->beginTransaction();
 
-            $lookupStmt = $pdo->prepare('SELECT name FROM products WHERE id = ? LIMIT 1');
+            $lookupStmt = $pdo->prepare('SELECT name, quantity FROM products WHERE id = ? LIMIT 1');
             $lookupStmt->execute([$id]);
             $productRow = $lookupStmt->fetch(PDO::FETCH_ASSOC);
 
@@ -298,20 +303,35 @@ if ($canManualAdjust && isset($_POST['update_stock'])) {
                 throw new RuntimeException('The selected product could not be found.');
             }
 
-            $updateStmt = $pdo->prepare('UPDATE products SET quantity = quantity + ? WHERE id = ?');
-            $updateStmt->execute([$change, $id]);
+            $currentQuantity = isset($productRow['quantity']) ? (int) $productRow['quantity'] : 0;
+            $proposedQuantity = $currentQuantity + $change;
+            $boundedQuantity = max(0, $proposedQuantity);
+            $effectiveChange = $boundedQuantity - $currentQuantity;
 
-            adjustDefaultVariantQuantity($pdo, $id, $change);
+            if ($effectiveChange !== 0) {
+                $updateStmt = $pdo->prepare('UPDATE products SET quantity = ? WHERE id = ?');
+                $updateStmt->execute([$boundedQuantity, $id]);
+
+                adjustDefaultVariantQuantity($pdo, $id, $effectiveChange);
+            }
 
             $pdo->commit();
 
-            $verb = $change > 0 ? 'added to' : 'removed from';
-            $quantityChanged = abs($change);
-            $_SESSION['manual_adjust_message'] = [
-                'type' => 'success',
-                'text' => sprintf('%dpcs %s "%s"', $quantityChanged, $verb, $productRow['name']),
-                'product_id' => $id,
-            ];
+            if ($effectiveChange === 0) {
+                $_SESSION['manual_adjust_message'] = [
+                    'type' => 'warning',
+                    'text' => 'No stock was adjusted because the product is already at zero.',
+                ];
+            } else {
+                $verb = $effectiveChange > 0 ? 'added to' : 'removed from';
+                $quantityChanged = abs($effectiveChange);
+                $limitedNote = ($change < 0 && $effectiveChange !== $change) ? ' (limited by available stock)' : '';
+                $_SESSION['manual_adjust_message'] = [
+                    'type' => 'success',
+                    'text' => sprintf('%dpcs %s "%s"%s', $quantityChanged, $verb, $productRow['name'], $limitedNote),
+                    'product_id' => $id,
+                ];
+            }
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
@@ -391,7 +411,9 @@ $offset = ($page - 1) * $limit;
 
 $sort = $_GET['sort'] ?? '';
 $direction = strtolower($_GET['direction'] ?? 'asc');
-$direction = $direction === 'desc' ? 'desc' : 'asc';
+if (!in_array($direction, ['asc', 'desc'], true)) {
+    $direction = 'asc';
+}
 
 $whereSql = 'WHERE 1=1';
 $filterParams = [];
@@ -419,8 +441,12 @@ $totalInventoryProducts = (int) $countStmt->fetchColumn();
 $totalPages = (int) ceil($totalInventoryProducts / $limit);
 
 $orderBySql = 'ORDER BY created_at DESC';
-if ($sort === 'name') {
-    $orderBySql = 'ORDER BY name ' . strtoupper($direction);
+$currentSort = '';
+$currentDirection = '';
+if (isset($sortableColumns[$sort])) {
+    $orderBySql = 'ORDER BY ' . $sortableColumns[$sort] . ' ' . strtoupper($direction);
+    $currentSort = $sort;
+    $currentDirection = $direction;
 }
 
 $inventorySql = 'SELECT * FROM products ' . $whereSql . ' ' . $orderBySql . ' LIMIT :limit OFFSET :offset';
@@ -436,8 +462,6 @@ $inventoryProducts = $inventoryStmt->fetchAll();
 $startRecord = $totalInventoryProducts > 0 ? $offset + 1 : 0;
 $endRecord = min($offset + $limit, $totalInventoryProducts);
 
-$currentSort = $sort === 'name' ? 'name' : '';
-$currentDirection = $currentSort === 'name' ? $direction : '';
 $nameSortDirection = ($currentSort === 'name' && $currentDirection === 'asc') ? 'desc' : 'asc';
 $nameSortParams = $_GET;
 unset($nameSortParams['page']);
@@ -451,6 +475,21 @@ if ($currentSort === 'name') {
     $nameSortIndicator = $currentDirection === 'asc' ? '▲' : '▼';
 } else {
     $nameSortIndicator = '↕';
+}
+
+$quantitySortDirection = ($currentSort === 'quantity' && $currentDirection === 'asc') ? 'desc' : 'asc';
+$quantitySortParams = $_GET;
+unset($quantitySortParams['page']);
+$quantitySortParams['page'] = 1;
+$quantitySortParams['sort'] = 'quantity';
+$quantitySortParams['direction'] = $quantitySortDirection;
+$quantitySortQuery = http_build_query($quantitySortParams);
+$quantitySortUrl = 'inventory.php' . ($quantitySortQuery ? '?' . $quantitySortQuery : '');
+$quantitySortIndicator = '';
+if ($currentSort === 'quantity') {
+    $quantitySortIndicator = $currentDirection === 'asc' ? '▲' : '▼';
+} else {
+    $quantitySortIndicator = '↕';
 }
 
 $manualAdjustReturnParams = [
@@ -1338,7 +1377,12 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                                     <span class="sort-indicator"><?= htmlspecialchars($nameSortIndicator) ?></span>
                                 </a>
                             </th>
-                            <th scope="col">Qty</th>
+                            <th scope="col">
+                                <a href="<?= htmlspecialchars($quantitySortUrl) ?>" class="sort-link">
+                                    Qty
+                                    <span class="sort-indicator"><?= htmlspecialchars($quantitySortIndicator) ?></span>
+                                </a>
+                            </th>
                             <th scope="col">Price</th>
                             <?php if ($canManualAdjust): ?>
                             <th scope="col">Action</th>
@@ -1355,7 +1399,11 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                         </tr>
                         <?php else: ?>
                         <?php foreach ($inventoryProducts as $p):
-                            $low = $p['quantity'] <= $p['low_stock_threshold'];
+                            $quantityValue = isset($p['quantity']) ? (int) $p['quantity'] : 0;
+                            $quantityValue = max(0, $quantityValue);
+                            $thresholdValue = isset($p['low_stock_threshold']) ? (int) $p['low_stock_threshold'] : 0;
+                            $thresholdValue = max(0, $thresholdValue);
+                            $low = $quantityValue <= $thresholdValue;
                             $productPrice = isset($p['price']) ? (float) $p['price'] : 0;
                             $brandLabel = trim((string) ($p['brand'] ?? ''));
                             $categoryLabel = trim((string) ($p['category'] ?? ''));
@@ -1384,13 +1432,13 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                                         <span class="product-meta__badge product-meta__badge--muted"><?= htmlspecialchars($categoryLabel) ?></span>
                                         <?php endif; ?>
                                         <?php if (!$canManualAdjust): ?>
-                                        <span class="product-meta__note">Low stock threshold: <span class="product-meta__value"><?= intval($p['low_stock_threshold']) ?></span></span>
+                                        <span class="product-meta__note">Low stock threshold: <span class="product-meta__value"><?= $thresholdValue ?></span></span>
                                         <?php endif; ?>
                                     </div>
                                     <?php endif; ?>
                                 </div>
                             </td>
-                            <td><?= intval($p['quantity']) ?></td>
+                            <td><?= $quantityValue ?></td>
                             <td>₱<?= number_format($productPrice, 2) ?></td>
                             <?php if ($canManualAdjust): ?>
                             <td>
@@ -1410,7 +1458,7 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                                         <button type="submit" name="update_stock" class="manual-adjust-button">Manual Adjust</button>
                                     </form>
                                     <div class="manual-adjust-meta">
-                                        Low stock threshold: <span class="manual-adjust-meta__value"><?= intval($p['low_stock_threshold']) ?></span>
+                                        Low stock threshold: <span class="manual-adjust-meta__value"><?= $thresholdValue ?></span>
                                     </div>
                                 </div>
                             </td>

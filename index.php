@@ -145,7 +145,8 @@ natcasesort($categories);
                         $variantsForProduct = $productVariantMap[$p['id']] ?? [];
                         $variantSummary = summariseVariantStock($variantsForProduct);
                         $displayPrice = isset($variantSummary['price']) ? $variantSummary['price'] : $p['price'];
-                        $displayQuantity = isset($variantSummary['quantity']) ? $variantSummary['quantity'] : $p['quantity'];
+                        $rawDisplayQuantity = isset($variantSummary['quantity']) ? $variantSummary['quantity'] : $p['quantity'];
+                        $displayQuantity = max(0, (int) $rawDisplayQuantity);
                         $defaultVariant = null;
                         foreach ($variantsForProduct as $variantRow) {
                             if (!empty($variantRow['is_default'])) {
@@ -157,10 +158,10 @@ natcasesort($categories);
                             $defaultVariant = $variantsForProduct[0];
                         }
                         if ($defaultVariant !== null) {
-                            $defaultQty = isset($defaultVariant['quantity']) ? (int) $defaultVariant['quantity'] : null;
+                            $defaultQty = isset($defaultVariant['quantity']) ? max(0, (int) $defaultVariant['quantity']) : null;
                             if ($defaultQty !== null && $defaultQty <= 0) {
                                 foreach ($variantsForProduct as $variantRow) {
-                                    $candidateQty = isset($variantRow['quantity']) ? (int) $variantRow['quantity'] : null;
+                                    $candidateQty = isset($variantRow['quantity']) ? max(0, (int) $variantRow['quantity']) : null;
                                     if ($candidateQty === null || $candidateQty > 0) {
                                         $defaultVariant = $variantRow;
                                         break;
@@ -168,6 +169,7 @@ natcasesort($categories);
                                 }
                             }
                         }
+                        $defaultVariantQuantity = isset($defaultVariant['quantity']) ? max(0, (int) $defaultVariant['quantity']) : '';
                         $variantsJson = htmlspecialchars(json_encode($variantsForProduct, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
                     ?>
                     <?php
@@ -188,12 +190,12 @@ natcasesort($categories);
                         data-product-category-label="<?= htmlspecialchars($category) ?>"
                         data-product-description="<?= htmlspecialchars($p['description'], ENT_QUOTES) ?>"
                         data-product-price="<?= htmlspecialchars(number_format((float)$displayPrice, 2, '.', '')) ?>"
-                        data-product-quantity="<?= (int) $displayQuantity ?>"
+                        data-product-quantity="<?= $displayQuantity ?>"
                         data-product-variants="<?= $variantsJson ?>"
                         data-product-default-variant-id="<?= htmlspecialchars($defaultVariant['id'] ?? '') ?>"
                         data-product-default-variant-label="<?= htmlspecialchars($defaultVariant['label'] ?? '') ?>"
                         data-product-default-variant-price="<?= htmlspecialchars(isset($defaultVariant['price']) ? number_format((float)$defaultVariant['price'], 2, '.', '') : '') ?>"
-                        data-product-default-variant-quantity="<?= htmlspecialchars(isset($defaultVariant['quantity']) ? (int)$defaultVariant['quantity'] : '') ?>"
+                        data-product-default-variant-quantity="<?= htmlspecialchars($defaultVariantQuantity) ?>"
                         data-primary-image="<?= htmlspecialchars($hasCustomImage ? $normalizedImagePath : $productPlaceholder) ?>"
                         tabindex="0"
                         aria-label="View <?= htmlspecialchars($p['name']) ?> details">
