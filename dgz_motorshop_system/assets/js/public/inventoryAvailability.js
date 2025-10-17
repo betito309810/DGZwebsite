@@ -9,14 +9,27 @@
     const REFRESH_INTERVAL_MS = 30000;
     const MAX_BATCH_SIZE = 45;
 
-    const productCards = Array.from(document.querySelectorAll('.product-card'));
-    if (!inventoryUrl || productCards.length === 0) {
+    if (!inventoryUrl) {
         return;
     }
 
     const inventoryState = new Map();
     let refreshTimer = null;
     let pendingRequest = null;
+    let hasInitialised = false;
+
+    function getProductCards() {
+        return Array.from(document.querySelectorAll('.product-card'));
+    }
+
+    function ensureCardsPresent(cards) {
+        if (Array.isArray(cards) && cards.length > 0) {
+            return true;
+        }
+
+        const discovered = getProductCards();
+        return discovered.length > 0;
+    }
 
     function parseVariantsFromCard(card) {
         if (!card) {
@@ -40,11 +53,11 @@
         return chunks;
     }
 
-    function gatherRequestItems() {
+    function gatherRequestItems(cards) {
         const seen = new Set();
         const requestItems = [];
 
-        productCards.forEach((card) => {
+        cards.forEach((card) => {
             const productId = Number(card.dataset.productId);
             if (!Number.isFinite(productId) || productId <= 0) {
                 return;
@@ -319,13 +332,19 @@
     }
 
     function updateAllCards() {
-        productCards.forEach(updateCardFromState);
+        const cards = getProductCards();
+        cards.forEach((card) => {
+            if (card && card.isConnected) {
+                updateCardFromState(card);
+            }
+        });
     }
 
     async function fetchBatch(batch) {
         const response = await fetch(inventoryUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            cache: 'no-store',
             body: JSON.stringify({ items: batch }),
         });
 
@@ -342,7 +361,7 @@
     }
 
     function refreshInventory(options = {}) {
-        const { force = false } = options;
+        const { force = false, cards: providedCards = null } = options;
 
         if (pendingRequest) {
             return;
@@ -352,7 +371,12 @@
             return;
         }
 
-        const requestItems = gatherRequestItems();
+        const cards = Array.isArray(providedCards) ? providedCards : getProductCards();
+        if (cards.length === 0) {
+            return;
+        }
+
+        const requestItems = gatherRequestItems(cards);
         if (requestItems.length === 0) {
             return;
         }
@@ -393,11 +417,65 @@
         }, REFRESH_INTERVAL_MS);
     }
 
-    refreshInventory({ force: true });
-    scheduleRefresh();
+    function initialiseWatcher() {
+        if (hasInitialised) {
+            return;
+        }
+
+        const cards = getProductCards();
+        if (cards.length === 0) {
+            return;
+        }
+
+        hasInitialised = true;
+        refreshInventory({ force: true, cards });
+        scheduleRefresh();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initialiseWatcher, { once: true });
+    } else {
+        initialiseWatcher();
+    }
+
+    if (typeof MutationObserver === 'function') {
+        const observerRoot = document.body || document.documentElement;
+        if (observerRoot) {
+            const observer = new MutationObserver((mutations) => {
+                let detectedCard = false;
+                mutations.forEach((mutation) => {
+                    mutation.addedNodes.forEach((node) => {
+                        if (detectedCard) {
+                            return;
+                        }
+
+                        if (!(node instanceof HTMLElement)) {
+                            return;
+                        }
+
+                        if (node.classList.contains('product-card') || node.querySelector('.product-card')) {
+                            detectedCard = true;
+                        }
+                    });
+                });
+
+                if (!detectedCard) {
+                    return;
+                }
+
+                if (!hasInitialised) {
+                    initialiseWatcher();
+                } else {
+                    refreshInventory({ force: true });
+                }
+            });
+
+            observer.observe(observerRoot, { childList: true, subtree: true });
+        }
+    }
 
     document.addEventListener('visibilitychange', () => {
-        if (!document.hidden) {
+        if (!document.hidden && ensureCardsPresent()) {
             refreshInventory({ force: true });
         }
     });
