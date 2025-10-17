@@ -6,6 +6,9 @@
     const LEADER_HEARTBEAT_MS = 4000;
     const LEADER_TIMEOUT_MS = 12000;
     const TAB_ID = `dgz-admin-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const AudioContextClass = typeof window !== 'undefined'
+        ? (window.AudioContext || window.webkitAudioContext)
+        : null;
 
     if (typeof window === 'undefined' || !('localStorage' in window) || !('EventSource' in window)) {
         return;
@@ -15,6 +18,9 @@
     let heartbeatTimer = null;
     let eventSource = null;
     let lastAppliedSignature = null;
+    let lastRealtimeSnapshot = null;
+    let audioContext = null;
+    let audioUnlockHandlersBound = false;
 
     const supportsBroadcastChannel = typeof window.BroadcastChannel === 'function';
     const broadcastChannel = supportsBroadcastChannel ? new BroadcastChannel(BROADCAST_CHANNEL_NAME) : null;
@@ -48,6 +54,129 @@
         } catch (error) {
             // Ignore storage errors.
         }
+    }
+
+    function getAudioContext() {
+        if (!AudioContextClass) {
+            return null;
+        }
+
+        if (!audioContext) {
+            try {
+                audioContext = new AudioContextClass();
+            } catch (error) {
+                audioContext = null;
+            }
+        }
+
+        return audioContext;
+    }
+
+    function handleAudioUnlock() {
+        const context = getAudioContext();
+        if (!context) {
+            removeAudioUnlockHandlers();
+            return;
+        }
+
+        if (context.state === 'suspended') {
+            context.resume().catch(function () {
+                // Ignore resume errors caused by autoplay policies.
+            });
+        }
+
+        if (context.state === 'running') {
+            removeAudioUnlockHandlers();
+        }
+    }
+
+    function addAudioUnlockHandlers() {
+        if (audioUnlockHandlersBound || !AudioContextClass) {
+            return;
+        }
+
+        audioUnlockHandlersBound = true;
+        ['pointerdown', 'keydown', 'touchstart'].forEach(function (eventName) {
+            document.addEventListener(eventName, handleAudioUnlock, true);
+        });
+    }
+
+    function removeAudioUnlockHandlers() {
+        if (!audioUnlockHandlersBound) {
+            return;
+        }
+
+        audioUnlockHandlersBound = false;
+        ['pointerdown', 'keydown', 'touchstart'].forEach(function (eventName) {
+            document.removeEventListener(eventName, handleAudioUnlock, true);
+        });
+    }
+
+    function playNotificationSound() {
+        const context = getAudioContext();
+        if (!context) {
+            return;
+        }
+
+        if (context.state === 'suspended') {
+            context.resume().then(function () {
+                playNotificationSound();
+            }).catch(function () {
+                // Ignore resume failures.
+            });
+            return;
+        }
+
+        const now = context.currentTime;
+        const oscillator = context.createOscillator();
+        const gainNode = context.createGain();
+
+        oscillator.type = 'triangle';
+        oscillator.frequency.setValueAtTime(880, now);
+
+        gainNode.gain.setValueAtTime(0, now);
+        gainNode.gain.linearRampToValueAtTime(0.18, now + 0.01);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+
+        oscillator.connect(gainNode);
+        gainNode.connect(context.destination);
+
+        oscillator.start(now);
+        oscillator.stop(now + 0.4);
+    }
+
+    function sanitizeSnapshotSection(section) {
+        const safeSection = section && typeof section === 'object' ? section : {};
+        return {
+            latestId: Number(safeSection.latestId) || 0,
+            latestCreatedAt: Number(safeSection.latestCreatedAt) || 0,
+            pendingCount: Number(safeSection.pendingCount) || 0,
+        };
+    }
+
+    function buildRealtimeSnapshot(payload) {
+        return {
+            pos: sanitizeSnapshotSection(payload && payload.pos),
+            stock: sanitizeSnapshotSection(payload && payload.stock),
+        };
+    }
+
+    function hasNewRealtimeActivity(previous, current) {
+        if (!previous || !current) {
+            return false;
+        }
+
+        const metrics = ['pendingCount', 'latestId', 'latestCreatedAt'];
+        const channels = ['pos', 'stock'];
+
+        return channels.some(function (channel) {
+            const currentSection = current[channel] || {};
+            const previousSection = previous[channel] || {};
+
+            return metrics.some(function (metric) {
+                return Number(currentSection[metric] || 0) > Number(previousSection[metric] || 0);
+            });
+        });
     }
 
     function broadcastUpdate(payload) {
@@ -146,6 +275,7 @@
 
         const pos = payload.pos || {};
         const stock = payload.stock || {};
+        const snapshot = buildRealtimeSnapshot(payload);
 
         if (isSidebarLinkActive('pos.php')) {
             removeSidebarBadge('[data-sidebar-pos-count]');
@@ -174,6 +304,12 @@
         } catch (error) {
             // Ignore custom event errors.
         }
+
+        if (hasNewRealtimeActivity(lastRealtimeSnapshot, snapshot)) {
+            playNotificationSound();
+        }
+
+        lastRealtimeSnapshot = snapshot;
     }
 
     function startEventSource() {
@@ -333,6 +469,8 @@
     });
 
     attemptLeadership();
+
+    addAudioUnlockHandlers();
 
     if (!isLeader) {
         evaluateLeadership();
