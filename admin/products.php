@@ -257,12 +257,100 @@ if (!function_exists('databaseColumnAllowsNull')) {
     }
 }
 
+if (!function_exists('fetchProductForeignKeyDependenciesViaShowCreate')) {
+    /**
+     * Fallback helper that inspects SHOW CREATE TABLE output when information_schema access is restricted.
+     */
+    function fetchProductForeignKeyDependenciesViaShowCreate(PDO $pdo): array
+    {
+        $dependencies = [];
+
+        try {
+            $tablesStmt = $pdo->query('SHOW FULL TABLES');
+        } catch (Throwable $tableError) {
+            error_log('Unable to enumerate tables for product FK inspection: ' . $tableError->getMessage());
+            return $dependencies;
+        }
+
+        if (!$tablesStmt) {
+            return $dependencies;
+        }
+
+        while ($tableRow = $tablesStmt->fetch(PDO::FETCH_NUM)) {
+            $tableName = $tableRow[0] ?? '';
+            $tableType = strtolower((string) ($tableRow[1] ?? ''));
+
+            if ($tableName === '' || $tableType === 'view') {
+                continue;
+            }
+
+            try {
+                $createStmt = $pdo->query('SHOW CREATE TABLE ' . quoteDatabaseIdentifier($tableName));
+            } catch (Throwable $createError) {
+                error_log('Unable to inspect schema for ' . $tableName . ': ' . $createError->getMessage());
+                continue;
+            }
+
+            if (!$createStmt) {
+                continue;
+            }
+
+            $createRow = $createStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$createRow) {
+                continue;
+            }
+
+            $createSql = '';
+            if (isset($createRow['Create Table'])) {
+                $createSql = (string) $createRow['Create Table'];
+            } elseif (isset($createRow['Create View'])) {
+                continue;
+            }
+
+            if ($createSql === '') {
+                continue;
+            }
+
+            if (preg_match_all(
+                '/CONSTRAINT `[^`]+` FOREIGN KEY \(([^)]+)\) REFERENCES `?products`? \(`?id`?\)(?: ON DELETE (CASCADE|SET NULL|RESTRICT|NO ACTION))?/i',
+                $createSql,
+                $matches,
+                PREG_SET_ORDER
+            )) {
+                foreach ($matches as $match) {
+                    $columnsRaw = str_replace('`', '', $match[1] ?? '');
+                    $deleteRule = strtoupper((string) ($match[2] ?? ''));
+                    if ($deleteRule === '') {
+                        $deleteRule = 'RESTRICT';
+                    }
+
+                    foreach (array_map('trim', explode(',', $columnsRaw)) as $columnName) {
+                        if ($columnName === '') {
+                            continue;
+                        }
+
+                        $dependencies[] = [
+                            'TABLE_NAME' => $tableName,
+                            'COLUMN_NAME' => $columnName,
+                            'DELETE_RULE' => $deleteRule,
+                        ];
+                    }
+                }
+            }
+        }
+
+        return $dependencies;
+    }
+}
+
 if (!function_exists('resolveProductForeignKeyDependencies')) {
     /**
      * Clear or remove rows that reference the product so restrictive foreign keys don't block deletion.
      */
     function resolveProductForeignKeyDependencies(PDO $pdo, int $productId): void
     {
+        $dependencies = [];
+
         try {
             $stmt = $pdo->query(
                 'SELECT '
@@ -273,22 +361,33 @@ if (!function_exists('resolveProductForeignKeyDependencies')) {
                 . 'INNER JOIN information_schema.REFERENTIAL_CONSTRAINTS rc '
                 . '    ON k.CONSTRAINT_NAME = rc.CONSTRAINT_NAME '
                 . '    AND k.CONSTRAINT_SCHEMA = rc.CONSTRAINT_SCHEMA '
+                . '    AND k.TABLE_NAME = rc.TABLE_NAME '
                 . 'WHERE k.TABLE_SCHEMA = DATABASE() '
                 . "  AND k.REFERENCED_TABLE_NAME = 'products' "
                 . "  AND k.REFERENCED_COLUMN_NAME = 'id'"
             );
+
+            if ($stmt) {
+                while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                    $dependencies[] = $row;
+                }
+            }
         } catch (Throwable $lookupError) {
-            error_log('Unable to inspect product foreign key dependencies: ' . $lookupError->getMessage());
-            return;
+            error_log('Unable to inspect product foreign key dependencies via information_schema: ' . $lookupError->getMessage());
         }
 
-        if (!$stmt) {
+        $fallbackDependencies = fetchProductForeignKeyDependenciesViaShowCreate($pdo);
+        if (!empty($fallbackDependencies)) {
+            $dependencies = array_merge($dependencies, $fallbackDependencies);
+        }
+
+        if (empty($dependencies)) {
             return;
         }
 
         $processed = [];
 
-        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        foreach ($dependencies as $row) {
             $table = $row['TABLE_NAME'] ?? '';
             $column = $row['COLUMN_NAME'] ?? '';
             if ($table === '' || $column === '') {
@@ -896,7 +995,21 @@ if(isset($_GET['delete'])) {
         }
 
         // Added: cascade clean-up for dependent tables to satisfy FK constraints.
-        $pdo->prepare('DELETE FROM stock_entries WHERE product_id = ?')->execute([$product_id]);
+        try {
+            $pdo->prepare('DELETE FROM stock_entries WHERE product_id = ?')->execute([$product_id]);
+        } catch (Exception $stockEntryError) {
+            error_log('Failed to clear stock_entries during delete: ' . $stockEntryError->getMessage());
+        }
+        try {
+            $pdo->prepare('UPDATE restock_requests SET product_id = NULL WHERE product_id = ?')->execute([$product_id]);
+        } catch (Exception $restockClearError) {
+            error_log('Failed to null restock_requests.product_id before delete: ' . $restockClearError->getMessage());
+        }
+        try {
+            $pdo->prepare('UPDATE restock_requests SET variant_id = NULL WHERE variant_id IN (SELECT id FROM product_variants WHERE product_id = ?)')->execute([$product_id]);
+        } catch (Exception $restockVariantError) {
+            error_log('Failed to null restock_requests.variant_id before delete: ' . $restockVariantError->getMessage());
+        }
         try {
             $pdo->prepare('UPDATE order_items SET product_id = NULL WHERE product_id = ?')->execute([$product_id]);
         } catch (Throwable $orderItemError) {
