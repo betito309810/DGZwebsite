@@ -677,81 +677,128 @@ $profile_created = format_profile_date($current_user['created_at'] ?? null);
 
 if(isset($_GET['delete'])) {
     $product_id = intval($_GET['delete']);
-    
+
+    if ($product_id <= 0) {
+        $_SESSION['products_error'] = 'Unable to determine which product should be deleted.';
+        header('Location: products.php');
+        exit;
+    }
+
+    $filesToRemove = [];
+    $productUploadDir = __DIR__ . '/../dgz_motorshop_system/uploads/products/' . $product_id;
+
     try {
         // Added: wrap the entire deletion in a transaction so history and clean-up are atomic.
         $pdo->beginTransaction();
 
         // Get product details before deletion (using prepared statement)
-        $stmt = $pdo->prepare("SELECT * FROM products WHERE id = ?");
+        $stmt = $pdo->prepare('SELECT * FROM products WHERE id = ?');
         $stmt->execute([$product_id]);
         $product = $stmt->fetch();
-        
-        if ($product) {
-            // Added: log lookup results in case a future deletion fails again.
-            error_log("Attempting to delete product ID: $product_id");
-            error_log("Product payload before delete: " . json_encode($product));
 
-            // Added: normalise the inventory notification schema and clear dependent rows
-            // ahead of the product removal. Some production databases still carried the
-            // original FK that blocked deletions, and calling ensure() here makes sure the
-            // constraint is relaxed even if the helper failed earlier in the request. We
-            // also proactively null the foreign keys so the delete never relies on the
-            // constraint behaviour.
-            if (function_exists('ensureInventoryNotificationSchema')) {
-                try {
-                    ensureInventoryNotificationSchema($pdo);
-                } catch (Throwable $schemaError) {
-                    error_log('Inventory notification schema check failed before deletion: ' . $schemaError->getMessage());
-                }
-            }
-
-            try {
-                $pdo->prepare('UPDATE inventory_notifications SET product_id = NULL WHERE product_id = ?')->execute([$product_id]);
-            } catch (Exception $notificationClearError) {
-                error_log('Failed to null inventory notifications before delete: ' . $notificationClearError->getMessage());
-            }
-
-            // Try to record deletion in history (optional)
-            try {
-                // Added: persist a snapshot of the product before it disappears so history remains readable.
-                $historyPayload = [
-                    'summary' => sprintf(
-                        'Deleted %s (%s).',
-                        $product['name'] ?? 'product',
-                        $product['code'] ?? 'no code'
-                    ),
-                    'snapshot' => [
-                        'code' => $product['code'] ?? null,
-                        'name' => $product['name'] ?? null,
-                        'description' => $product['description'] ?? null,
-                        'price' => $product['price'] ?? null,
-                        'quantity' => $product['quantity'] ?? null,
-                        'low_stock_threshold' => $product['low_stock_threshold'] ?? null,
-                        'brand' => $product['brand'] ?? null,
-                        'category' => $product['category'] ?? null,
-                        'supplier' => $product['supplier'] ?? null,
-                        'image' => $product['image'] ?? null,
-                    ],
-                ];
-
-                $pdo->prepare('INSERT INTO product_add_history (product_id, user_id, action, details) VALUES (?, ?, ?, ?)')
-                    ->execute([
-                        $product_id,
-                        $_SESSION['user_id'],
-                        'delete',
-                        json_encode($historyPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                    ]);
-            } catch (Exception $e) {
-                // History failed but continue with deletion
-                error_log("Failed to record product deletion history: " . $e->getMessage());
-            }
-            
-            // Added: cascade clean-up for dependent tables to satisfy FK constraints.
-            $pdo->prepare('DELETE FROM stock_entries WHERE product_id = ?')->execute([$product_id]);
-            $pdo->prepare('UPDATE order_items SET product_id = NULL WHERE product_id = ?')->execute([$product_id]);
-            $pdo->prepare('DELETE FROM products WHERE id=?')->execute([$product_id]);
+        if (!$product) {
+            throw new RuntimeException('Product record no longer exists.');
         }
+
+        // Added: log lookup results in case a future deletion fails again.
+        error_log("Attempting to delete product ID: $product_id");
+        error_log("Product payload before delete: " . json_encode($product));
+
+        // Added: capture gallery paths before we remove any records so filesystem clean-up can occur after commit.
+        $galleryStmt = $pdo->prepare('SELECT file_path FROM product_images WHERE product_id = ?');
+        $galleryStmt->execute([$product_id]);
+        $galleryFiles = $galleryStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        $mainImagePath = productImageAbsolutePath($product['image'] ?? '');
+        if ($mainImagePath) {
+            $filesToRemove[] = $mainImagePath;
+        }
+        foreach ($galleryFiles as $galleryRow) {
+            $galleryPath = productImageAbsolutePath($galleryRow['file_path'] ?? '');
+            if ($galleryPath) {
+                $filesToRemove[] = $galleryPath;
+            }
+        }
+
+        // Added: normalise the inventory notification schema and clear dependent rows
+        // ahead of the product removal. Some production databases still carried the
+        // original FK that blocked deletions, and calling ensure() here makes sure the
+        // constraint is relaxed even if the helper failed earlier in the request. We
+        // also proactively null the foreign keys so the delete never relies on the
+        // constraint behaviour.
+        if (function_exists('ensureInventoryNotificationSchema')) {
+            try {
+                ensureInventoryNotificationSchema($pdo);
+            } catch (Throwable $schemaError) {
+                error_log('Inventory notification schema check failed before deletion: ' . $schemaError->getMessage());
+            }
+        }
+
+        try {
+            $pdo->prepare('UPDATE inventory_notifications SET product_id = NULL WHERE product_id = ?')->execute([$product_id]);
+        } catch (Exception $notificationClearError) {
+            error_log('Failed to null inventory notifications before delete: ' . $notificationClearError->getMessage());
+        }
+
+        // Added: clean up auxiliary tables explicitly for legacy schemas that still enforce RESTRICT.
+        try {
+            $pdo->prepare('DELETE FROM product_images WHERE product_id = ?')->execute([$product_id]);
+        } catch (Exception $legacyGalleryError) {
+            error_log('Failed to clear product_images during delete: ' . $legacyGalleryError->getMessage());
+        }
+
+        try {
+            $pdo->prepare('DELETE FROM product_variants WHERE product_id = ?')->execute([$product_id]);
+        } catch (Exception $legacyVariantError) {
+            error_log('Failed to clear product_variants during delete: ' . $legacyVariantError->getMessage());
+        }
+
+        // Added: cascade clean-up for dependent tables to satisfy FK constraints.
+        $pdo->prepare('DELETE FROM stock_entries WHERE product_id = ?')->execute([$product_id]);
+        $pdo->prepare('UPDATE order_items SET product_id = NULL WHERE product_id = ?')->execute([$product_id]);
+
+        $deleteStmt = $pdo->prepare('DELETE FROM products WHERE id=?');
+        $deleteStmt->execute([$product_id]);
+
+        if ($deleteStmt->rowCount() === 0) {
+            throw new RuntimeException('Delete query completed but did not remove any rows.');
+        }
+
+        // Try to record deletion in history (optional)
+        try {
+            // Added: persist a snapshot of the product before it disappears so history remains readable.
+            $historyPayload = [
+                'summary' => sprintf(
+                    'Deleted %s (%s).',
+                    $product['name'] ?? 'product',
+                    $product['code'] ?? 'no code'
+                ),
+                'snapshot' => [
+                    'code' => $product['code'] ?? null,
+                    'name' => $product['name'] ?? null,
+                    'description' => $product['description'] ?? null,
+                    'price' => $product['price'] ?? null,
+                    'quantity' => $product['quantity'] ?? null,
+                    'low_stock_threshold' => $product['low_stock_threshold'] ?? null,
+                    'brand' => $product['brand'] ?? null,
+                    'category' => $product['category'] ?? null,
+                    'supplier' => $product['supplier'] ?? null,
+                    'image' => $product['image'] ?? null,
+                ],
+            ];
+
+            $pdo->prepare('INSERT INTO product_add_history (product_id, user_id, action, details) VALUES (?, ?, ?, ?)')
+                ->execute([
+                    $product_id,
+                    $_SESSION['user_id'],
+                    'delete',
+                    json_encode($historyPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                ]);
+        } catch (Exception $historyError) {
+            // History failed but continue with deletion
+            error_log('Failed to record product deletion history: ' . $historyError->getMessage());
+        }
+
         $pdo->commit();
     } catch (Exception $e) {
         // Added: rollback on failure to keep DB consistent when any step fails.
@@ -759,10 +806,28 @@ if(isset($_GET['delete'])) {
             $pdo->rollBack();
         }
         // Log the error and redirect
-        error_log("Product deletion failed: " . $e->getMessage());
+        error_log('Product deletion failed: ' . $e->getMessage());
+        $_SESSION['products_error'] = 'Failed to delete the product. Please resolve related records and try again.';
+        header('Location: products.php');
+        exit;
     }
-    
-    header('Location: products.php'); 
+
+    // Added: remove any orphaned image files after the transaction succeeds.
+    $filesToRemove = array_values(array_unique(array_filter($filesToRemove)));
+    foreach ($filesToRemove as $filePath) {
+        if (is_string($filePath) && $filePath !== '' && is_file($filePath)) {
+            @unlink($filePath);
+        }
+    }
+
+    if (is_dir($productUploadDir)) {
+        $remaining = glob($productUploadDir . '/*');
+        if ($remaining === false || count($remaining) === 0) {
+            @rmdir($productUploadDir);
+        }
+    }
+
+    header('Location: products.php');
     exit;
 }
 if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_product'])){
