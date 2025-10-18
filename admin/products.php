@@ -15,6 +15,11 @@ if (isset($_SESSION['products_error'])) {
     $productFormError = (string) $_SESSION['products_error'];
     unset($_SESSION['products_error']);
 }
+$productFormSuccess = null;
+if (isset($_SESSION['products_success'])) {
+    $productFormSuccess = (string) $_SESSION['products_success'];
+    unset($_SESSION['products_success']);
+}
 // Added: helper utilities that manage product image uploads in a single place.
 if (!function_exists('ensureProductImageDirectory')) {
     /**
@@ -1064,6 +1069,8 @@ if(isset($_GET['delete'])) {
         } catch (Throwable $imageCleanupError) {
             error_log('Failed to remove product image during delete: ' . $imageCleanupError->getMessage());
         }
+
+        $_SESSION['products_success'] = 'Product deleted successfully.';
     } catch (Exception $e) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
@@ -1292,6 +1299,8 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_product'])){
 
         $pdo->prepare('INSERT INTO product_add_history (product_id, user_id, action, details) VALUES (?, ?, ?, ?)')
             ->execute([$id, $user_id, 'edit', json_encode($historyPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)]);
+
+        $_SESSION['products_success'] = 'Product updated successfully.';
     } else {
         // Insert new product
         $stmt = $pdo->prepare('INSERT INTO products (code, name, description, price, quantity, low_stock_threshold, brand, category, supplier, image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
@@ -1333,6 +1342,8 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_product'])){
 
         $pdo->prepare('INSERT INTO product_add_history (product_id, user_id, action, details) VALUES (?, ?, ?, ?)')
             ->execute([$product_id, $user_id, 'add', json_encode($historyPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)]);
+
+        $_SESSION['products_success'] = 'Product added successfully.';
     }
     header('Location: products.php'); exit;
 }
@@ -1464,10 +1475,19 @@ if ($currentSort === 'name') {
             max-width: 1200px;
             padding: 14px 18px;
             border-radius: 6px;
+            font-size: 0.95rem;
+        }
+
+        .products-alert--error {
             border: 1px solid #f5c6cb;
             background-color: #f8d7da;
             color: #721c24;
-            font-size: 0.95rem;
+        }
+
+        .products-alert--success {
+            border: 1px solid #c3e6cb;
+            background-color: #d4edda;
+            color: #155724;
         }
     </style>
 
@@ -1508,7 +1528,10 @@ if ($currentSort === 'name') {
             </div>
         </header>
         <?php if ($productFormError !== null && $productFormError !== ''): ?>
-        <div class="products-alert"><?= htmlspecialchars($productFormError) ?></div>
+        <div class="products-alert products-alert--error"><?= htmlspecialchars($productFormError) ?></div>
+        <?php endif; ?>
+        <?php if ($productFormSuccess !== null && $productFormSuccess !== ''): ?>
+        <div class="products-alert products-alert--success"><?= htmlspecialchars($productFormSuccess) ?></div>
         <?php endif; ?>
         <!-- Action buttons aligned to the right -->
         <div class="products-action-bar">
