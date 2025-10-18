@@ -187,6 +187,27 @@ if (!function_exists('persistGalleryUploads')) {
     }
 }
 
+if (!function_exists('releaseProductHistoryReferences')) {
+    /**
+     * Detach product history rows so a product can be deleted even if the
+     * history table keeps a foreign key back to products.
+     */
+    function releaseProductHistoryReferences(PDO $pdo, int $productId): void
+    {
+        try {
+            $pdo->prepare('UPDATE product_add_history SET product_id = NULL WHERE product_id = ?')->execute([$productId]);
+        } catch (PDOException $exception) {
+            if ($exception->getCode() !== '23000') {
+                throw $exception;
+            }
+
+            // Legacy schemas may keep product_id NOT NULL; fall back to removing
+            // the rows entirely so the delete can proceed.
+            $pdo->prepare('DELETE FROM product_add_history WHERE product_id = ?')->execute([$productId]);
+        }
+    }
+}
+
 if (!function_exists('productImageAbsolutePath')) {
     /**
      * Translate a stored relative upload path into an absolute filesystem path.
@@ -672,24 +693,17 @@ $profile_created = format_profile_date($current_user['created_at'] ?? null);
 
 if(isset($_GET['delete'])) {
     $product_id = intval($_GET['delete']);
-    
+
     try {
         // Added: wrap the entire deletion in a transaction so history and clean-up are atomic.
         $pdo->beginTransaction();
 
-        // Get product details before deletion (using prepared statement)
-        $stmt = $pdo->prepare("SELECT * FROM products WHERE id = ?");
+        // Lock the product row while we gather the snapshot.
+        $stmt = $pdo->prepare('SELECT * FROM products WHERE id = ? FOR UPDATE');
         $stmt->execute([$product_id]);
         $product = $stmt->fetch();
-        
+
         if ($product) {
-            // Add this for debugging
-error_log("Attempting to delete product ID: $product_id");
-if ($product) {
-    error_log("Product found: " . json_encode($product));
-} else {
-    error_log("Product not found for deletion");
-}
             // Try to record deletion in history (optional)
             try {
                 // Added: persist a snapshot of the product before it disappears so history remains readable.
@@ -722,14 +736,42 @@ if ($product) {
                     ]);
             } catch (Exception $e) {
                 // History failed but continue with deletion
-                error_log("Failed to record product deletion history: " . $e->getMessage());
+                error_log('Failed to record product deletion history: ' . $e->getMessage());
             }
-            
+
             // Added: cascade clean-up for dependent tables to satisfy FK constraints.
+            try {
+                $pdo->prepare('UPDATE inventory_notifications SET product_id = NULL WHERE product_id = ?')->execute([$product_id]);
+            } catch (PDOException $inventoryException) {
+                if ($inventoryException->getCode() !== '23000') {
+                    throw $inventoryException;
+                }
+
+                // Older schemas keep product_id NOT NULL; fall back to deleting the rows entirely.
+                $pdo->prepare('DELETE FROM inventory_notifications WHERE product_id = ?')->execute([$product_id]);
+            }
+
             $pdo->prepare('DELETE FROM stock_entries WHERE product_id = ?')->execute([$product_id]);
-            $pdo->prepare('UPDATE order_items SET product_id = NULL WHERE product_id = ?')->execute([$product_id]);
-            $pdo->prepare('DELETE FROM products WHERE id=?')->execute([$product_id]);
+
+            try {
+                $pdo->prepare('UPDATE order_items SET product_id = NULL, variant_id = NULL WHERE product_id = ?')->execute([$product_id]);
+            } catch (PDOException $orderItemsException) {
+                if ($orderItemsException->getCode() !== '23000') {
+                    throw $orderItemsException;
+                }
+
+                // Some deployments still mark product_id as NOT NULL and rely on hard deletes.
+                $pdo->prepare('DELETE FROM order_items WHERE product_id = ?')->execute([$product_id]);
+            }
+
+            $pdo->prepare('DELETE FROM product_variants WHERE product_id = ?')->execute([$product_id]);
+            $pdo->prepare('DELETE FROM product_images WHERE product_id = ?')->execute([$product_id]);
+            releaseProductHistoryReferences($pdo, $product_id);
+            $pdo->prepare('DELETE FROM products WHERE id = ?')->execute([$product_id]);
+        } else {
+            $_SESSION['products_error'] = 'Product not found or already deleted.';
         }
+
         $pdo->commit();
     } catch (Exception $e) {
         // Added: rollback on failure to keep DB consistent when any step fails.
@@ -737,10 +779,11 @@ if ($product) {
             $pdo->rollBack();
         }
         // Log the error and redirect
-        error_log("Product deletion failed: " . $e->getMessage());
+        error_log('Product deletion failed: ' . $e->getMessage());
+        $_SESSION['products_error'] = 'Unable to delete product. Please try again.';
     }
-    
-    header('Location: products.php'); 
+
+    header('Location: products.php');
     exit;
 }
 if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_product'])){
