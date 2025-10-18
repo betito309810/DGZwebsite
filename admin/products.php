@@ -187,6 +187,45 @@ if (!function_exists('persistGalleryUploads')) {
     }
 }
 
+if (!function_exists('tableHasColumn')) {
+    /**
+     * Determine whether the current database contains the given column on the specified table.
+     */
+    function tableHasColumn(PDO $pdo, string $table, string $column): bool
+    {
+        static $cache = [];
+        $key = strtolower($table) . ':' . strtolower($column);
+
+        if (array_key_exists($key, $cache)) {
+            return $cache[$key];
+        }
+
+        try {
+            $stmt = $pdo->prepare(
+                'SELECT 1
+                 FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE()
+                   AND TABLE_NAME = :table
+                   AND COLUMN_NAME = :column
+                 LIMIT 1'
+            );
+
+            if ($stmt && $stmt->execute([
+                ':table' => $table,
+                ':column' => $column,
+            ])) {
+                $cache[$key] = $stmt->fetchColumn() !== false;
+            } else {
+                $cache[$key] = false;
+            }
+        } catch (Throwable $e) {
+            $cache[$key] = false;
+        }
+
+        return $cache[$key];
+    }
+}
+
 if (!function_exists('productImageAbsolutePath')) {
     /**
      * Translate a stored relative upload path into an absolute filesystem path.
@@ -726,8 +765,64 @@ if ($product) {
             }
             
             // Added: cascade clean-up for dependent tables to satisfy FK constraints.
+            $variantIds = [];
+            try {
+                $variantStmt = $pdo->prepare('SELECT id FROM product_variants WHERE product_id = ?');
+                if ($variantStmt && $variantStmt->execute([$product_id])) {
+                    $variantIds = array_map('intval', $variantStmt->fetchAll(PDO::FETCH_COLUMN));
+                }
+            } catch (Throwable $variantLookupError) {
+                error_log('Variant lookup during product delete failed: ' . $variantLookupError->getMessage());
+                $variantIds = [];
+            }
+
             $pdo->prepare('DELETE FROM stock_entries WHERE product_id = ?')->execute([$product_id]);
-            $pdo->prepare('UPDATE order_items SET product_id = NULL WHERE product_id = ?')->execute([$product_id]);
+            $pdo->prepare('DELETE FROM inventory_ledger WHERE product_id = ?')->execute([$product_id]);
+
+            if (tableHasColumn($pdo, 'stock_receipt_items', 'variant_id')) {
+                $pdo->prepare('UPDATE stock_receipt_items SET product_id = NULL, variant_id = NULL WHERE product_id = ?')
+                    ->execute([$product_id]);
+            } else {
+                $pdo->prepare('UPDATE stock_receipt_items SET product_id = NULL WHERE product_id = ?')
+                    ->execute([$product_id]);
+            }
+
+            $orderItemsUpdateSql = 'UPDATE order_items SET product_id = NULL';
+            if (tableHasColumn($pdo, 'order_items', 'variant_id')) {
+                $orderItemsUpdateSql .= ', variant_id = NULL';
+            }
+            $orderItemsUpdateSql .= ' WHERE product_id = ?';
+            $pdo->prepare($orderItemsUpdateSql)->execute([$product_id]);
+
+            if (tableHasColumn($pdo, 'restock_requests', 'variant_id')) {
+                $pdo->prepare('UPDATE restock_requests SET product_id = NULL, variant_id = NULL WHERE product_id = ?')
+                    ->execute([$product_id]);
+            } else {
+                $pdo->prepare('UPDATE restock_requests SET product_id = NULL WHERE product_id = ?')
+                    ->execute([$product_id]);
+            }
+
+            if (!empty($variantIds)) {
+                $variantPlaceholders = implode(', ', array_fill(0, count($variantIds), '?'));
+
+                if (tableHasColumn($pdo, 'stock_receipt_items', 'variant_id')) {
+                    $pdo->prepare("UPDATE stock_receipt_items SET variant_id = NULL WHERE variant_id IN ($variantPlaceholders)")
+                        ->execute($variantIds);
+                }
+
+                if (tableHasColumn($pdo, 'order_items', 'variant_id')) {
+                    $pdo->prepare("UPDATE order_items SET variant_id = NULL WHERE variant_id IN ($variantPlaceholders)")
+                        ->execute($variantIds);
+                }
+
+                if (tableHasColumn($pdo, 'restock_requests', 'variant_id')) {
+                    $pdo->prepare("UPDATE restock_requests SET variant_id = NULL WHERE variant_id IN ($variantPlaceholders)")
+                        ->execute($variantIds);
+                }
+            }
+
+            $pdo->prepare('DELETE FROM product_variants WHERE product_id = ?')->execute([$product_id]);
+            $pdo->prepare('DELETE FROM product_images WHERE product_id = ?')->execute([$product_id]);
             $pdo->prepare('DELETE FROM products WHERE id=?')->execute([$product_id]);
         }
         $pdo->commit();
