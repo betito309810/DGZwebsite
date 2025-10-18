@@ -695,7 +695,7 @@ if(isset($_GET['delete'])) {
             'product_add_history' => 'DELETE FROM product_add_history WHERE product_id = ?',
         ];
 
-        foreach ($cleanupStatements as $sql) {
+        foreach ($cleanupStatements as $tableName => $sql) {
             try {
                 $pdo->prepare($sql)->execute([$product_id]);
             } catch (PDOException $e) {
@@ -703,6 +703,8 @@ if(isset($_GET['delete'])) {
                 $sqlState = is_array($errorInfo) && !empty($errorInfo[0]) ? (string) $errorInfo[0] : (string) $e->getCode();
 
                 if ($sqlState !== '42S02') {
+                    // Potential blocker: schemas that renamed or removed the product reference column (e.g. SQLSTATE 42S22)
+                    // still bubble up here and abort the delete flow. Leaving the exception visible so we can confirm.
                     throw $e;
                 }
             }
@@ -724,10 +726,13 @@ if(isset($_GET['delete'])) {
                     $fallbackState = is_array($fallbackInfo) && !empty($fallbackInfo[0]) ? (string) $fallbackInfo[0] : (string) $fallback->getCode();
 
                     if ($fallbackState !== '42S02') {
+                        // Potential blocker: schemas where order_items.product_id cannot be nulled or deleted
+                        // (e.g. column renamed to item_product_id giving SQLSTATE 42S22) will still fail here.
                         throw $fallback;
                     }
                 }
             } else {
+                // Potential blocker: older order_items snapshots without the product_id column raise 42S22 and stop here.
                 throw $e;
             }
         }

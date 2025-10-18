@@ -443,6 +443,10 @@
                 });
             });
 
+            // Potential blocker: without an explicit click handler on `.delete-btn` to call stopPropagation(),
+            // nested markup or future refactors could let the row handler above reopen the modal and keep the
+            // browser on the page instead of following the delete link.
+
             detailCloseButton?.addEventListener('click', () => {
                 closeDetailModal();
             });
