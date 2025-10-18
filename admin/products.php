@@ -192,6 +192,148 @@ if (!function_exists('persistGalleryUploads')) {
     }
 }
 
+if (!function_exists('quoteDatabaseIdentifier')) {
+    /**
+     * Quote a table or column identifier for use in dynamically built SQL queries.
+     */
+    function quoteDatabaseIdentifier(string $identifier): string
+    {
+        return '`' . str_replace('`', '``', $identifier) . '`';
+    }
+}
+
+if (!function_exists('databaseColumnMetadata')) {
+    /**
+     * Fetch and cache information about a column for the current database.
+     */
+    function databaseColumnMetadata(PDO $pdo, string $table, string $column): ?array
+    {
+        static $cache = [];
+        $cacheKey = strtolower($table) . ':' . strtolower($column);
+
+        if (array_key_exists($cacheKey, $cache)) {
+            return $cache[$cacheKey];
+        }
+
+        try {
+            $stmt = $pdo->prepare(
+                'SELECT COLUMN_NAME, IS_NULLABLE, DATA_TYPE, COLUMN_TYPE '
+                . 'FROM information_schema.COLUMNS '
+                . 'WHERE TABLE_SCHEMA = DATABASE() '
+                . 'AND TABLE_NAME = :table '
+                . 'AND COLUMN_NAME = :column '
+                . 'LIMIT 1'
+            );
+
+            if ($stmt && $stmt->execute([
+                ':table' => $table,
+                ':column' => $column,
+            ])) {
+                $cache[$cacheKey] = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+            } else {
+                $cache[$cacheKey] = null;
+            }
+        } catch (Throwable $metadataError) {
+            error_log('Unable to load column metadata for ' . $table . '.' . $column . ': ' . $metadataError->getMessage());
+            $cache[$cacheKey] = null;
+        }
+
+        return $cache[$cacheKey];
+    }
+}
+
+if (!function_exists('databaseColumnAllowsNull')) {
+    /**
+     * Determine whether the specified column accepts NULL values.
+     */
+    function databaseColumnAllowsNull(PDO $pdo, string $table, string $column): bool
+    {
+        $metadata = databaseColumnMetadata($pdo, $table, $column);
+        if (!$metadata) {
+            return false;
+        }
+
+        return strtoupper((string) ($metadata['IS_NULLABLE'] ?? 'NO')) === 'YES';
+    }
+}
+
+if (!function_exists('resolveProductForeignKeyDependencies')) {
+    /**
+     * Clear or remove rows that reference the product so restrictive foreign keys don't block deletion.
+     */
+    function resolveProductForeignKeyDependencies(PDO $pdo, int $productId): void
+    {
+        try {
+            $stmt = $pdo->query(
+                'SELECT '
+                . '    k.TABLE_NAME, '
+                . '    k.COLUMN_NAME, '
+                . '    rc.DELETE_RULE '
+                . 'FROM information_schema.KEY_COLUMN_USAGE k '
+                . 'INNER JOIN information_schema.REFERENTIAL_CONSTRAINTS rc '
+                . '    ON k.CONSTRAINT_NAME = rc.CONSTRAINT_NAME '
+                . '    AND k.CONSTRAINT_SCHEMA = rc.CONSTRAINT_SCHEMA '
+                . 'WHERE k.TABLE_SCHEMA = DATABASE() '
+                . "  AND k.REFERENCED_TABLE_NAME = 'products' "
+                . "  AND k.REFERENCED_COLUMN_NAME = 'id'"
+            );
+        } catch (Throwable $lookupError) {
+            error_log('Unable to inspect product foreign key dependencies: ' . $lookupError->getMessage());
+            return;
+        }
+
+        if (!$stmt) {
+            return;
+        }
+
+        $processed = [];
+
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $table = $row['TABLE_NAME'] ?? '';
+            $column = $row['COLUMN_NAME'] ?? '';
+            if ($table === '' || $column === '') {
+                continue;
+            }
+
+            $processedKey = strtolower($table) . ':' . strtolower($column);
+            if (isset($processed[$processedKey])) {
+                continue;
+            }
+            $processed[$processedKey] = true;
+
+            $deleteRule = strtoupper((string) ($row['DELETE_RULE'] ?? ''));
+            if ($deleteRule === 'CASCADE') {
+                continue; // No manual clean-up necessary.
+            }
+
+            $qualifiedTable = quoteDatabaseIdentifier($table);
+            $qualifiedColumn = quoteDatabaseIdentifier($column);
+
+            if ($deleteRule === 'SET NULL' && databaseColumnAllowsNull($pdo, $table, $column)) {
+                $sql = sprintf('UPDATE %s SET %s = NULL WHERE %s = ?', $qualifiedTable, $qualifiedColumn, $qualifiedColumn);
+            } else {
+                $sql = sprintf('DELETE FROM %s WHERE %s = ?', $qualifiedTable, $qualifiedColumn);
+            }
+
+            try {
+                $resolver = $pdo->prepare($sql);
+                if ($resolver) {
+                    $resolver->execute([$productId]);
+                }
+            } catch (Throwable $resolverError) {
+                error_log(sprintf(
+                    'Failed to resolve foreign key dependency for %s.%s before deleting product %d: %s',
+                    $table,
+                    $column,
+                    $productId,
+                    $resolverError->getMessage()
+                ));
+                throw $resolverError;
+            }
+        }
+    }
+}
+
 if (!function_exists('productImageAbsolutePath')) {
     /**
      * Translate a stored relative upload path into an absolute filesystem path.
@@ -756,6 +898,9 @@ if(isset($_GET['delete'])) {
         // Added: cascade clean-up for dependent tables to satisfy FK constraints.
         $pdo->prepare('DELETE FROM stock_entries WHERE product_id = ?')->execute([$product_id]);
         $pdo->prepare('UPDATE order_items SET product_id = NULL WHERE product_id = ?')->execute([$product_id]);
+
+        // Added: automatically resolve any remaining foreign key relations that still reference this product.
+        resolveProductForeignKeyDependencies($pdo, $product_id);
 
         $deleteStmt = $pdo->prepare('DELETE FROM products WHERE id=?');
         $deleteStmt->execute([$product_id]);
