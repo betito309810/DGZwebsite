@@ -235,6 +235,167 @@ if (!function_exists('pdoErrorIndicatesConstraintFailure')) {
     }
 }
 
+if (!function_exists('columnAllowsNull')) {
+    /**
+     * Determine whether a table column accepts NULL assignments.
+     */
+    function columnAllowsNull(PDO $pdo, string $table, string $column): bool
+    {
+        static $cache = [];
+        $key = strtolower($table) . '.' . strtolower($column);
+
+        if (array_key_exists($key, $cache)) {
+            return $cache[$key];
+        }
+
+        try {
+            $stmt = $pdo->prepare(
+                'SELECT IS_NULLABLE
+                 FROM INFORMATION_SCHEMA.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE()
+                   AND TABLE_NAME = ?
+                   AND COLUMN_NAME = ?
+                 LIMIT 1'
+            );
+
+            if ($stmt && $stmt->execute([$table, $column])) {
+                $value = $stmt->fetchColumn();
+                $cache[$key] = strtoupper((string) $value) === 'YES';
+                return $cache[$key];
+            }
+        } catch (Throwable $error) {
+            error_log('columnAllowsNull lookup failed: ' . $error->getMessage());
+        }
+
+        $cache[$key] = false;
+        return false;
+    }
+}
+
+if (!function_exists('fetchProductForeignKeyReferences')) {
+    /**
+     * Inspect INFORMATION_SCHEMA to identify tables that reference products.id.
+     */
+    function fetchProductForeignKeyReferences(PDO $pdo): array
+    {
+        static $cache = null;
+        if (is_array($cache)) {
+            return $cache;
+        }
+
+        try {
+            $sql = "
+                SELECT
+                    kcu.TABLE_NAME,
+                    kcu.COLUMN_NAME,
+                    rc.DELETE_RULE
+                FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS kcu
+                JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS AS rc
+                  ON rc.CONSTRAINT_SCHEMA = kcu.CONSTRAINT_SCHEMA
+                 AND rc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME
+                WHERE kcu.TABLE_SCHEMA = DATABASE()
+                  AND kcu.REFERENCED_TABLE_SCHEMA = DATABASE()
+                  AND kcu.REFERENCED_TABLE_NAME = 'products'
+                  AND kcu.REFERENCED_COLUMN_NAME = 'id'
+            ";
+
+            $stmt = $pdo->query($sql);
+            $cache = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+        } catch (Throwable $error) {
+            error_log('Unable to inspect product foreign keys: ' . $error->getMessage());
+            $cache = [];
+        }
+
+        return $cache;
+    }
+}
+
+if (!function_exists('releaseProductForeignKeyReferences')) {
+    /**
+     * Clear or delete referencing rows for tables that block product deletion.
+     */
+    function releaseProductForeignKeyReferences(PDO $pdo, int $productId, array $skipTables = []): void
+    {
+        if ($productId <= 0) {
+            return;
+        }
+
+        $skipLookup = [];
+        foreach ($skipTables as $tableName) {
+            $skipLookup[strtolower($tableName)] = true;
+        }
+
+        $references = fetchProductForeignKeyReferences($pdo);
+        if (empty($references)) {
+            return;
+        }
+
+        foreach ($references as $reference) {
+            $table = (string) ($reference['TABLE_NAME'] ?? '');
+            $column = (string) ($reference['COLUMN_NAME'] ?? '');
+            $deleteRule = strtoupper((string) ($reference['DELETE_RULE'] ?? ''));
+
+            if ($table === '' || $column === '') {
+                continue;
+            }
+
+            if (isset($skipLookup[strtolower($table)])) {
+                continue;
+            }
+
+            if (in_array($deleteRule, ['CASCADE', 'SET NULL'], true)) {
+                continue;
+            }
+
+            if (!preg_match('/^[A-Za-z0-9_]+$/', $table) || !preg_match('/^[A-Za-z0-9_]+$/', $column)) {
+                error_log(sprintf('Skipping cleanup for %s.%s due to unsafe identifier.', $table, $column));
+                continue;
+            }
+
+            $qualifiedTable = '`' . $table . '`';
+            $qualifiedColumn = '`' . $column . '`';
+
+            $resolved = false;
+
+            if (columnAllowsNull($pdo, $table, $column)) {
+                try {
+                    $update = $pdo->prepare("UPDATE $qualifiedTable SET $qualifiedColumn = NULL WHERE $qualifiedColumn = ?");
+                    if ($update) {
+                        $update->execute([$productId]);
+                        $resolved = true;
+                    }
+                } catch (PDOException $updateError) {
+                    if (pdoErrorIndicatesMissingSchema($updateError)) {
+                        continue;
+                    }
+
+                    if (!pdoErrorIndicatesConstraintFailure($updateError)) {
+                        throw $updateError;
+                    }
+                    // Otherwise fall through to delete attempt.
+                }
+            }
+
+            if ($resolved) {
+                continue;
+            }
+
+            try {
+                $delete = $pdo->prepare("DELETE FROM $qualifiedTable WHERE $qualifiedColumn = ?");
+                if ($delete) {
+                    $delete->execute([$productId]);
+                }
+            } catch (PDOException $deleteError) {
+                if (pdoErrorIndicatesMissingSchema($deleteError)) {
+                    continue;
+                }
+
+                throw $deleteError;
+            }
+        }
+    }
+}
+
 if (!function_exists('productImageAbsolutePath')) {
     /**
      * Translate a stored relative upload path into an absolute filesystem path.
@@ -786,6 +947,15 @@ if(isset($_GET['delete'])) {
                 throw $orderItemsError;
             }
         }
+
+        releaseProductForeignKeyReferences($pdo, $product_id, [
+            'stock_entries',
+            'product_images',
+            'product_variants',
+            'inventory_notifications',
+            'product_add_history',
+            'order_items',
+        ]);
 
         // Potential blocker: if any referencing table keeps ON DELETE RESTRICT (no cleanup or cascade),
         // this delete statement will throw a foreign-key violation and the transaction will roll back.
