@@ -7,52 +7,6 @@ $role = $_SESSION['role'] ?? '';
 $isStaff = ($role === 'staff');
 enforceStaffAccess();
 
-if (!function_exists('sqlStateFromException')) {
-    /**
-     * Extract the SQLSTATE code from a PDO exception in a consistent way.
-     */
-    function sqlStateFromException(PDOException $exception): string
-    {
-        $errorInfo = $exception->errorInfo ?? null;
-        if (is_array($errorInfo) && isset($errorInfo[0]) && $errorInfo[0] !== null && $errorInfo[0] !== '') {
-            return (string) $errorInfo[0];
-        }
-
-        $code = $exception->getCode();
-        return $code !== null ? (string) $code : '';
-    }
-}
-
-if (!function_exists('isMissingTableError')) {
-    /**
-     * Determine whether the exception was triggered because a table is missing from the schema.
-     */
-    function isMissingTableError(PDOException $exception): bool
-    {
-        return sqlStateFromException($exception) === '42S02';
-    }
-}
-
-if (!function_exists('isMissingColumnError')) {
-    /**
-     * Detect schema mismatches where a referenced column is absent.
-     */
-    function isMissingColumnError(PDOException $exception): bool
-    {
-        return sqlStateFromException($exception) === '42S22';
-    }
-}
-
-if (!function_exists('isConstraintViolationError')) {
-    /**
-     * Detect referential/constraint errors so we can attempt fallback strategies.
-     */
-    function isConstraintViolationError(PDOException $exception): bool
-    {
-        return sqlStateFromException($exception) === '23000';
-    }
-}
-
 $productFormError = null;
 if (isset($_SESSION['products_error'])) {
     $productFormError = (string) $_SESSION['products_error'];
@@ -720,165 +674,79 @@ if(isset($_GET['delete'])) {
     $product_id = intval($_GET['delete']);
 
     try {
-        // Added: wrap the entire deletion in a transaction so history and clean-up are atomic.
         $pdo->beginTransaction();
 
-        // Get product details before deletion (using prepared statement)
-        $stmt = $pdo->prepare("SELECT * FROM products WHERE id = ?");
+        $stmt = $pdo->prepare('SELECT id, image FROM products WHERE id = ?');
         $stmt->execute([$product_id]);
-        $product = $stmt->fetch();
+        $product = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if ($product) {
-            error_log("Attempting to delete product ID: $product_id");
-            error_log('Product snapshot before delete: ' . json_encode($product));
-
-            // Try to record deletion in history (optional)
-            try {
-                // Added: persist a snapshot of the product before it disappears so history remains readable.
-                $historyPayload = [
-                    'summary' => sprintf(
-                        'Deleted %s (%s).',
-                        $product['name'] ?? 'product',
-                        $product['code'] ?? 'no code'
-                    ),
-                    'snapshot' => [
-                        'code' => $product['code'] ?? null,
-                        'name' => $product['name'] ?? null,
-                        'description' => $product['description'] ?? null,
-                        'price' => $product['price'] ?? null,
-                        'quantity' => $product['quantity'] ?? null,
-                        'low_stock_threshold' => $product['low_stock_threshold'] ?? null,
-                        'brand' => $product['brand'] ?? null,
-                        'category' => $product['category'] ?? null,
-                        'supplier' => $product['supplier'] ?? null,
-                        'image' => $product['image'] ?? null,
-                    ],
-                ];
-
-                $pdo->prepare('INSERT INTO product_add_history (product_id, user_id, action, details) VALUES (?, ?, ?, ?)')
-                    ->execute([
-                        $product_id,
-                        $_SESSION['user_id'],
-                        'delete',
-                        json_encode($historyPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                    ]);
-            } catch (Exception $e) {
-                // History failed but continue with deletion
-                error_log("Failed to record product deletion history: " . $e->getMessage());
-            }
-
-            // Added: cascade clean-up for dependent tables to satisfy FK constraints.
-            try {
-                $pdo->prepare('DELETE FROM stock_entries WHERE product_id = ?')->execute([$product_id]);
-            } catch (PDOException $e) {
-                if (!isMissingTableError($e) && !isMissingColumnError($e)) {
-                    error_log('Failed to clean stock_entries during product delete: ' . $e->getMessage());
-                    throw $e;
-                }
-            }
-
-            try {
-                $pdo->prepare('DELETE FROM product_images WHERE product_id = ?')->execute([$product_id]);
-            } catch (PDOException $e) {
-                if (!isMissingTableError($e) && !isMissingColumnError($e)) {
-                    error_log('Failed to clean product_images during product delete: ' . $e->getMessage());
-                    throw $e;
-                }
-            }
-
-            try {
-                $pdo->prepare('DELETE FROM product_variants WHERE product_id = ?')->execute([$product_id]);
-            } catch (PDOException $e) {
-                if (!isMissingTableError($e) && !isMissingColumnError($e)) {
-                    error_log('Failed to clean product_variants during product delete: ' . $e->getMessage());
-                    throw $e;
-                }
-            }
-
-            try {
-                $pdo->prepare('UPDATE inventory_notifications SET product_id = NULL WHERE product_id = ?')->execute([$product_id]);
-            } catch (PDOException $e) {
-                if (isMissingTableError($e) || isMissingColumnError($e)) {
-                    // Table is absent in minimal schemas; skip silently.
-                } elseif (isConstraintViolationError($e)) {
-                    try {
-                        $pdo->prepare('DELETE FROM inventory_notifications WHERE product_id = ?')->execute([$product_id]);
-                    } catch (PDOException $fallbackException) {
-                        if (!isMissingTableError($fallbackException) && !isMissingColumnError($fallbackException)) {
-                            error_log('Failed to purge inventory_notifications during product delete: ' . $fallbackException->getMessage());
-                            throw $fallbackException;
-                        }
-                    }
-                } else {
-                    error_log('Failed to release inventory_notifications during product delete: ' . $e->getMessage());
-                    throw $e;
-                }
-            }
-
-            try {
-                $pdo->prepare('UPDATE product_add_history SET product_id = NULL WHERE product_id = ?')->execute([$product_id]);
-            } catch (PDOException $e) {
-                if (isMissingTableError($e) || isMissingColumnError($e)) {
-                    // History table not present; skip.
-                } elseif (isConstraintViolationError($e)) {
-                    try {
-                        $pdo->prepare('DELETE FROM product_add_history WHERE product_id = ?')->execute([$product_id]);
-                    } catch (PDOException $fallbackException) {
-                        if (!isMissingTableError($fallbackException) && !isMissingColumnError($fallbackException)) {
-                            error_log('Failed to purge product_add_history rows during product delete: ' . $fallbackException->getMessage());
-                            throw $fallbackException;
-                        }
-                    }
-                } else {
-                    error_log('Failed to release product_add_history rows during product delete: ' . $e->getMessage());
-                    throw $e;
-                }
-            }
-
-            try {
-                $pdo->prepare('UPDATE order_items SET product_id = NULL WHERE product_id = ?')->execute([$product_id]);
-            } catch (PDOException $e) {
-                if (isMissingTableError($e) || isMissingColumnError($e)) {
-                    // Table is absent in minimal schemas; skip silently.
-                } elseif (isConstraintViolationError($e)) {
-                    try {
-                        $pdo->prepare('DELETE FROM order_items WHERE product_id = ?')->execute([$product_id]);
-                    } catch (PDOException $fallbackException) {
-                        if (!isMissingTableError($fallbackException) && !isMissingColumnError($fallbackException)) {
-                            error_log('Failed to purge order_items during product delete: ' . $fallbackException->getMessage());
-                            throw $fallbackException;
-                        }
-                    }
-                } else {
-                    error_log('Failed to release order_items during product delete: ' . $e->getMessage());
-                    throw $e;
-                }
-            }
-
-            try {
-                $pdo->prepare('DELETE FROM products WHERE id=?')->execute([$product_id]);
-            } catch (PDOException $e) {
-                error_log('Failed to delete product row: ' . $e->getMessage());
-                throw $e;
-            }
-
-            try {
-                deleteMainProductImage($product_id, $product['image'] ?? null);
-            } catch (Throwable $imageCleanupError) {
-                error_log('Failed to remove product image during delete: ' . $imageCleanupError->getMessage());
-            }
-        } else {
-            error_log("Product not found for deletion: $product_id");
+        if (!$product) {
+            $pdo->rollBack();
+            $_SESSION['products_error'] = 'Product not found.';
+            header('Location: products.php');
+            exit;
         }
 
+        $cleanupStatements = [
+            'stock_entries' => 'DELETE FROM stock_entries WHERE product_id = ?',
+            'product_images' => 'DELETE FROM product_images WHERE product_id = ?',
+            'product_variants' => 'DELETE FROM product_variants WHERE product_id = ?',
+            'inventory_notifications' => 'DELETE FROM inventory_notifications WHERE product_id = ?',
+            'product_add_history' => 'DELETE FROM product_add_history WHERE product_id = ?',
+        ];
+
+        foreach ($cleanupStatements as $sql) {
+            try {
+                $pdo->prepare($sql)->execute([$product_id]);
+            } catch (PDOException $e) {
+                $errorInfo = $e->errorInfo ?? null;
+                $sqlState = is_array($errorInfo) && !empty($errorInfo[0]) ? (string) $errorInfo[0] : (string) $e->getCode();
+
+                if ($sqlState !== '42S02') {
+                    throw $e;
+                }
+            }
+        }
+
+        try {
+            $pdo->prepare('UPDATE order_items SET product_id = NULL WHERE product_id = ?')->execute([$product_id]);
+        } catch (PDOException $e) {
+            $errorInfo = $e->errorInfo ?? null;
+            $sqlState = is_array($errorInfo) && !empty($errorInfo[0]) ? (string) $errorInfo[0] : (string) $e->getCode();
+
+            if ($sqlState === '42S02') {
+                // Table missing; ignore.
+            } elseif ($sqlState === '23000') {
+                try {
+                    $pdo->prepare('DELETE FROM order_items WHERE product_id = ?')->execute([$product_id]);
+                } catch (PDOException $fallback) {
+                    $fallbackInfo = $fallback->errorInfo ?? null;
+                    $fallbackState = is_array($fallbackInfo) && !empty($fallbackInfo[0]) ? (string) $fallbackInfo[0] : (string) $fallback->getCode();
+
+                    if ($fallbackState !== '42S02') {
+                        throw $fallback;
+                    }
+                }
+            } else {
+                throw $e;
+            }
+        }
+
+        $pdo->prepare('DELETE FROM products WHERE id = ?')->execute([$product_id]);
+
         $pdo->commit();
+
+        try {
+            deleteMainProductImage($product_id, $product['image'] ?? null);
+        } catch (Throwable $imageCleanupError) {
+            error_log('Failed to remove product image during delete: ' . $imageCleanupError->getMessage());
+        }
     } catch (Exception $e) {
-        // Added: rollback on failure to keep DB consistent when any step fails.
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
-        // Log the error and redirect
-        error_log("Product deletion failed: " . $e->getMessage());
+
+        error_log('Product deletion failed: ' . $e->getMessage());
         $_SESSION['products_error'] = 'Unable to delete product. Please try again.';
     }
 
