@@ -688,13 +688,30 @@ if(isset($_GET['delete'])) {
         $product = $stmt->fetch();
         
         if ($product) {
-            // Add this for debugging
-error_log("Attempting to delete product ID: $product_id");
-if ($product) {
-    error_log("Product found: " . json_encode($product));
-} else {
-    error_log("Product not found for deletion");
-}
+            // Added: log lookup results in case a future deletion fails again.
+            error_log("Attempting to delete product ID: $product_id");
+            error_log("Product payload before delete: " . json_encode($product));
+
+            // Added: normalise the inventory notification schema and clear dependent rows
+            // ahead of the product removal. Some production databases still carried the
+            // original FK that blocked deletions, and calling ensure() here makes sure the
+            // constraint is relaxed even if the helper failed earlier in the request. We
+            // also proactively null the foreign keys so the delete never relies on the
+            // constraint behaviour.
+            if (function_exists('ensureInventoryNotificationSchema')) {
+                try {
+                    ensureInventoryNotificationSchema($pdo);
+                } catch (Throwable $schemaError) {
+                    error_log('Inventory notification schema check failed before deletion: ' . $schemaError->getMessage());
+                }
+            }
+
+            try {
+                $pdo->prepare('UPDATE inventory_notifications SET product_id = NULL WHERE product_id = ?')->execute([$product_id]);
+            } catch (Exception $notificationClearError) {
+                error_log('Failed to null inventory notifications before delete: ' . $notificationClearError->getMessage());
+            }
+
             // Try to record deletion in history (optional)
             try {
                 // Added: persist a snapshot of the product before it disappears so history remains readable.
