@@ -5,7 +5,6 @@ $logoAsset = assetUrl('assets/logo.png');
 $indexStylesheet = assetUrl('assets/css/public/index.css');
 $trackStylesheet = assetUrl('assets/css/public/track-order.css');
 $cartScript = assetUrl('assets/js/public/cart.js');
-$searchScript = assetUrl('assets/js/public/search.js');
 $mobileNavScript = assetUrl('assets/js/public/mobileNav.js');
 $trackScript = assetUrl('assets/js/public/track-order.js');
 $homeUrl = orderingUrl('index.php');
@@ -43,13 +42,6 @@ $checkoutModalStylesheet = assetUrl('assets/css/public/checkoutModals.css');
                 <a href="<?= htmlspecialchars($homeUrl) ?>" aria-label="Go to DGZ Motorshop home">
                     <img src="<?= htmlspecialchars($logoAsset) ?>" alt="DGZ Motorshop Logo">
                 </a>
-            </div>
-
-            <div class="search-container">
-                <input type="text" class="search-bar" placeholder="Search by Category, Part, Brand...">
-                <button class="search-btn" type="button">
-                    <i class="fas fa-search"></i>
-                </button>
             </div>
 
             <a href="#" class="cart-btn" id="cartButton">
@@ -128,7 +120,6 @@ $checkoutModalStylesheet = assetUrl('assets/css/public/checkoutModals.css');
         });
     </script>
     <script src="<?= htmlspecialchars($cartScript) ?>"></script>
-    <script src="<?= htmlspecialchars($searchScript) ?>"></script>
     <script src="<?= htmlspecialchars($mobileNavScript) ?>"></script>
     <!-- Page specific logic for handling status lookups -->
     <script src="<?= htmlspecialchars($trackScript) ?>"></script>

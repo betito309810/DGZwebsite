@@ -627,6 +627,36 @@ body.modal-open {
     border-bottom: none;
 }
 
+/* Password visibility toggle inside settings password form */
+.password-input-group {
+    position: relative;
+    width: 100%;
+}
+
+.password-input-group input[type="password"],
+.password-input-group input[type="text"] {
+    width: 100%;
+    padding-right: 40px; /* space for eye icon */
+}
+
+.password-toggle-icon {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    color: #6b7280;
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 6px;
+}
+
+.password-toggle-icon:hover {
+    background: #f3f4f6;
+    color: #374151;
+}
+
 @media (max-width: 768px) {
     .settings-layout {
         padding: 20px 16px;

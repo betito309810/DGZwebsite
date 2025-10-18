@@ -2,7 +2,6 @@
 require __DIR__ . '/dgz_motorshop_system/config/config.php';
 
 $logoAsset = assetUrl('assets/logo.png');
-$searchScript = assetUrl('assets/js/public/search.js');
 $mobileNavScript = assetUrl('assets/js/public/mobileNav.js');
 $aboutStylesheet = assetUrl('assets/css/public/about.css');
 $faqStylesheet = assetUrl('assets/css/public/faq.css');
@@ -38,12 +37,6 @@ $productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
                 <a href="<?= htmlspecialchars($homeUrl) ?>" aria-label="Go to DGZ Motorshop home">
                     <img src="<?= htmlspecialchars($logoAsset) ?>" alt="DGZ Motorshop Logo">
                 </a>
-            </div>
-            <div class="search-container">
-                <input type="text" class="search-bar" placeholder="Search by Category, Part, Brand...">
-                <button class="search-btn" type="button">
-                    <i class="fas fa-search"></i>
-                </button>
             </div>
             <a href="#" class="cart-btn" id="cartButton">
                 <i class="fas fa-shopping-cart"></i>
@@ -135,7 +128,6 @@ $productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
         });
     </script>
     <script src="<?= htmlspecialchars($cartScript) ?>"></script>
-    <script src="<?= htmlspecialchars($searchScript) ?>"></script>
     <script src="<?= htmlspecialchars($mobileNavScript) ?>"></script>
 </body>
 </html>

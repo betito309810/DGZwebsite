@@ -206,9 +206,7 @@ if ($role === 'admin') {
     <title>Settings</title>
     <link rel="stylesheet" href="../dgz_motorshop_system/assets/css/style.css">
     <link rel="stylesheet" href="../dgz_motorshop_system/assets/css/dashboard/dashboard.css">
-    <?php if ($role === 'admin'): ?>
     <link rel="stylesheet" href="../dgz_motorshop_system/assets/css/users/userManagement.css">
-    <?php endif; ?>
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
@@ -299,15 +297,30 @@ if ($role === 'admin') {
                         <input type="hidden" name="change_password" value="1">
                         <div class="form-row">
                             <label for="current_password">Current Password</label>
-                            <input type="password" id="current_password" name="current_password" required autocomplete="current-password">
+                            <div class="password-input-group">
+                                <input type="password" id="current_password" name="current_password" required autocomplete="current-password">
+                                <button type="button" class="password-toggle-icon" data-toggle-target="current_password" aria-label="Show password">
+                                    <i class="fas fa-eye" aria-hidden="true"></i>
+                                </button>
+                            </div>
                         </div>
                         <div class="form-row">
                             <label for="new_password">New Password</label>
-                            <input type="password" id="new_password" name="new_password" required minlength="8" autocomplete="new-password">
+                            <div class="password-input-group">
+                                <input type="password" id="new_password" name="new_password" required minlength="8" autocomplete="new-password">
+                                <button type="button" class="password-toggle-icon" data-toggle-target="new_password" aria-label="Show password">
+                                    <i class="fas fa-eye" aria-hidden="true"></i>
+                                </button>
+                            </div>
                         </div>
                         <div class="form-row">
                             <label for="confirm_new_password">Confirm New Password</label>
-                            <input type="password" id="confirm_new_password" name="confirm_new_password" required autocomplete="new-password">
+                            <div class="password-input-group">
+                                <input type="password" id="confirm_new_password" name="confirm_new_password" required autocomplete="new-password">
+                                <button type="button" class="password-toggle-icon" data-toggle-target="confirm_new_password" aria-label="Show password">
+                                    <i class="fas fa-eye" aria-hidden="true"></i>
+                                </button>
+                            </div>
                         </div>
                         <div class="form-actions">
                             <button type="submit" class="primary-action">
@@ -402,6 +415,25 @@ if ($role === 'admin') {
                         panel.style.maxHeight = '0px';
                         requestAnimationFrame(openPanel);
                     }
+                });
+            });
+
+            // Password visibility toggles for New/Confirm fields
+            const visibilityToggles = document.querySelectorAll('.password-toggle-icon');
+            visibilityToggles.forEach(function (btn) {
+                const targetId = btn.getAttribute('data-toggle-target');
+                const input = document.getElementById(targetId);
+                if (!input) return;
+
+                btn.addEventListener('click', function () {
+                    const makeVisible = input.type === 'password';
+                    input.type = makeVisible ? 'text' : 'password';
+                    const icon = btn.querySelector('i');
+                    if (icon) {
+                        icon.classList.toggle('fa-eye', !makeVisible);
+                        icon.classList.toggle('fa-eye-slash', makeVisible);
+                    }
+                    btn.setAttribute('aria-label', makeVisible ? 'Hide password' : 'Show password');
                 });
             });
         });

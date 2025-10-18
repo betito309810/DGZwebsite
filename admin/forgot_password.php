@@ -4,6 +4,7 @@ require __DIR__ . '/../dgz_motorshop_system/includes/email.php';
 
 $pdo = db();
 $msg = '';
+$msgType = 'error'; // default to error styling unless marked success
 
 /**
  * Ensure the temporary password reset storage exists before we try to use it.
@@ -43,9 +44,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (empty($email)) {
         $msg = 'Please enter your email address.';
+        $msgType = 'error';
         error_log("Empty email provided in password reset form");
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $msg = 'Please enter a valid email address.';
+        $msgType = 'error';
         error_log("Invalid email format provided: " . $email);
     } else {
         // Ensure we only proceed when the email belongs to a registered user
@@ -80,6 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 error_log('Failed to store password reset token: ' . $e->getMessage());
                 $msg = 'We could not start the reset process right now. Please try again in a moment.';
+                $msgType = 'error';
             }
 
             if ($tokenSaved) {
@@ -112,6 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     
                     // Only show success message if email was actually sent
                     $msg = 'A password reset link has been sent to your email address. Please check your inbox and spam folder within 5 minutes.';
+                    $msgType = 'success';
                     
                 } catch (Exception $e) {
                     // Roll back the token record if email sending failed
@@ -119,12 +124,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $stmt->execute([$token]);
                     
                     $msg = $e->getMessage();
+                    $msgType = 'error';
                 }
             }
         } else {
             // For non-existent emails, add a small delay to prevent email enumeration
             sleep(1);
-            $msg = 'A password reset link has been sent to your email address if it exists in our system.';
+            $msg = 'If that email exists in our system, we sent a password reset link. Please check your inbox and spam.';
+            $msgType = 'success';
         }
     }
 }
@@ -147,7 +154,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <h2>Forgot Password</h2>
 
         <?php if ($msg): ?>
-            <div class="error-msg"><?= htmlspecialchars($msg) ?></div>
+            <div class="<?= $msgType === 'success' ? 'success-msg' : 'error-msg' ?>"><?= htmlspecialchars($msg) ?></div>
         <?php endif; ?>
 
         <form method="post">
