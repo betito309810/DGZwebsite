@@ -1,8 +1,13 @@
 <?php
 require __DIR__. '/../config/config.php';
 require_once __DIR__ . '/../dgz_motorshop_system/includes/product_variants.php'; // Added: helper that manages product variant lookups and payloads.
+require_once __DIR__ . '/includes/inventory_notifications.php';
 if(empty($_SESSION['user_id'])){ header('Location: login.php'); exit; }
 $pdo = db();
+$ensureInventorySchema = 'ensureInventoryNotificationSchema';
+if (function_exists($ensureInventorySchema)) {
+    $ensureInventorySchema($pdo);
+}
 $role = $_SESSION['role'] ?? '';
 $isStaff = ($role === 'staff');
 enforceStaffAccess();
