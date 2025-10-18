@@ -328,7 +328,7 @@ if (!function_exists('resolveProductForeignKeyDependencies')) {
                     $productId,
                     $resolverError->getMessage()
                 ));
-                throw $resolverError;
+                // Continue attempting other tables instead of aborting the product delete.
             }
         }
     }
@@ -897,10 +897,19 @@ if(isset($_GET['delete'])) {
 
         // Added: cascade clean-up for dependent tables to satisfy FK constraints.
         $pdo->prepare('DELETE FROM stock_entries WHERE product_id = ?')->execute([$product_id]);
-        $pdo->prepare('UPDATE order_items SET product_id = NULL WHERE product_id = ?')->execute([$product_id]);
+        try {
+            $pdo->prepare('UPDATE order_items SET product_id = NULL WHERE product_id = ?')->execute([$product_id]);
+        } catch (Throwable $orderItemError) {
+            error_log('Failed to null order_items.product_id before delete: ' . $orderItemError->getMessage());
+        }
 
         // Added: automatically resolve any remaining foreign key relations that still reference this product.
-        resolveProductForeignKeyDependencies($pdo, $product_id);
+        try {
+            resolveProductForeignKeyDependencies($pdo, $product_id);
+        } catch (Throwable $resolverError) {
+            // The resolver now logs its own failures, but keep a belt-and-braces catch so deletion keeps going.
+            error_log('Foreign key resolver encountered an unexpected failure: ' . $resolverError->getMessage());
+        }
 
         $deleteStmt = $pdo->prepare('DELETE FROM products WHERE id=?');
         $deleteStmt->execute([$product_id]);
