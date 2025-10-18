@@ -187,6 +187,27 @@ if (!function_exists('persistGalleryUploads')) {
     }
 }
 
+if (!function_exists('releaseProductHistoryReferences')) {
+    /**
+     * Detach product history rows so a product can be deleted even if the
+     * history table keeps a foreign key back to products.
+     */
+    function releaseProductHistoryReferences(PDO $pdo, int $productId): void
+    {
+        try {
+            $pdo->prepare('UPDATE product_add_history SET product_id = NULL WHERE product_id = ?')->execute([$productId]);
+        } catch (PDOException $exception) {
+            if ($exception->getCode() !== '23000') {
+                throw $exception;
+            }
+
+            // Legacy schemas may keep product_id NOT NULL; fall back to removing
+            // the rows entirely so the delete can proceed.
+            $pdo->prepare('DELETE FROM product_add_history WHERE product_id = ?')->execute([$productId]);
+        }
+    }
+}
+
 if (!function_exists('productImageAbsolutePath')) {
     /**
      * Translate a stored relative upload path into an absolute filesystem path.
@@ -731,9 +752,21 @@ if(isset($_GET['delete'])) {
             }
 
             $pdo->prepare('DELETE FROM stock_entries WHERE product_id = ?')->execute([$product_id]);
-            $pdo->prepare('UPDATE order_items SET product_id = NULL, variant_id = NULL WHERE product_id = ?')->execute([$product_id]);
+
+            try {
+                $pdo->prepare('UPDATE order_items SET product_id = NULL, variant_id = NULL WHERE product_id = ?')->execute([$product_id]);
+            } catch (PDOException $orderItemsException) {
+                if ($orderItemsException->getCode() !== '23000') {
+                    throw $orderItemsException;
+                }
+
+                // Some deployments still mark product_id as NOT NULL and rely on hard deletes.
+                $pdo->prepare('DELETE FROM order_items WHERE product_id = ?')->execute([$product_id]);
+            }
+
             $pdo->prepare('DELETE FROM product_variants WHERE product_id = ?')->execute([$product_id]);
             $pdo->prepare('DELETE FROM product_images WHERE product_id = ?')->execute([$product_id]);
+            releaseProductHistoryReferences($pdo, $product_id);
             $pdo->prepare('DELETE FROM products WHERE id = ?')->execute([$product_id]);
         } else {
             $_SESSION['products_error'] = 'Product not found or already deleted.';
