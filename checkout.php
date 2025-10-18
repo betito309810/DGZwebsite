@@ -702,6 +702,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Checkout - DGZ Motorshop</title>
+     <link rel="icon" type="image/x-icon" href="dgz_motorshop_system/assets/android-chrome-512x512.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="<?= htmlspecialchars($checkoutStylesheet) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars($checkoutModalStylesheet) ?>">

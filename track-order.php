@@ -22,6 +22,7 @@ $checkoutModalStylesheet = assetUrl('assets/css/public/checkoutModals.css');
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Track Your DGZ Motorshop Order</title>
+     <link rel="icon" type="image/x-icon" href="dgz_motorshop_system/assets/android-chrome-512x512.png">
     <!-- Font Awesome for consistent iconography across the storefront -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <!-- Shared index stylesheet for consistent footer and other styles -->
