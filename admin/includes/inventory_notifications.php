@@ -29,7 +29,8 @@ if (!function_exists('loadInventoryNotifications')) {
         $tableSql = $pdo->query('SHOW CREATE TABLE inventory_notifications');
         if ($tableSql) {
             $definitionRow = $tableSql->fetch(PDO::FETCH_ASSOC);
-            $definition = strtolower((string) ($definitionRow['Create Table'] ?? ''));
+            $definitionRaw = (string) ($definitionRow['Create Table'] ?? '');
+            $definition = strtolower($definitionRaw);
 
             if ($definition && preg_match('/`created_at`\s+([^,]+)/', $definition, $match)) {
                 $createdClause = $match[1];
@@ -49,6 +50,37 @@ if (!function_exists('loadInventoryNotifications')) {
                 if ($isTimestamp) {
                     $pdo->exec("ALTER TABLE inventory_notifications MODIFY resolved_at DATETIME NULL DEFAULT NULL");
                 }
+            }
+
+            // Ensure product_id can be set to NULL when a product is removed.
+            if ($definition && preg_match('/`product_id`\s+int[^,]*/', $definition, $match)) {
+                $productColumnDefinition = $match[0];
+                if (strpos($productColumnDefinition, 'not null') !== false) {
+                    $pdo->exec('ALTER TABLE inventory_notifications MODIFY product_id INT NULL');
+                    // Refresh the captured definition for subsequent FK checks.
+                    $latestDefinition = $pdo->query('SHOW CREATE TABLE inventory_notifications');
+                    if ($latestDefinition) {
+                        $latestRow = $latestDefinition->fetch(PDO::FETCH_ASSOC);
+                        if ($latestRow && isset($latestRow['Create Table'])) {
+                            $definitionRaw = (string) $latestRow['Create Table'];
+                            $definition = strtolower($definitionRaw);
+                        }
+                    }
+                }
+            }
+
+            // Ensure the FK constraint allows product deletions to null the column.
+            if ($definition && !preg_match('/foreign key `?[^`]*`? \(`product_id`\) references `?products`? \(`?id`?\) on delete set null/', $definition)) {
+                if (preg_match('/constraint `([^`]+)` foreign key \(`product_id`\) references `products` \(`id`\)/i', $definitionRaw, $fkMatch)) {
+                    $fkName = $fkMatch[1];
+                    $pdo->exec('ALTER TABLE inventory_notifications DROP FOREIGN KEY `' . $fkName . '`');
+                }
+
+                $pdo->exec(
+                    'ALTER TABLE inventory_notifications '
+                    . 'ADD CONSTRAINT fk_inventory_notifications_product '
+                    . 'FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL'
+                );
             }
         }
     }

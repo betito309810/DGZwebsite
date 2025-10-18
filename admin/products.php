@@ -1,8 +1,13 @@
 <?php
 require __DIR__. '/../config/config.php';
 require_once __DIR__ . '/../dgz_motorshop_system/includes/product_variants.php'; // Added: helper that manages product variant lookups and payloads.
+require_once __DIR__ . '/includes/inventory_notifications.php';
 if(empty($_SESSION['user_id'])){ header('Location: login.php'); exit; }
 $pdo = db();
+$ensureInventorySchema = 'ensureInventoryNotificationSchema';
+if (function_exists($ensureInventorySchema)) {
+    $ensureInventorySchema($pdo);
+}
 $role = $_SESSION['role'] ?? '';
 $isStaff = ($role === 'staff');
 enforceStaffAccess();
@@ -183,6 +188,247 @@ if (!function_exists('persistGalleryUploads')) {
         foreach ($storedPaths as $path) {
             $sortOrder++;
             $insertStmt->execute([$productId, $path, $sortOrder]);
+        }
+    }
+}
+
+if (!function_exists('quoteDatabaseIdentifier')) {
+    /**
+     * Quote a table or column identifier for use in dynamically built SQL queries.
+     */
+    function quoteDatabaseIdentifier(string $identifier): string
+    {
+        return '`' . str_replace('`', '``', $identifier) . '`';
+    }
+}
+
+if (!function_exists('databaseColumnMetadata')) {
+    /**
+     * Fetch and cache information about a column for the current database.
+     */
+    function databaseColumnMetadata(PDO $pdo, string $table, string $column): ?array
+    {
+        static $cache = [];
+        $cacheKey = strtolower($table) . ':' . strtolower($column);
+
+        if (array_key_exists($cacheKey, $cache)) {
+            return $cache[$cacheKey];
+        }
+
+        try {
+            $stmt = $pdo->prepare(
+                'SELECT COLUMN_NAME, IS_NULLABLE, DATA_TYPE, COLUMN_TYPE '
+                . 'FROM information_schema.COLUMNS '
+                . 'WHERE TABLE_SCHEMA = DATABASE() '
+                . 'AND TABLE_NAME = :table '
+                . 'AND COLUMN_NAME = :column '
+                . 'LIMIT 1'
+            );
+
+            if ($stmt && $stmt->execute([
+                ':table' => $table,
+                ':column' => $column,
+            ])) {
+                $cache[$cacheKey] = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+            } else {
+                $cache[$cacheKey] = null;
+            }
+        } catch (Throwable $metadataError) {
+            error_log('Unable to load column metadata for ' . $table . '.' . $column . ': ' . $metadataError->getMessage());
+            $cache[$cacheKey] = null;
+        }
+
+        return $cache[$cacheKey];
+    }
+}
+
+if (!function_exists('databaseColumnAllowsNull')) {
+    /**
+     * Determine whether the specified column accepts NULL values.
+     */
+    function databaseColumnAllowsNull(PDO $pdo, string $table, string $column): bool
+    {
+        $metadata = databaseColumnMetadata($pdo, $table, $column);
+        if (!$metadata) {
+            return false;
+        }
+
+        return strtoupper((string) ($metadata['IS_NULLABLE'] ?? 'NO')) === 'YES';
+    }
+}
+
+if (!function_exists('fetchProductForeignKeyDependenciesViaShowCreate')) {
+    /**
+     * Fallback helper that inspects SHOW CREATE TABLE output when information_schema access is restricted.
+     */
+    function fetchProductForeignKeyDependenciesViaShowCreate(PDO $pdo): array
+    {
+        $dependencies = [];
+
+        try {
+            $tablesStmt = $pdo->query('SHOW FULL TABLES');
+        } catch (Throwable $tableError) {
+            error_log('Unable to enumerate tables for product FK inspection: ' . $tableError->getMessage());
+            return $dependencies;
+        }
+
+        if (!$tablesStmt) {
+            return $dependencies;
+        }
+
+        while ($tableRow = $tablesStmt->fetch(PDO::FETCH_NUM)) {
+            $tableName = $tableRow[0] ?? '';
+            $tableType = strtolower((string) ($tableRow[1] ?? ''));
+
+            if ($tableName === '' || $tableType === 'view') {
+                continue;
+            }
+
+            try {
+                $createStmt = $pdo->query('SHOW CREATE TABLE ' . quoteDatabaseIdentifier($tableName));
+            } catch (Throwable $createError) {
+                error_log('Unable to inspect schema for ' . $tableName . ': ' . $createError->getMessage());
+                continue;
+            }
+
+            if (!$createStmt) {
+                continue;
+            }
+
+            $createRow = $createStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$createRow) {
+                continue;
+            }
+
+            $createSql = '';
+            if (isset($createRow['Create Table'])) {
+                $createSql = (string) $createRow['Create Table'];
+            } elseif (isset($createRow['Create View'])) {
+                continue;
+            }
+
+            if ($createSql === '') {
+                continue;
+            }
+
+            if (preg_match_all(
+                '/CONSTRAINT `[^`]+` FOREIGN KEY \(([^)]+)\) REFERENCES `?products`? \(`?id`?\)(?: ON DELETE (CASCADE|SET NULL|RESTRICT|NO ACTION))?/i',
+                $createSql,
+                $matches,
+                PREG_SET_ORDER
+            )) {
+                foreach ($matches as $match) {
+                    $columnsRaw = str_replace('`', '', $match[1] ?? '');
+                    $deleteRule = strtoupper((string) ($match[2] ?? ''));
+                    if ($deleteRule === '') {
+                        $deleteRule = 'RESTRICT';
+                    }
+
+                    foreach (array_map('trim', explode(',', $columnsRaw)) as $columnName) {
+                        if ($columnName === '') {
+                            continue;
+                        }
+
+                        $dependencies[] = [
+                            'TABLE_NAME' => $tableName,
+                            'COLUMN_NAME' => $columnName,
+                            'DELETE_RULE' => $deleteRule,
+                        ];
+                    }
+                }
+            }
+        }
+
+        return $dependencies;
+    }
+}
+
+if (!function_exists('resolveProductForeignKeyDependencies')) {
+    /**
+     * Clear or remove rows that reference the product so restrictive foreign keys don't block deletion.
+     */
+    function resolveProductForeignKeyDependencies(PDO $pdo, int $productId): void
+    {
+        $dependencies = [];
+
+        try {
+            $stmt = $pdo->query(
+                'SELECT '
+                . '    k.TABLE_NAME, '
+                . '    k.COLUMN_NAME, '
+                . '    rc.DELETE_RULE '
+                . 'FROM information_schema.KEY_COLUMN_USAGE k '
+                . 'INNER JOIN information_schema.REFERENTIAL_CONSTRAINTS rc '
+                . '    ON k.CONSTRAINT_NAME = rc.CONSTRAINT_NAME '
+                . '    AND k.CONSTRAINT_SCHEMA = rc.CONSTRAINT_SCHEMA '
+                . '    AND k.TABLE_NAME = rc.TABLE_NAME '
+                . 'WHERE k.TABLE_SCHEMA = DATABASE() '
+                . "  AND k.REFERENCED_TABLE_NAME = 'products' "
+                . "  AND k.REFERENCED_COLUMN_NAME = 'id'"
+            );
+
+            if ($stmt) {
+                while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                    $dependencies[] = $row;
+                }
+            }
+        } catch (Throwable $lookupError) {
+            error_log('Unable to inspect product foreign key dependencies via information_schema: ' . $lookupError->getMessage());
+        }
+
+        $fallbackDependencies = fetchProductForeignKeyDependenciesViaShowCreate($pdo);
+        if (!empty($fallbackDependencies)) {
+            $dependencies = array_merge($dependencies, $fallbackDependencies);
+        }
+
+        if (empty($dependencies)) {
+            return;
+        }
+
+        $processed = [];
+
+        foreach ($dependencies as $row) {
+            $table = $row['TABLE_NAME'] ?? '';
+            $column = $row['COLUMN_NAME'] ?? '';
+            if ($table === '' || $column === '') {
+                continue;
+            }
+
+            $processedKey = strtolower($table) . ':' . strtolower($column);
+            if (isset($processed[$processedKey])) {
+                continue;
+            }
+            $processed[$processedKey] = true;
+
+            $deleteRule = strtoupper((string) ($row['DELETE_RULE'] ?? ''));
+            if ($deleteRule === 'CASCADE') {
+                continue; // No manual clean-up necessary.
+            }
+
+            $qualifiedTable = quoteDatabaseIdentifier($table);
+            $qualifiedColumn = quoteDatabaseIdentifier($column);
+
+            if ($deleteRule === 'SET NULL' && databaseColumnAllowsNull($pdo, $table, $column)) {
+                $sql = sprintf('UPDATE %s SET %s = NULL WHERE %s = ?', $qualifiedTable, $qualifiedColumn, $qualifiedColumn);
+            } else {
+                $sql = sprintf('DELETE FROM %s WHERE %s = ?', $qualifiedTable, $qualifiedColumn);
+            }
+
+            try {
+                $resolver = $pdo->prepare($sql);
+                if ($resolver) {
+                    $resolver->execute([$productId]);
+                }
+            } catch (Throwable $resolverError) {
+                error_log(sprintf(
+                    'Failed to resolve foreign key dependency for %s.%s before deleting product %d: %s',
+                    $table,
+                    $column,
+                    $productId,
+                    $resolverError->getMessage()
+                ));
+                // Continue attempting other tables instead of aborting the product delete.
+            }
         }
     }
 }
@@ -672,64 +918,154 @@ $profile_created = format_profile_date($current_user['created_at'] ?? null);
 
 if(isset($_GET['delete'])) {
     $product_id = intval($_GET['delete']);
-    
+
+    if ($product_id <= 0) {
+        $_SESSION['products_error'] = 'Unable to determine which product should be deleted.';
+        header('Location: products.php');
+        exit;
+    }
+
+    $filesToRemove = [];
+    $productUploadDir = __DIR__ . '/../dgz_motorshop_system/uploads/products/' . $product_id;
+
     try {
         // Added: wrap the entire deletion in a transaction so history and clean-up are atomic.
         $pdo->beginTransaction();
 
         // Get product details before deletion (using prepared statement)
-        $stmt = $pdo->prepare("SELECT * FROM products WHERE id = ?");
+        $stmt = $pdo->prepare('SELECT * FROM products WHERE id = ?');
         $stmt->execute([$product_id]);
         $product = $stmt->fetch();
-        
-        if ($product) {
-            // Add this for debugging
-error_log("Attempting to delete product ID: $product_id");
-if ($product) {
-    error_log("Product found: " . json_encode($product));
-} else {
-    error_log("Product not found for deletion");
-}
-            // Try to record deletion in history (optional)
-            try {
-                // Added: persist a snapshot of the product before it disappears so history remains readable.
-                $historyPayload = [
-                    'summary' => sprintf(
-                        'Deleted %s (%s).',
-                        $product['name'] ?? 'product',
-                        $product['code'] ?? 'no code'
-                    ),
-                    'snapshot' => [
-                        'code' => $product['code'] ?? null,
-                        'name' => $product['name'] ?? null,
-                        'description' => $product['description'] ?? null,
-                        'price' => $product['price'] ?? null,
-                        'quantity' => $product['quantity'] ?? null,
-                        'low_stock_threshold' => $product['low_stock_threshold'] ?? null,
-                        'brand' => $product['brand'] ?? null,
-                        'category' => $product['category'] ?? null,
-                        'supplier' => $product['supplier'] ?? null,
-                        'image' => $product['image'] ?? null,
-                    ],
-                ];
 
-                $pdo->prepare('INSERT INTO product_add_history (product_id, user_id, action, details) VALUES (?, ?, ?, ?)')
-                    ->execute([
-                        $product_id,
-                        $_SESSION['user_id'],
-                        'delete',
-                        json_encode($historyPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                    ]);
-            } catch (Exception $e) {
-                // History failed but continue with deletion
-                error_log("Failed to record product deletion history: " . $e->getMessage());
-            }
-            
-            // Added: cascade clean-up for dependent tables to satisfy FK constraints.
-            $pdo->prepare('DELETE FROM stock_entries WHERE product_id = ?')->execute([$product_id]);
-            $pdo->prepare('UPDATE order_items SET product_id = NULL WHERE product_id = ?')->execute([$product_id]);
-            $pdo->prepare('DELETE FROM products WHERE id=?')->execute([$product_id]);
+        if (!$product) {
+            throw new RuntimeException('Product record no longer exists.');
         }
+
+        // Added: log lookup results in case a future deletion fails again.
+        error_log("Attempting to delete product ID: $product_id");
+        error_log("Product payload before delete: " . json_encode($product));
+
+        // Added: capture gallery paths before we remove any records so filesystem clean-up can occur after commit.
+        $galleryStmt = $pdo->prepare('SELECT file_path FROM product_images WHERE product_id = ?');
+        $galleryStmt->execute([$product_id]);
+        $galleryFiles = $galleryStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        $mainImagePath = productImageAbsolutePath($product['image'] ?? '');
+        if ($mainImagePath) {
+            $filesToRemove[] = $mainImagePath;
+        }
+        foreach ($galleryFiles as $galleryRow) {
+            $galleryPath = productImageAbsolutePath($galleryRow['file_path'] ?? '');
+            if ($galleryPath) {
+                $filesToRemove[] = $galleryPath;
+            }
+        }
+
+        // Added: normalise the inventory notification schema and clear dependent rows
+        // ahead of the product removal. Some production databases still carried the
+        // original FK that blocked deletions, and calling ensure() here makes sure the
+        // constraint is relaxed even if the helper failed earlier in the request. We
+        // also proactively null the foreign keys so the delete never relies on the
+        // constraint behaviour.
+        if (function_exists('ensureInventoryNotificationSchema')) {
+            try {
+                ensureInventoryNotificationSchema($pdo);
+            } catch (Throwable $schemaError) {
+                error_log('Inventory notification schema check failed before deletion: ' . $schemaError->getMessage());
+            }
+        }
+
+        try {
+            $pdo->prepare('UPDATE inventory_notifications SET product_id = NULL WHERE product_id = ?')->execute([$product_id]);
+        } catch (Exception $notificationClearError) {
+            error_log('Failed to null inventory notifications before delete: ' . $notificationClearError->getMessage());
+        }
+
+        // Added: clean up auxiliary tables explicitly for legacy schemas that still enforce RESTRICT.
+        try {
+            $pdo->prepare('DELETE FROM product_images WHERE product_id = ?')->execute([$product_id]);
+        } catch (Exception $legacyGalleryError) {
+            error_log('Failed to clear product_images during delete: ' . $legacyGalleryError->getMessage());
+        }
+
+        try {
+            $pdo->prepare('DELETE FROM product_variants WHERE product_id = ?')->execute([$product_id]);
+        } catch (Exception $legacyVariantError) {
+            error_log('Failed to clear product_variants during delete: ' . $legacyVariantError->getMessage());
+        }
+
+        // Added: cascade clean-up for dependent tables to satisfy FK constraints.
+        try {
+            $pdo->prepare('DELETE FROM stock_entries WHERE product_id = ?')->execute([$product_id]);
+        } catch (Exception $stockEntryError) {
+            error_log('Failed to clear stock_entries during delete: ' . $stockEntryError->getMessage());
+        }
+        try {
+            $pdo->prepare('UPDATE restock_requests SET product_id = NULL WHERE product_id = ?')->execute([$product_id]);
+        } catch (Exception $restockClearError) {
+            error_log('Failed to null restock_requests.product_id before delete: ' . $restockClearError->getMessage());
+        }
+        try {
+            $pdo->prepare('UPDATE restock_requests SET variant_id = NULL WHERE variant_id IN (SELECT id FROM product_variants WHERE product_id = ?)')->execute([$product_id]);
+        } catch (Exception $restockVariantError) {
+            error_log('Failed to null restock_requests.variant_id before delete: ' . $restockVariantError->getMessage());
+        }
+        try {
+            $pdo->prepare('UPDATE order_items SET product_id = NULL WHERE product_id = ?')->execute([$product_id]);
+        } catch (Throwable $orderItemError) {
+            error_log('Failed to null order_items.product_id before delete: ' . $orderItemError->getMessage());
+        }
+
+        // Added: automatically resolve any remaining foreign key relations that still reference this product.
+        try {
+            resolveProductForeignKeyDependencies($pdo, $product_id);
+        } catch (Throwable $resolverError) {
+            // The resolver now logs its own failures, but keep a belt-and-braces catch so deletion keeps going.
+            error_log('Foreign key resolver encountered an unexpected failure: ' . $resolverError->getMessage());
+        }
+
+        $deleteStmt = $pdo->prepare('DELETE FROM products WHERE id=?');
+        $deleteStmt->execute([$product_id]);
+
+        if ($deleteStmt->rowCount() === 0) {
+            throw new RuntimeException('Delete query completed but did not remove any rows.');
+        }
+
+        // Try to record deletion in history (optional)
+        try {
+            // Added: persist a snapshot of the product before it disappears so history remains readable.
+            $historyPayload = [
+                'summary' => sprintf(
+                    'Deleted %s (%s).',
+                    $product['name'] ?? 'product',
+                    $product['code'] ?? 'no code'
+                ),
+                'snapshot' => [
+                    'code' => $product['code'] ?? null,
+                    'name' => $product['name'] ?? null,
+                    'description' => $product['description'] ?? null,
+                    'price' => $product['price'] ?? null,
+                    'quantity' => $product['quantity'] ?? null,
+                    'low_stock_threshold' => $product['low_stock_threshold'] ?? null,
+                    'brand' => $product['brand'] ?? null,
+                    'category' => $product['category'] ?? null,
+                    'supplier' => $product['supplier'] ?? null,
+                    'image' => $product['image'] ?? null,
+                ],
+            ];
+
+            $pdo->prepare('INSERT INTO product_add_history (product_id, user_id, action, details) VALUES (?, ?, ?, ?)')
+                ->execute([
+                    $product_id,
+                    $_SESSION['user_id'],
+                    'delete',
+                    json_encode($historyPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                ]);
+        } catch (Exception $historyError) {
+            // History failed but continue with deletion
+            error_log('Failed to record product deletion history: ' . $historyError->getMessage());
+        }
+
         $pdo->commit();
     } catch (Exception $e) {
         // Added: rollback on failure to keep DB consistent when any step fails.
@@ -737,10 +1073,28 @@ if ($product) {
             $pdo->rollBack();
         }
         // Log the error and redirect
-        error_log("Product deletion failed: " . $e->getMessage());
+        error_log('Product deletion failed: ' . $e->getMessage());
+        $_SESSION['products_error'] = 'Failed to delete the product. Please resolve related records and try again.';
+        header('Location: products.php');
+        exit;
     }
-    
-    header('Location: products.php'); 
+
+    // Added: remove any orphaned image files after the transaction succeeds.
+    $filesToRemove = array_values(array_unique(array_filter($filesToRemove)));
+    foreach ($filesToRemove as $filePath) {
+        if (is_string($filePath) && $filePath !== '' && is_file($filePath)) {
+            @unlink($filePath);
+        }
+    }
+
+    if (is_dir($productUploadDir)) {
+        $remaining = glob($productUploadDir . '/*');
+        if ($remaining === false || count($remaining) === 0) {
+            @rmdir($productUploadDir);
+        }
+    }
+
+    header('Location: products.php');
     exit;
 }
 if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_product'])){
