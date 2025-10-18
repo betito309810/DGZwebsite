@@ -726,9 +726,44 @@ if ($product) {
             }
             
             // Added: cascade clean-up for dependent tables to satisfy FK constraints.
-            $pdo->prepare('DELETE FROM stock_entries WHERE product_id = ?')->execute([$product_id]);
-            $pdo->prepare('UPDATE order_items SET product_id = NULL WHERE product_id = ?')->execute([$product_id]);
-            $pdo->prepare('DELETE FROM products WHERE id=?')->execute([$product_id]);
+            try {
+                $pdo->prepare('DELETE FROM stock_entries WHERE product_id = ?')->execute([$product_id]);
+            } catch (PDOException $e) {
+                $sqlState = $e->errorInfo[0] ?? $e->getCode();
+                if ($sqlState !== '42S02') {
+                    error_log('Failed to clean stock_entries during product delete: ' . $e->getMessage());
+                    throw $e;
+                }
+            }
+
+            try {
+                $pdo->prepare('UPDATE order_items SET product_id = NULL WHERE product_id = ?')->execute([$product_id]);
+            } catch (PDOException $e) {
+                $sqlState = $e->errorInfo[0] ?? $e->getCode();
+                if ($sqlState === '42S02') {
+                    // Table is absent in minimal schemas; skip silently.
+                } elseif ($sqlState === '23000') {
+                    try {
+                        $pdo->prepare('DELETE FROM order_items WHERE product_id = ?')->execute([$product_id]);
+                    } catch (PDOException $fallbackException) {
+                        $fallbackState = $fallbackException->errorInfo[0] ?? $fallbackException->getCode();
+                        if ($fallbackState !== '42S02') {
+                            error_log('Failed to purge order_items during product delete: ' . $fallbackException->getMessage());
+                            throw $fallbackException;
+                        }
+                    }
+                } else {
+                    error_log('Failed to release order_items during product delete: ' . $e->getMessage());
+                    throw $e;
+                }
+            }
+
+            try {
+                $pdo->prepare('DELETE FROM products WHERE id=?')->execute([$product_id]);
+            } catch (PDOException $e) {
+                error_log('Failed to delete product row: ' . $e->getMessage());
+                throw $e;
+            }
         }
         $pdo->commit();
     } catch (Exception $e) {
