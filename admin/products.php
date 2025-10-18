@@ -187,6 +187,51 @@ if (!function_exists('persistGalleryUploads')) {
     }
 }
 
+if (!function_exists('pdoErrorMatchesState')) {
+    /**
+     * Determine whether the given PDOException corresponds to one of the supplied SQLSTATE codes.
+     */
+    function pdoErrorMatchesState(PDOException $exception, $states): bool
+    {
+        $states = (array) $states;
+
+        $sqlState = $exception->errorInfo[0] ?? null;
+        $driverCode = $exception->getCode();
+
+        foreach ($states as $state) {
+            if ($state === null || $state === '') {
+                continue;
+            }
+
+            if ($sqlState === $state || $driverCode === $state) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}
+
+if (!function_exists('pdoErrorIndicatesMissingSchema')) {
+    /**
+     * Helper to detect missing-table or missing-column SQLSTATE values.
+     */
+    function pdoErrorIndicatesMissingSchema(PDOException $exception): bool
+    {
+        return pdoErrorMatchesState($exception, ['42S02', '42S22']);
+    }
+}
+
+if (!function_exists('pdoErrorIndicatesConstraintFailure')) {
+    /**
+     * Helper to detect integrity constraint violations (e.g. foreign key failures).
+     */
+    function pdoErrorIndicatesConstraintFailure(PDOException $exception): bool
+    {
+        return pdoErrorMatchesState($exception, ['23000']);
+    }
+}
+
 if (!function_exists('productImageAbsolutePath')) {
     /**
      * Translate a stored relative upload path into an absolute filesystem path.
@@ -687,24 +732,50 @@ if(isset($_GET['delete'])) {
             exit;
         }
 
-        /*
-         * Commented out potential blockers: the optional table cleanup queries and order_items adjustments have been
-         * observed to throw SQLSTATE errors on deployments where those tables or columns are absent, cancelling the
-         * transaction before the product row is removed. Re-enable once the schema differences are resolved.
-         */
-        // $cleanupStatements = [
-        //     'stock_entries' => 'DELETE FROM stock_entries WHERE product_id = ?',
-        //     'product_images' => 'DELETE FROM product_images WHERE product_id = ?',
-        //     'product_variants' => 'DELETE FROM product_variants WHERE product_id = ?',
-        //     'inventory_notifications' => 'DELETE FROM inventory_notifications WHERE product_id = ?',
-        //     'product_add_history' => 'DELETE FROM product_add_history WHERE product_id = ?',
-        // ];
-        //
-        // foreach ($cleanupStatements as $tableName => $sql) {
-        //     $pdo->prepare($sql)->execute([$product_id]);
-        // }
-        //
-        // $pdo->prepare('UPDATE order_items SET product_id = NULL WHERE product_id = ?')->execute([$product_id]);
+        $cleanupStatements = [
+            'stock_entries' => 'DELETE FROM stock_entries WHERE product_id = ?',
+            'product_images' => 'DELETE FROM product_images WHERE product_id = ?',
+            'product_variants' => 'DELETE FROM product_variants WHERE product_id = ?',
+            'inventory_notifications' => 'DELETE FROM inventory_notifications WHERE product_id = ?',
+            'product_add_history' => 'DELETE FROM product_add_history WHERE product_id = ?',
+        ];
+
+        foreach ($cleanupStatements as $tableName => $sql) {
+            try {
+                $pdo->prepare($sql)->execute([$product_id]);
+            } catch (PDOException $cleanupError) {
+                if (pdoErrorIndicatesMissingSchema($cleanupError)) {
+                    error_log(sprintf(
+                        'Skipping %s cleanup during product delete because the table is missing: %s',
+                        $tableName,
+                        $cleanupError->getMessage()
+                    ));
+                    continue;
+                }
+
+                throw $cleanupError;
+            }
+        }
+
+        try {
+            $pdo->prepare('UPDATE order_items SET product_id = NULL WHERE product_id = ?')->execute([$product_id]);
+        } catch (PDOException $orderItemsError) {
+            if (pdoErrorIndicatesMissingSchema($orderItemsError)) {
+                error_log('Skipping order_items reassignment during product delete because the table or column is missing.');
+            } elseif (pdoErrorIndicatesConstraintFailure($orderItemsError)) {
+                try {
+                    $pdo->prepare('DELETE FROM order_items WHERE product_id = ?')->execute([$product_id]);
+                } catch (PDOException $orderItemsDeleteError) {
+                    if (pdoErrorIndicatesMissingSchema($orderItemsDeleteError)) {
+                        error_log('Skipping order_items delete fallback during product delete because the table is missing.');
+                    } else {
+                        throw $orderItemsDeleteError;
+                    }
+                }
+            } else {
+                throw $orderItemsError;
+            }
+        }
 
         $pdo->prepare('DELETE FROM products WHERE id = ?')->execute([$product_id]);
 
@@ -1456,7 +1527,9 @@ if ($currentSort === 'name') {
                                     data-gallery="<?=$galleryJson?>"
                                     data-default-variant="<?=htmlspecialchars($defaultVariantLabel)?>"><i class="fas fa-edit"></i>Edit</a>
                                 <a href="products.php?delete=<?=$p['id']?>" class="delete-btn action-btn"
-                                    onclick="return confirm('Delete?')"> <i class="fas fa-trash"></i>Delete</a>
+                                    data-product-name="<?= htmlspecialchars($p['name'] ?? 'this product') ?>">
+                                    <i class="fas fa-trash"></i>Delete
+                                </a>
                             </td>
                             <?php endif; ?>
                         </tr>

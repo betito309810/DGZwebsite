@@ -448,6 +448,25 @@
             //     });
             // });
 
+            document.querySelectorAll('.delete-btn').forEach((button) => {
+                button.addEventListener('click', (event) => {
+                    event.stopPropagation();
+
+                    const targetUrl = button.getAttribute('href');
+                    if (!targetUrl) {
+                        event.preventDefault();
+                        return;
+                    }
+
+                    const productName = button.dataset.productName || 'this product';
+                    const confirmationMessage = `Deleting ${productName} will remove all related records. This action cannot be undone. Continue?`;
+
+                    if (!window.confirm(confirmationMessage)) {
+                        event.preventDefault();
+                    }
+                });
+            });
+
             detailCloseButton?.addEventListener('click', () => {
                 closeDetailModal();
             });
