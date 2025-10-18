@@ -423,29 +423,30 @@
                 });
             }
 
-            document.querySelectorAll('.product-row').forEach((row) => {
-                row.addEventListener('click', (event) => {
-                    if (event.target.closest('.action-btn')) {
-                        return;
-                    }
-
-                    const payload = row.dataset.product;
-                    if (!payload) {
-                        return;
-                    }
-
-                    try {
-                        const product = JSON.parse(payload);
-                        openDetailModal(product);
-                    } catch (error) {
-                        console.error('Failed to parse product payload for detail modal', error);
-                    }
-                });
-            });
-
-            // Potential blocker: without an explicit click handler on `.delete-btn` to call stopPropagation(),
-            // nested markup or future refactors could let the row handler above reopen the modal and keep the
-            // browser on the page instead of following the delete link.
+            /*
+             * Commented out potential blocker: the row-level click handler can intercept delete link presses when
+             * stopPropagation() is not enforced, preventing navigation to the backend delete endpoint. Revisit once
+             * dedicated delete button handling is reinstated.
+             */
+            // document.querySelectorAll('.product-row').forEach((row) => {
+            //     row.addEventListener('click', (event) => {
+            //         if (event.target.closest('.action-btn')) {
+            //             return;
+            //         }
+            //
+            //         const payload = row.dataset.product;
+            //         if (!payload) {
+            //             return;
+            //         }
+            //
+            //         try {
+            //             const product = JSON.parse(payload);
+            //             openDetailModal(product);
+            //         } catch (error) {
+            //             console.error('Failed to parse product payload for detail modal', error);
+            //         }
+            //     });
+            // });
 
             detailCloseButton?.addEventListener('click', () => {
                 closeDetailModal();

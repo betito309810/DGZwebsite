@@ -687,55 +687,24 @@ if(isset($_GET['delete'])) {
             exit;
         }
 
-        $cleanupStatements = [
-            'stock_entries' => 'DELETE FROM stock_entries WHERE product_id = ?',
-            'product_images' => 'DELETE FROM product_images WHERE product_id = ?',
-            'product_variants' => 'DELETE FROM product_variants WHERE product_id = ?',
-            'inventory_notifications' => 'DELETE FROM inventory_notifications WHERE product_id = ?',
-            'product_add_history' => 'DELETE FROM product_add_history WHERE product_id = ?',
-        ];
-
-        foreach ($cleanupStatements as $tableName => $sql) {
-            try {
-                $pdo->prepare($sql)->execute([$product_id]);
-            } catch (PDOException $e) {
-                $errorInfo = $e->errorInfo ?? null;
-                $sqlState = is_array($errorInfo) && !empty($errorInfo[0]) ? (string) $errorInfo[0] : (string) $e->getCode();
-
-                if ($sqlState !== '42S02') {
-                    // Potential blocker: schemas that renamed or removed the product reference column (e.g. SQLSTATE 42S22)
-                    // still bubble up here and abort the delete flow. Leaving the exception visible so we can confirm.
-                    throw $e;
-                }
-            }
-        }
-
-        try {
-            $pdo->prepare('UPDATE order_items SET product_id = NULL WHERE product_id = ?')->execute([$product_id]);
-        } catch (PDOException $e) {
-            $errorInfo = $e->errorInfo ?? null;
-            $sqlState = is_array($errorInfo) && !empty($errorInfo[0]) ? (string) $errorInfo[0] : (string) $e->getCode();
-
-            if ($sqlState === '42S02') {
-                // Table missing; ignore.
-            } elseif ($sqlState === '23000') {
-                try {
-                    $pdo->prepare('DELETE FROM order_items WHERE product_id = ?')->execute([$product_id]);
-                } catch (PDOException $fallback) {
-                    $fallbackInfo = $fallback->errorInfo ?? null;
-                    $fallbackState = is_array($fallbackInfo) && !empty($fallbackInfo[0]) ? (string) $fallbackInfo[0] : (string) $fallback->getCode();
-
-                    if ($fallbackState !== '42S02') {
-                        // Potential blocker: schemas where order_items.product_id cannot be nulled or deleted
-                        // (e.g. column renamed to item_product_id giving SQLSTATE 42S22) will still fail here.
-                        throw $fallback;
-                    }
-                }
-            } else {
-                // Potential blocker: older order_items snapshots without the product_id column raise 42S22 and stop here.
-                throw $e;
-            }
-        }
+        /*
+         * Commented out potential blockers: the optional table cleanup queries and order_items adjustments have been
+         * observed to throw SQLSTATE errors on deployments where those tables or columns are absent, cancelling the
+         * transaction before the product row is removed. Re-enable once the schema differences are resolved.
+         */
+        // $cleanupStatements = [
+        //     'stock_entries' => 'DELETE FROM stock_entries WHERE product_id = ?',
+        //     'product_images' => 'DELETE FROM product_images WHERE product_id = ?',
+        //     'product_variants' => 'DELETE FROM product_variants WHERE product_id = ?',
+        //     'inventory_notifications' => 'DELETE FROM inventory_notifications WHERE product_id = ?',
+        //     'product_add_history' => 'DELETE FROM product_add_history WHERE product_id = ?',
+        // ];
+        //
+        // foreach ($cleanupStatements as $tableName => $sql) {
+        //     $pdo->prepare($sql)->execute([$product_id]);
+        // }
+        //
+        // $pdo->prepare('UPDATE order_items SET product_id = NULL WHERE product_id = ?')->execute([$product_id]);
 
         $pdo->prepare('DELETE FROM products WHERE id = ?')->execute([$product_id]);
 
