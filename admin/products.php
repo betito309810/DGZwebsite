@@ -187,6 +187,131 @@ if (!function_exists('persistGalleryUploads')) {
     }
 }
 
+if (!function_exists('tableHasColumn')) {
+    /**
+     * Determine whether the current database contains the given column on the specified table.
+     */
+    function tableHasColumn(PDO $pdo, string $table, string $column): bool
+    {
+        static $cache = [];
+        $key = strtolower($table) . ':' . strtolower($column);
+
+        if (array_key_exists($key, $cache)) {
+            return $cache[$key];
+        }
+
+        try {
+            $stmt = $pdo->prepare(
+                'SELECT 1
+                 FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE()
+                   AND TABLE_NAME = :table
+                   AND COLUMN_NAME = :column
+                 LIMIT 1'
+            );
+
+            if ($stmt && $stmt->execute([
+                ':table' => $table,
+                ':column' => $column,
+            ])) {
+                $cache[$key] = $stmt->fetchColumn() !== false;
+            } else {
+                $cache[$key] = false;
+            }
+        } catch (Throwable $e) {
+            $cache[$key] = false;
+        }
+
+        return $cache[$key];
+    }
+}
+
+if (!function_exists('tableColumnAllowsNull')) {
+    /**
+     * Check whether the specified column is nullable in the active database.
+     */
+    function tableColumnAllowsNull(PDO $pdo, string $table, string $column): bool
+    {
+        static $cache = [];
+        $key = strtolower($table) . ':' . strtolower($column);
+
+        if (array_key_exists($key, $cache)) {
+            return $cache[$key];
+        }
+
+        try {
+            $stmt = $pdo->prepare(
+                'SELECT IS_NULLABLE
+                 FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE()
+                   AND TABLE_NAME = :table
+                   AND COLUMN_NAME = :column
+                 LIMIT 1'
+            );
+
+            if ($stmt && $stmt->execute([
+                ':table' => $table,
+                ':column' => $column,
+            ])) {
+                $result = $stmt->fetchColumn();
+                $cache[$key] = ($result !== false) && (strtoupper((string) $result) === 'YES');
+            } else {
+                $cache[$key] = false;
+            }
+        } catch (Throwable $e) {
+            $cache[$key] = false;
+        }
+
+        return $cache[$key];
+    }
+}
+
+if (!function_exists('clearColumnReference')) {
+    /**
+     * Either null out or delete rows referencing the supplied identifier based on column nullability.
+     */
+    function clearColumnReference(PDO $pdo, string $table, string $column, int $id): void
+    {
+        if (!tableHasColumn($pdo, $table, $column)) {
+            return;
+        }
+
+        $allowsNull = tableColumnAllowsNull($pdo, $table, $column);
+        $sql = $allowsNull
+            ? sprintf('UPDATE `%s` SET `%s` = NULL WHERE `%s` = ?', $table, $column, $column)
+            : sprintf('DELETE FROM `%s` WHERE `%s` = ?', $table, $column);
+
+        $stmt = $pdo->prepare($sql);
+        if ($stmt) {
+            $stmt->execute([$id]);
+        }
+    }
+}
+
+if (!function_exists('clearColumnReferencesInList')) {
+    /**
+     * Either null out or delete rows referencing any of the supplied identifiers.
+     */
+    function clearColumnReferencesInList(PDO $pdo, string $table, string $column, array $ids): void
+    {
+        $ids = array_values(array_unique(array_map('intval', $ids)));
+        if (empty($ids) || !tableHasColumn($pdo, $table, $column)) {
+            return;
+        }
+
+        $allowsNull = tableColumnAllowsNull($pdo, $table, $column);
+        $placeholders = implode(', ', array_fill(0, count($ids), '?'));
+        $sql = $allowsNull
+            ? sprintf('UPDATE `%s` SET `%s` = NULL WHERE `%s` IN (%s)', $table, $column, $column, $placeholders)
+            : sprintf('DELETE FROM `%s` WHERE `%s` IN (%s)', $table, $column, $placeholders);
+
+        $stmt = $pdo->prepare($sql);
+        if ($stmt) {
+            $stmt->execute($ids);
+        }
+    }
+}
+
 if (!function_exists('productImageAbsolutePath')) {
     /**
      * Translate a stored relative upload path into an absolute filesystem path.
@@ -726,8 +851,32 @@ if ($product) {
             }
             
             // Added: cascade clean-up for dependent tables to satisfy FK constraints.
+            $variantIds = [];
+            try {
+                $variantStmt = $pdo->prepare('SELECT id FROM product_variants WHERE product_id = ?');
+                if ($variantStmt && $variantStmt->execute([$product_id])) {
+                    $variantIds = array_map('intval', $variantStmt->fetchAll(PDO::FETCH_COLUMN));
+                }
+            } catch (Throwable $variantLookupError) {
+                error_log('Variant lookup during product delete failed: ' . $variantLookupError->getMessage());
+                $variantIds = [];
+            }
+
             $pdo->prepare('DELETE FROM stock_entries WHERE product_id = ?')->execute([$product_id]);
-            $pdo->prepare('UPDATE order_items SET product_id = NULL WHERE product_id = ?')->execute([$product_id]);
+            $pdo->prepare('DELETE FROM inventory_ledger WHERE product_id = ?')->execute([$product_id]);
+
+            clearColumnReference($pdo, 'stock_receipt_items', 'product_id', $product_id);
+            clearColumnReference($pdo, 'order_items', 'product_id', $product_id);
+            clearColumnReference($pdo, 'restock_requests', 'product_id', $product_id);
+
+            if (!empty($variantIds)) {
+                clearColumnReferencesInList($pdo, 'stock_receipt_items', 'variant_id', $variantIds);
+                clearColumnReferencesInList($pdo, 'order_items', 'variant_id', $variantIds);
+                clearColumnReferencesInList($pdo, 'restock_requests', 'variant_id', $variantIds);
+            }
+
+            $pdo->prepare('DELETE FROM product_variants WHERE product_id = ?')->execute([$product_id]);
+            $pdo->prepare('DELETE FROM product_images WHERE product_id = ?')->execute([$product_id]);
             $pdo->prepare('DELETE FROM products WHERE id=?')->execute([$product_id]);
         }
         $pdo->commit();
