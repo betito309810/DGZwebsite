@@ -726,6 +726,7 @@ if ($product) {
             }
             
             // Added: cascade clean-up for dependent tables to satisfy FK constraints.
+            $pdo->prepare('DELETE FROM inventory_notifications WHERE product_id = ?')->execute([$product_id]);
             $pdo->prepare('DELETE FROM stock_entries WHERE product_id = ?')->execute([$product_id]);
             $pdo->prepare('UPDATE order_items SET product_id = NULL WHERE product_id = ?')->execute([$product_id]);
             $pdo->prepare('DELETE FROM products WHERE id=?')->execute([$product_id]);
