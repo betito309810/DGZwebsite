@@ -893,7 +893,7 @@ if(isset($_GET['delete'])) {
             error_log('Unable to disable foreign key checks prior to product delete: ' . $toggleError->getMessage());
         }
 
-        $stmt = $pdo->prepare('SELECT id, image FROM products WHERE id = ?');
+        $stmt = $pdo->prepare('SELECT * FROM products WHERE id = ?');
         $stmt->execute([$product_id]);
         $product = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -904,12 +904,99 @@ if(isset($_GET['delete'])) {
             exit;
         }
 
+        $productSnapshot = [
+            'code' => $product['code'] ?? null,
+            'name' => $product['name'] ?? null,
+            'description' => $product['description'] ?? null,
+            'price' => isset($product['price']) ? (float) $product['price'] : null,
+            'quantity' => isset($product['quantity']) ? (int) $product['quantity'] : null,
+            'low_stock_threshold' => isset($product['low_stock_threshold']) ? (int) $product['low_stock_threshold'] : null,
+            'brand' => $product['brand'] ?? null,
+            'category' => $product['category'] ?? null,
+            'supplier' => $product['supplier'] ?? null,
+            'image' => $product['image'] ?? null,
+            'variants' => [],
+        ];
+
+        try {
+            $productSnapshot['variants'] = fetchProductVariants($pdo, $product_id);
+        } catch (PDOException $variantLookupError) {
+            if (!pdoErrorIndicatesMissingSchema($variantLookupError)) {
+                throw $variantLookupError;
+            }
+        }
+
+        $summaryParts = [];
+        $productName = trim((string) ($product['name'] ?? ''));
+        $productCode = trim((string) ($product['code'] ?? ''));
+        $summaryParts[] = sprintf(
+            'Deleted %s (%s).',
+            $productName !== '' ? $productName : 'product',
+            $productCode !== '' ? $productCode : 'no code'
+        );
+
+        if (isset($productSnapshot['quantity'])) {
+            $summaryParts[] = 'Stock: ' . number_format((int) $productSnapshot['quantity']);
+        }
+
+        if (isset($productSnapshot['price'])) {
+            $summaryParts[] = 'Price: ₱' . number_format((float) $productSnapshot['price'], 2);
+        }
+
+        $brandLabel = trim((string) ($product['brand'] ?? ''));
+        if ($brandLabel !== '') {
+            $summaryParts[] = 'Brand: ' . $brandLabel;
+        }
+
+        $categoryLabel = trim((string) ($product['category'] ?? ''));
+        if ($categoryLabel !== '') {
+            $summaryParts[] = 'Category: ' . $categoryLabel;
+        }
+
+        $historyPayload = [
+            'summary' => implode(' • ', $summaryParts),
+            'snapshot' => $productSnapshot,
+            'changes' => [],
+            'variant_changes' => [],
+            'removed_gallery_images' => [],
+            'removed_main_image' => ($product['image'] ?? null) !== null,
+            'deleted_product_id' => $product_id,
+            'deleted_at' => date('c'),
+        ];
+
+        $historyInsertSucceeded = false;
+        try {
+            $pdo->prepare('INSERT INTO product_add_history (product_id, user_id, action, details) VALUES (?, ?, ?, ?)')
+                ->execute([
+                    $product_id,
+                    isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null,
+                    'delete',
+                    json_encode($historyPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                ]);
+            $historyInsertSucceeded = true;
+        } catch (PDOException $historyError) {
+            if (pdoErrorIndicatesMissingSchema($historyError)) {
+                error_log('Skipping product delete history insert because product_add_history table is missing.');
+            } else {
+                throw $historyError;
+            }
+        }
+
+        if ($historyInsertSucceeded && columnAllowsNull($pdo, 'product_add_history', 'product_id')) {
+            try {
+                $pdo->prepare('UPDATE product_add_history SET product_id = NULL WHERE product_id = ?')->execute([$product_id]);
+            } catch (PDOException $historyDetachError) {
+                if (!pdoErrorIndicatesMissingSchema($historyDetachError)) {
+                    throw $historyDetachError;
+                }
+            }
+        }
+
         $cleanupStatements = [
             'stock_entries' => 'DELETE FROM stock_entries WHERE product_id = ?',
             'product_images' => 'DELETE FROM product_images WHERE product_id = ?',
             'product_variants' => 'DELETE FROM product_variants WHERE product_id = ?',
             'inventory_notifications' => 'DELETE FROM inventory_notifications WHERE product_id = ?',
-            'product_add_history' => 'DELETE FROM product_add_history WHERE product_id = ?',
         ];
 
         foreach ($cleanupStatements as $tableName => $sql) {
