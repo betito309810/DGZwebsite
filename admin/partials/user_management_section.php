@@ -78,7 +78,6 @@ $showUserManagementBackButton = $showUserManagementBackButton ?? true;
                             <th>Email</th>
                             <th>Contact Number</th>
                             <th>Role</th>
-                            <th>Status</th>
                             <th>Created</th>
                             <th>Actions</th>
                         </tr>
@@ -95,38 +94,16 @@ $showUserManagementBackButton = $showUserManagementBackButton ?? true;
                                         <?php echo ucfirst($user['role']); ?>
                                     </span>
                                 </td>
-                                <td>
-                                    <?php $isDeactivated = !empty($user['deleted_at']); ?>
-                                    <span class="status-badge status-<?php echo $isDeactivated ? 'inactive' : 'active'; ?>">
-                                        <?php echo $isDeactivated ? 'Deactivated' : 'Active'; ?>
-                                    </span>
-                                </td>
                                 <td><?php echo date('M d, Y H:i', strtotime($user['created_at'])); ?></td>
                                 <td class="table-actions">
-                                    <?php if ($user['role'] === 'staff'): ?>
-                                        <div class="action-stack">
-                                            <form method="post" class="inline-form" onsubmit="return confirm('<?php echo $isDeactivated ? 'Reactivate this staff account?' : 'Deactivate this staff account?'; ?>');">
-                                                <input type="hidden" name="toggle_user_status" value="1">
-                                                <input type="hidden" name="toggle_user_id" value="<?php echo (int) $user['id']; ?>">
-                                                <input type="hidden" name="toggle_action" value="<?php echo $isDeactivated ? 'activate' : 'deactivate'; ?>">
-                                                <button type="submit" class="<?php echo $isDeactivated ? 'primary-action' : 'danger-action'; ?>">
-                                                    <?php if ($isDeactivated): ?>
-                                                        <i class="fas fa-user-check"></i> Activate
-                                                    <?php else: ?>
-                                                        <i class="fas fa-user-slash"></i> Deactivate
-                                                    <?php endif; ?>
-                                                </button>
-                                            </form>
-                                            <?php if ((int) $user['id'] !== (int) ($_SESSION['user_id'] ?? 0)): ?>
-                                                <form method="post" class="inline-form" onsubmit="return confirm('Permanently delete this staff account? This cannot be undone.');">
-                                                    <input type="hidden" name="delete_user" value="1">
-                                                    <input type="hidden" name="delete_user_id" value="<?php echo (int) $user['id']; ?>">
-                                                    <button type="submit" class="danger-action">
-                                                        <i class="fas fa-trash"></i> Delete
-                                                    </button>
-                                                </form>
-                                            <?php endif; ?>
-                                        </div>
+                                    <?php if ($user['role'] === 'staff' && (int) $user['id'] !== (int) ($_SESSION['user_id'] ?? 0)): ?>
+                                        <form method="post" class="inline-form" onsubmit="return confirm('Permanently delete this staff account? This cannot be undone.');">
+                                            <input type="hidden" name="delete_user" value="1">
+                                            <input type="hidden" name="delete_user_id" value="<?php echo (int) $user['id']; ?>">
+                                            <button type="submit" class="danger-action">
+                                                <i class="fas fa-trash"></i> Delete
+                                            </button>
+                                        </form>
                                     <?php else: ?>
                                         <span class="muted">—</span>
                                     <?php endif; ?>
@@ -135,7 +112,7 @@ $showUserManagementBackButton = $showUserManagementBackButton ?? true;
                         <?php endforeach; ?>
                         <?php if (empty($userManagementUsers)): ?>
                             <tr>
-                                <td colspan="8" class="empty-row">No users found.</td>
+                                <td colspan="7" class="empty-row">No users found.</td>
                             </tr>
                         <?php endif; ?>
                     </tbody>

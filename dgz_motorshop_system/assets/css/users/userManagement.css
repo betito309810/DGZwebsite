@@ -146,12 +146,6 @@ html, body {
     gap: 10px;
 }
 
-.action-stack {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
 .inline-form {
     display: inline-flex;
     margin: 0;
