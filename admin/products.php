@@ -881,9 +881,17 @@ $profile_created = format_profile_date($current_user['created_at'] ?? null);
 
 if(isset($_GET['delete'])) {
     $product_id = intval($_GET['delete']);
+    $foreignKeysTemporarilyDisabled = false;
 
     try {
         $pdo->beginTransaction();
+
+        try {
+            $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
+            $foreignKeysTemporarilyDisabled = true;
+        } catch (Throwable $toggleError) {
+            error_log('Unable to disable foreign key checks prior to product delete: ' . $toggleError->getMessage());
+        }
 
         $stmt = $pdo->prepare('SELECT id, image FROM products WHERE id = ?');
         $stmt->execute([$product_id]);
@@ -976,6 +984,14 @@ if(isset($_GET['delete'])) {
 
         error_log('Product deletion failed: ' . $e->getMessage());
         $_SESSION['products_error'] = 'Unable to delete product. Please try again.';
+    } finally {
+        if ($foreignKeysTemporarilyDisabled) {
+            try {
+                $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
+            } catch (Throwable $toggleError) {
+                error_log('Unable to re-enable foreign key checks after product delete: ' . $toggleError->getMessage());
+            }
+        }
     }
 
     header('Location: products.php');
