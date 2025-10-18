@@ -6,6 +6,9 @@ $pdo = db();
 $role = $_SESSION['role'] ?? '';
 $isStaff = ($role === 'staff');
 enforceStaffAccess();
+// Potential blocker: if the staff ACL list in enforceStaffAccess() omits products.php,
+// staff users will be redirected before the delete handler runs, making it appear as if
+// the delete link is broken. Verify the allow-list whenever permissions are changed.
 
 $productFormError = null;
 if (isset($_SESSION['products_error'])) {
@@ -753,6 +756,10 @@ if(isset($_GET['delete'])) {
                     continue;
                 }
 
+                // Potential blocker: schema mismatches (wrong column names or extra NOT NULL fields)
+                // surface here as SQL errors and will abort the delete flow. Cross-check custom
+                // migrations to ensure the cleanup query still matches the live schema.
+
                 throw $cleanupError;
             }
         }
@@ -773,10 +780,16 @@ if(isset($_GET['delete'])) {
                     }
                 }
             } else {
+                // Potential blocker: a NOT NULL column (e.g., product_id without SET NULL support)
+                // or a trigger on order_items may make this UPDATE fail without raising a classic
+                // FK error. Inspect the exception message in the PHP error log to confirm.
                 throw $orderItemsError;
             }
         }
 
+        // Potential blocker: if any referencing table keeps ON DELETE RESTRICT (no cleanup or cascade),
+        // this delete statement will throw a foreign-key violation and the transaction will roll back.
+        // Run the INFORMATION_SCHEMA FK query shared earlier to confirm cascade rules in the live DB.
         $pdo->prepare('DELETE FROM products WHERE id = ?')->execute([$product_id]);
 
         $pdo->commit();

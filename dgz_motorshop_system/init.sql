@@ -62,7 +62,8 @@ CREATE TABLE IF NOT EXISTS stock_entries (
   notes TEXT,
   stock_in_by INT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (product_id) REFERENCES products(id),
+  FOREIGN KEY (product_id) REFERENCES products(id), -- Potential blocker: live DBs that keep the default RESTRICT rule here
+                                                   -- will stop product deletions unless related stock entries are cleared.
   FOREIGN KEY (stock_in_by) REFERENCES users(id)
 );
 
@@ -92,7 +93,9 @@ CREATE TABLE IF NOT EXISTS order_items (
   variant_label VARCHAR(100) DEFAULT NULL,
   description VARCHAR(255) DEFAULT NULL,
   FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
-  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL,
+  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL, -- Potential blocker: if this constraint is altered to
+                                                                      -- RESTRICT in production, the admin delete flow must
+                                                                      -- null/delete dependents first or it will fail.
   FOREIGN KEY (variant_id) REFERENCES product_variants(id) ON DELETE SET NULL
 );
 
