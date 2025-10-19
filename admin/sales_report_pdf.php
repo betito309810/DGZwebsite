@@ -160,20 +160,6 @@ try {
 <body>
     <div class="header">
 
-        <?php
-        $logoPath = __DIR__ . '/../dgz_motorshop_system/assets/logo.png';
-        $logoBase64 = '';
-        if (is_file($logoPath)) {
-            $data = @file_get_contents($logoPath);
-            if ($data !== false) {
-                $logoBase64 = 'data:image/png;base64,' . base64_encode($data);
-            }
-        }
-        if ($logoBase64 !== '') {
-            echo '<div class="logo"><img src="' . $logoBase64 . '" alt="DGZ Motorshop Logo"></div>';
-        }
-        ?>
-
         ' . $logoImgTag . '
 
         <h1>DGZ Motorshop</h1>
@@ -310,6 +296,21 @@ $html .= '
             </thead>
             <tbody>
 HTML;
+
+    // Append item rows into the new HTML template
+    if (!empty($top_items)) {
+        foreach ($top_items as $item) {
+            $name = htmlspecialchars($item['item_name'] ?? 'Item', ENT_QUOTES, 'UTF-8');
+            $qty = number_format((float)($item['total_qty'] ?? 0));
+            $sales = number_format((float)($item['total_sales'] ?? 0), 2);
+            $html .= "\n                <tr>\n                    <td>{$name}</td>\n                    <td>{$qty}</td>\n                    <td> PHP {$sales}</td>\n                </tr>";
+        }
+    } else {
+        $html .= "\n                <tr>\n                    <td colspan=\"3\" style=\"text-align:center; color:#64748b;\">No items recorded for this period.</td>\n                </tr>";
+    }
+
+    // Close table and document
+    $html .= "\n            </tbody>\n        </table>\n    </div>\n</body>\n</html>";
 
     // Configure Dompdf
     $options = new Options();
