@@ -378,11 +378,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateBadgeElement(sidebarPosCount, count);
             };
 
-            const renderOnlineOrdersSummary = (onPage, total) => {
+            const renderOnlineOrdersSummary = (onPage, total, meta) => {
                 if (!onlineOrdersSummary) {
                     return;
                 }
-                onlineOrdersSummary.textContent = `Showing ${onPage} of ${total} orders`;
+                const totalOrders = Number(total) || 0;
+                const page = Number(meta?.page) || 1;
+                const perPage = Number(meta?.perPage) || Number(onlineOrdersState.perPage) || 15;
+                const start = totalOrders > 0 ? ((page - 1) * perPage + 1) : 0;
+                const end = totalOrders > 0 ? Math.min(page * perPage, totalOrders) : 0;
+                onlineOrdersSummary.textContent = `Showing ${start} to ${end} of ${totalOrders} entries`;
             };
 
             const renderOnlineOrdersPagination = (meta) => {
@@ -407,38 +412,37 @@ document.addEventListener('DOMContentLoaded', () => {
                 const fragments = [];
 
                 if (currentPage > 1) {
-                    fragments.push(
-                        `<a href="${buildOnlineOrdersUrl(currentPage - 1)}" class="pagination-btn"><i class="fas fa-chevron-left"></i> Previous</a>`
-                    );
+                    fragments.push(`<a href="${buildOnlineOrdersUrl(currentPage - 1)}" class="prev"><i class=\"fas fa-chevron-left\"></i> Prev</a>`);
+                } else {
+                    fragments.push('<span class="prev disabled"><i class="fas fa-chevron-left"></i> Prev</span>');
                 }
 
                 if (startPage > 1) {
-                    fragments.push(`<a href="${buildOnlineOrdersUrl(1)}" class="pagination-btn">1</a>`);
+                    fragments.push(`<a href="${buildOnlineOrdersUrl(1)}">1</a>`);
                     if (startPage > 2) {
-                        fragments.push('<span class="pagination-ellipsis">...</span>');
+                        fragments.push('<span>...</span>');
                     }
                 }
 
                 for (let pageIndex = startPage; pageIndex <= endPage; pageIndex += 1) {
-                    const activeClass = pageIndex === currentPage ? ' active' : '';
-                    fragments.push(
-                        `<a href="${buildOnlineOrdersUrl(pageIndex)}" class="pagination-btn${activeClass}">${pageIndex}</a>`
-                    );
+                    if (pageIndex === currentPage) {
+                        fragments.push(`<span class=\"current\">${pageIndex}</span>`);
+                    } else {
+                        fragments.push(`<a href="${buildOnlineOrdersUrl(pageIndex)}">${pageIndex}</a>`);
+                    }
                 }
 
                 if (endPage < totalPages) {
                     if (endPage < totalPages - 1) {
-                        fragments.push('<span class="pagination-ellipsis">...</span>');
+                        fragments.push('<span>...</span>');
                     }
-                    fragments.push(
-                        `<a href="${buildOnlineOrdersUrl(totalPages)}" class="pagination-btn">${totalPages}</a>`
-                    );
+                    fragments.push(`<a href="${buildOnlineOrdersUrl(totalPages)}">${totalPages}</a>`);
                 }
 
                 if (currentPage < totalPages) {
-                    fragments.push(
-                        `<a href="${buildOnlineOrdersUrl(currentPage + 1)}" class="pagination-btn">Next <i class="fas fa-chevron-right"></i></a>`
-                    );
+                    fragments.push(`<a href="${buildOnlineOrdersUrl(currentPage + 1)}" class="next">Next <i class=\"fas fa-chevron-right\"></i></a>`);
+                } else {
+                    fragments.push('<span class="next disabled">Next <i class="fas fa-chevron-right"></i></span>');
                 }
 
                 onlineOrdersPaginationBody.innerHTML = fragments.join('');
@@ -557,7 +561,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
 
                 renderOnlineOrdersTable(onlineOrdersState.orders);
-                renderOnlineOrdersSummary(onlineOrdersState.orders.length, onlineOrdersState.totalOrders);
+                renderOnlineOrdersSummary(onlineOrdersState.orders.length, onlineOrdersState.totalOrders, onlineOrdersState);
                 renderOnlineOrdersPagination(onlineOrdersState);
                 updateOnlineOrderBadges(onlineOrdersState.attentionCount);
             };
@@ -2069,7 +2073,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Initialisation
             renderOnlineOrdersTable(onlineOrdersState.orders);
-            renderOnlineOrdersSummary(onlineOrdersState.orders.length, onlineOrdersState.totalOrders);
+            renderOnlineOrdersSummary(onlineOrdersState.orders.length, onlineOrdersState.totalOrders, onlineOrdersState);
             renderOnlineOrdersPagination(onlineOrdersState);
             updateOnlineOrderBadges(onlineOrdersState.attentionCount);
             startOnlineOrdersPoll();

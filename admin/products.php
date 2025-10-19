@@ -1860,12 +1860,13 @@ if ($currentSort === 'name') {
                     $current_params = $_GET;
                     unset($current_params['page']);
                     $base_query = http_build_query($current_params);
-                    $separator = $base_query ? '&' : '?';
+                    // Use explicit path to match sales.php behavior and avoid odd browser reload quirks
+                    $href_prefix = 'products.php' . ($base_query !== '' ? ('?' . $base_query . '&') : '?');
                     ?>
 
                     <!-- Previous button -->
                     <?php if ($page > 1): ?>
-                    <a href="?<?= $base_query . $separator ?>page=<?= ($page - 1) ?>" class="prev">
+                    <a href="<?= $href_prefix ?>page=<?= ($page - 1) ?>" class="prev">
                         <i class="fas fa-chevron-left"></i> Prev
                     </a>
                     <?php else: ?>
@@ -1881,7 +1882,7 @@ if ($currentSort === 'name') {
                     
                     // Show first page if not in range
                     if ($start_page > 1): ?>
-                    <a href="?<?= $base_query . $separator ?>page=1">1</a>
+                    <a href="<?= $href_prefix ?>page=1">1</a>
                     <?php if ($start_page > 2): ?>
                     <span>...</span>
                     <?php endif; ?>
@@ -1892,7 +1893,7 @@ if ($currentSort === 'name') {
                     <?php if ($i == $page): ?>
                     <span class="current"><?= $i ?></span>
                     <?php else: ?>
-                    <a href="?<?= $base_query . $separator ?>page=<?= $i ?>"><?= $i ?></a>
+                    <a href="<?= $href_prefix ?>page=<?= $i ?>"><?= $i ?></a>
                     <?php endif; ?>
                     <?php endfor; ?>
                     
@@ -1901,12 +1902,12 @@ if ($currentSort === 'name') {
                     <?php if ($end_page < $total_pages - 1): ?>
                     <span>...</span>
                     <?php endif; ?>
-                    <a href="?<?= $base_query . $separator ?>page=<?= $total_pages ?>"><?= $total_pages ?></a>
+                    <a href="<?= $href_prefix ?>page=<?= $total_pages ?>"><?= $total_pages ?></a>
                     <?php endif; ?>
 
                     <!-- Next button -->
                     <?php if ($page < $total_pages): ?>
-                    <a href="?<?= $base_query . $separator ?>page=<?= ($page + 1) ?>" class="next">
+                    <a href="<?= $href_prefix ?>page=<?= ($page + 1) ?>" class="next">
                         Next <i class="fas fa-chevron-right"></i>
                     </a>
                     <?php else: ?>

@@ -430,17 +430,22 @@ body {
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
-.orders-info {
+/* Unified pagination info styling (align with products/sales) */
+.pagination-info {
     color: #6b7280;
     font-size: 14px;
-    font-weight: 500;
 }
 
 /* Pagination */
 .pagination-container {
+    padding: 20px 30px;
+    background: #fff;
+    border-top: 1px solid #e2e8f0;
     display: flex;
-    justify-content: center;
-    margin: 24px 0;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
 }
 
 .pagination {
@@ -450,52 +455,26 @@ body {
     flex-wrap: wrap;
 }
 
-.pagination-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
+/* Anchor + span chips (match sales/products) */
+.pagination a,
+.pagination span {
     padding: 8px 12px;
-    border: 1px solid #d1d5db;
-    border-radius: 8px;
-    background: #fff;
-    color: #374151;
     text-decoration: none;
+    border-radius: 6px;
     font-size: 14px;
     font-weight: 500;
-    transition: all 0.2s ease;
+    transition: all 0.3s ease;
     min-width: 40px;
-    height: 40px;
+    text-align: center;
+    border: 1px solid #e2e8f0;
 }
 
-.pagination-btn:hover {
-    background: #f3f4f6;
-    border-color: #9ca3af;
-    color: #1f2937;
-}
-
-.pagination-btn.active {
-    background: #3b82f6;
-    border-color: #3b82f6;
-    color: #fff;
-    font-weight: 600;
-}
-
-.pagination-btn.active:hover {
-    background: #2563eb;
-    border-color: #2563eb;
-}
-
-.pagination-ellipsis {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 8px 4px;
-    color: #9ca3af;
-    font-size: 14px;
-    min-width: 40px;
-    height: 40px;
-}
+.pagination a { color: #4a5568; background: #fff; }
+.pagination a:hover { background: #f8fafc; border-color: #cbd5e0; color: #2d3748; }
+.pagination .current { background: #3498db; color: #fff; border-color: #3498db; }
+.pagination .prev, .pagination .next { padding: 8px 16px; font-weight: 600; }
+.pagination .disabled { color: #a0aec0; cursor: not-allowed; background: #f7fafc; }
+.pagination .disabled:hover { background: #f7fafc; border-color: #e2e8f0; }
 
 @media (max-width: 768px) {
     .online-orders-filters {
@@ -508,25 +487,9 @@ body {
         justify-content: space-between;
     }
 
-    .orders-info {
-        text-align: center;
-    }
-
     .pagination {
         justify-content: center;
         gap: 4px;
-    }
-
-    .pagination-btn {
-        padding: 6px 10px;
-        font-size: 13px;
-        min-width: 36px;
-        height: 36px;
-    }
-
-    .pagination-ellipsis {
-        min-width: 36px;
-        height: 36px;
     }
 }
 

@@ -1567,48 +1567,68 @@ if ($receiptDataJson === false) {
                 </table>
             </div>
 
-            <div class="orders-info">
-                <span data-online-orders-summary>Showing <?= $onlineOrdersOnPage ?> of <?= $totalOrders ?> orders</span>
-            </div>
+            <?php
+                // Match products/sales style: "Showing X to Y of Z entries"
+                $startRecord = ($totalOrders > 0) ? (($page - 1) * $perPage + 1) : 0;
+                $endRecord = ($totalOrders > 0) ? min($page * $perPage, $totalOrders) : 0;
 
-            <div class="pagination-container" data-online-orders-pagination <?= $totalPages > 1 ? '' : 'hidden' ?>>
-                <div class="pagination" data-online-orders-pagination-body>
-                    <?php if ($totalPages > 1): ?>
-                        <?php if ($page > 1): ?>
-                            <a href="?tab=online&page=<?= $page - 1 ?><?= $statusFilter ? '&status_filter=' . urlencode($statusFilter) : '' ?>" class="pagination-btn">
-                                <i class="fas fa-chevron-left"></i> Previous
-                            </a>
-                        <?php endif; ?>
+                // Build a robust href prefix preserving tab/status filter
+                $queryParams = ['tab' => 'online'];
+                if ($statusFilter !== '') {
+                    $queryParams['status_filter'] = $statusFilter;
+                }
+                $baseQuery = http_build_query($queryParams);
+                $hrefPrefix = $baseQuery !== '' ? ('?' . $baseQuery . '&') : '?';
+            ?>
 
-                        <?php
-                        $startPage = max(1, $page - 2);
-                        $endPage = min($totalPages, $page + 2);
-                        
-                        if ($startPage > 1): ?>
-                            <a href="?tab=online&page=1<?= $statusFilter ? '&status_filter=' . urlencode($statusFilter) : '' ?>" class="pagination-btn">1</a>
-                            <?php if ($startPage > 2): ?>
-                                <span class="pagination-ellipsis">...</span>
+            <div class="pagination-container">
+                <div class="pagination-info" data-online-orders-summary>
+                    Showing <?= $startRecord ?> to <?= $endRecord ?> of <?= (int) $totalOrders ?> entries
+                </div>
+                <div class="pagination" data-online-orders-pagination <?= $totalPages > 1 ? '' : 'hidden' ?>>
+                    <div data-online-orders-pagination-body>
+                        <?php if ($totalPages > 1): ?>
+                            <!-- Previous button -->
+                            <?php if ($page > 1): ?>
+                                <a href="<?= $hrefPrefix ?>page=<?= $page - 1 ?>" class="prev"><i class="fas fa-chevron-left"></i> Prev</a>
+                            <?php else: ?>
+                                <span class="prev disabled"><i class="fas fa-chevron-left"></i> Prev</span>
+                            <?php endif; ?>
+
+                            <?php
+                            $startPage = max(1, $page - 2);
+                            $endPage = min($totalPages, $page + 2);
+
+                            if ($startPage > 1): ?>
+                                <a href="<?= $hrefPrefix ?>page=1">1</a>
+                                <?php if ($startPage > 2): ?>
+                                    <span>...</span>
+                                <?php endif; ?>
+                            <?php endif; ?>
+
+                            <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
+                                <?php if ($i == $page): ?>
+                                    <span class="current"><?= $i ?></span>
+                                <?php else: ?>
+                                    <a href="<?= $hrefPrefix ?>page=<?= $i ?>"><?= $i ?></a>
+                                <?php endif; ?>
+                            <?php endfor; ?>
+
+                            <?php if ($endPage < $totalPages): ?>
+                                <?php if ($endPage < $totalPages - 1): ?>
+                                    <span>...</span>
+                                <?php endif; ?>
+                                <a href="<?= $hrefPrefix ?>page=<?= $totalPages ?>"><?= $totalPages ?></a>
+                            <?php endif; ?>
+
+                            <!-- Next button -->
+                            <?php if ($page < $totalPages): ?>
+                                <a href="<?= $hrefPrefix ?>page=<?= $page + 1 ?>" class="next">Next <i class="fas fa-chevron-right"></i></a>
+                            <?php else: ?>
+                                <span class="next disabled">Next <i class="fas fa-chevron-right"></i></span>
                             <?php endif; ?>
                         <?php endif; ?>
-
-                        <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
-                            <a href="?tab=online&page=<?= $i ?><?= $statusFilter ? '&status_filter=' . urlencode($statusFilter) : '' ?>" 
-                               class="pagination-btn <?= $i === $page ? 'active' : '' ?>"><?= $i ?></a>
-                        <?php endfor; ?>
-
-                        <?php if ($endPage < $totalPages): ?>
-                            <?php if ($endPage < $totalPages - 1): ?>
-                                <span class="pagination-ellipsis">...</span>
-                            <?php endif; ?>
-                            <a href="?tab=online&page=<?= $totalPages ?><?= $statusFilter ? '&status_filter=' . urlencode($statusFilter) : '' ?>" class="pagination-btn"><?= $totalPages ?></a>
-                        <?php endif; ?>
-
-                        <?php if ($page < $totalPages): ?>
-                            <a href="?tab=online&page=<?= $page + 1 ?><?= $statusFilter ? '&status_filter=' . urlencode($statusFilter) : '' ?>" class="pagination-btn">
-                                Next <i class="fas fa-chevron-right"></i>
-                            </a>
-                        <?php endif; ?>
-                    <?php endif; ?>
+                    </div>
                 </div>
             </div>
 
@@ -1812,7 +1832,8 @@ if ($receiptDataJson === false) {
             <div id="receiptContent" class="receipt-content">
                 <div class="receipt-header">
                     <h2>DGZ Motorshop</h2>
-                    <p>123 Main Street</p>
+                    <p>Lot 2 Blk 3 Dolores Road,</p>
+                    <p>Brgy. Sto. Niño, Antipolo City</p>
                     <p>Phone: (123) 456-7890</p>
                     <p>Receipt #: <span id="receiptNumber"></span></p>
                     <p>Date: <span id="receiptDate"></span></p>
