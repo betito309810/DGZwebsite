@@ -99,8 +99,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $subject = 'Password Reset Request';
                     $body = "
                         <p>You requested a password reset for your DGZ Motorshop account.</p>
-                        <p>Click the link below to reset your password:</p>
-                        <p><a href='$resetLink' style='padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;'>Reset Password</a></p>
+                        <p>Click the link below to reset your password:</p>ration: none; border-ra
+                        <p><a href='$resetLink' style='padding: 10px 20px; background-color: #007bff; color: white; text-decodius: 5px;'>Reset Password</a></p>
                         <p>Or copy and paste this link in your browser:</p>
                         <p>$resetLink</p>
                         <p>This link will expire in 5 minutes.</p>

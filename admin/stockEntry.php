@@ -2962,8 +2962,6 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
                 <div class="logo"><img src="<?= $logoBase64 ?>" alt="DGZ Motorshop Logo"></div>
             <?php endif; ?>
 
-           
-
             <h1>DGZ Motorshop</h1>
             <h2>Stock-In Report</h2>
             <p>Generated on <?= htmlspecialchars($generatedOn) ?></p>
