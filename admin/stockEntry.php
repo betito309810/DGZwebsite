@@ -2805,19 +2805,7 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
 
     $uniqueReceipts = count($receiptTracker);
 
-    $logoPath = realpath(__DIR__ . '/../dgz_motorshop_system/assets/logo.png');
-    $logoDataUri = '';
-    if ($logoPath && file_exists($logoPath)) {
-        $logoData = file_get_contents($logoPath);
-        if ($logoData !== false) {
-            $logoDataUri = 'data:image/png;base64,' . base64_encode($logoData);
-        }
-    }
-
-    $logoImgTag = $logoDataUri !== ''
-        ? '<img src="' . $logoDataUri . '" alt="DGZ Motorshop Logo" class="logo">'
-        : '';
-
+    
     ob_start();
     ?>
     <!DOCTYPE html>
@@ -2826,14 +2814,14 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
         <meta charset="UTF-8">
         <title><?= htmlspecialchars($reportTitle) ?></title>
         <style>
-<<<<<<< HEAD
+
             body { font-family: Arial, sans-serif; margin: 20px; }
             .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
             .header .logo { margin-bottom: 8px; }
             .header .logo img { max-height: 64px; }
             .header h1 { margin: 0; color: #333; }
             .header p { margin: 5px 0; color: #666; }
-=======
+
             body {
                 font-family: 'Helvetica', Arial, sans-serif;
                 font-size: 12px;
@@ -2868,7 +2856,7 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
                 margin: 0;
                 color: #475569;
             }
->>>>>>> codex/fix-http-error-on-sales-report-export
+
             .section {
                 margin-bottom: 24px;
             }
@@ -2969,13 +2957,13 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
     </head>
     <body>
         <div class="header">
-<<<<<<< HEAD
+
             <?php if ($logoBase64 !== ''): ?>
                 <div class="logo"><img src="<?= $logoBase64 ?>" alt="DGZ Motorshop Logo"></div>
             <?php endif; ?>
-=======
-            <?= $logoImgTag ?>
->>>>>>> codex/fix-http-error-on-sales-report-export
+
+           
+
             <h1>DGZ Motorshop</h1>
             <h2>Stock-In Report</h2>
             <p>Generated on <?= htmlspecialchars($generatedOn) ?></p>

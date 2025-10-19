@@ -756,7 +756,6 @@ body {
     opacity: 0.75;
 }
 
-#openProductModal,
 #clearPosTable,
 #addSelectedProducts,
 #closeProductModal {
@@ -789,13 +788,27 @@ body {
     background: #e74c3c;
 }
 
-#openProductModal:hover,
 #addSelectedProducts:hover {
     background: #2176bd;
 }
 
 #clearPosTable:hover {
     background: #c0392b;
+}
+
+/* Make "Search Product" a neutral/outline button (no fill color) */
+#openProductModal {
+    background: transparent;
+    color: #2c3e50;
+    border: 1px solid #dfe4ea;
+    border-radius: 8px;
+    padding: 8px 16px;
+    box-shadow: none;
+}
+
+#openProductModal:hover {
+    background: #f1f5f9;
+    color: #111827;
 }
 
 .pos-actions {
@@ -1134,10 +1147,12 @@ body {
 .service-form-grid {
     display: flex;
     gap: 12px;
+    flex-wrap: wrap; /* prevent overflow on narrow modals */
 }
 
 .service-form-grid .service-field {
     flex: 1 1 0;
+    min-width: 0; /* allow inputs to shrink inside flex */
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -1156,6 +1171,8 @@ body {
     border-radius: 8px;
     font-size: 15px;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    width: 100%;
+    max-width: 100%;
 }
 
 #serviceModal input[type="text"]:focus,

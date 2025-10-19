@@ -210,7 +210,7 @@ natcasesort($categories);
                             <h3><?=htmlspecialchars($p['name'])?></h3>
                         </div>
 
-                        <p class="product-description"><?=htmlspecialchars($p['description'])?></p>
+                        <!-- Removed inline product description from grid card; still available in modal via data-product-description -->
                         <p class="product-meta" style="font-size:12px;color:#888;">
                             Category: <?= htmlspecialchars($category) ?> | Brand: <?= htmlspecialchars($brand) ?>
                         </p>

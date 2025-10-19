@@ -527,7 +527,15 @@ if (!function_exists('publicAsset')) {
             return $trimmed;
         }
 
-        return assetUrl($trimmed);
+        // If callers already pass a path rooted at the system folder (e.g.
+        // 'dgz_motorshop_system/uploads/...'), do not prefix it again via
+        // assetUrl(), as that would yield '/dgz_motorshop_system/dgz_motorshop_system/...'
+        $normalized = ltrim(str_replace('\\', '/', $trimmed), '/');
+        if (stripos($normalized, 'dgz_motorshop_system/') === 0) {
+            return '/' . $normalized; // make it an absolute web path
+        }
+
+        return assetUrl($normalized);
     }
 }
 
