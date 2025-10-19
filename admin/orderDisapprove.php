@@ -378,6 +378,8 @@ try {
                     </tfoot>
                 </table>'
             . '<p style="margin:0;">If you have questions or would like to place a new order, feel free to contact us.</p>'
+            . '<p style="margin:0;">Email:dgzstoninocapstone@gmail.com </p>'
+            . '<p style="margin:0;">Phone:09536514033 </p>'
             . '<p style="margin:16px 0 0;">Thank you,<br>DGZ Motorshop Team</p>'
             . '</div>';
 

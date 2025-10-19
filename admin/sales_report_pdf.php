@@ -122,6 +122,8 @@ $html = '
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; }
         .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
+        .header .logo { margin-bottom: 8px; }
+        .header .logo img { max-height: 64px; }
         .header h1 { margin: 0; color: #333; }
         .header p { margin: 5px 0; color: #666; }
         .date-range { font-size: 14px; margin-bottom: 15px; font-weight: bold; }
@@ -139,6 +141,19 @@ $html = '
 </head>
 <body>
     <div class="header">
+        <?php
+        $logoPath = __DIR__ . '/../dgz_motorshop_system/assets/logo.png';
+        $logoBase64 = '';
+        if (is_file($logoPath)) {
+            $data = @file_get_contents($logoPath);
+            if ($data !== false) {
+                $logoBase64 = 'data:image/png;base64,' . base64_encode($data);
+            }
+        }
+        if ($logoBase64 !== '') {
+            echo '<div class="logo"><img src="' . $logoBase64 . '" alt="DGZ Motorshop Logo"></div>';
+        }
+        ?>
         <h1>DGZ Motorshop</h1>
         <h2>' . htmlspecialchars($period_title) . '</h2>
         <p>Generated on: ' . date('F j, Y g:i A') . '</p>
@@ -192,6 +207,87 @@ $html .= '
     </div>
     </body>
     </html>';
+
+    // Rebuild HTML using a safe template that avoids any embedded PHP in the content
+    $generatedOnDisplay = date('F j, Y g:i A');
+    $safeTitle = htmlspecialchars($period_title, ENT_QUOTES, 'UTF-8');
+    $safeDateRange = htmlspecialchars($date_range_display, ENT_QUOTES, 'UTF-8');
+    $totalOrdersStr = number_format($total_orders);
+    $totalSalesStr = number_format($total_sales, 2);
+
+    // Optional logo embed (reused from receipt)
+    $logoBase64 = '';
+    $logoPath = __DIR__ . '/../dgz_motorshop_system/assets/logo.png';
+    if (is_file($logoPath)) {
+        $data = @file_get_contents($logoPath);
+        if ($data !== false) {
+            $logoBase64 = 'data:image/png;base64,' . base64_encode($data);
+        }
+    }
+    $logoHtml = $logoBase64 !== '' ? '<div class="logo"><img src="' . $logoBase64 . '" alt="DGZ Motorshop Logo"></div>' : '';
+
+    $html = <<<HTML
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>{$safeTitle}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
+        .header .logo { margin-bottom: 8px; }
+        .header .logo img { max-height: 64px; }
+        .header h1 { margin: 0; color: #333; }
+        .header p { margin: 5px 0; color: #666; }
+        .date-range { font-size: 14px; margin-bottom: 15px; font-weight: bold; }
+        .summary { margin-bottom: 30px; }
+        .summary table { width: 100%; border-collapse: collapse; }
+        .summary th, .summary td { padding: 10px; text-align: left; border: 1px solid #ddd; }
+        .summary th { background-color: #f5f5f5; }
+        .top-items { margin-bottom: 30px; }
+        .top-items table { width: 100%; border-collapse: collapse; }
+        .top-items th, .top-items td { padding: 8px; text-align: left; border: 1px solid #ddd; font-size: 12px; }
+        .top-items th { background-color: #f5f5f5; }
+        .total-row { font-weight: bold; background-color: #e9ecef; }
+        .footer { margin-top: 50px; text-align: center; font-size: 10px; color: #666; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        {$logoHtml}
+        <h1>DGZ Motorshop</h1>
+        <h2>{$safeTitle}</h2>
+        <p>Generated on: {$generatedOnDisplay}</p>
+    </div>
+
+    <div class="date-range">{$safeDateRange}</div>
+
+    <div class="summary">
+        <h2>Sales Summary</h2>
+        <table>
+            <tr>
+                <th>Total Orders</th>
+                <td>{$totalOrdersStr}</td>
+            </tr>
+            <tr>
+                <th>Total Sales Amount</th>
+                <td> PHP {$totalSalesStr}</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="top-items">
+        <h2>Items Sold</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Item Name</th>
+                    <th>Quantity Sold</th>
+                    <th>Total Sales</th>
+                </tr>
+            </thead>
+            <tbody>
+HTML;
 
     // Configure Dompdf
     $options = new Options();

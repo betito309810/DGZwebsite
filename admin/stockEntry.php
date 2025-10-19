@@ -734,7 +734,7 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                     </div>
                 </div>
                 <div id="recentReceiptsContent" class="panel-content">
-                    <form class="report-filters activity-filters" method="GET" aria-label="Recent stock-in filters">
+                    <form class="report-filters activity-filters" method="GET" action="stockEntry.php#recentReceiptsContent" aria-label="Recent stock-in filters">
                         <input type="hidden" name="activity_page" value="1">
                         <?php foreach ($activityPreservedParams as $paramKey => $paramValue): ?>
                             <input type="hidden" name="<?= htmlspecialchars($paramKey) ?>" value="<?= htmlspecialchars((string)$paramValue) ?>">
@@ -1094,7 +1094,7 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                     </div>
                 </div>
                 <div id="stockInReportContent" class="panel-content">
-                    <form class="report-filters" method="GET" aria-label="Stock-In report filters">
+                    <form class="report-filters" method="GET" action="stockEntry.php#stockInReportContent" aria-label="Stock-In report filters">
                     <input type="hidden" name="report_page" value="1">
                     <?php foreach ($reportPreservedParams as $paramKey => $paramValue): ?>
                         <input type="hidden" name="<?= htmlspecialchars($paramKey) ?>" value="<?= htmlspecialchars((string)$paramValue) ?>">
@@ -2517,6 +2517,16 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
     $generatedOn = date('F j, Y g:i A');
     $reportTitle = 'DGZ Motorshop · Stock-In Report';
 
+    // Load logo (same asset used by receipt) and embed as base64 when available
+    $logoBase64 = '';
+    $logoPath = __DIR__ . '/../dgz_motorshop_system/assets/logo.png';
+    if (is_file($logoPath)) {
+        $data = @file_get_contents($logoPath);
+        if ($data !== false) {
+            $logoBase64 = 'data:image/png;base64,' . base64_encode($data);
+        }
+    }
+
     $filterSummaries = [];
 
     $dateFromLabel = '';
@@ -2609,34 +2619,12 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
         <meta charset="UTF-8">
         <title><?= htmlspecialchars($reportTitle) ?></title>
         <style>
-            body {
-                font-family: 'Helvetica', Arial, sans-serif;
-                font-size: 12px;
-                color: #1f2937;
-                margin: 24px;
-                line-height: 1.5;
-            }
-            .header {
-                text-align: center;
-                margin-bottom: 24px;
-                border-bottom: 2px solid #0f172a;
-                padding-bottom: 16px;
-            }
-            .header h1 {
-                margin: 0;
-                font-size: 24px;
-                letter-spacing: 0.08em;
-                text-transform: uppercase;
-            }
-            .header h2 {
-                margin: 8px 0 6px;
-                font-size: 18px;
-                font-weight: 600;
-            }
-            .header p {
-                margin: 0;
-                color: #475569;
-            }
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
+            .header .logo { margin-bottom: 8px; }
+            .header .logo img { max-height: 64px; }
+            .header h1 { margin: 0; color: #333; }
+            .header p { margin: 5px 0; color: #666; }
             .section {
                 margin-bottom: 24px;
             }
@@ -2737,6 +2725,9 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
     </head>
     <body>
         <div class="header">
+            <?php if ($logoBase64 !== ''): ?>
+                <div class="logo"><img src="<?= $logoBase64 ?>" alt="DGZ Motorshop Logo"></div>
+            <?php endif; ?>
             <h1>DGZ Motorshop</h1>
             <h2>Stock-In Report</h2>
             <p>Generated on <?= htmlspecialchars($generatedOn) ?></p>
