@@ -74,7 +74,8 @@ if (isset($_GET['posted']) && $_GET['posted'] === '1') {
     $successMessage = 'Stock-in document posted and inventory updated.';
 }
 
-$products = fetchProductCatalog($pdo);
+$stockReportCapabilities = detectStockInReportCapabilities($pdo);
+$products = fetchProductCatalog($pdo, $stockReportCapabilities);
 $productIds = array_column($products, 'id');
 $productVariantsMap = !empty($productIds) ? fetchVariantsForProducts($pdo, $productIds) : [];
 $productVariantsBootstrap = [];
@@ -104,13 +105,13 @@ $categoryOptions = [];
 $supplierFilterOptions = [];
 foreach ($products as $productMeta) {
     $productLookup[(int)$productMeta['id']] = $productMeta['name'];
-    if (!empty($productMeta['brand'])) {
+    if (!empty($stockReportCapabilities['products']['has_brand']) && !empty($productMeta['brand'])) {
         $brandOptions[] = $productMeta['brand'];
     }
-    if (!empty($productMeta['category'])) {
+    if (!empty($stockReportCapabilities['products']['has_category']) && !empty($productMeta['category'])) {
         $categoryOptions[] = $productMeta['category'];
     }
-    if (!empty($productMeta['supplier'])) {
+    if (!empty($stockReportCapabilities['products']['has_supplier']) && !empty($productMeta['supplier'])) {
         $supplierFilterOptions[] = $productMeta['supplier'];
     }
 }
@@ -122,6 +123,24 @@ sort($brandOptions, SORT_NATURAL | SORT_FLAG_CASE);
 sort($categoryOptions, SORT_NATURAL | SORT_FLAG_CASE);
 sort($supplierFilterOptions, SORT_NATURAL | SORT_FLAG_CASE);
 $reportFilters = parseStockInReportFilters($_GET ?? [], $stockReceiptStatusOptions, $productLookup, $brandOptions, $categoryOptions);
+
+$reportSearchPlaceholderParts = ['name'];
+if (!empty($stockReportCapabilities['products']['has_code'])) {
+    $reportSearchPlaceholderParts[] = 'code';
+}
+if (!empty($stockReportCapabilities['receipts']['has_receipt_code'])) {
+    $reportSearchPlaceholderParts[] = 'receipt';
+}
+if (!empty($stockReportCapabilities['receipts']['document_column'])) {
+    $reportSearchPlaceholderParts[] = 'DR no';
+}
+$reportSearchPlaceholderParts = array_values(array_unique($reportSearchPlaceholderParts));
+if (count($reportSearchPlaceholderParts) > 1) {
+    $lastPlaceholder = array_pop($reportSearchPlaceholderParts);
+    $reportProductSearchPlaceholder = 'Search ' . implode(', ', $reportSearchPlaceholderParts) . ' or ' . $lastPlaceholder;
+} else {
+    $reportProductSearchPlaceholder = 'Search ' . ($reportSearchPlaceholderParts[0] ?? 'products');
+}
 
 $inventorySearchTerm = trim((string)($_GET['inv_search'] ?? ''));
 $inventoryBrandFilter = trim((string)($_GET['inv_brand'] ?? ''));
@@ -333,12 +352,12 @@ if ($moduleReady) {
     if (!empty($_GET['stock_in_export'])) {
         $exportFormat = strtolower((string)$_GET['stock_in_export']);
         if (in_array($exportFormat, ['csv', 'pdf'], true)) {
-            $exportRows = fetchStockInReport($pdo, $reportFilters, null, 0);
+            $exportRows = fetchStockInReport($pdo, $reportFilters, null, 0, $stockReportCapabilities);
             handleStockInReportExport($exportFormat, $exportRows, $reportFilters);
         }
     }
 
-    $stockInReportTotalCount = countStockInReport($pdo, $reportFilters);
+    $stockInReportTotalCount = countStockInReport($pdo, $reportFilters, $stockReportCapabilities);
     $stockInReportTotalPages = $stockInReportTotalCount > 0 ? (int)ceil($stockInReportTotalCount / $reportLimit) : 0;
     if ($stockInReportTotalPages > 0 && $reportPage > $stockInReportTotalPages) {
         $reportPage = $stockInReportTotalPages;
@@ -349,7 +368,7 @@ if ($moduleReady) {
         $stockInReportOffset = 0;
     }
 
-    $stockInReportRows = fetchStockInReport($pdo, $reportFilters, $reportLimit, $stockInReportOffset);
+    $stockInReportRows = fetchStockInReport($pdo, $reportFilters, $reportLimit, $stockInReportOffset, $stockReportCapabilities);
     $stockInReportStartRecord = $stockInReportTotalCount === 0 ? 0 : $stockInReportOffset + 1;
     $stockInReportEndRecord = $stockInReportTotalCount === 0 ? 0 : min($stockInReportOffset + $reportLimit, $stockInReportTotalCount);
 }
@@ -1124,8 +1143,9 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                         <!-- Additional filters to support larger catalogs (brand/category/search). -->
                         <div class="form-group">
                             <label for="filter_product_search">Product Search</label>
-                            <input type="text" id="filter_product_search" name="report_product_search" placeholder="Search name, code, or receipt" value="<?= htmlspecialchars($reportFilters['product_search']) ?>">
+                            <input type="text" id="filter_product_search" name="report_product_search" placeholder="<?= htmlspecialchars($reportProductSearchPlaceholder) ?>" value="<?= htmlspecialchars($reportFilters['product_search']) ?>">
                         </div>
+                        <?php if (!empty($stockReportCapabilities['products']['has_brand'])): ?>
                         <div class="form-group">
                             <label for="filter_brand">Brand</label>
                             <select id="filter_brand" name="report_brand">
@@ -1135,6 +1155,8 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                                 <?php endforeach; ?>
                             </select>
                         </div>
+                        <?php endif; ?>
+                        <?php if (!empty($stockReportCapabilities['products']['has_category'])): ?>
                         <div class="form-group">
                             <label for="filter_category">Category</label>
                             <select id="filter_category" name="report_category">
@@ -1144,6 +1166,7 @@ $discrepancyGroupHiddenAttr = $hasPresetDiscrepancy ? '' : 'hidden';
                                 <?php endforeach; ?>
                             </select>
                         </div>
+                        <?php endif; ?>
                         <div class="form-group">
                             <label for="filter_status">Status</label>
                             <select id="filter_status" name="report_status">
@@ -1351,10 +1374,106 @@ function ensureStockReceiptTablesExist(PDO $pdo): bool
 /**
  * Load product catalog data needed to populate line item selectors.
  */
-function fetchProductCatalog(PDO $pdo): array
+function detectStockInReportCapabilities(PDO $pdo): array
 {
-    $stmt = $pdo->query('SELECT id, name, code, brand, category, supplier FROM products ORDER BY name');
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $capabilities = [
+        'receipts' => [
+            'date_column' => null,
+            'supplier_column' => null,
+            'document_column' => null,
+            'related_reference_column' => null,
+            'has_receipt_code' => tableHasColumn($pdo, 'stock_receipts', 'receipt_code'),
+            'has_status' => tableHasColumn($pdo, 'stock_receipts', 'status'),
+            'join_receiver' => tableHasColumn($pdo, 'stock_receipts', 'received_by_user_id'),
+        ],
+        'items' => [
+            'qty_column' => null,
+            'unit_cost_column' => null,
+        ],
+        'products' => [
+            'has_code' => tableHasColumn($pdo, 'products', 'code'),
+            'has_brand' => tableHasColumn($pdo, 'products', 'brand'),
+            'has_category' => tableHasColumn($pdo, 'products', 'category'),
+            'has_supplier' => tableHasColumn($pdo, 'products', 'supplier'),
+        ],
+    ];
+
+    if (tableHasColumn($pdo, 'stock_receipts', 'date_received')) {
+        $capabilities['receipts']['date_column'] = 'sr.date_received';
+    } elseif (tableHasColumn($pdo, 'stock_receipts', 'created_at')) {
+        $capabilities['receipts']['date_column'] = 'sr.created_at';
+    }
+
+    if (tableHasColumn($pdo, 'stock_receipts', 'supplier_name')) {
+        $capabilities['receipts']['supplier_column'] = 'sr.supplier_name';
+    } elseif (tableHasColumn($pdo, 'stock_receipts', 'supplier')) {
+        $capabilities['receipts']['supplier_column'] = 'sr.supplier';
+    }
+
+    if (tableHasColumn($pdo, 'stock_receipts', 'document_number')) {
+        $capabilities['receipts']['document_column'] = 'sr.document_number';
+    } elseif (tableHasColumn($pdo, 'stock_receipts', 'reference_number')) {
+        $capabilities['receipts']['document_column'] = 'sr.reference_number';
+    }
+
+    if (tableHasColumn($pdo, 'stock_receipts', 'related_reference')) {
+        $capabilities['receipts']['related_reference_column'] = 'sr.related_reference';
+    }
+
+    if (tableHasColumn($pdo, 'stock_receipt_items', 'qty_received')) {
+        $capabilities['items']['qty_column'] = 'sri.qty_received';
+    } elseif (tableHasColumn($pdo, 'stock_receipt_items', 'quantity_received')) {
+        $capabilities['items']['qty_column'] = 'sri.quantity_received';
+    } elseif (tableHasColumn($pdo, 'stock_receipt_items', 'quantity')) {
+        $capabilities['items']['qty_column'] = 'sri.quantity';
+    }
+
+    if (tableHasColumn($pdo, 'stock_receipt_items', 'unit_cost')) {
+        $capabilities['items']['unit_cost_column'] = 'sri.unit_cost';
+    } elseif (tableHasColumn($pdo, 'stock_receipt_items', 'cost')) {
+        $capabilities['items']['unit_cost_column'] = 'sri.cost';
+    }
+
+    return $capabilities;
+}
+
+function fetchProductCatalog(PDO $pdo, array $capabilities): array
+{
+    $selectParts = ['id', 'name'];
+
+    if (!empty($capabilities['products']['has_code'])) {
+        $selectParts[] = 'code';
+    } else {
+        $selectParts[] = 'NULL AS code';
+    }
+
+    if (!empty($capabilities['products']['has_brand'])) {
+        $selectParts[] = 'brand';
+    } else {
+        $selectParts[] = 'NULL AS brand';
+    }
+
+    if (!empty($capabilities['products']['has_category'])) {
+        $selectParts[] = 'category';
+    } else {
+        $selectParts[] = 'NULL AS category';
+    }
+
+    if (!empty($capabilities['products']['has_supplier'])) {
+        $selectParts[] = 'supplier';
+    } else {
+        $selectParts[] = 'NULL AS supplier';
+    }
+
+    $sql = 'SELECT ' . implode(', ', $selectParts) . ' FROM products ORDER BY name';
+
+    try {
+        $stmt = $pdo->query($sql);
+        return $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+    } catch (Throwable $e) {
+        error_log('Product catalog query failed: ' . $e->getMessage());
+        return [];
+    }
 }
 
 /**
@@ -2114,22 +2233,24 @@ function normalizeOptionalReportDate(string $value): ?string
 /**
  * Build shared WHERE clause fragments for stock-in report queries.
  */
-function buildStockInReportWhereClause(array $filters, array &$params): string
+function buildStockInReportWhereClause(array $filters, array &$params, array $capabilities): string
 {
     $clauses = ['1=1'];
 
-    if (!empty($filters['date_from'])) {
-        $clauses[] = 'sr.date_received >= :report_date_from';
+    $dateColumn = $capabilities['receipts']['date_column'] ?? null;
+    if ($dateColumn && !empty($filters['date_from'])) {
+        $clauses[] = $dateColumn . ' >= :report_date_from';
         $params[':report_date_from'] = $filters['date_from'];
     }
 
-    if (!empty($filters['date_to'])) {
-        $clauses[] = 'sr.date_received <= :report_date_to';
+    if ($dateColumn && !empty($filters['date_to'])) {
+        $clauses[] = $dateColumn . ' <= :report_date_to';
         $params[':report_date_to'] = $filters['date_to'];
     }
 
-    if ($filters['supplier'] !== '') {
-        $clauses[] = 'sr.supplier_name LIKE :report_supplier';
+    $supplierColumn = $capabilities['receipts']['supplier_column'] ?? null;
+    if ($supplierColumn && $filters['supplier'] !== '') {
+        $clauses[] = $supplierColumn . ' LIKE :report_supplier';
         $params[':report_supplier'] = '%' . $filters['supplier'] . '%';
     }
 
@@ -2139,26 +2260,46 @@ function buildStockInReportWhereClause(array $filters, array &$params): string
     }
 
     if ($filters['product_search'] !== '') {
-        $clauses[] = '(
-            p.name LIKE :report_product_search
-            OR p.code LIKE :report_product_search
-            OR sr.receipt_code LIKE :report_product_search
-            OR sr.document_number LIKE :report_product_search
-        )';
-        $params[':report_product_search'] = '%' . $filters['product_search'] . '%';
+        $searchColumns = ['p.name'];
+
+        if (!empty($capabilities['products']['has_code'])) {
+            $searchColumns[] = 'p.code';
+        }
+
+        if (!empty($capabilities['receipts']['has_receipt_code'])) {
+            $searchColumns[] = 'sr.receipt_code';
+        }
+
+        if (!empty($capabilities['receipts']['document_column'])) {
+            $searchColumns[] = $capabilities['receipts']['document_column'];
+        }
+
+        if (!empty($capabilities['receipts']['related_reference_column'])) {
+            $searchColumns[] = $capabilities['receipts']['related_reference_column'];
+        }
+
+        $searchColumns = array_values(array_unique(array_filter($searchColumns)));
+
+        if (!empty($searchColumns)) {
+            $searchParts = array_map(static function ($column) {
+                return $column . ' LIKE :report_product_search';
+            }, $searchColumns);
+            $clauses[] = '(' . implode(' OR ', $searchParts) . ')';
+            $params[':report_product_search'] = '%' . $filters['product_search'] . '%';
+        }
     }
 
-    if ($filters['brand'] !== '') {
+    if (!empty($capabilities['products']['has_brand']) && $filters['brand'] !== '') {
         $clauses[] = 'p.brand = :report_brand';
         $params[':report_brand'] = $filters['brand'];
     }
 
-    if ($filters['category'] !== '') {
+    if (!empty($capabilities['products']['has_category']) && $filters['category'] !== '') {
         $clauses[] = 'p.category = :report_category';
         $params[':report_category'] = $filters['category'];
     }
 
-    if (!empty($filters['status'])) {
+    if (!empty($capabilities['receipts']['has_status']) && !empty($filters['status'])) {
         $clauses[] = 'sr.status = :report_status';
         $params[':report_status'] = $filters['status'];
     }
@@ -2169,16 +2310,16 @@ function buildStockInReportWhereClause(array $filters, array &$params): string
 /**
  * Count stock receipt lines matching the active filters.
  */
-function countStockInReport(PDO $pdo, array $filters): int
+function countStockInReport(PDO $pdo, array $filters, array $capabilities): int
 {
     $params = [];
-    $whereClause = buildStockInReportWhereClause($filters, $params);
+    $whereClause = buildStockInReportWhereClause($filters, $params, $capabilities);
 
     try {
         $sql = '
             SELECT COUNT(*)
             FROM stock_receipts sr
-            INNER JOIN stock_receipt_items sri ON sri.receipt_id = sr.id
+            LEFT JOIN stock_receipt_items sri ON sri.receipt_id = sr.id
             LEFT JOIN products p ON p.id = sri.product_id
             WHERE ' . $whereClause;
 
@@ -2197,29 +2338,69 @@ function countStockInReport(PDO $pdo, array $filters): int
 /**
  * Fetch stock receipt lines matching the active filters for reporting.
  */
-function fetchStockInReport(PDO $pdo, array $filters, ?int $limit = 50, int $offset = 0): array
+function fetchStockInReport(PDO $pdo, array $filters, ?int $limit = 50, int $offset = 0, array $capabilities = []): array
 {
     $params = [];
-    $whereClause = buildStockInReportWhereClause($filters, $params);
+    $whereClause = buildStockInReportWhereClause($filters, $params, $capabilities);
 
-    $sql = '
-        SELECT
-            sr.date_received,
-            sr.receipt_code,
-            sr.supplier_name,
-            sr.document_number,
-            sr.status,
-            sri.qty_received,
-            sri.unit_cost,
-            COALESCE(p.name, CONCAT(\'Product #\', sri.product_id)) AS product_name,
-            COALESCE(receiver.name, \'Pending\') AS receiver_name
-        FROM stock_receipts sr
-        INNER JOIN stock_receipt_items sri ON sri.receipt_id = sr.id
-        LEFT JOIN products p ON p.id = sri.product_id
-        LEFT JOIN users receiver ON receiver.id = sr.received_by_user_id
-        WHERE ' . $whereClause . '
-        ORDER BY sr.date_received DESC, sr.id DESC, sri.id ASC
-    ';
+    $dateColumn = $capabilities['receipts']['date_column'] ?? 'sr.created_at';
+    $dateSelect = $dateColumn . ' AS report_date';
+
+    $receiptCodeSelect = !empty($capabilities['receipts']['has_receipt_code'])
+        ? 'sr.receipt_code'
+        : "NULL AS receipt_code";
+
+    $supplierColumn = $capabilities['receipts']['supplier_column'] ?? null;
+    $supplierSelect = $supplierColumn
+        ? $supplierColumn . ' AS supplier_name'
+        : "NULL AS supplier_name";
+
+    $documentColumn = $capabilities['receipts']['document_column'] ?? null;
+    $documentSelect = $documentColumn
+        ? $documentColumn . ' AS document_number'
+        : "NULL AS document_number";
+
+    $statusSelect = !empty($capabilities['receipts']['has_status'])
+        ? 'sr.status'
+        : "NULL AS status";
+
+    $qtyColumn = $capabilities['items']['qty_column'] ?? null;
+    $qtySelect = $qtyColumn
+        ? $qtyColumn . ' AS qty_received'
+        : '0 AS qty_received';
+
+    $unitCostColumn = $capabilities['items']['unit_cost_column'] ?? null;
+    $unitCostSelect = $unitCostColumn
+        ? $unitCostColumn . ' AS unit_cost'
+        : '0 AS unit_cost';
+
+    $receiverJoin = '';
+    $receiverSelect = "'Pending' AS receiver_name";
+    if (!empty($capabilities['receipts']['join_receiver'])) {
+        $receiverJoin = "\n        LEFT JOIN users receiver ON receiver.id = sr.received_by_user_id";
+        $receiverSelect = "COALESCE(receiver.name, 'Pending') AS receiver_name";
+    }
+
+    $selectParts = [
+        $dateSelect,
+        $receiptCodeSelect,
+        'sr.id AS receipt_id',
+        $supplierSelect,
+        $documentSelect,
+        $statusSelect,
+        $qtySelect,
+        $unitCostSelect,
+        "CASE\n            WHEN p.name IS NOT NULL AND TRIM(p.name) <> '' THEN p.name\n            WHEN sri.product_id IS NOT NULL THEN CONCAT('Product #', sri.product_id)\n            ELSE 'No items recorded'\n        END AS product_name",
+        $receiverSelect,
+    ];
+
+    $selectSql = implode(",\n            ", $selectParts);
+    $joinSql = "LEFT JOIN stock_receipt_items sri ON sri.receipt_id = sr.id\n        LEFT JOIN products p ON p.id = sri.product_id";
+    if ($receiverJoin !== '') {
+        $joinSql .= $receiverJoin;
+    }
+
+    $sql = "SELECT\n            $selectSql\n        FROM stock_receipts sr\n        $joinSql\n        WHERE $whereClause\n        ORDER BY $dateColumn DESC, sr.id DESC, sri.id ASC";
 
     if ($limit !== null) {
         $sql .= ' LIMIT :report_limit OFFSET :report_offset';
@@ -2244,10 +2425,21 @@ function fetchStockInReport(PDO $pdo, array $filters, ?int $limit = 50, int $off
     foreach ($rows as &$row) {
         $row['qty_received'] = isset($row['qty_received']) ? (float)$row['qty_received'] : 0.0;
         $row['unit_cost'] = isset($row['unit_cost']) ? (float)$row['unit_cost'] : 0.0;
-        $row['date_display'] = $row['date_received'] ? date('M d, Y', strtotime($row['date_received'])) : '';
+
+        $dateRaw = $row['report_date'] ?? null;
+        if (!empty($dateRaw)) {
+            $timestamp = strtotime((string)$dateRaw);
+            $row['date_display'] = $timestamp ? date('M d, Y', $timestamp) : '';
+        } else {
+            $row['date_display'] = '';
+        }
+        $row['date_received'] = $row['report_date'] ?? null;
+
         $row['qty_received_display'] = number_format($row['qty_received'], 0);
         $row['unit_cost_display'] = number_format($row['unit_cost'], 2);
-        $row['status_label'] = formatStockReceiptStatus($row['status']);
+
+        $statusValue = isset($row['status']) ? (string)$row['status'] : '';
+        $row['status_label'] = $statusValue !== '' ? formatStockReceiptStatus($statusValue) : '';
     }
     unset($row);
 
@@ -2606,10 +2798,25 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
 
         if (!empty($row['receipt_code'])) {
             $receiptTracker[$row['receipt_code']] = true;
+        } elseif (!empty($row['receipt_id'])) {
+            $receiptTracker['#' . (int)$row['receipt_id']] = true;
         }
     }
 
     $uniqueReceipts = count($receiptTracker);
+
+    $logoPath = realpath(__DIR__ . '/../dgz_motorshop_system/assets/logo.png');
+    $logoDataUri = '';
+    if ($logoPath && file_exists($logoPath)) {
+        $logoData = file_get_contents($logoPath);
+        if ($logoData !== false) {
+            $logoDataUri = 'data:image/png;base64,' . base64_encode($logoData);
+        }
+    }
+
+    $logoImgTag = $logoDataUri !== ''
+        ? '<img src="' . $logoDataUri . '" alt="DGZ Motorshop Logo" class="logo">'
+        : '';
 
     ob_start();
     ?>
@@ -2619,12 +2826,49 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
         <meta charset="UTF-8">
         <title><?= htmlspecialchars($reportTitle) ?></title>
         <style>
+<<<<<<< HEAD
             body { font-family: Arial, sans-serif; margin: 20px; }
             .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
             .header .logo { margin-bottom: 8px; }
             .header .logo img { max-height: 64px; }
             .header h1 { margin: 0; color: #333; }
             .header p { margin: 5px 0; color: #666; }
+=======
+            body {
+                font-family: 'Helvetica', Arial, sans-serif;
+                font-size: 12px;
+                color: #1f2937;
+                margin: 24px;
+                line-height: 1.5;
+            }
+            .header {
+                text-align: center;
+                margin-bottom: 24px;
+                border-bottom: 2px solid #0f172a;
+                padding-bottom: 16px;
+            }
+            .header .logo {
+                display: block;
+                margin: 0 auto 12px;
+                max-width: 160px;
+                height: auto;
+            }
+            .header h1 {
+                margin: 0;
+                font-size: 24px;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+            }
+            .header h2 {
+                margin: 8px 0 6px;
+                font-size: 18px;
+                font-weight: 600;
+            }
+            .header p {
+                margin: 0;
+                color: #475569;
+            }
+>>>>>>> codex/fix-http-error-on-sales-report-export
             .section {
                 margin-bottom: 24px;
             }
@@ -2725,12 +2969,17 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
     </head>
     <body>
         <div class="header">
+<<<<<<< HEAD
             <?php if ($logoBase64 !== ''): ?>
                 <div class="logo"><img src="<?= $logoBase64 ?>" alt="DGZ Motorshop Logo"></div>
             <?php endif; ?>
+=======
+            <?= $logoImgTag ?>
+>>>>>>> codex/fix-http-error-on-sales-report-export
             <h1>DGZ Motorshop</h1>
             <h2>Stock-In Report</h2>
             <p>Generated on <?= htmlspecialchars($generatedOn) ?></p>
+            <p><?= htmlspecialchars(number_format($totalRows)) ?> line<?= $totalRows === 1 ? '' : 's' ?> • <?= htmlspecialchars(number_format($uniqueReceipts)) ?> receipt<?= $uniqueReceipts === 1 ? '' : 's' ?></p>
         </div>
 
         <div class="section filters">
@@ -2878,6 +3127,7 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
     $lines[] = $lightDivider;
     $lines[] = 'Total Quantity Received: ' . number_format($totalQty, 0);
     $lines[] = 'Estimated Total Value: PHP ' . number_format($totalValue, 2);
+    $lines[] = 'Total Receipts: ' . number_format($uniqueReceipts);
     $lines[] = '';
     $lines[] = 'Prepared via DGZ Inventory System';
 

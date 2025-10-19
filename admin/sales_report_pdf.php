@@ -102,6 +102,16 @@ try {
     $stmt->execute($queryParams);
     $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+    // Load logo for header
+    $logoPath = realpath(__DIR__ . '/../dgz_motorshop_system/assets/logo.png');
+    $logoDataUri = '';
+    if ($logoPath && file_exists($logoPath)) {
+        $logoData = file_get_contents($logoPath);
+        if ($logoData !== false) {
+            $logoDataUri = 'data:image/png;base64,' . base64_encode($logoData);
+        }
+    }
+
     // Calculate totals
     $total_orders = count($orders);
     $total_sales = array_sum(array_map('floatval', array_column($orders, 'total')));
@@ -113,7 +123,11 @@ try {
         : 'Date: ' . $rangeStartDisplay . ' to ' . $rangeEndDisplay;
 
 // Generate HTML for PDF
-$html = '
+    $logoImgTag = $logoDataUri
+        ? '<img src="' . $logoDataUri . '" alt="DGZ Motorshop Logo" class="logo">'
+        : '';
+
+    $html = '
 <!DOCTYPE html>
 <html>
 <head>
@@ -122,8 +136,12 @@ $html = '
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; }
         .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
+
         .header .logo { margin-bottom: 8px; }
         .header .logo img { max-height: 64px; }
+
+        .header .logo { display: block; margin: 0 auto 12px; max-width: 160px; height: auto; }
+
         .header h1 { margin: 0; color: #333; }
         .header p { margin: 5px 0; color: #666; }
         .date-range { font-size: 14px; margin-bottom: 15px; font-weight: bold; }
@@ -141,6 +159,7 @@ $html = '
 </head>
 <body>
     <div class="header">
+
         <?php
         $logoPath = __DIR__ . '/../dgz_motorshop_system/assets/logo.png';
         $logoBase64 = '';
@@ -154,6 +173,9 @@ $html = '
             echo '<div class="logo"><img src="' . $logoBase64 . '" alt="DGZ Motorshop Logo"></div>';
         }
         ?>
+
+        ' . $logoImgTag . '
+
         <h1>DGZ Motorshop</h1>
         <h2>' . htmlspecialchars($period_title) . '</h2>
         <p>Generated on: ' . date('F j, Y g:i A') . '</p>
