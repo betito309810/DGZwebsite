@@ -676,7 +676,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
     if ($trackingCodeDisplay !== '') {
         $trackOrderUrl = resolveTrackOrderUrl();
         $safeTrackOrderUrl = htmlspecialchars($trackOrderUrl, ENT_QUOTES, 'UTF-8');
-        echo '<div style="display: inline-block; padding: 16px 28px; margin-bottom: 18px; background: linear-gradient(135deg, #74b9ff 0%, #a29bfe 100%); color: white; font-size: 24px; font-weight: 700; letter-spacing: 2px; border-radius: 12px;">'
+        echo '<div style="display: inline-block; padding: 16px 28px; margin-bottom: 18px; background: #2563eb; color: white; font-size: 24px; font-weight: 700; letter-spacing: 2px; border-radius: 12px;">'
             . htmlspecialchars($trackingCodeDisplay, ENT_QUOTES, 'UTF-8')
             . '</div>';
         echo '<p style="color: #2d3436; margin-bottom: 10px; font-weight: 600;">Here is your tracking code. Keep it safe to check your order status.</p>';
@@ -688,7 +688,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
         echo '<p style="color: #636e72; margin-bottom: 10px;">Please check your email for your tracking code.</p>';
     }
     echo '<p style="color: #636e72; margin-bottom: 30px;">Status: <span style="background: #fdcb6e; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">Pending</span></p>';
-    echo '<a href="' . htmlspecialchars($shopUrl, ENT_QUOTES, 'UTF-8') . '" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; padding: 15px 30px; border-radius: 8px; font-weight: 600;">Back to Shop</a>';
+    echo '<a href="' . htmlspecialchars($shopUrl, ENT_QUOTES, 'UTF-8') . '" style="background: #2563eb; color: white; text-decoration: none; padding: 15px 30px; border-radius: 8px; font-weight: 600;">Back to Shop</a>';
     echo '<script>try{localStorage.removeItem("cartItems");localStorage.removeItem("cartCount");}catch(e){}</script>';
     echo '</div>';
     exit;

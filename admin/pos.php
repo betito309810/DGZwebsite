@@ -1565,8 +1565,6 @@ if ($receiptDataJson === false) {
                         <?php endif; ?>
                     </tbody>
                 </table>
-            </div>
-
             <?php
                 // Match products/sales style: "Showing X to Y of Z entries"
                 $startRecord = ($totalOrders > 0) ? (($page - 1) * $perPage + 1) : 0;
@@ -1630,6 +1628,8 @@ if ($receiptDataJson === false) {
                         <?php endif; ?>
                     </div>
                 </div>
+            </div>
+
             </div>
 
         </div>

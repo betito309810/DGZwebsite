@@ -1471,9 +1471,9 @@ if ($currentSort === 'name') {
     <link rel="stylesheet" href="../dgz_motorshop_system/assets/css/products/product_modals.css"> <!-- Added: widened horizontal modal layout. -->
     <style>
         .products-alert {
-            margin: 20px auto;
-            max-width: 1200px;
-            padding: 14px 18px;
+            margin: 0;
+            max-width: 100%;
+            padding: 10px 14px;
             border-radius: 6px;
             font-size: 0.95rem;
         }
@@ -1527,14 +1527,16 @@ if ($currentSort === 'name') {
                 </div>
             </div>
         </header>
-        <?php if ($productFormError !== null && $productFormError !== ''): ?>
-        <div class="products-alert products-alert--error"><?= htmlspecialchars($productFormError) ?></div>
-        <?php endif; ?>
-        <?php if ($productFormSuccess !== null && $productFormSuccess !== ''): ?>
-        <div class="products-alert products-alert--success"><?= htmlspecialchars($productFormSuccess) ?></div>
-        <?php endif; ?>
-        <!-- Action buttons aligned to the right -->
+        <!-- Action bar with inline notifications to keep them visible -->
         <div class="products-action-bar">
+            <div class="products-action-bar__alerts">
+                <?php if ($productFormError !== null && $productFormError !== ''): ?>
+                <div class="products-alert products-alert--error"><?= htmlspecialchars($productFormError) ?></div>
+                <?php endif; ?>
+                <?php if ($productFormSuccess !== null && $productFormSuccess !== ''): ?>
+                <div class="products-alert products-alert--success"><?= htmlspecialchars($productFormSuccess) ?></div>
+                <?php endif; ?>
+            </div>
             <?php if (!$isStaff): ?>
             <button id="openAddModal" class="add-btn" type="button">
                 <i class="fas fa-plus"></i> Add Product

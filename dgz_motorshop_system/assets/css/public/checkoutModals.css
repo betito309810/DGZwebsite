@@ -52,10 +52,7 @@
     transition: all 0.2s ease;
 }
 
-.checkout-modal__button--primary {
-    background: linear-gradient(135deg, #10b981, #059669);
-    color: #fff;
-}
+.checkout-modal__button--primary { background: #10b981; color: #fff; }
 
 .checkout-modal__button--secondary {
     background: #e5e7eb;

@@ -116,7 +116,7 @@ table {
 }
 
 table th {
-    background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+    background: #f8fafc;
     padding: 16px 18px;
     text-align: left;
     font-weight: 600;
@@ -196,7 +196,7 @@ table tr:last-child td {
 }
 
 #inventoryTable .inventory-filter-form {
-    background: linear-gradient(135deg, #f8fafc, #edf2f7);
+    background: #f8fafc;
     border-bottom: 1px solid #e2e8f0;
     padding: 24px 30px 18px;
     display: flex;
@@ -226,7 +226,6 @@ table tr:last-child td {
 
 /* New: styling for manual adjustment notifications and highlights */
 #inventoryTable .inventory-alert {
-    margin: 0 0 20px;
     padding: 14px 18px;
     border-radius: 10px;
     font-weight: 500;
@@ -235,6 +234,20 @@ table tr:last-child td {
     gap: 10px;
     box-shadow: 0 14px 28px -16px rgba(15, 23, 42, 0.35);
     transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+/* Float the flash alert so it stays visible while scrolling */
+#inventoryTable [data-inventory-flash] {
+    position: fixed;
+    top: 120px; /* align near Add Stock row */
+    left: calc(260px + 30px); /* sidebar width + content padding */
+    z-index: 10040;
+    max-width: 520px;
+    width: auto;
+}
+
+@media (max-width: 1024px) {
+    #inventoryTable [data-inventory-flash] { left: 16px; right: 16px; width: auto; }
 }
 
 #inventoryTable .inventory-alert--success {
@@ -475,7 +488,7 @@ table tr:last-child td {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    min-width: 140px;
+    min-width: 100px;
 }
 
 #inventoryTable .manual-inventory-table .manual-adjust-field--variant {
@@ -496,12 +509,12 @@ table tr:last-child td {
 }
 
 #inventoryTable .manual-inventory-table .manual-adjust-input {
-    width: 120px;
+    width: 72px; /* 4-digit friendly */
     max-width: 100%;
     height: 44px;
     border: 1px solid #d4d4d8;
     border-radius: 10px;
-    padding: 0 12px;
+    padding: 0 10px;
     font-size: 14px;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
@@ -613,7 +626,7 @@ table tr:last-child td {
 }
 
 #inventoryTable thead th {
-    background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+    background: #f8fafc;
     padding: 16px 18px;
     text-align: left;
     font-weight: 600;

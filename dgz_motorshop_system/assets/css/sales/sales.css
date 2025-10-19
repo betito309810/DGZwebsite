@@ -268,25 +268,19 @@ body {
 }
 
 /* Export Button */
-.btn-export {
-    background: linear-gradient(135deg, #3498db, #2980b9);
-    color: white;
-}
+.btn-export { background: #3498db; color: white; }
 
 .btn-export:hover {
-    background: linear-gradient(135deg, #2980b9, #2573a7);
+    background: #2980b9;
     transform: translateY(-1px);
     box-shadow: 0 4px 8px rgba(52, 152, 219, 0.3);
 }
 
 /* Generate Report Button */
-.btn-generate {
-    background: linear-gradient(135deg, #27ae60, #219a52);
-    color: white;
-}
+.btn-generate { background: #27ae60; color: white; }
 
 .btn-generate:hover {
-    background: linear-gradient(135deg, #219a52, #1e8449);
+    background: #219a52;
     transform: translateY(-1px);
     box-shadow: 0 4px 8px rgba(39, 174, 96, 0.3);
 }
@@ -336,7 +330,7 @@ table {
 }
 
 table th {
-    background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+    background: #f8fafc;
     padding: 16px 18px;
     text-align: left;
     font-weight: 600;
@@ -738,7 +732,7 @@ table tr:last-child td {
 }
 
 .stat-card {
-    background: linear-gradient(135deg, #f8fafc, #ffffff);
+    background: #ffffff;
     border: 1px solid #e2e8f0;
     border-radius: 12px;
     padding: 20px;
@@ -756,7 +750,7 @@ table tr:last-child td {
     left: 0;
     right: 0;
     height: 4px;
-    background: linear-gradient(90deg, #3498db, #2980b9);
+    background: #3498db;
 }
 
 .stat-card:hover {
@@ -777,13 +771,9 @@ table tr:last-child td {
 }
 
 
-.stat-card:nth-child(1) .stat-icon {
-    background: linear-gradient(135deg, #27ae60, #2ecc71);
-}
+.stat-card:nth-child(1) .stat-icon { background: #27ae60; }
 
-.stat-card:nth-child(2) .stat-icon {
-    background: linear-gradient(135deg, #e74c3c, #c0392b);
-}
+.stat-card:nth-child(2) .stat-icon { background: #e74c3c; }
 
 .stat-value {
     font-size: 28px;
@@ -835,9 +825,10 @@ table tr:last-child td {
 }
 
 .loading .stat-value {
-    background: linear-gradient(90deg, #e2e8f0, #cbd5e0, #e2e8f0);
+    background: #e2e8f0;
     background-size: 200% 100%;
-    animation: shimmer 1.5s infinite;
+    /* optional: remove shimmer gradient for solid design; keep subtle pulse */
+    animation: none;
     color: transparent;
     border-radius: 4px;
 }

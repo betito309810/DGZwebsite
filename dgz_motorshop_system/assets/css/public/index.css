@@ -222,10 +222,7 @@ body {
 }
 
 .nav-link:hover,
-.nav-link.active {
-    background: linear-gradient(135deg, #00bcd4 0%, #2196f3 100%);
-    color: white;
-}
+.nav-link.active { background: #2196f3; color: white; }
 
 /* ... rest of your CSS remains the same ... */
 
@@ -461,7 +458,7 @@ body.sort-sheet-open {
 .sort-option.is-active,
 .sort-option:hover,
 .sort-option:focus {
-    background: linear-gradient(135deg, #00bcd4 0%, #2196f3 100%);
+    background: #2196f3;
     border-color: transparent;
     color: #ffffff;
     outline: none;
@@ -536,7 +533,7 @@ body.sort-sheet-open {
 
 /* Featured Products */
 .featured-card {
-    background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+    background: #fcb69f;
     border-radius: 20px;
     padding: 30px;
     text-align: center;
@@ -548,7 +545,7 @@ body.sort-sheet-open {
     position: absolute;
     top: 10px;
     right: 10px;
-    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+    background: #ff6b6b;
     color: white;
     padding: 4px 8px;
     border-radius: 12px;
@@ -564,7 +561,7 @@ body.sort-sheet-open {
 }
 
 .featured-card {
-    background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+    background: #fcb69f;
     border-radius: 20px;
     padding: 30px;
     text-align: center;
@@ -578,17 +575,7 @@ body.sort-sheet-open {
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
 }
 
-.featured-card::before {
-    content: '';
-    position: absolute;
-    top: -50%;
-    left: -50%;
-    width: 200%;
-    height: 200%;
-    background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
-    transform: rotate(45deg);
-    transition: all 0.3s ease;
-}
+.featured-card::before { content: none; }
 
 .featured-card:hover::before {
     transform: rotate(45deg) translate(20px, 20px);
@@ -655,7 +642,7 @@ body.sort-sheet-open {
 .category-icon {
     width: 60px;
     height: 60px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #667eea;
     border-radius: 50%;
     margin: 0 auto 20px;
     display: flex;
@@ -1137,13 +1124,13 @@ body.modal-open {
 }
 
 .product-gallery-buy {
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    background: #10b981;
     color: #ffffff;
     box-shadow: 0 10px 20px rgba(16, 185, 129, 0.25);
 }
 
 .product-gallery-cart {
-    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    background: #3b82f6;
     color: #ffffff;
     display: inline-flex;
     align-items: center;
@@ -1476,7 +1463,7 @@ body.modal-open {
         display: flex;
         flex-direction: column;
         gap: 24px;
-        background: linear-gradient(180deg, #43d6ff 0%, #1c8ae6 100%);
+        background: #1c8ae6;
         z-index: 1600;
         overflow-y: auto;
     }
@@ -1647,7 +1634,7 @@ body.terms-overlay-active {
 
 .terms-overlay__button {
     align-self: flex-end;
-    background: linear-gradient(135deg, #00bcd4 0%, #2196f3 100%);
+    background: #2196f3;
     color: #ffffff;
     border: none;
     border-radius: 999px;

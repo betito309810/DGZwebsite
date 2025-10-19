@@ -394,7 +394,7 @@ natcasesort($categories);
         <!-- Contact info on the far left -->
         <div class="footer-column contact-info">
             <p><strong>Visit Us:</strong> Lot 2 Blk 3 Dolores Road, Brgy. Sto. Niño, Antipolo City</p>
-            <p><strong>Call:</strong> <a href="tel:+639123456789">+63 912 345 6789</a></p>
+            <p><strong>Call:</strong> <a href="tel:+639123456789">09536514033</a></p>
             <p><strong>Email:</strong> <a href="mailto:orders@dgzmotorshop.com">orders@dgzmotorshop.com</a></p>
         </div>
         

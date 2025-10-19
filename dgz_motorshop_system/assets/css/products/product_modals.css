@@ -21,7 +21,7 @@
     width: min(1320px, 98vw); /* Updated: widen the modal so fields and media breathe. */
     padding: 28px 32px; /* Updated: reduce vertical padding to shorten the perceived height. */
     border-radius: 22px;
-    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%); /* Added: subtle gradient for visual separation. */
+    background: #ffffff; /* Solid background for design consistency */
     box-shadow: 0 28px 70px rgba(15, 23, 42, 0.24);
     position: relative;
     max-height: 90vh; /* Added: cap modal height so it never towers over the viewport. */
@@ -83,7 +83,7 @@
     padding: 10px 22px;
     border-radius: 10px;
     border: none;
-    background: linear-gradient(135deg, #2563eb, #4f46e5);
+    background: #2563eb; /* Solid primary */
     color: #ffffff;
     font-weight: 600;
     cursor: pointer;
@@ -462,7 +462,7 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    background: linear-gradient(135deg, #2563eb, #4f46e5);
+    background: #2563eb;
     color: #ffffff;
     font-size: 12px;
     padding: 2px 10px;

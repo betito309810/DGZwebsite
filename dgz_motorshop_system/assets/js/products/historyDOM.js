@@ -567,6 +567,10 @@
             document.querySelectorAll('.edit-btn').forEach((btn) => {
                 btn.addEventListener('click', (event) => {
                     event.preventDefault();
+                    // Stop the event from bubbling to the row-level click handler.
+                    // This guarantees single-click open for Edit even if DOM changes
+                    // or the closest('.action-btn') guard fails in some browsers.
+                    event.stopPropagation();
                     (document.getElementById('edit_id') ?? {}).value = btn.dataset.id ?? '';
                     (document.getElementById('edit_code') ?? {}).value = btn.dataset.code ?? '';
                     (document.getElementById('edit_name') ?? {}).value = btn.dataset.name ?? '';

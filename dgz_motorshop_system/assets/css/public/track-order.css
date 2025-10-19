@@ -95,7 +95,7 @@ main {
 }
 
 .tracker-button {
-    background: linear-gradient(135deg, #00bcd4 0%, #2196f3 100%);
+    background: #2196f3;
     color: white;
     border: none;
     border-radius: 14px;

@@ -31,9 +31,7 @@ html, body {
     transition: background 0.2s ease;
 }
 
-.primary-action:hover {
-    background: linear-gradient(135deg, #2563eb, #1e40af);
-}
+.primary-action:hover { background: #2563eb; }
 
 .secondary-action {
     background: #4b5563;

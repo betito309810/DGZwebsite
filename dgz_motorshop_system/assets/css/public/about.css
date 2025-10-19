@@ -220,10 +220,7 @@ body {
 }
 
 .nav-link:hover,
-.nav-link.active {
-    background: linear-gradient(135deg, #00bcd4 0%, #2196f3 100%);
-    color: white;
-}
+.nav-link.active { background: #2196f3; color: white; }
 
 .nav-backdrop {
     position: fixed;
@@ -460,7 +457,7 @@ body.nav-open {
         display: flex;
         flex-direction: column;
         gap: 24px;
-        background: linear-gradient(180deg, #43d6ff 0%, #1c8ae6 100%);
+        background: #1c8ae6;
         z-index: 1600;
         overflow-y: auto;
     }

@@ -1081,20 +1081,25 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
         /* Alert Styles */
         .alert {
             padding: 15px;
-            margin: 20px 0;
-            border-radius: 4px;
+            border-radius: 8px;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.15);
         }
 
-        .alert-success {
-            background-color: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
+        .alert-success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .alert-error   { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+
+        /* Floating variant so feedback is visible while scrolling */
+        .alert-floating {
+            position: fixed;
+            top: 120px; /* align near Add Stock row */
+            left: calc(260px + 30px); /* sidebar width + page padding */
+            z-index: 10050;
+            max-width: 520px;
+            width: auto;
         }
 
-        .alert-error {
-            background-color: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
+        @media (max-width: 1024px) {
+            .alert-floating { left: 16px; right: 16px; width: auto; }
         }
     </style>
 </head>
@@ -1133,15 +1138,40 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
             </div>
         </header>
 
-        <!-- Messages -->
+        <!-- Messages (floating so they remain visible when scrolling) -->
         <?php if (isset($success_message)): ?>
-            <div class="alert alert-success"><?php echo $success_message; ?></div>
+            <div class="alert alert-success alert-floating" role="status" data-float-alert>
+                <?php echo $success_message; ?>
+            </div>
         <?php endif; ?>
-        
         <?php if (isset($error_message)): ?>
-            <div class="alert alert-error"><?php echo $error_message; ?></div>
+            <div class="alert alert-error alert-floating" role="status" data-float-alert>
+                <?php echo $error_message; ?>
+            </div>
         <?php endif; ?>
-        
+
+        <script>
+            // Auto-dismiss floating alerts after a short delay
+            (function () {
+                function dismiss(node) {
+                    if (!node) return;
+                    node.style.transition = 'opacity .4s ease, transform .4s ease';
+                    node.style.opacity = '0';
+                    node.style.transform = 'translateY(-6px)';
+                    setTimeout(function () { try { node.remove(); } catch (e) {} }, 450);
+                }
+
+                // Inventory table flash (manual adjust)
+                var tableFlash = document.querySelector('[data-inventory-flash]');
+                if (tableFlash) { setTimeout(function () { dismiss(tableFlash); }, 4000); }
+
+                // Top-level success/error alerts
+                var floatAlerts = document.querySelectorAll('[data-float-alert]');
+                floatAlerts.forEach(function (node) {
+                    setTimeout(function () { dismiss(node); }, 4000);
+                });
+            })();
+        </script>
 
         <div class="inventory-actions">
             
@@ -1463,11 +1493,7 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
 
         <div id="inventoryTable" class="table-container">
             <?php if ($manualAdjustFeedback): ?>
-            <div
-                class="inventory-alert inventory-alert--<?= htmlspecialchars($manualAdjustFeedback['type'] ?? 'info') ?>"
-                role="status"
-                data-inventory-flash
-            >
+            <div class="inventory-alert inventory-alert--<?= htmlspecialchars($manualAdjustFeedback['type'] ?? 'info') ?>" role="status" data-inventory-flash>
                 <?= htmlspecialchars($manualAdjustFeedback['text'] ?? '') ?>
             </div>
             <?php endif; ?>

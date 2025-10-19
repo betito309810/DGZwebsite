@@ -89,14 +89,14 @@ $productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
 
             <article class="faq-item">
                 <!-- FAQ Item 3: edit the question and answer text -->
-                <h3 class="faq-question">Can I order parts online for store pickup?</h3>
-                <p class="faq-answer">Absolutely. Place your order through our online catalog and choose in-store pickup so everything is ready when you arrive.</p>
+                <h3 class="faq-question">Can I request a refund if the item I received is damaged?</h3>
+                <p class="faq-answer">We’re not liable for damages after the item is handed to the courier. All products are checked in good condition before shipping.</p>
             </article>
 
             <article class="faq-item">
                 <!-- FAQ Item 4: edit the question and answer text -->
                 <h3 class="faq-question">What are your store hours?</h3>
-                <p class="faq-answer">We are open Monday to Saturday from 9:00 AM to 6:00 PM, with extended hours during peak riding season.</p>
+                <p class="faq-answer">We are open Monday to Saturday from 8:00 AM to 10:00 PM, with extended hours during peak riding season.</p>
             </article>
         </section>
     </div>
@@ -107,7 +107,7 @@ $productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
         <!-- Contact info on the far left -->
         <div class="footer-column contact-info">
             <p><strong>Visit Us:</strong> Lot 2 Blk 3 Dolores Road, Brgy. Sto. Niño, Antipolo City</p>
-            <p><strong>Call:</strong> <a href="tel:+639123456789">+63 912 345 6789</a></p>
+            <p><strong>Call:</strong> <a href="tel:+639123456789">09536514033</a></p>
             <p><strong>Email:</strong> <a href="mailto:orders@dgzmotorshop.com">orders@dgzmotorshop.com</a></p>
         </div>
         
