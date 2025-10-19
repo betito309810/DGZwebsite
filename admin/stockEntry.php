@@ -2319,7 +2319,7 @@ function countStockInReport(PDO $pdo, array $filters, array $capabilities): int
         $sql = '
             SELECT COUNT(*)
             FROM stock_receipts sr
-            INNER JOIN stock_receipt_items sri ON sri.receipt_id = sr.id
+            LEFT JOIN stock_receipt_items sri ON sri.receipt_id = sr.id
             LEFT JOIN products p ON p.id = sri.product_id
             WHERE ' . $whereClause;
 
@@ -2384,17 +2384,18 @@ function fetchStockInReport(PDO $pdo, array $filters, ?int $limit = 50, int $off
     $selectParts = [
         $dateSelect,
         $receiptCodeSelect,
+        'sr.id AS receipt_id',
         $supplierSelect,
         $documentSelect,
         $statusSelect,
         $qtySelect,
         $unitCostSelect,
-        "COALESCE(p.name, CONCAT('Product #', sri.product_id)) AS product_name",
+        "CASE\n            WHEN p.name IS NOT NULL AND TRIM(p.name) <> '' THEN p.name\n            WHEN sri.product_id IS NOT NULL THEN CONCAT('Product #', sri.product_id)\n            ELSE 'No items recorded'\n        END AS product_name",
         $receiverSelect,
     ];
 
     $selectSql = implode(",\n            ", $selectParts);
-    $joinSql = "INNER JOIN stock_receipt_items sri ON sri.receipt_id = sr.id\n        LEFT JOIN products p ON p.id = sri.product_id";
+    $joinSql = "LEFT JOIN stock_receipt_items sri ON sri.receipt_id = sr.id\n        LEFT JOIN products p ON p.id = sri.product_id";
     if ($receiverJoin !== '') {
         $joinSql .= $receiverJoin;
     }
@@ -2787,10 +2788,25 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
 
         if (!empty($row['receipt_code'])) {
             $receiptTracker[$row['receipt_code']] = true;
+        } elseif (!empty($row['receipt_id'])) {
+            $receiptTracker['#' . (int)$row['receipt_id']] = true;
         }
     }
 
     $uniqueReceipts = count($receiptTracker);
+
+    $logoPath = realpath(__DIR__ . '/../dgz_motorshop_system/assets/logo.png');
+    $logoDataUri = '';
+    if ($logoPath && file_exists($logoPath)) {
+        $logoData = file_get_contents($logoPath);
+        if ($logoData !== false) {
+            $logoDataUri = 'data:image/png;base64,' . base64_encode($logoData);
+        }
+    }
+
+    $logoImgTag = $logoDataUri !== ''
+        ? '<img src="' . $logoDataUri . '" alt="DGZ Motorshop Logo" class="logo">'
+        : '';
 
     ob_start();
     ?>
@@ -2812,6 +2828,12 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
                 margin-bottom: 24px;
                 border-bottom: 2px solid #0f172a;
                 padding-bottom: 16px;
+            }
+            .header .logo {
+                display: block;
+                margin: 0 auto 12px;
+                max-width: 160px;
+                height: auto;
             }
             .header h1 {
                 margin: 0;
@@ -2928,9 +2950,11 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
     </head>
     <body>
         <div class="header">
+            <?= $logoImgTag ?>
             <h1>DGZ Motorshop</h1>
             <h2>Stock-In Report</h2>
             <p>Generated on <?= htmlspecialchars($generatedOn) ?></p>
+            <p><?= htmlspecialchars(number_format($totalRows)) ?> line<?= $totalRows === 1 ? '' : 's' ?> • <?= htmlspecialchars(number_format($uniqueReceipts)) ?> receipt<?= $uniqueReceipts === 1 ? '' : 's' ?></p>
         </div>
 
         <div class="section filters">
@@ -3078,6 +3102,7 @@ function exportStockInReportPdf(string $filenameBase, array $headers, array $row
     $lines[] = $lightDivider;
     $lines[] = 'Total Quantity Received: ' . number_format($totalQty, 0);
     $lines[] = 'Estimated Total Value: PHP ' . number_format($totalValue, 2);
+    $lines[] = 'Total Receipts: ' . number_format($uniqueReceipts);
     $lines[] = '';
     $lines[] = 'Prepared via DGZ Inventory System';
 
