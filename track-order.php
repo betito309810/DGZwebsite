@@ -1,4 +1,13 @@
 <?php
+/**
+ * Public order tracker landing page.
+ * The PHP prelude wires up shared asset helpers so this template can re-use the storefront
+ * header, navigation, and modal styles while exposing the order-status endpoint URL to the
+ * accompanying JavaScript controller. Everything else happens client-side: the React-less
+ * script grabs the tracking code, makes an AJAX request to `order_status.php`, then fills the
+ * status panel with the curated response payload. Keeping this file well commented helps
+ * future maintainers understand how the PHP bootstrap feeds into the front-end modules.
+ */
 require __DIR__ . '/dgz_motorshop_system/config/config.php';
 
 $logoAsset = assetUrl('assets/logo.png');
@@ -113,6 +122,9 @@ $checkoutModalStylesheet = assetUrl('assets/css/public/checkoutModals.css');
 
     <!-- Shared cart functionality -->
     <script>
+        // Share important URLs with the vanilla JS modules so they can make API calls without
+        // hardcoding paths. Using Object.assign keeps compatibility with other pages that may
+        // have already defined `window.dgzPaths`.
         window.dgzPaths = Object.assign({}, window.dgzPaths || {}, {
             checkout: <?= json_encode($checkoutUrl) ?>,
             orderStatus: <?= json_encode($orderStatusEndpoint) ?>,

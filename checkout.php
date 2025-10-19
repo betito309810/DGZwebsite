@@ -1,7 +1,26 @@
 <?php
+/**
+ * Checkout controller
+ * -------------------
+ * This script powers the public checkout page and has to juggle a lot of concerns at once:
+ *   • Bootstrap shared dependencies so storefront helpers (asset resolvers, DB connection)
+ *     are available to both the initial render and subsequent form submissions.
+ *   • Normalise cart payloads coming from multiple entry points (direct product links,
+ *     encoded cart URLs, and POSTed JSON) while hydrating variant information so stock and
+ *     pricing validation remains accurate.
+ *   • Opportunistically evolve the `orders` schema by adding tracking- and note-related
+ *     columns when they are missing, guaranteeing that customer metadata is never dropped
+ *     just because the database has not been migrated yet.
+ *   • Validate the customer’s contact, address, payment, and proof-of-payment inputs before
+ *     committing the order, while also creating human-friendly tracking codes and dispatching
+ *     confirmation email messages.
+ * The inline comments throughout the file narrate each stage of that workflow so future
+ * maintainers can quickly understand why a given block exists and what it expects to receive.
+ */
 require __DIR__ . '/dgz_motorshop_system/config/config.php';
 require_once __DIR__ . '/dgz_motorshop_system/includes/product_variants.php'; // Added: variant helpers for checkout validation.
 require_once __DIR__ . '/dgz_motorshop_system/includes/email.php';
+// Resolve configuration dependencies and compute the asset URLs that the template consumes.
 $pdo = db();
 $errors = [];
 $referenceInput = '';
@@ -190,6 +209,11 @@ if (!function_exists('ensureOrdersCustomerNoteColumn')) {
 ensureOrdersCustomerNoteColumn($pdo); // Added call to prepare storage for customer cashier notes
 
 if (!function_exists('normaliseCartItems')) {
+    /**
+     * Convert loosely structured cart payloads into a consistent schema so later validation
+     * logic can assume every element has the same keys. This runs on both GET and POST
+     * submissions which is why we defensively coerce types and default missing fields.
+     */
     function normaliseCartItems($items): array
     {
         if (!is_array($items)) {
@@ -371,6 +395,7 @@ if (isset($_POST['cart'])) {
     $cartItems = normaliseCartItems($cartItems);
 }
 
+// Always normalise the payload before rendering or validation to avoid duplicate code paths.
 $cartItems = normaliseCartItems($cartItems);
 
 // If no cart items, show error (unless success page)
@@ -384,6 +409,8 @@ if (empty($cartItems) && !(isset($_GET['success']) && $_GET['success'] === '1'))
     exit;
 }
 
+// When the customer submits the checkout form we validate inputs, enforce stock limits,
+// persist the order, and finally redirect them to the success state with a tracking code.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
     // Treat customer_name as full name
     $customer_name = trim($_POST['customer_name']);
@@ -535,6 +562,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
         }
     }
 
+    // Only generate a tracking code once we are confident validation passed and the schema supports it.
     if (empty($errors) && $supportsTrackingCodes) {
         try {
             $trackingCodeForRedirect = generateUniqueTrackingCode($pdo);
@@ -545,6 +573,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
     }
 
     if (empty($errors)) {
+
+        // Build a column list dynamically so the checkout can run against both legacy and migrated schemas.
 
         $hasReferenceColumn = ordersHasReferenceColumn($pdo);
 
@@ -625,6 +655,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
             }
         }
 
+        // Email the tracking code when we have both a generated code and a deliverable email address.
         if ($supportsTrackingCodes && $trackingCodeForRedirect !== null && filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $nameParts = array_filter([
                 trim($customer_name),

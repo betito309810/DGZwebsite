@@ -1,4 +1,12 @@
 <?php
+/**
+ * Order status API endpoint.
+ * The tracking page calls this endpoint with a DGZ-XXXX-XXXX code and expects a filtered,
+ * customer-safe representation of the order. We validate the method, accept both JSON and
+ * form submissions, normalise the tracking code format, and only return online transactions
+ * so walk-in purchases stay private. Every early return is documented so integrators understand
+ * why a particular HTTP status might be emitted.
+ */
 // Allow the public order tracker to query order details securely.
 header('Content-Type: application/json');
 
