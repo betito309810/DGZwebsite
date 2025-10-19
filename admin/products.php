@@ -1528,10 +1528,10 @@ if ($currentSort === 'name') {
             </div>
         </header>
         <?php if ($productFormError !== null && $productFormError !== ''): ?>
-        <div class="products-alert products-alert--error"><?= htmlspecialchars($productFormError) ?></div>
+        <div class="products-alert products-alert--error" role="alert" aria-live="assertive"><?= htmlspecialchars($productFormError) ?></div>
         <?php endif; ?>
         <?php if ($productFormSuccess !== null && $productFormSuccess !== ''): ?>
-        <div class="products-alert products-alert--success"><?= htmlspecialchars($productFormSuccess) ?></div>
+        <div class="products-alert products-alert--success" role="alert" aria-live="polite"><?= htmlspecialchars($productFormSuccess) ?></div>
         <?php endif; ?>
         <!-- Action buttons aligned to the right -->
         <div class="products-action-bar">
