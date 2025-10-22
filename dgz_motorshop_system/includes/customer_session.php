@@ -15,6 +15,18 @@ if (!function_exists('customerRepository')) {
     }
 }
 
+if (!function_exists('dgzCustomerSessionCache')) {
+    /**
+     * Internal utility to hold the authenticated customer cache by reference.
+     */
+    function &dgzCustomerSessionCache(): mixed
+    {
+        static $cache = false;
+
+        return $cache;
+    }
+}
+
 if (!function_exists('getAuthenticatedCustomer')) {
     /**
      * Fetch the authenticated customer from the session (if any).
@@ -23,26 +35,26 @@ if (!function_exists('getAuthenticatedCustomer')) {
      */
     function getAuthenticatedCustomer(): ?array
     {
-        static $cachedCustomer = false;
-
-        if ($cachedCustomer !== false) {
-            return $cachedCustomer;
+        $cache = &dgzCustomerSessionCache();
+        if ($cache !== false) {
+            return $cache;
         }
 
         if (empty($_SESSION['customer_id'])) {
-            $cachedCustomer = null;
-            return $cachedCustomer;
+            $cache = null;
+            return $cache;
         }
 
         $customerId = (int) $_SESSION['customer_id'];
 
         try {
             $pdo = customerRepository();
-            $stmt = $pdo->prepare('SELECT id, full_name, email, phone, created_at FROM customers WHERE id = ? LIMIT 1');
+            $stmt = $pdo->prepare('SELECT id, full_name, email, phone, address_line1, city, postal_code, created_at, updated_at FROM customers WHERE id = ? LIMIT 1');
             $stmt->execute([$customerId]);
             $customer = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
             if ($customer) {
                 $customer['first_name'] = extractCustomerFirstName($customer['full_name'] ?? '');
+                $customer['address_completed'] = customerAddressCompleted($customer);
             }
         } catch (Throwable $exception) {
             error_log('Unable to load authenticated customer: ' . $exception->getMessage());
@@ -53,8 +65,19 @@ if (!function_exists('getAuthenticatedCustomer')) {
             unset($_SESSION['customer_id']);
         }
 
-        $cachedCustomer = $customer;
-        return $cachedCustomer;
+        $cache = $customer;
+        return $cache;
+    }
+}
+
+if (!function_exists('customerAddressCompleted')) {
+    function customerAddressCompleted(array $customer): bool
+    {
+        $address = trim((string)($customer['address_line1'] ?? ''));
+        $city = trim((string)($customer['city'] ?? ''));
+        $postalCode = trim((string)($customer['postal_code'] ?? ''));
+
+        return $address !== '' && $city !== '' && $postalCode !== '';
     }
 }
 
@@ -103,6 +126,14 @@ if (!function_exists('customerLogout')) {
     }
 }
 
+if (!function_exists('customerSessionRefresh')) {
+    function customerSessionRefresh(): void
+    {
+        $cache = &dgzCustomerSessionCache();
+        $cache = false;
+    }
+}
+
 if (!function_exists('requireCustomerAuthentication')) {
     function requireCustomerAuthentication(): void
     {
@@ -135,6 +166,7 @@ if (!function_exists('customerSessionExport')) {
         return [
             'authenticated' => true,
             'firstName' => $customer['first_name'] ?? extractCustomerFirstName($customer['full_name'] ?? ''),
+            'addressCompleted' => (bool) ($customer['address_completed'] ?? false),
         ];
     }
 }

@@ -36,15 +36,60 @@ $registerUrl = orderingUrl('register.php');
 $myOrdersUrl = orderingUrl('my_orders.php');
 $logoutUrl = orderingUrl('logout.php');
 
+$storedFullName = trim((string) ($customerAccount['full_name'] ?? ''));
+$storedEmail = trim((string) ($customerAccount['email'] ?? ''));
+$storedPhone = trim((string) ($customerAccount['phone'] ?? ''));
+$storedAddress = trim((string) ($customerAccount['address_line1'] ?? ''));
+$storedCity = trim((string) ($customerAccount['city'] ?? ''));
+$storedPostal = trim((string) ($customerAccount['postal_code'] ?? ''));
+$customerHasSavedAddress = $storedAddress !== '' && $storedCity !== '' && $storedPostal !== '';
+
+$defaultAddressMode = ($customerHasSavedAddress && !isset($_GET['edit_address'])) ? 'summary' : 'edit';
+$addressMode = isset($_POST['address_mode']) ? (string) $_POST['address_mode'] : $defaultAddressMode;
+if ($addressMode !== 'summary' && $addressMode !== 'edit') {
+    $addressMode = $defaultAddressMode;
+}
+$showAddressSummary = $customerHasSavedAddress && $addressMode === 'summary';
+
+$formValues = [
+    'email' => trim((string) ($_POST['email'] ?? '')),
+    'phone' => trim((string) ($_POST['phone'] ?? '')),
+    'facebook_account' => trim((string) ($_POST['facebook_account'] ?? '')),
+    'customer_name' => trim((string) ($_POST['customer_name'] ?? '')),
+    'address' => trim((string) ($_POST['address'] ?? '')),
+    'postal_code' => trim((string) ($_POST['postal_code'] ?? '')),
+    'city' => trim((string) ($_POST['city'] ?? '')),
+    'customer_note' => trim((string) ($_POST['customer_note'] ?? '')),
+];
+
 if ($customerAccount) {
-    if (!isset($_POST['customer_name']) || trim((string) $_POST['customer_name']) === '') {
-        $_POST['customer_name'] = $customerAccount['full_name'] ?? '';
+    if ($formValues['email'] === '' && $storedEmail !== '') {
+        $formValues['email'] = $storedEmail;
     }
-    if (!isset($_POST['email']) || trim((string) $_POST['email']) === '') {
-        $_POST['email'] = $customerAccount['email'] ?? '';
+    if ($formValues['phone'] === '' && $storedPhone !== '') {
+        $formValues['phone'] = $storedPhone;
     }
-    if (!isset($_POST['phone']) || trim((string) $_POST['phone']) === '') {
-        $_POST['phone'] = $customerAccount['phone'] ?? '';
+    if ($formValues['customer_name'] === '' && $storedFullName !== '') {
+        $formValues['customer_name'] = $storedFullName;
+    }
+
+    if ($addressMode === 'summary' && $customerHasSavedAddress) {
+        $formValues['customer_name'] = $storedFullName;
+        $formValues['address'] = $storedAddress;
+        $formValues['postal_code'] = $storedPostal;
+        $formValues['city'] = $storedCity;
+    } else {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST' && $customerHasSavedAddress) {
+            if ($formValues['address'] === '') {
+                $formValues['address'] = $storedAddress;
+            }
+            if ($formValues['postal_code'] === '') {
+                $formValues['postal_code'] = $storedPostal;
+            }
+            if ($formValues['city'] === '') {
+                $formValues['city'] = $storedCity;
+            }
+        }
     }
 }
 
@@ -410,31 +455,48 @@ if (empty($cartItems) && !(isset($_GET['success']) && $_GET['success'] === '1'))
     exit;
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$isCustomerAuthenticated || !$customerAccount) {
         $errors[] = 'Please log in or create an account before checking out.';
     }
     // Treat customer_name as full name
-    $customer_name = trim($_POST['customer_name']);
-    $email = trim($_POST['email'] ?? '');
-    $phone = trim($_POST['phone'] ?? '');
-    $facebookAccount = trim($_POST['facebook_account'] ?? '');
-    $address = trim($_POST['address']);
-    $postalCode = trim((string)($_POST['postal_code'] ?? ''));
-    $city = trim((string)($_POST['city'] ?? ''));
-    $customerNote = trim((string) ($_POST['customer_note'] ?? '')); // Added capture for optional cashier note
+    $customer_name = $formValues['customer_name'];
+    $email = $formValues['email'];
+    $phone = $formValues['phone'];
+    $facebookAccount = $formValues['facebook_account'];
+    $address = $formValues['address'];
+    $postalCode = $formValues['postal_code'];
+    $city = $formValues['city'];
+    $customerNote = $formValues['customer_note']; // Added capture for optional cashier note
     if (mb_strlen($customerNote) > 500) {
         $customerNote = mb_substr($customerNote, 0, 500); // Added guard to keep notes reasonably short
     }
     if ($customerAccount) {
-        $customer_name = $customerAccount['full_name'] ?? $customer_name;
-        if (!empty($customerAccount['email'])) {
-            $email = (string) $customerAccount['email'];
+        if ($addressMode === 'summary' && $customerHasSavedAddress) {
+            $customer_name = $storedFullName !== '' ? $storedFullName : $customer_name;
+            $address = $storedAddress !== '' ? $storedAddress : $address;
+            $postalCode = $storedPostal !== '' ? $storedPostal : $postalCode;
+            $city = $storedCity !== '' ? $storedCity : $city;
         }
-        if (!empty($customerAccount['phone'])) {
-            $phone = (string) $customerAccount['phone'];
+        if ($storedFullName !== '' && $addressMode !== 'edit') {
+            $customer_name = $storedFullName;
+        }
+        if ($storedEmail !== '') {
+            $email = $storedEmail;
+        }
+        if ($storedPhone !== '') {
+            $phone = $storedPhone;
         }
     }
+
+    $formValues['customer_name'] = $customer_name;
+    $formValues['email'] = $email;
+    $formValues['phone'] = $phone;
+    $formValues['address'] = $address;
+    $formValues['postal_code'] = $postalCode;
+    $formValues['city'] = $city;
+    $formValues['customer_note'] = $customerNote;
+    $formValues['facebook_account'] = $facebookAccount;
 
     $payment_method = $_POST['payment_method'] ?? '';
     $referenceInput = trim($_POST['reference_number'] ?? '');
@@ -632,6 +694,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
 
         $order_id = $pdo->lastInsertId();
 
+        if ($customerAccount) {
+            $shouldSyncAddress = ($addressMode === 'edit') || !$customerHasSavedAddress;
+            $updates = [];
+            $updateValues = [];
+
+            if ($customer_name !== '' && $customer_name !== $storedFullName) {
+                $updates[] = 'full_name = ?';
+                $updateValues[] = $customer_name;
+            }
+
+            if ($shouldSyncAddress) {
+                if ($address !== '' && $address !== $storedAddress) {
+                    $updates[] = 'address_line1 = ?';
+                    $updateValues[] = $address;
+                }
+                if ($city !== '' && $city !== $storedCity) {
+                    $updates[] = 'city = ?';
+                    $updateValues[] = $city;
+                }
+                if ($postalCode !== '' && $postalCode !== $storedPostal) {
+                    $updates[] = 'postal_code = ?';
+                    $updateValues[] = $postalCode;
+                }
+            }
+
+            if (!empty($updates)) {
+                $updates[] = 'updated_at = NOW()';
+                $updateValues[] = (int) $customerAccount['id'];
+                $updateSql = 'UPDATE customers SET ' . implode(', ', $updates) . ' WHERE id = ?';
+                $updateStmt = $pdo->prepare($updateSql);
+                $updateStmt->execute($updateValues);
+                customerSessionRefresh();
+            }
+        }
+
         // Insert order items and update stock
         foreach ($cartItems as $item) {
             $variantId = $item['variant_id'] ?? null;
@@ -760,6 +857,10 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                 </a>
             </div>
 
+            <a href="<?= htmlspecialchars($shopUrl) ?>" class="continue-shopping-btn">
+                <i class="fas fa-arrow-left"></i> Continue Shopping
+            </a>
+
             <div class="account-menu" data-account-menu>
                 <?php if ($isCustomerAuthenticated): ?>
                     <button type="button" class="account-menu__trigger" data-account-trigger aria-haspopup="true" aria-expanded="false">
@@ -778,10 +879,6 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                     </a>
                 <?php endif; ?>
             </div>
-
-            <a href="<?= htmlspecialchars($shopUrl) ?>" class="continue-shopping-btn">
-                <i class="fas fa-arrow-left"></i> Continue Shopping
-            </a>
         </div>
     </header>
 
@@ -805,6 +902,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             <?php endif; ?>
             <form method="post" enctype="multipart/form-data">
                 <input type="hidden" name="cart" value='<?= htmlspecialchars(json_encode($cartItems)) ?>'>
+                <input type="hidden" name="address_mode" value="<?= htmlspecialchars($addressMode) ?>" data-billing-mode-input>
                 
                 <!-- Contact Section -->
                 <div class="section">
@@ -815,46 +913,80 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                     <div class="form-group">
                         <!-- Required indicator styling hook: edit .required-indicator in dgz_motorshop_system/assets/css/public/checkout.css -->
                         <label>Email <span class="required-indicator">*</span></label>
-                        <input type="email" name="email" placeholder="you@example.com" value="<?= htmlspecialchars($_POST['email'] ?? '') ?>" required>
+                        <input type="email" name="email" placeholder="you@example.com" value="<?= htmlspecialchars($formValues['email']) ?>" required>
                     </div>
                     <div class="form-group">
                         <label>Mobile number <span class="required-indicator">*</span></label>
-                        <input type="tel" name="phone" placeholder="Mobile No." inputmode="numeric" maxlength="12" value="<?= htmlspecialchars($_POST['phone'] ?? '') ?>" required>
+                        <input type="tel" name="phone" placeholder="Mobile No." inputmode="numeric" maxlength="12" value="<?= htmlspecialchars($formValues['phone']) ?>" required>
                     </div>
                     <div class="form-group">
                         <label>Facebook account <span class="required-indicator">*</span></label>
-                        <input type="text" name="facebook_account" placeholder="Facebook profile or link" value="<?= htmlspecialchars($_POST['facebook_account'] ?? '') ?>" required>
+                        <input type="text" name="facebook_account" placeholder="Facebook profile or link" value="<?= htmlspecialchars($formValues['facebook_account']) ?>" required>
                     </div>
                 </div>
 
                 <!-- Billing Address Section -->
-                <div class="section">
+                <div class="section section--billing" data-billing-section data-billing-mode="<?= htmlspecialchars($addressMode) ?>">
                     <h2 class="section-title">
                         <i class="fas fa-map-marker-alt"></i>
                         Billing Address
                     </h2>
-                    <div class="form-group">
-                        <label>Full name <span class="required-indicator">*</span></label>
-                        <input type="text" name="customer_name" value="<?= htmlspecialchars($_POST['customer_name'] ?? '') ?>" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Address <span class="required-indicator">*</span></label>
-                        <textarea name="address" placeholder="Street address, apartment, suite, etc." required><?= htmlspecialchars($_POST['address'] ?? '') ?></textarea>
-                    </div>
-                    <div class="form-row">
+                    <?php if ($showAddressSummary): ?>
+                        <div class="billing-summary" data-billing-summary>
+                            <dl class="billing-summary__details">
+                                <div>
+                                    <dt>Name</dt>
+                                    <dd><?= htmlspecialchars($formValues['customer_name']) ?></dd>
+                                </div>
+                                <div>
+                                    <dt>Address</dt>
+                                    <dd><?= nl2br(htmlspecialchars($formValues['address'])) ?></dd>
+                                </div>
+                                <div class="billing-summary__inline">
+                                    <div>
+                                        <dt>City</dt>
+                                        <dd><?= htmlspecialchars($formValues['city']) ?></dd>
+                                    </div>
+                                    <div>
+                                        <dt>Postal code</dt>
+                                        <dd><?= htmlspecialchars($formValues['postal_code']) ?></dd>
+                                    </div>
+                                </div>
+                            </dl>
+                            <p class="billing-summary__hint">We’ll reuse this billing information for future orders.</p>
+                            <button type="button" class="billing-summary__edit" data-billing-edit>
+                                <i class="fas fa-pen"></i>
+                                Edit billing address
+                            </button>
+                        </div>
+                    <?php endif; ?>
+                    <div class="billing-form<?= $showAddressSummary ? ' is-hidden' : '' ?>" data-billing-form <?= $showAddressSummary ? 'hidden' : '' ?>>
                         <div class="form-group">
-                            <label>Postal code <span class="required-indicator">*</span></label>
-                            <input type="text" name="postal_code" value="<?= htmlspecialchars($_POST['postal_code'] ?? '') ?>" required>
+                            <label>Full name <span class="required-indicator">*</span></label>
+                            <input type="text" name="customer_name" value="<?= htmlspecialchars($formValues['customer_name']) ?>" <?= $showAddressSummary ? '' : 'required' ?> data-billing-required>
                         </div>
                         <div class="form-group">
-                            <label>City <span class="required-indicator">*</span></label>
-                            <input type="text" name="city" value="<?= htmlspecialchars($_POST['city'] ?? '') ?>" required>
+                            <label>Address <span class="required-indicator">*</span></label>
+                            <textarea name="address" placeholder="Street address, apartment, suite, etc." <?= $showAddressSummary ? '' : 'required' ?> data-billing-required><?= htmlspecialchars($formValues['address']) ?></textarea>
                         </div>
-                    </div>
-                    <div class="form-group">
-                        <!-- Added note textarea so customers can leave instructions for the cashier -->
-                        <label for="customer_note">Notes for the cashier</label>
-                        <textarea name="customer_note" id="customer_note" maxlength="500" placeholder="Add delivery instructions, preferred pickup time, etc."><?= htmlspecialchars($_POST['customer_note'] ?? '') ?></textarea>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Postal code <span class="required-indicator">*</span></label>
+                                <input type="text" name="postal_code" value="<?= htmlspecialchars($formValues['postal_code']) ?>" <?= $showAddressSummary ? '' : 'required' ?> data-billing-required>
+                            </div>
+                            <div class="form-group">
+                                <label>City <span class="required-indicator">*</span></label>
+                                <input type="text" name="city" value="<?= htmlspecialchars($formValues['city']) ?>" <?= $showAddressSummary ? '' : 'required' ?> data-billing-required>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <!-- Added note textarea so customers can leave instructions for the cashier -->
+                            <label for="customer_note">Notes for the cashier</label>
+                            <textarea name="customer_note" id="customer_note" maxlength="500" placeholder="Add delivery instructions, preferred pickup time, etc."><?= htmlspecialchars($formValues['customer_note']) ?></textarea>
+                        </div>
+                        <?php if ($showAddressSummary): ?>
+                            <button type="button" class="billing-form__cancel" data-billing-cancel>Cancel</button>
+                        <?php endif; ?>
                     </div>
                 </div>
 

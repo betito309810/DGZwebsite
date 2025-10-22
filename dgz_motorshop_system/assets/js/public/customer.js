@@ -118,6 +118,107 @@
         }
     }
 
+    const billingSection = document.querySelector('[data-billing-section]');
+    if (billingSection) {
+        const modeInput = document.querySelector('[data-billing-mode-input]');
+        const summary = billingSection.querySelector('[data-billing-summary]');
+        const form = billingSection.querySelector('[data-billing-form]');
+        const editButton = billingSection.querySelector('[data-billing-edit]');
+        const cancelButton = billingSection.querySelector('[data-billing-cancel]');
+        const requiredFields = form ? Array.from(form.querySelectorAll('[data-billing-required]')) : [];
+
+        const setMode = (mode) => {
+            const nextMode = mode === 'edit' ? 'edit' : 'summary';
+            billingSection.dataset.billingMode = nextMode;
+            if (modeInput) {
+                modeInput.value = nextMode;
+            }
+
+            if (nextMode === 'edit') {
+                if (summary) {
+                    summary.setAttribute('hidden', '');
+                }
+                if (form) {
+                    form.classList.remove('is-hidden');
+                    form.removeAttribute('hidden');
+                }
+                requiredFields.forEach((field) => field.setAttribute('required', ''));
+                const firstEditable = form ? form.querySelector('input, textarea') : null;
+                if (firstEditable && typeof firstEditable.focus === 'function') {
+                    window.requestAnimationFrame(() => firstEditable.focus());
+                }
+            } else {
+                if (summary) {
+                    summary.removeAttribute('hidden');
+                }
+                if (form) {
+                    form.classList.add('is-hidden');
+                    form.setAttribute('hidden', '');
+                }
+                requiredFields.forEach((field) => field.removeAttribute('required'));
+            }
+        };
+
+        if (billingSection.dataset.billingMode === 'edit') {
+            requiredFields.forEach((field) => field.setAttribute('required', ''));
+        } else {
+            requiredFields.forEach((field) => field.removeAttribute('required'));
+        }
+
+        editButton?.addEventListener('click', (event) => {
+            event.preventDefault();
+            setMode('edit');
+        });
+
+        cancelButton?.addEventListener('click', (event) => {
+            event.preventDefault();
+            setMode('summary');
+        });
+    }
+
+    document.querySelectorAll('[data-order-card]').forEach((card) => {
+        const toggle = card.querySelector('[data-order-toggle]');
+        const details = card.querySelector('[data-order-details]');
+        if (!toggle || !details) {
+            return;
+        }
+
+        const label = toggle.querySelector('[data-order-toggle-label]');
+        const header = card.querySelector('.customer-order-card__header');
+
+        const setExpanded = (expanded) => {
+            const isExpanded = Boolean(expanded);
+            toggle.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+            if (isExpanded) {
+                details.removeAttribute('hidden');
+                card.classList.add('is-expanded');
+                if (label) {
+                    label.textContent = 'Hide order details';
+                }
+            } else {
+                details.setAttribute('hidden', '');
+                card.classList.remove('is-expanded');
+                if (label) {
+                    label.textContent = 'View order details';
+                }
+            }
+        };
+
+        toggle.addEventListener('click', (event) => {
+            event.preventDefault();
+            const expanded = toggle.getAttribute('aria-expanded') === 'true';
+            setExpanded(!expanded);
+        });
+
+        header?.addEventListener('click', (event) => {
+            if (event.target.closest('[data-order-toggle]')) {
+                return;
+            }
+            const expanded = toggle.getAttribute('aria-expanded') === 'true';
+            setExpanded(!expanded);
+        });
+    });
+
     // Utility to expose acceptance state
     document.addEventListener('terms:reset', () => {
         try {

@@ -5,11 +5,16 @@ require __DIR__ . '/dgz_motorshop_system/includes/customer_session.php';
 requireCustomerAuthentication();
 $customer = getAuthenticatedCustomer();
 
+$customerSessionState = customerSessionExport();
+$customerFirstName = $customerSessionState['firstName'] ?? extractCustomerFirstName($customer['full_name'] ?? '');
+
 $customerStylesheet = assetUrl('assets/css/public/customer.css');
 $indexStylesheet = assetUrl('assets/css/public/index.css');
 $customerScript = assetUrl('assets/js/public/customer.js');
 $logoAsset = assetUrl('assets/logo.png');
 $homeUrl = orderingUrl('index.php');
+$logoutUrl = orderingUrl('logout.php');
+$myOrdersUrl = orderingUrl('my_orders.php');
 
 $pdo = db();
 $alerts = [
@@ -66,9 +71,74 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_order_id'])) {
     }
 }
 
-$orderStmt = $pdo->prepare('SELECT id, tracking_code, created_at, total, status FROM orders WHERE customer_id = ? ORDER BY created_at DESC');
+if (!function_exists('ordersColumnExists')) {
+    function ordersColumnExists(PDO $pdo, string $column): bool
+    {
+        static $cache = [];
+        if (array_key_exists($column, $cache)) {
+            return $cache[$column];
+        }
+
+        try {
+            $stmt = $pdo->prepare("SHOW COLUMNS FROM orders LIKE ?");
+            $stmt->execute([$column]);
+            $cache[$column] = $stmt !== false && $stmt->fetch() !== false;
+        } catch (Throwable $exception) {
+            error_log('Unable to inspect orders column ' . $column . ': ' . $exception->getMessage());
+            $cache[$column] = false;
+        }
+
+        return $cache[$column];
+    }
+}
+
+$orderColumns = ['id', 'tracking_code', 'created_at', 'total', 'status', 'customer_name', 'address'];
+foreach (['postal_code', 'city', 'email', 'phone', 'facebook_account', 'customer_note', 'reference_no'] as $column) {
+    if (ordersColumnExists($pdo, $column)) {
+        $orderColumns[] = $column;
+    }
+}
+
+$orderColumns = array_unique($orderColumns);
+$orderSql = 'SELECT ' . implode(', ', $orderColumns) . ' FROM orders WHERE customer_id = ? ORDER BY created_at DESC';
+$orderStmt = $pdo->prepare($orderSql);
 $orderStmt->execute([(int) $customer['id']]);
 $orders = $orderStmt->fetchAll(PDO::FETCH_ASSOC);
+
+$orderItemsMap = [];
+if (!empty($orders)) {
+    $orderIds = array_column($orders, 'id');
+    $placeholders = implode(',', array_fill(0, count($orderIds), '?'));
+    $itemsSql = 'SELECT oi.order_id, oi.qty, oi.price, oi.variant_label, oi.description, p.name AS product_name '
+        . 'FROM order_items oi '
+        . 'LEFT JOIN products p ON oi.product_id = p.id '
+        . 'WHERE oi.order_id IN (' . $placeholders . ') '
+        . 'ORDER BY oi.id';
+    $itemStmt = $pdo->prepare($itemsSql);
+    $itemStmt->execute($orderIds);
+
+    while ($row = $itemStmt->fetch(PDO::FETCH_ASSOC)) {
+        $orderId = (int) ($row['order_id'] ?? 0);
+        if ($orderId === 0) {
+            continue;
+        }
+        if (!isset($orderItemsMap[$orderId])) {
+            $orderItemsMap[$orderId] = [];
+        }
+        $productName = trim((string) ($row['product_name'] ?? ''));
+        $description = trim((string) ($row['description'] ?? ''));
+        $displayName = $productName !== '' ? $productName : ($description !== '' ? $description : 'Item');
+        $variantLabel = trim((string) ($row['variant_label'] ?? ''));
+        $quantity = (int) ($row['qty'] ?? 0);
+        $price = isset($row['price']) ? (float) $row['price'] : 0.0;
+        $orderItemsMap[$orderId][] = [
+            'name' => $displayName,
+            'variant' => $variantLabel,
+            'quantity' => $quantity,
+            'price' => $price,
+        ];
+    }
+}
 
 $statusLabels = [
     'pending' => 'Pending review',
@@ -90,14 +160,29 @@ $statusLabels = [
     <link rel="stylesheet" href="<?= htmlspecialchars($indexStylesheet) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars($customerStylesheet) ?>">
 </head>
-<body class="customer-orders-page">
+<body class="customer-orders-page" data-customer-session="authenticated" data-customer-first-name="<?= htmlspecialchars($customerFirstName) ?>">
 <header class="customer-orders-header">
-    <a href="<?= htmlspecialchars($homeUrl) ?>" class="customer-orders-logo">
-        <img src="<?= htmlspecialchars($logoAsset) ?>" alt="DGZ Motorshop logo">
-    </a>
-    <div class="customer-orders-meta">
-        <span>Signed in as <strong><?= htmlspecialchars($customer['full_name'] ?? '') ?></strong></span>
-        <a class="customer-orders-link" href="<?= htmlspecialchars(orderingUrl('logout.php')) ?>">Logout</a>
+    <div class="customer-orders-brand">
+        <a href="<?= htmlspecialchars($homeUrl) ?>" class="customer-orders-logo">
+            <img src="<?= htmlspecialchars($logoAsset) ?>" alt="DGZ Motorshop logo">
+        </a>
+    </div>
+    <div class="customer-orders-actions">
+        <a href="<?= htmlspecialchars($homeUrl) ?>" class="customer-orders-continue">
+            <i class="fas fa-arrow-left" aria-hidden="true"></i>
+            Continue Shopping
+        </a>
+        <div class="account-menu" data-account-menu>
+            <button type="button" class="account-menu__trigger" data-account-trigger aria-haspopup="true" aria-expanded="false">
+                <span class="account-menu__avatar" aria-hidden="true"><i class="fas fa-user-circle"></i></span>
+                <span class="account-menu__label"><?= htmlspecialchars($customerFirstName) ?></span>
+                <i class="fas fa-chevron-down" aria-hidden="true"></i>
+            </button>
+            <div class="account-menu__dropdown" data-account-dropdown hidden>
+                <a href="<?= htmlspecialchars($myOrdersUrl) ?>" class="account-menu__link">My Orders</a>
+                <a href="<?= htmlspecialchars($logoutUrl) ?>" class="account-menu__link">Logout</a>
+            </div>
+        </div>
     </div>
 </header>
 <main class="customer-orders-wrapper">
@@ -124,7 +209,30 @@ $statusLabels = [
                         $orderDateFormatted = $orderDateRaw;
                     }
                 ?>
-                <article class="customer-order-card">
+                <?php
+                    $orderId = (int) $order['id'];
+                    $orderItems = $orderItemsMap[$orderId] ?? [];
+                    $contactEmail = trim((string) ($order['email'] ?? ''));
+                    $contactPhone = trim((string) ($order['phone'] ?? ''));
+                    $facebookAccount = trim((string) ($order['facebook_account'] ?? ''));
+                    $referenceNumber = trim((string) ($order['reference_no'] ?? ''));
+                    $addressLine = trim((string) ($order['address'] ?? ''));
+                    $postalCode = trim((string) ($order['postal_code'] ?? ''));
+                    $city = trim((string) ($order['city'] ?? ''));
+                    $billingLines = [];
+                    if ($addressLine !== '') {
+                        $billingLines[] = $addressLine;
+                    }
+                    $cityLineParts = array_filter([$city, $postalCode], static function ($value) {
+                        return trim((string) $value) !== '';
+                    });
+                    if (!empty($cityLineParts)) {
+                        $billingLines[] = implode(', ', array_map('trim', $cityLineParts));
+                    }
+                    $billingDisplay = implode("\n", $billingLines);
+                    $customerNote = trim((string) ($order['customer_note'] ?? ''));
+                ?>
+                <article class="customer-order-card" data-order-card>
                     <header class="customer-order-card__header">
                         <div>
                             <h2>Order #<?= (int) $order['id'] ?></h2>
@@ -132,11 +240,17 @@ $statusLabels = [
                                 <p class="customer-order-card__tracking">Tracking code: <?= htmlspecialchars($order['tracking_code']) ?></p>
                             <?php endif; ?>
                         </div>
-                        <span class="customer-order-card__status customer-order-card__status--<?= htmlspecialchars($order['status']) ?>">
-                            <?= htmlspecialchars($statusLabels[$order['status']] ?? ucfirst($order['status'])) ?>
-                        </span>
+                        <div class="customer-order-card__meta">
+                            <span class="customer-order-card__status customer-order-card__status--<?= htmlspecialchars($order['status']) ?>">
+                                <?= htmlspecialchars($statusLabels[$order['status']] ?? ucfirst($order['status'])) ?>
+                            </span>
+                            <button type="button" class="customer-order-card__toggle" data-order-toggle aria-expanded="false">
+                                <span data-order-toggle-label>View order details</span>
+                                <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                            </button>
+                        </div>
                     </header>
-                    <dl class="customer-order-card__details">
+                    <dl class="customer-order-card__summary">
                         <div>
                             <dt>Placed on</dt>
                             <dd><?= htmlspecialchars($orderDateFormatted) ?></dd>
@@ -146,12 +260,71 @@ $statusLabels = [
                             <dd>₱<?= number_format((float) $order['total'], 2) ?></dd>
                         </div>
                     </dl>
-                    <?php if ($order['status'] === 'approved'): ?>
-                        <form method="post" class="customer-order-card__actions" data-customer-cancel-form>
-                            <input type="hidden" name="cancel_order_id" value="<?= (int) $order['id'] ?>">
-                            <button type="submit" class="customer-order-card__button customer-order-card__button--danger">Cancel order</button>
-                        </form>
-                    <?php endif; ?>
+                    <div class="customer-order-card__details-panel" data-order-details hidden>
+                        <div class="customer-order-card__items">
+                            <h3>Items</h3>
+                            <?php if (empty($orderItems)): ?>
+                                <p class="customer-order-card__empty">No items were recorded for this order.</p>
+                            <?php else: ?>
+                                <?php foreach ($orderItems as $item): ?>
+                                    <?php $lineTotal = max(0, (int) $item['quantity']) * (float) $item['price']; ?>
+                                    <div class="customer-order-item">
+                                        <div>
+                                            <p class="customer-order-item__name"><?= htmlspecialchars($item['name']) ?></p>
+                                            <?php if (($item['variant'] ?? '') !== ''): ?>
+                                                <p class="customer-order-item__variant">Variant: <?= htmlspecialchars($item['variant']) ?></p>
+                                            <?php endif; ?>
+                                        </div>
+                                        <div class="customer-order-item__meta">
+                                            <span><?= (int) $item['quantity'] ?> × ₱<?= number_format((float) $item['price'], 2) ?></span>
+                                            <span class="customer-order-item__total">₱<?= number_format($lineTotal, 2) ?></span>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </div>
+                        <div class="customer-order-card__info-grid">
+                            <?php if ($contactEmail !== '' || $contactPhone !== '' || $facebookAccount !== '' || $referenceNumber !== ''): ?>
+                                <div class="customer-order-card__section">
+                                    <h3>Contact details</h3>
+                                    <dl>
+                                        <?php if ($contactEmail !== ''): ?>
+                                            <div><dt>Email</dt><dd><?= htmlspecialchars($contactEmail) ?></dd></div>
+                                        <?php endif; ?>
+                                        <?php if ($contactPhone !== ''): ?>
+                                            <div><dt>Mobile</dt><dd><?= htmlspecialchars($contactPhone) ?></dd></div>
+                                        <?php endif; ?>
+                                        <?php if ($facebookAccount !== ''): ?>
+                                            <div><dt>Facebook</dt><dd><?= htmlspecialchars($facebookAccount) ?></dd></div>
+                                        <?php endif; ?>
+                                        <?php if ($referenceNumber !== ''): ?>
+                                            <div><dt>Reference #</dt><dd><?= htmlspecialchars($referenceNumber) ?></dd></div>
+                                        <?php endif; ?>
+                                    </dl>
+                                </div>
+                            <?php endif; ?>
+                            <?php if ($billingDisplay !== ''): ?>
+                                <div class="customer-order-card__section">
+                                    <h3>Billing address</h3>
+                                    <p><?= nl2br(htmlspecialchars($billingDisplay)) ?></p>
+                                </div>
+                            <?php endif; ?>
+                            <?php if ($customerNote !== ''): ?>
+                                <div class="customer-order-card__section">
+                                    <h3>Notes for the cashier</h3>
+                                    <p><?= nl2br(htmlspecialchars($customerNote)) ?></p>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                        <?php if ($order['status'] === 'approved'): ?>
+                            <div class="customer-order-card__footer">
+                                <form method="post" class="customer-order-card__actions" data-customer-cancel-form>
+                                    <input type="hidden" name="cancel_order_id" value="<?= (int) $order['id'] ?>">
+                                    <button type="submit" class="customer-order-card__button customer-order-card__button--danger">Cancel order</button>
+                                </form>
+                            </div>
+                        <?php endif; ?>
+                    </div>
                 </article>
             <?php endforeach; ?>
         </div>
