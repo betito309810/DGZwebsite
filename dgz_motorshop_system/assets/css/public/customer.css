@@ -177,6 +177,12 @@
     font-weight: 400;
 }
 
+.required-indicator {
+    color: #e74c3c;
+    font-weight: 700;
+    margin-left: 0.25rem;
+}
+
 .form-split {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));

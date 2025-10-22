@@ -6,6 +6,52 @@ requireCustomerAuthentication();
 $customer = getAuthenticatedCustomer();
 $pdo = db();
 
+$facebookColumn = customerFindColumn($pdo, ['facebook_account', 'facebook', 'fb_account']);
+$addressColumn = customerFindColumn($pdo, ['address_line1', 'address', 'address1', 'street']);
+$cityColumn = customerFindColumn($pdo, ['city', 'town', 'municipality']);
+$postalColumn = customerFindColumn($pdo, ['postal_code', 'postal', 'zip_code', 'zipcode', 'zip']);
+
+$currentFacebook = trim((string)($customer['facebook_account'] ?? ''));
+if ($currentFacebook === '' && $facebookColumn !== null) {
+    $currentFacebook = trim((string)($customer[$facebookColumn] ?? ''));
+}
+
+$addressSources = array_values(array_unique(array_filter([$addressColumn, 'address_line1', 'address', 'address1', 'street'])));
+$currentAddress = '';
+foreach ($addressSources as $alias) {
+    if (isset($customer[$alias])) {
+        $candidate = trim((string)$customer[$alias]);
+        if ($candidate !== '') {
+            $currentAddress = $candidate;
+            break;
+        }
+    }
+}
+
+$postalSources = array_values(array_unique(array_filter([$postalColumn, 'postal_code', 'postal', 'zip_code', 'zipcode', 'zip'])));
+$currentPostal = '';
+foreach ($postalSources as $alias) {
+    if (isset($customer[$alias])) {
+        $candidate = trim((string)$customer[$alias]);
+        if ($candidate !== '') {
+            $currentPostal = $candidate;
+            break;
+        }
+    }
+}
+
+$citySources = array_values(array_unique(array_filter([$cityColumn, 'city', 'town', 'municipality'])));
+$currentCity = '';
+foreach ($citySources as $alias) {
+    if (isset($customer[$alias])) {
+        $candidate = trim((string)$customer[$alias]);
+        if ($candidate !== '') {
+            $currentCity = $candidate;
+            break;
+        }
+    }
+}
+
 $indexStylesheet = assetUrl('assets/css/public/index.css');
 $customerStylesheet = assetUrl('assets/css/public/customer.css');
 $customerScript = assetUrl('assets/js/public/customer.js');
@@ -17,6 +63,10 @@ $logoutUrl = orderingUrl('logout.php');
 $values = [
     'email' => trim((string)($_POST['email'] ?? ($customer['email'] ?? ''))),
     'phone' => trim((string)($_POST['phone'] ?? ($customer['phone'] ?? ''))),
+    'facebook_account' => trim((string)($_POST['facebook_account'] ?? $currentFacebook)),
+    'address' => trim((string)($_POST['address'] ?? $currentAddress)),
+    'postal_code' => trim((string)($_POST['postal_code'] ?? $currentPostal)),
+    'city' => trim((string)($_POST['city'] ?? $currentCity)),
     'current_password' => '',
     'new_password' => '',
     'confirm_password' => '',
@@ -46,23 +96,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     if ($action === 'profile') {
-        if ($values['email'] !== '' && !filter_var($values['email'], FILTER_VALIDATE_EMAIL)) {
+        if ($values['email'] === '') {
+            $errors['email'] = 'Please enter your email.';
+        } elseif (!filter_var($values['email'], FILTER_VALIDATE_EMAIL)) {
             $errors['email'] = 'Please enter a valid email.';
         }
         // Normalize phone a bit
         $normalizedPhone = normalizeCustomerPhone($values['phone']);
-        if ($values['phone'] !== '' && $normalizedPhone === '') {
+        if ($values['phone'] === '') {
+            $errors['phone'] = 'Please enter your phone number.';
+        } elseif ($normalizedPhone === '') {
             $errors['phone'] = 'Please enter a valid phone number.';
         } else {
             $values['phone'] = $normalizedPhone;
+        }
+
+        if ($values['facebook_account'] === '') {
+            $errors['facebook_account'] = 'Please enter your Facebook account.';
+        }
+
+        if ($values['address'] === '') {
+            $errors['address'] = 'Please enter your address.';
+        }
+
+        if ($values['postal_code'] === '') {
+            $errors['postal_code'] = 'Please enter your postal code.';
+        }
+
+        if ($values['city'] === '') {
+            $errors['city'] = 'Please enter your city.';
         }
 
         if (!$errors) {
             try {
                 $updates = [];
                 $params = [];
-                if ($values['email'] !== (string)($customer['email'] ?? '')) { $updates[] = 'email = ?'; $params[] = $values['email'] !== '' ? $values['email'] : null; }
-                if ($values['phone'] !== (string)($customer['phone'] ?? '')) { $updates[] = 'phone = ?'; $params[] = $values['phone'] !== '' ? $values['phone'] : null; }
+                if ($values['email'] !== (string)($customer['email'] ?? '')) { $updates[] = 'email = ?'; $params[] = $values['email']; }
+                if ($values['phone'] !== (string)($customer['phone'] ?? '')) { $updates[] = 'phone = ?'; $params[] = $values['phone']; }
+                if ($facebookColumn !== null && $values['facebook_account'] !== $currentFacebook) { $updates[] = "`$facebookColumn` = ?"; $params[] = $values['facebook_account']; }
+                if ($addressColumn !== null && $values['address'] !== $currentAddress) { $updates[] = "`$addressColumn` = ?"; $params[] = $values['address']; }
+                if ($postalColumn !== null && $values['postal_code'] !== $currentPostal) { $updates[] = "`$postalColumn` = ?"; $params[] = $values['postal_code']; }
+                if ($cityColumn !== null && $values['city'] !== $currentCity) { $updates[] = "`$cityColumn` = ?"; $params[] = $values['city']; }
                 if ($updates) {
                     $params[] = (int)$customer['id'];
                     $sql = 'UPDATE customers SET ' . implode(', ', $updates) . ', updated_at = NOW() WHERE id = ?';
@@ -70,6 +144,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $stmt->execute($params);
                     customerSessionRefresh();
                     $customer = getAuthenticatedCustomer();
+                    $currentFacebook = trim((string)($customer['facebook_account'] ?? $currentFacebook));
+                    if ($currentFacebook === '' && $facebookColumn !== null) {
+                        $currentFacebook = trim((string)($customer[$facebookColumn] ?? $currentFacebook));
+                    }
+                    $addressSources = array_values(array_unique(array_filter([$addressColumn, 'address_line1', 'address', 'address1', 'street'])));
+                    foreach ($addressSources as $alias) {
+                        if (isset($customer[$alias])) {
+                            $candidate = trim((string)$customer[$alias]);
+                            if ($candidate !== '') {
+                                $currentAddress = $candidate;
+                                break;
+                            }
+                        }
+                    }
+                    $postalSources = array_values(array_unique(array_filter([$postalColumn, 'postal_code', 'postal', 'zip_code', 'zipcode', 'zip'])));
+                    foreach ($postalSources as $alias) {
+                        if (isset($customer[$alias])) {
+                            $candidate = trim((string)$customer[$alias]);
+                            if ($candidate !== '') {
+                                $currentPostal = $candidate;
+                                break;
+                            }
+                        }
+                    }
+                    $citySources = array_values(array_unique(array_filter([$cityColumn, 'city', 'town', 'municipality'])));
+                    foreach ($citySources as $alias) {
+                        if (isset($customer[$alias])) {
+                            $candidate = trim((string)$customer[$alias]);
+                            if ($candidate !== '') {
+                                $currentCity = $candidate;
+                                break;
+                            }
+                        }
+                    }
+                    $values['email'] = trim((string)($customer['email'] ?? $values['email']));
+                    $values['phone'] = trim((string)($customer['phone'] ?? $values['phone']));
+                    $values['facebook_account'] = $currentFacebook;
+                    $values['address'] = $currentAddress;
+                    $values['postal_code'] = $currentPostal;
+                    $values['city'] = $currentCity;
                 }
                 $success[] = 'Profile updated successfully.';
             } catch (Throwable $e) {
@@ -168,13 +282,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <input type="hidden" name="action" value="profile">
                 <div class="form-field">
                     <label for="email">Email</label>
-                    <input type="email" id="email" name="email" value="<?= htmlspecialchars($values['email']) ?>">
+                    <input type="email" id="email" name="email" value="<?= htmlspecialchars($values['email']) ?>" required>
                     <?php if (!empty($errors['email'])): ?><p class="field-error"><?= htmlspecialchars($errors['email']) ?></p><?php endif; ?>
                 </div>
                 <div class="form-field">
                     <label for="phone">Mobile number</label>
-                    <input type="text" id="phone" name="phone" value="<?= htmlspecialchars($values['phone']) ?>">
+                    <input type="text" id="phone" name="phone" value="<?= htmlspecialchars($values['phone']) ?>" required>
                     <?php if (!empty($errors['phone'])): ?><p class="field-error"><?= htmlspecialchars($errors['phone']) ?></p><?php endif; ?>
+                </div>
+                <div class="form-field">
+                    <label for="facebook_account">Facebook account</label>
+                    <input type="text" id="facebook_account" name="facebook_account" value="<?= htmlspecialchars($values['facebook_account']) ?>" required>
+                    <?php if (!empty($errors['facebook_account'])): ?><p class="field-error"><?= htmlspecialchars($errors['facebook_account']) ?></p><?php endif; ?>
+                </div>
+                <div class="form-field">
+                    <label for="address">Address</label>
+                    <textarea id="address" name="address" rows="3" required><?= htmlspecialchars($values['address']) ?></textarea>
+                    <?php if (!empty($errors['address'])): ?><p class="field-error"><?= htmlspecialchars($errors['address']) ?></p><?php endif; ?>
+                </div>
+                <div class="form-field">
+                    <label for="postal_code">Postal code</label>
+                    <input type="text" id="postal_code" name="postal_code" value="<?= htmlspecialchars($values['postal_code']) ?>" required>
+                    <?php if (!empty($errors['postal_code'])): ?><p class="field-error"><?= htmlspecialchars($errors['postal_code']) ?></p><?php endif; ?>
+                </div>
+                <div class="form-field">
+                    <label for="city">City</label>
+                    <input type="text" id="city" name="city" value="<?= htmlspecialchars($values['city']) ?>" required>
+                    <?php if (!empty($errors['city'])): ?><p class="field-error"><?= htmlspecialchars($errors['city']) ?></p><?php endif; ?>
                 </div>
                 <div class="settings-actions"><button class="settings-submit" type="submit">Save</button></div>
             </form>
