@@ -87,7 +87,20 @@ if (!function_exists('normaliseOnlineOrderStatus')) {
     function normaliseOnlineOrderStatus($status): string
     {
         $status = strtolower(trim((string) $status));
-        $allowed = ['pending', 'payment_verification', 'approved', 'delivery', 'completed', 'disapproved'];
+        $allowed = [
+            'pending',
+            'payment_verification',
+            'approved',
+            'delivery',
+            'completed',
+            'complete',
+            'disapproved',
+            'cancelled_by_customer',
+            'cancelled_by_staff',
+            'cancelled',
+            'canceled',
+        ];
+
         return in_array($status, $allowed, true) ? $status : '';
     }
 }
@@ -101,7 +114,12 @@ if (!function_exists('getOnlineOrderStatusOptions')) {
             'approved' => 'Approved',
             'delivery' => 'Out for Delivery',
             'completed' => 'Completed',
+            'complete' => 'Complete',
             'disapproved' => 'Disapproved',
+            'cancelled_by_customer' => 'Cancelled by Customer',
+            'cancelled_by_staff' => 'Cancelled by Staff',
+            'cancelled' => 'Cancelled',
+            'canceled' => 'Cancelled',
         ];
     }
 }
@@ -115,7 +133,12 @@ if (!function_exists('getOnlineOrderStatusTransitions')) {
             'approved' => ['delivery', 'completed'],
             'delivery' => ['completed'],
             'completed' => [],
+            'complete' => ['completed'],
             'disapproved' => [],
+            'cancelled_by_customer' => [],
+            'cancelled_by_staff' => [],
+            'cancelled' => [],
+            'canceled' => [],
         ];
     }
 }
@@ -208,10 +231,9 @@ if (!function_exists('fetchOnlineOrdersData')) {
         $orders = [];
         foreach ($rows as $row) {
             $row = normalizeOnlineOrderRow($row);
-            $statusValue = strtolower((string) ($row['status'] ?? 'pending'));
-            if (!isset($statusOptions[$statusValue])) {
-                $statusValue = 'pending';
-            }
+            $rawStatus = strtolower((string) ($row['status'] ?? ''));
+            $statusValue = $rawStatus !== '' ? $rawStatus : 'pending';
+            $statusLabel = $statusOptions[$statusValue] ?? ucwords(str_replace('_', ' ', $statusValue));
 
             $paymentDetails = parsePaymentProofValue($row['payment_proof'] ?? null, $row['reference_no'] ?? null);
             $referenceNumber = (string) ($paymentDetails['reference'] ?? '');
@@ -262,7 +284,7 @@ if (!function_exists('fetchOnlineOrdersData')) {
                 'reference_number' => $referenceNumber !== '' ? $referenceNumber : (string) ($row['reference_no'] ?? ''),
                 'proof_image_url' => $proofImage,
                 'status_value' => $statusValue,
-                'status_label' => $statusOptions[$statusValue] ?? ucfirst($statusValue),
+                'status_label' => $statusLabel,
                 'status_badge_class' => 'status-' . $statusValue,
                 'available_status_changes' => $transitionOptions,
                 'status_form_disabled' => empty($transitionOptions),
