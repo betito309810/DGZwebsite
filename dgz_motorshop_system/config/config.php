@@ -547,6 +547,161 @@ if (!function_exists('publicAsset')) {
  * @param string|null $fallbackReference Optional reference number to use when the value
  *                                       does not contain one.
  */
+if (!function_exists('ordersHasColumn')) {
+    function ordersHasColumn(PDO $pdo, string $column): bool
+    {
+        static $cache = [];
+
+        $column = trim($column);
+        if ($column === '') {
+            return false;
+        }
+
+        $key = strtolower($column);
+        if (array_key_exists($key, $cache)) {
+            return $cache[$key];
+        }
+
+        try {
+            $stmt = $pdo->prepare("SHOW COLUMNS FROM orders LIKE ?");
+            if ($stmt && $stmt->execute([$column])) {
+                $cache[$key] = $stmt->fetch(PDO::FETCH_ASSOC) !== false;
+            } else {
+                $cache[$key] = false;
+            }
+        } catch (Throwable $e) {
+            error_log('Unable to check orders column ' . $column . ': ' . $e->getMessage());
+            $cache[$key] = false;
+        }
+
+        return $cache[$key];
+    }
+}
+
+if (!function_exists('customersHasColumn')) {
+    function customersHasColumn(PDO $pdo, string $column): bool
+    {
+        static $cache = [];
+
+        $column = trim($column);
+        if ($column === '') {
+            return false;
+        }
+
+        $key = strtolower($column);
+        if (array_key_exists($key, $cache)) {
+            return $cache[$key];
+        }
+
+        try {
+            $stmt = $pdo->prepare("SHOW COLUMNS FROM customers LIKE ?");
+            if ($stmt && $stmt->execute([$column])) {
+                $cache[$key] = $stmt->fetch(PDO::FETCH_ASSOC) !== false;
+            } else {
+                $cache[$key] = false;
+            }
+        } catch (Throwable $e) {
+            error_log('Unable to check customers column ' . $column . ': ' . $e->getMessage());
+            $cache[$key] = false;
+        }
+
+        return $cache[$key];
+    }
+}
+
+if (!function_exists('resolveOrderContactDetails')) {
+    function resolveOrderContactDetails(array $row): array
+    {
+        $emailCandidates = [];
+        foreach ([
+            'email',
+            'contact',
+            'contact_email',
+            'customer_email',
+            'customer_contact',
+            'customer_contact_email',
+            'legacy_contact',
+        ] as $key) {
+            if (!empty($row[$key])) {
+                $emailCandidates[] = $row[$key];
+            }
+        }
+
+        $email = '';
+        foreach ($emailCandidates as $candidate) {
+            $candidate = trim((string) $candidate);
+            if ($candidate !== '' && filter_var($candidate, FILTER_VALIDATE_EMAIL)) {
+                $email = $candidate;
+                break;
+            }
+        }
+
+        $phoneCandidates = [];
+        foreach ([
+            'phone',
+            'contact_number',
+            'contact_no',
+            'contact',
+            'mobile',
+            'telephone',
+            'customer_phone',
+            'customer_contact',
+            'customer_contact_number',
+            'customer_phone_value',
+        ] as $key) {
+            if (!empty($row[$key])) {
+                $phoneCandidates[] = $row[$key];
+            }
+        }
+
+        $phone = '';
+        foreach ($phoneCandidates as $candidate) {
+            $candidate = trim((string) $candidate);
+            if ($candidate !== '') {
+                $phone = $candidate;
+                break;
+            }
+        }
+
+        $nameCandidates = [];
+        foreach ([
+            'customer_name',
+            'full_name',
+            'name',
+            'customer_full_name',
+            'customer_name_value',
+        ] as $key) {
+            if (!empty($row[$key])) {
+                $nameCandidates[] = $row[$key];
+            }
+        }
+
+        $name = '';
+        foreach ($nameCandidates as $candidate) {
+            $candidate = trim((string) $candidate);
+            if ($candidate !== '') {
+                $name = $candidate;
+                break;
+            }
+        }
+
+        if ($name === '') {
+            $first = isset($row['first_name']) ? trim((string) $row['first_name']) : '';
+            $last = isset($row['last_name']) ? trim((string) $row['last_name']) : '';
+            $combined = trim($first . ' ' . $last);
+            if ($combined !== '') {
+                $name = $combined;
+            }
+        }
+
+        return [
+            'email' => $email,
+            'phone' => $phone,
+            'name' => $name,
+        ];
+    }
+}
+
 if (!function_exists('ordersSupportsProcessedBy')) {
     function ordersSupportsProcessedBy(PDO $pdo): bool
     {

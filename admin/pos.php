@@ -482,25 +482,35 @@ function prepareOrderItemsData(PDO $pdo, int $orderId): array
 function fetchOrderNotificationContext(PDO $pdo, int $orderId): array
 {
     $supportsCustomerAccounts = ordersSupportsCustomerAccounts($pdo);
-    $columns = ['o.customer_name', 'o.total', 'o.created_at'];
-
-    if (ordersHasColumn($pdo, 'email')) {
-        $columns[] = 'o.email';
-    }
-    if (ordersHasColumn($pdo, 'phone')) {
-        $columns[] = 'o.phone';
-    }
-    if (ordersHasColumn($pdo, 'contact')) {
-        $columns[] = 'o.contact AS legacy_contact';
-    }
-    if (ordersSupportsInvoiceNumbers($pdo)) {
-        $columns[] = 'o.invoice_number';
-    }
+    $columns = ['o.*'];
 
     if ($supportsCustomerAccounts) {
-        $columns[] = 'c.email AS customer_email';
-        $columns[] = 'c.phone AS customer_phone';
-        $columns[] = 'c.full_name AS customer_full_name';
+        if (customersHasColumn($pdo, 'full_name')) {
+            $columns[] = 'c.full_name AS customer_full_name';
+        }
+        if (customersHasColumn($pdo, 'email')) {
+            $columns[] = 'c.email AS customer_email';
+        }
+
+        foreach (['phone', 'contact', 'contact_number', 'contact_no', 'mobile', 'telephone'] as $customerPhoneColumn) {
+            if (customersHasColumn($pdo, $customerPhoneColumn)) {
+                $columns[] = 'c.' . $customerPhoneColumn . ' AS customer_phone';
+                break;
+            }
+        }
+
+        if (customersHasColumn($pdo, 'facebook_account')) {
+            $columns[] = 'c.facebook_account AS customer_facebook_account';
+        }
+        if (customersHasColumn($pdo, 'address')) {
+            $columns[] = 'c.address AS customer_address';
+        }
+        if (customersHasColumn($pdo, 'postal_code')) {
+            $columns[] = 'c.postal_code AS customer_postal_code';
+        }
+        if (customersHasColumn($pdo, 'city')) {
+            $columns[] = 'c.city AS customer_city';
+        }
     }
 
     $sql = 'SELECT ' . implode(', ', $columns) . ' FROM orders o';
@@ -516,40 +526,12 @@ function fetchOrderNotificationContext(PDO $pdo, int $orderId): array
         return [];
     }
 
-    $emailCandidates = [];
-    if (!empty($row['email'])) {
-        $emailCandidates[] = $row['email'];
-    }
-    if (!empty($row['legacy_contact'])) {
-        $emailCandidates[] = $row['legacy_contact'];
-    }
-    if (!empty($row['customer_email'])) {
-        $emailCandidates[] = $row['customer_email'];
-    }
-
-    $email = '';
-    foreach ($emailCandidates as $candidate) {
-        $candidate = trim((string) $candidate);
-        if ($candidate !== '' && filter_var($candidate, FILTER_VALIDATE_EMAIL)) {
-            $email = $candidate;
-            break;
-        }
-    }
-
-    $customerName = trim((string) ($row['customer_name'] ?? ''));
-    if ($customerName === '' && !empty($row['customer_full_name'])) {
-        $customerName = trim((string) $row['customer_full_name']);
-    }
-
-    $phone = trim((string) ($row['phone'] ?? ''));
-    if ($phone === '' && !empty($row['customer_phone'])) {
-        $phone = trim((string) $row['customer_phone']);
-    }
+    $contactDetails = resolveOrderContactDetails($row);
 
     return [
-        'customer_name' => $customerName,
-        'email' => $email,
-        'phone' => $phone,
+        'customer_name' => $contactDetails['name'],
+        'email' => $contactDetails['email'],
+        'phone' => $contactDetails['phone'],
         'invoice_number' => trim((string) ($row['invoice_number'] ?? '')),
         'total' => (float) ($row['total'] ?? 0.0),
         'created_at' => (string) ($row['created_at'] ?? ''),

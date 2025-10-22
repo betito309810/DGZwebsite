@@ -166,14 +166,36 @@ if (!function_exists('fetchOnlineOrdersData')) {
         $customerSelect = '';
         $customerJoin = '';
         if ($supportsCustomerAccounts) {
-            $customerSelect = ',
-                c.full_name AS full_name,
-                c.email AS customer_email,
-                c.phone AS customer_phone,
-                c.facebook_account AS customer_facebook_account,
-                c.address AS customer_address,
-                c.postal_code AS customer_postal_code,
-                c.city AS customer_city';
+            $customerFields = [];
+            if (customersHasColumn($pdo, 'full_name')) {
+                $customerFields[] = 'c.full_name AS full_name';
+            }
+            if (customersHasColumn($pdo, 'email')) {
+                $customerFields[] = 'c.email AS customer_email';
+            }
+            foreach (['phone', 'contact', 'contact_number', 'contact_no', 'mobile', 'telephone'] as $customerPhoneColumn) {
+                if (customersHasColumn($pdo, $customerPhoneColumn)) {
+                    $customerFields[] = 'c.' . $customerPhoneColumn . ' AS customer_phone';
+                    break;
+                }
+            }
+            if (customersHasColumn($pdo, 'facebook_account')) {
+                $customerFields[] = 'c.facebook_account AS customer_facebook_account';
+            }
+            if (customersHasColumn($pdo, 'address')) {
+                $customerFields[] = 'c.address AS customer_address';
+            }
+            if (customersHasColumn($pdo, 'postal_code')) {
+                $customerFields[] = 'c.postal_code AS customer_postal_code';
+            }
+            if (customersHasColumn($pdo, 'city')) {
+                $customerFields[] = 'c.city AS customer_city';
+            }
+
+            if ($customerFields !== []) {
+                $customerSelect = ",\n                " . implode(",\n                ", $customerFields);
+            }
+
             $customerJoin = ' LEFT JOIN customers c ON c.id = orders.customer_id';
         }
 

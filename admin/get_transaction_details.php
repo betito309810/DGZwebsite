@@ -53,7 +53,7 @@ $order_id = (int)$_GET['order_id'];
 
 try {
     // Get order details
-    $buildOrderDetailsQuery = static function (bool $withProcessedBy) use ($supportsCustomerAccounts): string {
+    $buildOrderDetailsQuery = static function (bool $withProcessedBy) use ($supportsCustomerAccounts, $pdo): string {
         $selectParts = [
             'o.*',
             'r.label AS decline_reason_label',
@@ -68,13 +68,30 @@ try {
         }
 
         if ($supportsCustomerAccounts) {
-            $selectParts[] = 'c.full_name AS customer_full_name';
-            $selectParts[] = 'c.email AS customer_email';
-            $selectParts[] = 'c.phone AS customer_phone';
-            $selectParts[] = 'c.facebook_account AS customer_facebook_account';
-            $selectParts[] = 'c.address AS customer_address';
-            $selectParts[] = 'c.postal_code AS customer_postal_code';
-            $selectParts[] = 'c.city AS customer_city';
+            if (customersHasColumn($pdo, 'full_name')) {
+                $selectParts[] = 'c.full_name AS customer_full_name';
+            }
+            if (customersHasColumn($pdo, 'email')) {
+                $selectParts[] = 'c.email AS customer_email';
+            }
+            foreach (['phone', 'contact', 'contact_number', 'contact_no', 'mobile', 'telephone'] as $customerPhoneColumn) {
+                if (customersHasColumn($pdo, $customerPhoneColumn)) {
+                    $selectParts[] = 'c.' . $customerPhoneColumn . ' AS customer_phone';
+                    break;
+                }
+            }
+            if (customersHasColumn($pdo, 'facebook_account')) {
+                $selectParts[] = 'c.facebook_account AS customer_facebook_account';
+            }
+            if (customersHasColumn($pdo, 'address')) {
+                $selectParts[] = 'c.address AS customer_address';
+            }
+            if (customersHasColumn($pdo, 'postal_code')) {
+                $selectParts[] = 'c.postal_code AS customer_postal_code';
+            }
+            if (customersHasColumn($pdo, 'city')) {
+                $selectParts[] = 'c.city AS customer_city';
+            }
         }
 
         $joins = [

@@ -148,6 +148,7 @@ if ($orderId <= 0) {
 
 $pdo = db();
 ensureOrderDeclineSchema($pdo);
+$supportsCustomerAccounts = ordersSupportsCustomerAccounts($pdo);
 
 $storedAttachment = null;
 $existingAttachmentPath = '';
@@ -156,17 +157,43 @@ $declineReason = null;
 try {
     $pdo->beginTransaction();
 
-    $orderStmt = $pdo->prepare(
-        'SELECT id, customer_name, email, status, total, created_at, decline_attachment_path
-         FROM orders
-         WHERE id = ?
-         LIMIT 1'
-    );
+    $selectParts = ['o.*'];
+    if ($supportsCustomerAccounts) {
+        if (customersHasColumn($pdo, 'full_name')) {
+            $selectParts[] = 'c.full_name AS customer_full_name';
+        }
+        if (customersHasColumn($pdo, 'email')) {
+            $selectParts[] = 'c.email AS customer_email';
+        }
+        foreach (['phone', 'contact', 'contact_number', 'contact_no', 'mobile', 'telephone'] as $customerPhoneColumn) {
+            if (customersHasColumn($pdo, $customerPhoneColumn)) {
+                $selectParts[] = 'c.' . $customerPhoneColumn . ' AS customer_phone';
+                break;
+            }
+        }
+    }
+
+    $orderSql = 'SELECT ' . implode(', ', $selectParts) . ' FROM orders o';
+    if ($supportsCustomerAccounts) {
+        $orderSql .= ' LEFT JOIN customers c ON c.id = o.customer_id';
+    }
+    $orderSql .= ' WHERE o.id = ? LIMIT 1';
+
+    $orderStmt = $pdo->prepare($orderSql);
     $orderStmt->execute([$orderId]);
-    $order = $orderStmt->fetch();
+    $order = $orderStmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$order) {
         throw new RuntimeException('Order not found.');
+    }
+
+    $contactDetails = resolveOrderContactDetails($order);
+    $order['email'] = $contactDetails['email'];
+    if ($contactDetails['name'] !== '') {
+        $order['customer_name'] = $contactDetails['name'];
+    }
+    if ($contactDetails['phone'] !== '') {
+        $order['phone'] = $contactDetails['phone'];
     }
 
     $existingAttachmentPath = isset($order['decline_attachment_path']) ? trim((string) $order['decline_attachment_path']) : '';
