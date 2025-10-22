@@ -37,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($values['phone'] !== '') {
-        $normalizedPhone = preg_replace('/[^0-9+]/', '', $values['phone']);
+        $normalizedPhone = normalizeCustomerPhone($values['phone']);
         if ($normalizedPhone === '') {
             $errors['phone'] = 'Please enter a valid phone number.';
         } else {

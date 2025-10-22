@@ -73,6 +73,13 @@ body {
     width: 100%;
 }
 
+.header-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
 .search-bar {
     width: 100%;
     padding: 10px 45px 10px 15px;

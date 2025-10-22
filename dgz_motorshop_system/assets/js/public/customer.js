@@ -97,7 +97,7 @@
 
     if (authGate) {
         authGate.addEventListener('click', (event) => {
-            if (event.target.matches('[data-auth-gate-close]')) {
+            if (event.target && event.target.closest('[data-auth-gate-close]')) {
                 closeAuthGate();
             }
         });

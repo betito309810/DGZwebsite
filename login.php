@@ -31,15 +31,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $pdo = db();
             $candidate = null;
-            $stmt = $pdo->prepare('SELECT id, full_name, email, phone, password_hash FROM customers WHERE email = ? LIMIT 1');
-            if (filter_var($values['identifier'], FILTER_VALIDATE_EMAIL)) {
-                $stmt->execute([$values['identifier']]);
+            $identifier = $values['identifier'];
+
+            if (filter_var($identifier, FILTER_VALIDATE_EMAIL)) {
+                $stmt = $pdo->prepare('SELECT id, full_name, email, phone, password_hash FROM customers WHERE email = ? LIMIT 1');
+                $stmt->execute([$identifier]);
                 $candidate = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
             }
 
             if ($candidate === null) {
+                $normalizedPhone = normalizeCustomerPhone($identifier);
+                if ($normalizedPhone !== '') {
+                    $stmt = $pdo->prepare('SELECT id, full_name, email, phone, password_hash FROM customers WHERE phone = ? LIMIT 1');
+                    $stmt->execute([$normalizedPhone]);
+                    $candidate = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+                }
+            }
+
+            if ($candidate === null && $identifier !== '') {
                 $stmt = $pdo->prepare('SELECT id, full_name, email, phone, password_hash FROM customers WHERE phone = ? LIMIT 1');
-                $stmt->execute([$values['identifier']]);
+                $stmt->execute([$identifier]);
                 $candidate = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
             }
 

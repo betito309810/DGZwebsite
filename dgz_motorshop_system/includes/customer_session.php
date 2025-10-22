@@ -98,6 +98,33 @@ if (!function_exists('extractCustomerFirstName')) {
     }
 }
 
+if (!function_exists('normalizeCustomerPhone')) {
+    function normalizeCustomerPhone(string $input): string
+    {
+        $trimmed = trim($input);
+        if ($trimmed === '') {
+            return '';
+        }
+
+        $clean = preg_replace('/[^0-9+]/', '', $trimmed);
+        if (!is_string($clean)) {
+            return '';
+        }
+
+        $hasLeadingPlus = isset($clean[0]) && $clean[0] === '+';
+        $digitsOnly = preg_replace('/[^0-9]/', '', $clean);
+        if (!is_string($digitsOnly)) {
+            $digitsOnly = '';
+        }
+
+        if ($digitsOnly === '') {
+            return '';
+        }
+
+        return $hasLeadingPlus ? '+' . $digitsOnly : $digitsOnly;
+    }
+}
+
 if (!function_exists('customerLogin')) {
     function customerLogin(int $customerId): void
     {
