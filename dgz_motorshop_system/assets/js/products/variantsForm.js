@@ -26,11 +26,22 @@
         if (trimmed === '') {
             return 0;
         }
-        const parsed = Number.parseInt(trimmed, 10);
-        const clamped = clampQuantityNumber(parsed);
-        if (String(clamped) !== trimmed) {
-            field.value = String(clamped);
+        const digits = trimmed.replace(/\D+/g, '');
+        if (digits === '') {
+            field.value = '';
+            return 0;
         }
+        const limited = digits.slice(0, 4);
+        if (limited !== trimmed) {
+            field.value = limited;
+        }
+        const parsed = Number.parseInt(limited, 10);
+        const clamped = clampQuantityNumber(parsed);
+        if (!Number.isFinite(clamped)) {
+            field.value = '';
+            return 0;
+        }
+        field.value = String(clamped);
         return clamped;
     };
 

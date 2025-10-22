@@ -134,7 +134,7 @@
     };
 
     const highestSuffixByPrefix = parseExistingCodePrefixes();
-    const generatedSuggestions = new Map();
+    const nextSuffixByPrefix = new Map();
 
     const derivePrefixFromCategory = (categoryName) => {
         const key = normaliseCode(categoryName);
@@ -161,29 +161,42 @@
         if (!prefix) {
             return '';
         }
-        const cached = generatedSuggestions.get(prefix);
-        if (cached) {
-            return cached;
-        }
-        const nextIndex = (highestSuffixByPrefix.get(prefix) ?? 0) + 1;
-        const suggestion = `${prefix}${String(nextIndex).padStart(CODE_SUFFIX_WIDTH, '0')}`;
-        generatedSuggestions.set(prefix, suggestion);
-        return suggestion;
+        const lastUsed = nextSuffixByPrefix.has(prefix)
+            ? nextSuffixByPrefix.get(prefix)
+            : (highestSuffixByPrefix.get(prefix) ?? 0);
+        const nextIndex = lastUsed + 1;
+        nextSuffixByPrefix.set(prefix, nextIndex);
+        return `${prefix}${String(nextIndex).padStart(CODE_SUFFIX_WIDTH, '0')}`;
     };
 
-    const markManualOverride = (input) => {
-        if (input) {
-            input.dataset.manualCode = '1';
+    const releaseSuggestionForInput = (input) => {
+        if (!input) {
+            return;
+        }
+        const prefix = input.dataset.codePrefix;
+        const suggestion = input.dataset.codeSuggestion;
+        if (!prefix || !suggestion) {
+            return;
+        }
+        const current = nextSuffixByPrefix.get(prefix);
+        if (!Number.isFinite(current)) {
+            return;
+        }
+        const suffixPart = suggestion.slice(prefix.length);
+        const suffixNumber = Number.parseInt(suffixPart, 10);
+        if (!Number.isFinite(suffixNumber)) {
+            return;
+        }
+        if (current === suffixNumber) {
+            const highestPersisted = highestSuffixByPrefix.get(prefix) ?? 0;
+            const fallback = suffixNumber - 1;
+            if (fallback <= highestPersisted) {
+                nextSuffixByPrefix.delete(prefix);
+            } else {
+                nextSuffixByPrefix.set(prefix, fallback);
+            }
         }
     };
-
-    const clearManualOverride = (input) => {
-        if (input) {
-            delete input.dataset.manualCode;
-        }
-    };
-
-    const hasManualOverride = (input) => Boolean(input?.dataset.manualCode === '1');
 
     const normaliseQuantityInput = (input) => {
         if (!input) {
@@ -194,11 +207,22 @@
         if (trimmed === '') {
             return 0;
         }
-        const parsed = Number.parseInt(trimmed, 10);
-        const clamped = clampQuantityNumber(parsed);
-        if (String(clamped) !== trimmed) {
-            input.value = String(clamped);
+        const digits = trimmed.replace(/\D+/g, '');
+        if (digits === '') {
+            input.value = '';
+            return 0;
         }
+        const limited = digits.slice(0, 4);
+        if (limited !== trimmed) {
+            input.value = limited;
+        }
+        const parsed = Number.parseInt(limited, 10);
+        const clamped = clampQuantityNumber(parsed);
+        if (!Number.isFinite(clamped)) {
+            input.value = '';
+            return 0;
+        }
+        input.value = String(clamped);
         return clamped;
     };
 
@@ -252,24 +276,42 @@
     };
 
     const autoFillProductCode = (codeInput, selectEl, textInput) => {
-        if (!codeInput || hasManualOverride(codeInput)) {
-            return;
-        }
-        if (normaliseText(codeInput.value) !== '') {
+        if (!codeInput) {
             return;
         }
         const categoryName = deriveSelectedCategory(selectEl, textInput);
         if (!categoryName) {
+            releaseSuggestionForInput(codeInput);
+            delete codeInput.dataset.codePrefix;
+            delete codeInput.dataset.codeSuggestion;
+            codeInput.value = '';
             return;
         }
         const prefix = derivePrefixFromCategory(categoryName);
         if (!prefix) {
+            releaseSuggestionForInput(codeInput);
+            delete codeInput.dataset.codePrefix;
+            delete codeInput.dataset.codeSuggestion;
+            codeInput.value = '';
+            return;
+        }
+        const lastPrefix = codeInput.dataset.codePrefix;
+        const lastSuggestion = codeInput.dataset.codeSuggestion;
+        if (lastPrefix && lastPrefix !== prefix) {
+            releaseSuggestionForInput(codeInput);
+            delete codeInput.dataset.codePrefix;
+            delete codeInput.dataset.codeSuggestion;
+        }
+        if (lastPrefix === prefix && lastSuggestion) {
+            codeInput.value = lastSuggestion;
             return;
         }
         const suggestion = getNextCodeForPrefix(prefix);
         if (!suggestion) {
             return;
         }
+        codeInput.dataset.codePrefix = prefix;
+        codeInput.dataset.codeSuggestion = suggestion;
         codeInput.value = suggestion;
     };
 
@@ -286,17 +328,6 @@
         const editQuantityInput = document.getElementById('edit_quantity');
         const editLowInput = document.getElementById('edit_low');
 
-        if (addCodeInput) {
-            addCodeInput.addEventListener('input', () => {
-                const trimmed = normaliseText(addCodeInput.value);
-                if (trimmed === '') {
-                    clearManualOverride(addCodeInput);
-                } else {
-                    markManualOverride(addCodeInput);
-                }
-            });
-        }
-
         const triggerAutoFill = () => autoFillProductCode(addCodeInput, addCategorySelect, addCategoryNewInput);
 
         addCategorySelect?.addEventListener('change', () => {
@@ -312,8 +343,10 @@
 
         document.getElementById('openAddModal')?.addEventListener('click', () => {
             if (addCodeInput) {
+                releaseSuggestionForInput(addCodeInput);
                 addCodeInput.value = '';
-                clearManualOverride(addCodeInput);
+                delete addCodeInput.dataset.codePrefix;
+                delete addCodeInput.dataset.codeSuggestion;
             }
             updateLowStockField(addLowInput, 0);
         });

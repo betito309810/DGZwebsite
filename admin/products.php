@@ -1607,7 +1607,7 @@ if ($currentSort === 'name') {
                                 <!-- Updated: Field wrapper keeps inputs aligned within the new grid layout. -->
                                 <div class="product-modal__field">
                                     <label for="addProductCode">Product Code</label>
-                                    <input id="addProductCode" name="code" required placeholder="Enter product code">
+                                    <input id="addProductCode" name="code" required placeholder="Code auto-generated from category" readonly>
                                 </div>
                                 <div class="product-modal__field">
                                     <label for="addProductName">Name</label>
@@ -2037,7 +2037,7 @@ if ($currentSort === 'name') {
                                 <!-- Added: Layout mirrors the add modal so both dialogs remain consistent. -->
                                 <div class="product-modal__field">
                                     <label for="edit_code">Product Code</label>
-                                    <input name="code" id="edit_code" required placeholder="Enter product code">
+                                    <input name="code" id="edit_code" required placeholder="Code auto-generated from category" readonly>
                                 </div>
                                 <div class="product-modal__field">
                                     <label for="edit_name">Name</label>
