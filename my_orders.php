@@ -463,6 +463,8 @@ if ($orderProofColumn !== null) {
 }
 
 $statusFilter = isset($_GET['status']) ? strtolower(trim((string) $_GET['status'])) : '';
+$completedStatusFilters = ['complete', 'completed'];
+$isCompletedFilter = in_array($statusFilter, $completedStatusFilters, true);
 $orderWhereParts = [];
 $orderParams = [];
 
@@ -473,9 +475,16 @@ if ($customerIdColumn === null) {
     $orderParams[] = (int) $customer['id'];
 }
 
-if ($statusFilter === 'complete') {
+if ($isCompletedFilter) {
     if ($orderStatusColumn !== null) {
-        $orderWhereParts[] = "`" . $orderStatusColumn . "` = 'complete'";
+        $completedStatusValues = array_values(array_unique($completedStatusFilters));
+        if (!empty($completedStatusValues)) {
+            $placeholders = implode(', ', array_fill(0, count($completedStatusValues), '?'));
+            $orderWhereParts[] = '`' . $orderStatusColumn . '` IN (' . $placeholders . ')';
+            foreach ($completedStatusValues as $completedStatus) {
+                $orderParams[] = $completedStatus;
+            }
+        }
     } else {
         $alerts['error'][] = 'Unable to filter by status because the orders table is missing a status column.';
     }
@@ -610,9 +619,8 @@ $statusLabels = [
 <main class="customer-orders-wrapper">
     <h1>My Orders</h1>
     <nav class="customer-orders-tabs" aria-label="Order filters">
-        <?php $isCompleted = ($statusFilter === 'complete'); ?>
-        <a class="customer-orders-tab<?= $isCompleted ? '' : ' is-active' ?>" href="<?= htmlspecialchars($myOrdersUrl) ?>">All</a>
-        <a class="customer-orders-tab<?= $isCompleted ? ' is-active' : '' ?>" href="<?= htmlspecialchars($myOrdersUrl) ?>?status=complete">Completed</a>
+        <a class="customer-orders-tab<?= $isCompletedFilter ? '' : ' is-active' ?>" href="<?= htmlspecialchars($myOrdersUrl) ?>">All</a>
+        <a class="customer-orders-tab<?= $isCompletedFilter ? ' is-active' : '' ?>" href="<?= htmlspecialchars($myOrdersUrl) ?>?status=complete">Completed</a>
     </nav>
     <?php foreach ($alerts as $type => $messages): ?>
         <?php foreach ($messages as $message): ?>
@@ -621,7 +629,7 @@ $statusLabels = [
     <?php endforeach; ?>
 
     <?php if (empty($orders)): ?>
-        <?php if ($statusFilter === 'complete'): ?>
+        <?php if ($isCompletedFilter): ?>
             <p class="customer-orders-empty">No completed orders yet. <a href="<?= htmlspecialchars($homeUrl) ?>">Start shopping</a></p>
         <?php else: ?>
             <p class="customer-orders-empty">You have not placed any orders yet. <a href="<?= htmlspecialchars($homeUrl) ?>">Start shopping</a>.</p>
