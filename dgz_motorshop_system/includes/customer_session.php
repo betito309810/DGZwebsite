@@ -161,6 +161,68 @@ if (!function_exists('customerSessionRefresh')) {
     }
 }
 
+if (!function_exists('customerLegacyPasswordColumnAvailable')) {
+    function customerLegacyPasswordColumnAvailable(?PDO $pdo = null): bool
+    {
+        static $hasLegacyColumn;
+
+        if ($hasLegacyColumn !== null) {
+            return $hasLegacyColumn;
+        }
+
+        try {
+            $pdo = $pdo ?? customerRepository();
+            $pdo->query('SELECT `password` FROM customers LIMIT 0');
+            $hasLegacyColumn = true;
+        } catch (Throwable $exception) {
+            $hasLegacyColumn = false;
+        }
+
+        return $hasLegacyColumn;
+    }
+}
+
+if (!function_exists('customerFetchLegacyPassword')) {
+    function customerFetchLegacyPassword(PDO $pdo, int $customerId): ?string
+    {
+        if (!customerLegacyPasswordColumnAvailable($pdo)) {
+            return null;
+        }
+
+        try {
+            $stmt = $pdo->prepare('SELECT `password` FROM customers WHERE id = ? LIMIT 1');
+            $stmt->execute([$customerId]);
+            $value = $stmt->fetchColumn();
+            if ($value === false) {
+                return null;
+            }
+
+            $value = trim((string) $value);
+            return $value === '' ? null : $value;
+        } catch (Throwable $exception) {
+            error_log('Unable to fetch legacy customer password: ' . $exception->getMessage());
+            return null;
+        }
+    }
+}
+
+if (!function_exists('customerPersistPasswordHash')) {
+    function customerPersistPasswordHash(PDO $pdo, int $customerId, string $passwordHash): void
+    {
+        try {
+            $update = $pdo->prepare('UPDATE customers SET password_hash = ?, updated_at = COALESCE(updated_at, CURRENT_TIMESTAMP) WHERE id = ?');
+            $update->execute([$passwordHash, $customerId]);
+
+            if (customerLegacyPasswordColumnAvailable($pdo)) {
+                $legacy = $pdo->prepare('UPDATE customers SET `password` = ? WHERE id = ?');
+                $legacy->execute([$passwordHash, $customerId]);
+            }
+        } catch (Throwable $exception) {
+            error_log('Unable to persist customer password hash: ' . $exception->getMessage());
+        }
+    }
+}
+
 if (!function_exists('requireCustomerAuthentication')) {
     function requireCustomerAuthentication(): void
     {

@@ -2,6 +2,61 @@
 require __DIR__ . '/dgz_motorshop_system/config/config.php';
 require __DIR__ . '/dgz_motorshop_system/includes/customer_session.php';
 
+function upgradeCustomerPassword(PDO $pdo, int $customerId, string $password): void
+{
+    try {
+        $newHash = password_hash($password, PASSWORD_DEFAULT);
+        customerPersistPasswordHash($pdo, $customerId, $newHash);
+    } catch (Throwable $exception) {
+        error_log('Unable to upgrade customer password hash: ' . $exception->getMessage());
+    }
+}
+
+function verifyCustomerPassword(PDO $pdo, array $candidate, string $password): bool
+{
+    $customerId = (int) ($candidate['id'] ?? 0);
+    if ($customerId <= 0) {
+        return false;
+    }
+
+    $storedHash = (string) ($candidate['password_hash'] ?? '');
+    if ($storedHash !== '') {
+        if (password_verify($password, $storedHash)) {
+            if (password_needs_rehash($storedHash, PASSWORD_DEFAULT)) {
+                upgradeCustomerPassword($pdo, $customerId, $password);
+            }
+
+            return true;
+        }
+    }
+
+    $legacySecret = customerFetchLegacyPassword($pdo, $customerId);
+    if ($legacySecret === null || $legacySecret === '') {
+        return false;
+    }
+
+    if (password_verify($password, $legacySecret)) {
+        upgradeCustomerPassword($pdo, $customerId, $password);
+        return true;
+    }
+
+    $legacyCandidates = [
+        $password,
+        hash('sha256', $password),
+        hash('sha1', $password),
+        md5($password),
+    ];
+
+    foreach ($legacyCandidates as $legacyCandidate) {
+        if (hash_equals((string) $legacySecret, (string) $legacyCandidate)) {
+            upgradeCustomerPassword($pdo, $customerId, $password);
+            return true;
+        }
+    }
+
+    return false;
+}
+
 $customerSession = getAuthenticatedCustomer();
 if ($customerSession !== null) {
     header('Location: ' . orderingUrl('my_orders.php'));
@@ -54,7 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $candidate = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
             }
 
-            if (!$candidate || empty($candidate['password_hash']) || !password_verify($password, (string) $candidate['password_hash'])) {
+            if (!$candidate || !verifyCustomerPassword($pdo, $candidate, $password)) {
                 $errors['general'] = 'We could not find a matching account. Double check your details and try again.';
             } else {
                 customerLogin((int) $candidate['id']);

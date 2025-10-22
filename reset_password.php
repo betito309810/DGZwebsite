@@ -38,8 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 $passwordHash = password_hash($password, PASSWORD_DEFAULT);
                 $pdo->beginTransaction();
-                $update = $pdo->prepare('UPDATE customers SET password_hash = ? WHERE id = ?');
-                $update->execute([$passwordHash, (int) $record['customer_id']]);
+                customerPersistPasswordHash($pdo, (int) $record['customer_id'], $passwordHash);
                 $delete = $pdo->prepare('DELETE FROM customer_password_resets WHERE customer_id = ?');
                 $delete->execute([(int) $record['customer_id']]);
                 $pdo->commit();

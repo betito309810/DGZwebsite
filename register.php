@@ -80,6 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $passwordHash,
                 ]);
                 $customerId = (int) $pdo->lastInsertId();
+                customerPersistPasswordHash($pdo, $customerId, $passwordHash);
                 customerLogin($customerId);
 
                 $redirect = $_GET['redirect'] ?? orderingUrl('my_orders.php');
