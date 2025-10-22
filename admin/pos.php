@@ -807,6 +807,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                         : 'Customer';
 
                     if (strtolower(trim($customerName)) !== 'walk-in') {
+                        $itemData = prepareOrderItemsData($pdo, $orderId);
+                        $itemsTotal = (float) ($itemData['items_total'] ?? 0.0);
+                        $summaryTableHtml = (string) ($itemData['table_html'] ?? '');
+
                         $createdAt = (string) ($orderInfo['created_at'] ?? '');
                         $prettyDate = '';
                         if ($createdAt !== '') {
@@ -816,6 +820,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                             }
                         }
 
+                        $orderTotal = (float) ($orderInfo['total'] ?? $itemsTotal);
                         $invoiceNumber = trim((string) ($orderInfo['invoice_number'] ?? ''));
                         $displayInvoice = $invoiceNumber !== ''
                             ? $invoiceNumber
@@ -834,17 +839,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                             $detailsHtml = '<p style="margin:0 0 12px;">' . implode('<br>', $detailLines) . '</p>';
                         }
 
+                        $summaryHtml = $summaryTableHtml !== '' ? $summaryTableHtml : '';
+
                         $subject = 'Thank You - DGZ Motorshop Order #' . (int) $orderId;
                         $body = '<div style="font-family: Arial, sans-serif; font-size:14px; color:#333;">'
                             . '<h2 style="color:#1f2937; margin-bottom:8px;">Thank You!</h2>'
                             . '<p style="margin:0 0 12px;">Hi ' . htmlspecialchars($customerName, ENT_QUOTES, 'UTF-8') . ',</p>'
                             . '<p style="margin:0 0 12px;">Your DGZ Motorshop order #' . (int) $orderId . ' has been completed. Thank you for trusting us with your purchase.</p>'
                             . $detailsHtml
+                            . $summaryHtml
                             . '<p style="margin:12px 0 0;">We appreciate your support and hope to serve you again soon.</p>'
                             . '</div>';
 
+                        $receiptData = [
+                            'order_id' => $orderId,
+                            'invoice_number' => $invoiceNumber,
+                            'customer_name' => $customerName,
+                            'created_at' => $createdAt,
+                            'sales_total' => $orderTotal,
+                            'vatable' => $orderTotal / 1.12,
+                            'vat' => $orderTotal - ($orderTotal / 1.12),
+                            'amount_paid' => $orderTotal,
+                            'change' => 0.0,
+                            'cashier' => currentSessionUserDisplayName() ?? 'Cashier',
+                            'items' => array_map(static function (array $item): array {
+                                return [
+                                    'name' => $item['name'] ?? 'Item',
+                                    'quantity' => (int) ($item['quantity'] ?? 0),
+                                    'price' => (float) ($item['price'] ?? 0),
+                                    'total' => (float) ($item['total'] ?? 0),
+                                ];
+                            }, $itemData['items'] ?? []),
+                        ];
+
+                        $pdfContent = generateReceiptPDF($receiptData);
+                        $pdfFilename = 'receipt_' . $orderId . '.pdf';
+
                         try {
-                            sendEmail($customerEmail, $subject, $body);
+                            sendEmail($customerEmail, $subject, $body, $pdfContent, $pdfFilename);
                         } catch (Throwable $e) {
                             /* logged */
                         }
