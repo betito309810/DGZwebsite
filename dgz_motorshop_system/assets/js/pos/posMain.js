@@ -187,6 +187,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 pending: 'Pending',
                 payment_verification: 'Payment Verification',
                 approved: 'Approved',
+                delivery: 'Out for Delivery',
                 completed: 'Completed',
                 disapproved: 'Disapproved',
             };
@@ -196,11 +197,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
 
-                const safeCustomer = (order.customer_name || 'Customer').toString();
-                const safeInvoice = (order.invoice_number || 'N/A').toString();
+                const safeCustomer = (order.customer_name || order.full_name || order.name || 'Customer').toString();
+                const safeInvoice = (order.invoice_number || order.invoice || order.invoice_no || 'N/A').toString();
                 const safeStatus = (order.status || 'pending').toString().toLowerCase();
-                const safePayment = (order.payment_method || 'N/A').toString();
-                const referenceNumber = (order.reference_number || '').toString();
+                const safePayment = (order.payment_method || order.paymentType || 'N/A').toString();
+                const referenceNumber = (order.reference_number || order.reference_no || order.reference || '').toString();
 
                 onlineOrderCustomer.textContent = safeCustomer;
                 onlineOrderInvoice.textContent = safeInvoice !== '' ? safeInvoice : 'N/A';
@@ -217,28 +218,54 @@ document.addEventListener('DOMContentLoaded', () => {
                 const statusLabel = statusLabels[safeStatus] || safeStatus.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase());
                 onlineOrderStatus.textContent = statusLabel;
                 onlineOrderPayment.textContent = safePayment !== '' ? safePayment : 'N/A';
-                onlineOrderEmail.textContent = (order.email || '').toString();
-                onlineOrderPhone.textContent = (order.phone || '').toString();
+
+                const emailValue = (order.email
+                    || order.customer_email
+                    || order.contact_email
+                    || '').toString();
+                onlineOrderEmail.textContent = emailValue !== '' ? emailValue : 'N/A';
+
+                const phoneValue = (order.phone
+                    || order.customer_phone
+                    || order.contact_number
+                    || order.contact
+                    || order.mobile
+                    || '').toString();
+                onlineOrderPhone.textContent = phoneValue !== '' ? phoneValue : 'N/A';
 
                 if (onlineOrderFacebook) {
-                    const fb = (order.facebook_account || '').toString().trim();
+                    const fb = (order.facebook_account
+                        || order.facebook
+                        || order.fb_account
+                        || '').toString().trim();
                     onlineOrderFacebook.textContent = fb !== '' ? fb : 'N/A';
                 }
                 if (onlineOrderAddress) {
-                    const addr = (order.address || '').toString().trim();
+                    const addr = (order.address
+                        || order.customer_address
+                        || order.shipping_address
+                        || '').toString().trim();
                     onlineOrderAddress.textContent = addr !== '' ? addr : 'N/A';
                 }
                 if (onlineOrderPostal) {
-                    const pc = (order.postal_code || '').toString().trim();
+                    const pc = (order.postal_code
+                        || order.postal
+                        || order.zip_code
+                        || order.zipcode
+                        || order.zip
+                        || '').toString().trim();
                     onlineOrderPostal.textContent = pc !== '' ? pc : 'N/A';
                 }
                 if (onlineOrderCity) {
-                    const city = (order.city || '').toString().trim();
+                    const city = (order.city
+                        || order.town
+                        || order.municipality
+                        || '').toString().trim();
                     onlineOrderCity.textContent = city !== '' ? city : 'N/A';
                 }
 
                 if (onlineOrderNoteContainer && onlineOrderNote) {
-                    const noteText = ((order.customer_note ?? order.notes) || '').toString().trim();
+                    const noteText = ((order.customer_note ?? order.notes ?? order.note) || '').toString().trim();
                     if (noteText !== '') {
                         onlineOrderNote.textContent = noteText; // Added cashier note so staff can review special instructions
                         onlineOrderNoteContainer.style.display = 'flex';
@@ -298,7 +325,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 }
 
-                const totalAmount = Number(order.total) || 0;
+                const totalAmount = Number(order.total ?? order.grand_total ?? order.amount ?? order.total_amount ?? 0) || 0;
                 onlineOrderTotal.textContent = formatPeso(totalAmount);
             };
             // End POS online order modal populator

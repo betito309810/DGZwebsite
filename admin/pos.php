@@ -254,7 +254,7 @@ $profile_name = $current_user['name'] ?? 'N/A';
 $profile_role = !empty($current_user['role']) ? ucfirst($current_user['role']) : 'N/A';
 $profile_created = format_profile_date($current_user['created_at'] ?? null);
 
-$allowedStatuses = ['pending', 'payment_verification', 'approved', 'completed', 'disapproved'];
+$allowedStatuses = ['pending', 'payment_verification', 'approved', 'delivery', 'completed', 'disapproved'];
 
 function ordersSupportsInvoiceNumbers(PDO $pdo): bool
 {
@@ -546,7 +546,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
     if ($orderId > 0 && $newStatus !== '') {
         if ($newStatus === 'disapproved') {
             $statusError = 'missing_reason';
-        } elseif (in_array($newStatus, ['payment_verification', 'approved', 'completed'], true)) {
+        } elseif (in_array($newStatus, ['payment_verification', 'approved', 'delivery', 'completed'], true)) {
             $selectSql = $supportsInvoiceNumbers
                 ? 'SELECT status, invoice_number FROM orders WHERE id = ?'
                 : 'SELECT status FROM orders WHERE id = ?';
@@ -561,9 +561,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                 }
 
                 $transitions = [
-                    'pending' => ['payment_verification', 'approved', 'disapproved', 'completed'],
-                    'payment_verification' => ['approved', 'disapproved'],
-                    'approved' => ['completed'],
+                    'pending' => ['payment_verification', 'approved', 'delivery', 'disapproved', 'completed'],
+                    'payment_verification' => ['approved', 'delivery', 'disapproved'],
+                    'approved' => ['delivery', 'completed'],
+                    'delivery' => ['completed'],
                     'completed' => [],
                     'disapproved' => [],
                 ];
@@ -587,7 +588,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                         ? (string) ($currentOrder['invoice_number'] ?? '')
                         : '';
                     $needsInvoice = $supportsInvoiceNumbers
-                        && in_array($newStatus, ['approved', 'completed'], true)
+                        && in_array($newStatus, ['approved', 'delivery', 'completed'], true)
                         && $existingInvoice === '';
 
                     if ($needsInvoice) {
@@ -1461,6 +1462,7 @@ if ($receiptDataJson === false) {
                         <option value="pending" <?= $statusFilter === 'pending' ? 'selected' : '' ?>>Pending</option>
                         <option value="payment_verification" <?= $statusFilter === 'payment_verification' ? 'selected' : '' ?>>Payment Verification</option>
                         <option value="approved" <?= $statusFilter === 'approved' ? 'selected' : '' ?>>Approved</option>
+                        <option value="delivery" <?= $statusFilter === 'delivery' ? 'selected' : '' ?>>Out for Delivery</option>
                         <option value="completed" <?= $statusFilter === 'completed' ? 'selected' : '' ?>>Completed</option>
                         <option value="disapproved" <?= $statusFilter === 'disapproved' ? 'selected' : '' ?>>Disapproved</option>
                     </select>

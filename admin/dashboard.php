@@ -123,7 +123,7 @@ try {
         INNER JOIN products p ON p.id = oi.product_id
         WHERE o.created_at >= :start
           AND o.created_at < :end
-          AND o.status IN ('pending', 'payment_verification', 'approved', 'completed')
+          AND o.status IN ('pending', 'payment_verification', 'approved', 'delivery', 'completed')
         GROUP BY p.id
         ORDER BY sold DESC
         LIMIT 5

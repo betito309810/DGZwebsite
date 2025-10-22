@@ -597,6 +597,7 @@ $buildPageUrl = static function (int $page) use ($queryParams): string {
                         <?php
                         $statusLabels = [
                             'approved' => 'Approved',
+                            'delivery' => 'Out for Delivery',
                             'completed' => 'Completed',
                             'disapproved' => 'Disapproved',
                             'payment_verification' => 'Payment Verification',

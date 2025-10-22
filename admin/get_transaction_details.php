@@ -1,5 +1,6 @@
 <?php
 require __DIR__. '/../config/config.php';
+require_once __DIR__ . '/includes/online_orders_helpers.php';
 if(empty($_SESSION['user_id'])){
     http_response_code(401);
     exit('Unauthorized');
@@ -87,6 +88,8 @@ try {
         exit('Order not found');
     }
 
+    $order = normalizeOnlineOrderRow($order);
+
     // Get order items with product details
     $stmt = $pdo->prepare("
         SELECT oi.*, COALESCE(oi.description, p.name) AS name, p.code
@@ -101,7 +104,9 @@ try {
     header('Content-Type: application/json');
     $details = parsePaymentProofValue($order['payment_proof'] ?? null, $order['reference_no'] ?? null);
 
-    $order['reference_number'] = $details['reference'];
+    $order['reference_number'] = $details['reference'] !== ''
+        ? $details['reference']
+        : (string) ($order['reference_no'] ?? ($order['reference_number'] ?? ''));
     $order['cashier_display_name'] = resolveCashierDisplay($pdo, $order);
     if (
         (!isset($order['cashier_name']) || trim((string) $order['cashier_name']) === '')
@@ -110,6 +115,11 @@ try {
         $order['cashier_name'] = $order['cashier_display_name'];
     }
     $order['phone'] = $order['phone'] ?? null;
+    $order['email'] = $order['email'] ?? null;
+    $order['facebook_account'] = $order['facebook_account'] ?? ($order['facebook'] ?? null);
+    $order['address'] = $order['address'] ?? ($order['customer_address'] ?? null);
+    $order['postal_code'] = $order['postal_code'] ?? null;
+    $order['city'] = $order['city'] ?? null;
     $order['customer_note'] = isset($order['customer_note']) && $order['customer_note'] !== null
         ? (string) $order['customer_note']
         : (isset($order['notes']) ? (string) $order['notes'] : ''); // Added normalized field for cashier notes

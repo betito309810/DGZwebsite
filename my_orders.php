@@ -34,9 +34,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_order_id'])) {
         $order = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$order) {
             $alerts['error'][] = 'We could not find that order.';
-        } elseif ($order['status'] !== 'approved') {
-            $alerts['error'][] = 'Only approved orders can be cancelled online.';
         } else {
+            $status = strtolower((string) ($order['status'] ?? ''));
+            if ($status === '') {
+                $status = 'pending';
+            }
+
+            $lockedStatuses = ['delivery'];
+            $terminalStatuses = ['complete', 'completed', 'cancelled_by_staff', 'cancelled_by_customer', 'disapproved'];
+
+            if (in_array($status, $lockedStatuses, true)) {
+                $alerts['error'][] = 'Orders that are already out for delivery can no longer be cancelled online.';
+            } elseif (in_array($status, $terminalStatuses, true)) {
+                $alerts['error'][] = 'This order can no longer be cancelled online.';
+            } else {
             $itemStmt = $pdo->prepare('SELECT product_id, variant_id, qty FROM order_items WHERE order_id = ?');
             $itemStmt->execute([$orderId]);
             $items = $itemStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -63,6 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_order_id'])) {
             $update = $pdo->prepare("UPDATE orders SET status = 'cancelled_by_customer', updated_at = NOW() WHERE id = ?");
             $update->execute([$orderId]);
             $alerts['success'][] = 'Your order has been cancelled. We restocked the items to our inventory.';
+            }
         }
         $pdo->commit();
     } catch (Throwable $exception) {
@@ -320,11 +332,14 @@ if (!empty($orders)) {
 
 $statusLabels = [
     'pending' => 'Pending review',
+    'payment_verification' => 'Awaiting payment verification',
     'approved' => 'Approved',
     'delivery' => 'Out for delivery',
     'complete' => 'Completed',
+    'completed' => 'Completed',
     'cancelled_by_staff' => 'Cancelled by staff',
     'cancelled_by_customer' => 'Cancelled',
+    'disapproved' => 'Disapproved',
 ];
 ?>
 <!doctype html>
@@ -405,13 +420,21 @@ $statusLabels = [
                 <?php
                     $orderId = (int) $order['id'];
                     $orderItems = $orderItemsMap[$orderId] ?? [];
-                    $contactEmail = trim((string) ($order['email'] ?? ''));
-                    $contactPhone = trim((string) ($order['phone'] ?? ''));
-                    $facebookAccount = trim((string) ($order['facebook_account'] ?? ''));
-                    $referenceNumber = trim((string) ($order['reference_no'] ?? ''));
-                    $addressLine = trim((string) ($order['address'] ?? ''));
-                    $postalCode = trim((string) ($order['postal_code'] ?? ''));
-                    $city = trim((string) ($order['city'] ?? ''));
+                    $statusKey = strtolower((string) ($order['status'] ?? ''));
+                    if ($statusKey === '') {
+                        $statusKey = 'pending';
+                    }
+                    $statusLabel = $statusLabels[$statusKey] ?? ucwords(str_replace('_', ' ', $statusKey));
+                    $nonCancellableStatuses = ['delivery', 'complete', 'completed', 'cancelled_by_staff', 'cancelled_by_customer', 'disapproved'];
+                    $canCancel = !in_array($statusKey, $nonCancellableStatuses, true);
+
+                    $contactEmail = trim((string) ($order['email'] ?? $order['customer_email'] ?? ''));
+                    $contactPhone = trim((string) ($order['phone'] ?? $order['customer_phone'] ?? $order['contact'] ?? ''));
+                    $facebookAccount = trim((string) ($order['facebook_account'] ?? $order['facebook'] ?? ''));
+                    $referenceNumber = trim((string) ($order['reference_no'] ?? $order['reference_number'] ?? ''));
+                    $addressLine = trim((string) ($order['address'] ?? $order['customer_address'] ?? ''));
+                    $postalCode = trim((string) ($order['postal_code'] ?? $order['postal'] ?? $order['zip_code'] ?? ''));
+                    $city = trim((string) ($order['city'] ?? $order['town'] ?? $order['municipality'] ?? ''));
                     $billingLines = [];
                     if ($addressLine !== '') {
                         $billingLines[] = $addressLine;
@@ -423,19 +446,20 @@ $statusLabels = [
                         $billingLines[] = implode(', ', array_map('trim', $cityLineParts));
                     }
                     $billingDisplay = implode("\n", $billingLines);
-                    $customerNote = trim((string) ($order['customer_note'] ?? ''));
+                    $customerNote = trim((string) ($order['customer_note'] ?? $order['notes'] ?? ''));
                 ?>
                 <article class="customer-order-card" data-order-card>
                     <header class="customer-order-card__header">
                         <div>
                             <h2>Order #<?= (int) $order['id'] ?></h2>
-                            <?php if (!empty($order['tracking_code'])): ?>
-                                <p class="customer-order-card__tracking">Tracking code: <?= htmlspecialchars($order['tracking_code']) ?></p>
+                            <?php $trackingCode = trim((string) ($order['tracking_code'] ?? $order['tracking_number'] ?? '')); ?>
+                            <?php if ($trackingCode !== ''): ?>
+                                <p class="customer-order-card__tracking">Tracking code: <?= htmlspecialchars($trackingCode) ?></p>
                             <?php endif; ?>
                         </div>
                         <div class="customer-order-card__meta">
-                            <span class="customer-order-card__status customer-order-card__status--<?= htmlspecialchars($order['status']) ?>">
-                                <?= htmlspecialchars($statusLabels[$order['status']] ?? ucfirst($order['status'])) ?>
+                            <span class="customer-order-card__status customer-order-card__status--<?= htmlspecialchars($statusKey) ?>">
+                                <?= htmlspecialchars($statusLabel) ?>
                             </span>
                             <button type="button" class="customer-order-card__toggle" data-order-toggle aria-expanded="false">
                                 <span data-order-toggle-label>View order details</span>
@@ -509,7 +533,7 @@ $statusLabels = [
                                 </div>
                             <?php endif; ?>
                         </div>
-                        <?php if (in_array($order['status'], ['approved', 'pending'], true)): ?>
+                        <?php if ($canCancel): ?>
                             <div class="customer-order-card__footer">
                                 <form method="post" class="customer-order-card__actions" data-customer-cancel-form>
                                     <input type="hidden" name="cancel_order_id" value="<?= (int) $order['id'] ?>">

@@ -54,15 +54,15 @@ async function loadTransactionDetails(orderId) {
         const items = data.items;
 
         // Format the date
-        const orderDate = new Date(order.created_at).toLocaleString();
+        const orderDate = order.created_at ? new Date(order.created_at).toLocaleString() : 'N/A';
         const cashierName = (order.cashier_display_name || order.cashier_name || order.cashier_username || '').trim() || 'Unassigned';
-        const customerName = (order.customer_name || '').trim() || 'N/A';
-        const email = (order.email || '').toString();
-        const phone = (order.phone || '').toString();
-        const facebook = ((order.facebook_account ?? '') + '').trim();
-        const address = ((order.address ?? '') + '').trim();
-        const postal = ((order.postal_code ?? '') + '').trim();
-        const city = ((order.city ?? '') + '').trim();
+        const customerName = (order.customer_name || order.full_name || order.name || '').trim() || 'N/A';
+        const email = (order.email || order.customer_email || order.contact_email || '').toString();
+        const phone = (order.phone || order.customer_phone || order.contact_number || order.contact || order.mobile || '').toString();
+        const facebook = ((order.facebook_account ?? order.facebook ?? order.fb_account ?? '') + '').trim();
+        const address = ((order.address ?? order.customer_address ?? order.shipping_address ?? '') + '').trim();
+        const postal = ((order.postal_code ?? order.postal ?? order.zip_code ?? order.zipcode ?? order.zip ?? '') + '').trim();
+        const city = ((order.city ?? order.town ?? order.municipality ?? '') + '').trim();
         
         // Debug: log items data to console
         console.log('Transaction items:', items);
@@ -75,6 +75,7 @@ async function loadTransactionDetails(orderId) {
             pending: 'Pending',
             payment_verification: 'Payment Verification',
             approved: 'Approved',
+            delivery: 'Out for Delivery',
             completed: 'Completed',
             disapproved: 'Disapproved',
         };
@@ -164,16 +165,16 @@ async function loadTransactionDetails(orderId) {
                     </div>
                     <div class="info-item">
                         <label>Reference:</label>
-                        <span>${order.reference_number || 'N/A'}</span>
+                        <span>${order.reference_number || order.reference_no || order.reference || 'N/A'}</span>
                     </div>
                 </div>
 
                 ${disapprovalHtml}
 
-                ${(order.customer_note ?? '').toString().trim() !== '' ? `
+                ${(order.customer_note ?? order.notes ?? order.note ?? '').toString().trim() !== '' ? `
                 <div class="info-item note-item" style="display:block;">
                     <label>Customer Note:</label>
-                    <span>${escapeHtml((order.customer_note || '').toString())}</span>
+                    <span>${escapeHtml(((order.customer_note ?? order.notes ?? order.note) || '').toString())}</span>
                 </div>` : ''}
             </div>
 
@@ -195,7 +196,7 @@ async function loadTransactionDetails(orderId) {
                         <tfoot>
                             <tr>
                                 <td colspan="3"><strong>Total:</strong></td>
-                                <td>₱${parseFloat(order.total).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                                <td>₱${parseFloat(order.total ?? order.grand_total ?? order.amount ?? order.total_amount ?? 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                             </tr>
                         </tfoot>
                     </table>

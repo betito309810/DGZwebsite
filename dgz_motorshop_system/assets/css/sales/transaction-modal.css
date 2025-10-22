@@ -96,6 +96,11 @@
     font-weight: 600;
 }
 
+.status-delivery {
+    color: #047857;
+    font-weight: 600;
+}
+
 .status-completed {
     color: #2563eb;
     font-weight: 600;
