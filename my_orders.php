@@ -846,7 +846,6 @@ $statusLabels = [
                                                 </div>
                                             </div>
                                             <div class="customer-payment-card__actions">
-                                                <button type="submit" class="customer-order-card__button customer-payment-card__submit">Save payment details</button>
                                                 <p class="customer-payment-card__instructions">
                                                     <span class="customer-payment-card__instructions-label">GCash:</span>
                                                     <span class="customer-payment-card__instructions-value">0987654321</span>
@@ -854,6 +853,7 @@ $statusLabels = [
                                                     <span class="customer-payment-card__instructions-label">Maya:</span>
                                                     <span class="customer-payment-card__instructions-value">0987654321</span>
                                                 </p>
+                                                <button type="submit" class="customer-order-card__button customer-payment-card__submit">Save payment details</button>
                                             </div>
                                         </form>
                                     <?php endif; ?>
