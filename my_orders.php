@@ -710,18 +710,6 @@ $statusLabels = [
                             }
                         }
                     }
-                    $paymentProofPreviewUrl = '';
-                    if ($paymentProofUrl !== '') {
-                        $previewPath = $paymentProofUrl;
-                        $urlPath = parse_url($paymentProofUrl, PHP_URL_PATH);
-                        if (is_string($urlPath) && $urlPath !== '') {
-                            $previewPath = $urlPath;
-                        }
-                        $extension = strtolower((string) pathinfo($previewPath, PATHINFO_EXTENSION));
-                        if (in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true)) {
-                            $paymentProofPreviewUrl = $paymentProofUrl;
-                        }
-                    }
                     $canUpdatePayment = $canCancel;
                 ?>
                 <article class="customer-order-card" data-order-card>
@@ -809,7 +797,7 @@ $statusLabels = [
                         <?php $hasStoredPaymentDetails = ($referenceNumber !== '' || $paymentProofUrl !== ''); ?>
                         <?php if ($hasStoredPaymentDetails || $canUpdatePayment): ?>
                             <div class="customer-order-card__section customer-order-card__section--payment">
-                                <div class="customer-payment-card" data-payment-card>
+                                <div class="customer-payment-card">
                                     <div class="customer-payment-card__intro">
                                         <div>
                                             <h3>Payment details</h3>
@@ -820,22 +808,15 @@ $statusLabels = [
                                         <?php endif; ?>
                                     </div>
                                     <?php if ($hasStoredPaymentDetails): ?>
-                                        <div class="customer-payment-card__stored" data-payment-stored>
+                                        <div class="customer-payment-card__stored">
                                             <?php if ($referenceNumber !== ''): ?>
                                                 <div class="customer-payment-card__stored-item">
                                                     <span class="customer-payment-card__stored-label">Reference #</span>
                                                     <span class="customer-payment-card__stored-value"><?= htmlspecialchars($referenceNumber) ?></span>
                                                 </div>
                                             <?php endif; ?>
-                                            <?php if ($paymentProofPreviewUrl !== ''): ?>
-                                                <figure class="customer-payment-card__preview" data-payment-preview>
-                                                    <img src="<?= htmlspecialchars($paymentProofPreviewUrl) ?>" alt="Proof of payment preview" data-payment-preview-image>
-                                                </figure>
-                                                <?php if ($paymentProofUrl !== ''): ?>
-                                                    <p class="customer-payment-card__note" data-payment-preview-fallback hidden>Proof of payment uploaded.</p>
-                                                <?php endif; ?>
-                                            <?php elseif ($paymentProofUrl !== ''): ?>
-                                                <p class="customer-payment-card__note" data-payment-preview-fallback>Proof of payment uploaded.</p>
+                                            <?php if ($paymentProofUrl !== ''): ?>
+                                                <p class="customer-payment-card__note">Proof of payment uploaded.</p>
                                             <?php endif; ?>
                                         </div>
                                     <?php endif; ?>
@@ -851,7 +832,7 @@ $statusLabels = [
                                                 <div class="customer-payment-card__field">
                                                     <label for="payment-proof-<?= (int) $order['id'] ?>">Upload proof of payment</label>
                                                     <div class="customer-payment-card__file">
-                                                        <input type="file" name="payment_proof" id="payment-proof-<?= (int) $order['id'] ?>" accept="image/*" data-payment-proof-input>
+                                                        <input type="file" name="payment_proof" id="payment-proof-<?= (int) $order['id'] ?>" accept="image/*">
                                                     </div>
                                                     <p class="customer-payment-card__help">Accepted formats: JPG, PNG, GIF, or WEBP.</p>
                                                 </div>

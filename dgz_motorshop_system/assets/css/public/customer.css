@@ -766,20 +766,6 @@
     word-break: break-word;
 }
 
-.customer-payment-card__preview {
-    margin: 0;
-    border-radius: 0.75rem;
-    overflow: hidden;
-    box-shadow: 0 18px 35px rgba(79, 70, 229, 0.2);
-    max-width: 240px;
-}
-
-.customer-payment-card__preview img {
-    width: 100%;
-    height: auto;
-    display: block;
-}
-
 .customer-payment-card__note {
     margin: 0;
     color: #3730a3;
