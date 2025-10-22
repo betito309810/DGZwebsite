@@ -578,6 +578,14 @@
                     (document.getElementById('edit_price') ?? {}).value = btn.dataset.price ?? '';
                     (document.getElementById('edit_quantity') ?? {}).value = btn.dataset.quantity ?? '';
                     (document.getElementById('edit_low') ?? {}).value = btn.dataset.low ?? '';
+                    const editForm = document.getElementById('editProductForm');
+                    if (editForm) {
+                        const parsedQuantity = Number.parseInt(btn.dataset.quantity ?? '', 10);
+                        const safeQuantity = Number.isFinite(parsedQuantity) ? parsedQuantity : 0;
+                        editForm.dispatchEvent(new CustomEvent('product:quantityChanged', {
+                            detail: { quantity: safeQuantity },
+                        }));
+                    }
                     setSelectWithFallback('edit_brand', 'edit_brand_new', btn.dataset.brand || '');
                     setSelectWithFallback('edit_category', 'edit_category_new', btn.dataset.category || '');
                     setSelectWithFallback('edit_supplier', 'edit_supplier_new', btn.dataset.supplier || '');

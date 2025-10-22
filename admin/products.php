@@ -1097,8 +1097,31 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_product'])){
     $code = trim($_POST['code'] ?? '');
     $desc = trim($_POST['description'] ?? '');
     $price = isset($_POST['price']) ? (float) $_POST['price'] : 0.0;
-    $qty = isset($_POST['quantity']) ? (int) $_POST['quantity'] : 0;
-    $low = isset($_POST['low_stock_threshold']) ? (int) $_POST['low_stock_threshold'] : 0;
+    $clampQuantity = static function ($value) {
+        $numeric = (int) $value;
+        if ($numeric < 0) {
+            return 0;
+        }
+        if ($numeric > 9999) {
+            return 9999;
+        }
+        return $numeric;
+    };
+    $calculateLowStock = static function (int $quantity) {
+        if ($quantity <= 0) {
+            return 0;
+        }
+        $threshold = (int) round($quantity * 0.2);
+        if ($threshold < 1) {
+            $threshold = 1;
+        }
+        if ($threshold > 9999) {
+            $threshold = 9999;
+        }
+        return $threshold;
+    };
+    $qty = isset($_POST['quantity']) ? $clampQuantity($_POST['quantity']) : 0;
+    $low = isset($_POST['low_stock_threshold']) ? $clampQuantity($_POST['low_stock_threshold']) : 0;
     $id = isset($_POST['id']) ? (int) $_POST['id'] : 0;
 
     if ($code !== '' && productCodeExists($pdo, $code, $id > 0 ? $id : null)) {
@@ -1120,9 +1143,12 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_product'])){
     if (!empty($variantRecords)) {
         atLeastOneVariantIsDefault($variantRecords);
         $variantSummary = summariseVariantStock($variantRecords);
-        $qty = (int) ($variantSummary['quantity'] ?? $qty);
+        $qty = $clampQuantity($variantSummary['quantity'] ?? $qty);
         $price = (float) ($variantSummary['price'] ?? $price);
     }
+
+    $qty = $clampQuantity($qty);
+    $low = $calculateLowStock($qty);
     
     // Handle brand and category
     $brand = trim($_POST['brand'] ?? '');
@@ -1615,7 +1641,7 @@ if ($currentSort === 'name') {
                                 </div>
                                 <div class="product-modal__field">
                                     <label for="addProductQuantity">Quantity</label>
-                                    <input id="addProductQuantity" name="quantity" type="number" min="0" required placeholder="Enter quantity or leave for variants" data-variant-total-quantity>
+                                    <input id="addProductQuantity" name="quantity" type="number" min="0" max="9999" maxlength="4" required placeholder="Enter quantity or leave for variants" data-variant-total-quantity>
                                 </div>
                                 <div class="product-modal__field">
                                     <label for="addProductPrice">Price per unit</label>
@@ -1634,7 +1660,7 @@ if ($currentSort === 'name') {
                                 </div>
                                 <div class="product-modal__field">
                                     <label for="addProductLowStock">Low Stock Threshold</label>
-                                    <input id="addProductLowStock" name="low_stock_threshold" value="5" type="number" min="0" required>
+                                    <input id="addProductLowStock" name="low_stock_threshold" value="5" type="number" min="0" max="9999" maxlength="4" required>
                                 </div>
                             </div>
                         </div>
@@ -1681,7 +1707,7 @@ if ($currentSort === 'name') {
                                         </div>
                                         <div class="variant-row__field">
                                             <label>Quantity
-                                                <input type="number" min="0" data-variant-quantity>
+                                                <input type="number" min="0" max="9999" maxlength="4" data-variant-quantity>
                                             </label>
                                         </div>
                                         <div class="variant-row__field variant-row__field--default">
@@ -2045,7 +2071,7 @@ if ($currentSort === 'name') {
                                 </div>
                                 <div class="product-modal__field">
                                     <label for="edit_quantity">Quantity</label>
-                                    <input name="quantity" id="edit_quantity" type="number" min="0" required placeholder="Enter quantity or leave for variants" data-variant-total-quantity>
+                                    <input name="quantity" id="edit_quantity" type="number" min="0" max="9999" maxlength="4" required placeholder="Enter quantity or leave for variants" data-variant-total-quantity>
                                 </div>
                                 <div class="product-modal__field">
                                     <label for="edit_price">Price per unit</label>
@@ -2064,7 +2090,7 @@ if ($currentSort === 'name') {
                                 </div>
                                 <div class="product-modal__field">
                                     <label for="edit_low">Low Stock Threshold</label>
-                                    <input name="low_stock_threshold" id="edit_low" value="5" type="number" min="0" required>
+                                    <input name="low_stock_threshold" id="edit_low" value="5" type="number" min="0" max="9999" maxlength="4" required>
                                 </div>
                             </div>
                         </div>
@@ -2124,7 +2150,7 @@ if ($currentSort === 'name') {
                                         </div>
                                         <div class="variant-row__field">
                                             <label>Quantity
-                                                <input type="number" min="0" data-variant-quantity>
+                                                <input type="number" min="0" max="9999" maxlength="4" data-variant-quantity>
                                             </label>
                                         </div>
                                         <div class="variant-row__field variant-row__field--default">

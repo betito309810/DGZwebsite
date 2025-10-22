@@ -81,16 +81,25 @@ if (!function_exists('summariseVariantStock')) {
 
         foreach ($variants as $variant) {
             $quantity = isset($variant['quantity']) ? (int) $variant['quantity'] : 0;
+            if ($quantity < 0) {
+                $quantity = 0;
+            } elseif ($quantity > 9999) {
+                $quantity = 9999;
+            }
             $price = isset($variant['price']) ? (float) $variant['price'] : 0.0;
             $isDefault = !empty($variant['is_default']);
 
-            $totalQuantity += max(0, $quantity);
+            $totalQuantity += $quantity;
             if ($fallbackPrice === null) {
                 $fallbackPrice = $price;
             }
             if ($isDefault) {
                 $defaultPrice = $price;
             }
+        }
+
+        if ($totalQuantity > 9999) {
+            $totalQuantity = 9999;
         }
 
         if ($defaultPrice === null) {
@@ -132,12 +141,18 @@ if (!function_exists('normaliseVariantPayload')) {
             }
 
             $sortOrder++;
+            $quantity = isset($raw['quantity']) ? (int) $raw['quantity'] : 0;
+            if ($quantity < 0) {
+                $quantity = 0;
+            } elseif ($quantity > 9999) {
+                $quantity = 9999;
+            }
             $normalised[] = [
                 'id' => isset($raw['id']) ? (int) $raw['id'] : null,
                 'label' => $label,
                 'sku' => trim((string) ($raw['sku'] ?? '')) ?: null,
                 'price' => isset($raw['price']) ? max(0, (float) $raw['price']) : 0.0,
-                'quantity' => isset($raw['quantity']) ? max(0, (int) $raw['quantity']) : 0,
+                'quantity' => $quantity,
                 'is_default' => !empty($raw['is_default']) ? 1 : 0,
                 'sort_order' => $sortOrder,
             ];

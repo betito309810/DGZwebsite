@@ -1,6 +1,38 @@
 // Added: client-side controller that powers the variant editor UI on the products page.
 (function () {
     const EVENT_HYDRATE = 'variant:hydrate';
+    const EVENT_QUANTITY_CHANGED = 'product:quantityChanged';
+    const MAX_QUANTITY = 9999;
+
+    const clampQuantityNumber = (value) => {
+        if (!Number.isFinite(value)) {
+            return 0;
+        }
+        if (value < 0) {
+            return 0;
+        }
+        if (value > MAX_QUANTITY) {
+            return MAX_QUANTITY;
+        }
+        return Math.trunc(value);
+    };
+
+    const normaliseQuantityField = (field) => {
+        if (!field) {
+            return 0;
+        }
+        const raw = typeof field.value === 'string' ? field.value : String(field.value ?? '');
+        const trimmed = raw.trim();
+        if (trimmed === '') {
+            return 0;
+        }
+        const parsed = Number.parseInt(trimmed, 10);
+        const clamped = clampQuantityNumber(parsed);
+        if (String(clamped) !== trimmed) {
+            field.value = String(clamped);
+        }
+        return clamped;
+    };
 
     function initialiseVariantEditor(editor) {
         if (!editor) {
@@ -56,7 +88,7 @@
 
                 activeRows.push({ priceField, qtyField, defaultRadio }); // Added: remember usable row metadata for later fallbacks.
 
-                const qty = qtyField ? parseInt(qtyField.value, 10) || 0 : 0;
+                const qty = normaliseQuantityField(qtyField);
                 const price = priceField ? parseFloat(priceField.value) || 0 : 0;
 
                 totalQty += qty;
@@ -77,10 +109,12 @@
 
             const hasVariants = activeRows.length > 0; // Added: only lock the main fields when at least one variant is defined.
 
+            const aggregatedQty = clampQuantityNumber(totalQty);
+
             if (quantityInput) {
                 quantityInput.readOnly = hasVariants;
                 if (hasVariants) {
-                    quantityInput.value = String(totalQty);
+                    quantityInput.value = String(aggregatedQty);
                 }
             }
             if (priceInput) {
@@ -88,6 +122,15 @@
                 if (hasVariants) {
                     priceInput.value = Number.isFinite(defaultPrice) ? defaultPrice.toFixed(2) : '0.00';
                 }
+            }
+
+            if (hostForm) {
+                const manualQty = !hasVariants && quantityInput
+                    ? normaliseQuantityField(quantityInput)
+                    : aggregatedQty;
+                hostForm.dispatchEvent(new CustomEvent(EVENT_QUANTITY_CHANGED, {
+                    detail: { quantity: clampQuantityNumber(manualQty) },
+                }));
             }
         }
 
@@ -111,7 +154,7 @@
                     label,
                     sku: skuField && skuField.value.trim() !== '' ? skuField.value.trim() : null,
                     price: priceField ? parseFloat(priceField.value) || 0 : 0,
-                    quantity: qtyField ? parseInt(qtyField.value, 10) || 0 : 0,
+                    quantity: normaliseQuantityField(qtyField),
                     is_default: defaultRadio ? defaultRadio.checked : false,
                     sort_order: index + 1,
                 });
@@ -152,7 +195,11 @@
                 priceField.value = data.price !== undefined ? parseFloat(data.price).toFixed(2) : '';
             }
             if (qtyField) {
-                qtyField.value = data.quantity !== undefined ? String(data.quantity) : '';
+                if (data.quantity !== undefined && data.quantity !== null && data.quantity !== '') {
+                    qtyField.value = String(clampQuantityNumber(Number(data.quantity)));
+                } else {
+                    qtyField.value = '';
+                }
             }
             if (defaultRadio) {
                 defaultRadio.name = defaultRadioName;
@@ -233,6 +280,17 @@
 
         // Initial boot: hydrate based on markup dataset or fallback row.
         hydrateFromDataset();
+
+        if (hostForm && quantityInput) {
+            const handleManualQuantity = () => {
+                const qty = normaliseQuantityField(quantityInput);
+                hostForm.dispatchEvent(new CustomEvent(EVENT_QUANTITY_CHANGED, {
+                    detail: { quantity: qty },
+                }));
+            };
+            quantityInput.addEventListener('input', handleManualQuantity);
+            quantityInput.addEventListener('change', handleManualQuantity);
+        }
     }
 
     document.addEventListener('DOMContentLoaded', () => {
