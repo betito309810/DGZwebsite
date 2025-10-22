@@ -186,8 +186,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_update_order_
                 $alerts['error'][] = $error;
             }
         } else {
+            $transactionActive = false;
             try {
-                $pdo->beginTransaction();
+                try {
+                    if (!$pdo->inTransaction()) {
+                        $transactionActive = $pdo->beginTransaction();
+                    } else {
+                        $transactionActive = true;
+                    }
+                } catch (Throwable $transactionException) {
+                    error_log('Database does not support transactions for customer payment updates: ' . $transactionException->getMessage());
+                    $transactionActive = false;
+                }
 
                 $selectParts = ['`' . $orderIdColumn . '` AS `id`'];
                 if ($orderStatusColumn !== null) {
@@ -208,7 +218,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_update_order_
 
                 if (!$order) {
                     $alerts['error'][] = 'We could not find that order.';
-                    $pdo->rollBack();
+                    if ($transactionActive && $pdo->inTransaction()) {
+                        $pdo->rollBack();
+                    }
                 } else {
                     $status = strtolower((string) ($order['status'] ?? ''));
                     if ($status === '') {
@@ -220,7 +232,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_update_order_
 
                     if (in_array($status, $lockedStatuses, true) || in_array($status, $terminalStatuses, true)) {
                         $alerts['error'][] = 'This order can no longer be updated.';
-                        $pdo->rollBack();
+                        if ($transactionActive && $pdo->inTransaction()) {
+                            $pdo->rollBack();
+                        }
                     } else {
                         $updates = [];
                         $params = [];
@@ -237,7 +251,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_update_order_
 
                         if (empty($updates)) {
                             $alerts['error'][] = 'There were no changes to save for that order.';
-                            $pdo->rollBack();
+                            if ($transactionActive && $pdo->inTransaction()) {
+                                $pdo->rollBack();
+                            }
                         } else {
                             try {
                                 $pdo->exec("ALTER TABLE orders ADD COLUMN updated_at TIMESTAMP NULL DEFAULT NULL");
@@ -251,14 +267,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_update_order_
 
                             $updateStmt = $pdo->prepare($sql);
                             $updateStmt->execute($params);
-                            $pdo->commit();
+                            if ($transactionActive && $pdo->inTransaction()) {
+                                $pdo->commit();
+                            }
 
                             $alerts['success'][] = 'Payment details updated for your order.';
                         }
                     }
                 }
             } catch (Throwable $exception) {
-                if ($pdo->inTransaction()) {
+                if ($transactionActive && $pdo->inTransaction()) {
                     $pdo->rollBack();
                 }
                 error_log('Unable to update customer payment details: ' . $exception->getMessage());
@@ -270,13 +288,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_update_order_
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_order_id'])) {
     $orderId = (int) $_POST['cancel_order_id'];
+    $transactionActive = false;
     try {
-        $pdo->beginTransaction();
+        try {
+            if (!$pdo->inTransaction()) {
+                $transactionActive = $pdo->beginTransaction();
+            } else {
+                $transactionActive = true;
+            }
+        } catch (Throwable $transactionException) {
+            error_log('Database does not support transactions for customer cancellations: ' . $transactionException->getMessage());
+            $transactionActive = false;
+        }
         $stmt = $pdo->prepare('SELECT id, status FROM orders WHERE id = ? AND customer_id = ? FOR UPDATE');
         $stmt->execute([$orderId, (int) $customer['id']]);
         $order = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$order) {
             $alerts['error'][] = 'We could not find that order.';
+            if ($transactionActive && $pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
         } else {
             $status = strtolower((string) ($order['status'] ?? ''));
             if ($status === '') {
@@ -288,40 +319,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_order_id'])) {
 
             if (in_array($status, $lockedStatuses, true)) {
                 $alerts['error'][] = 'Orders that are already out for delivery can no longer be cancelled online.';
+                if ($transactionActive && $pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
             } elseif (in_array($status, $terminalStatuses, true)) {
                 $alerts['error'][] = 'This order can no longer be cancelled online.';
+                if ($transactionActive && $pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
             } else {
-            $itemStmt = $pdo->prepare('SELECT product_id, variant_id, qty FROM order_items WHERE order_id = ?');
-            $itemStmt->execute([$orderId]);
-            $items = $itemStmt->fetchAll(PDO::FETCH_ASSOC);
+                $itemStmt = $pdo->prepare('SELECT product_id, variant_id, qty FROM order_items WHERE order_id = ?');
+                $itemStmt->execute([$orderId]);
+                $items = $itemStmt->fetchAll(PDO::FETCH_ASSOC);
 
-            foreach ($items as $item) {
-                $qty = (int) ($item['qty'] ?? 0);
-                if ($qty <= 0) {
-                    continue;
+                foreach ($items as $item) {
+                    $qty = (int) ($item['qty'] ?? 0);
+                    if ($qty <= 0) {
+                        continue;
+                    }
+                    if (!empty($item['variant_id'])) {
+                        $variantUpdate = $pdo->prepare('UPDATE product_variants SET quantity = quantity + ? WHERE id = ?');
+                        $variantUpdate->execute([$qty, (int) $item['variant_id']]);
+                    } elseif (!empty($item['product_id'])) {
+                        $productUpdate = $pdo->prepare('UPDATE products SET quantity = quantity + ? WHERE id = ?');
+                        $productUpdate->execute([$qty, (int) $item['product_id']]);
+                    }
                 }
-                if (!empty($item['variant_id'])) {
-                    $variantUpdate = $pdo->prepare('UPDATE product_variants SET quantity = quantity + ? WHERE id = ?');
-                    $variantUpdate->execute([$qty, (int) $item['variant_id']]);
-                } elseif (!empty($item['product_id'])) {
-                    $productUpdate = $pdo->prepare('UPDATE products SET quantity = quantity + ? WHERE id = ?');
-                    $productUpdate->execute([$qty, (int) $item['product_id']]);
-                }
-            }
 
-            try {
-                $pdo->exec("ALTER TABLE orders ADD COLUMN updated_at TIMESTAMP NULL DEFAULT NULL");
-            } catch (Throwable $e) {
-                // ignore when column already exists
-            }
-            $update = $pdo->prepare("UPDATE orders SET status = 'cancelled_by_customer', updated_at = NOW() WHERE id = ?");
-            $update->execute([$orderId]);
-            $alerts['success'][] = 'Your order has been cancelled. We restocked the items to our inventory.';
+                try {
+                    $pdo->exec("ALTER TABLE orders ADD COLUMN updated_at TIMESTAMP NULL DEFAULT NULL");
+                } catch (Throwable $e) {
+                    // ignore when column already exists
+                }
+                $update = $pdo->prepare("UPDATE orders SET status = 'cancelled_by_customer', updated_at = NOW() WHERE id = ?");
+                $update->execute([$orderId]);
+                $alerts['success'][] = 'Your order has been cancelled. We restocked the items to our inventory.';
             }
         }
-        $pdo->commit();
+        if ($transactionActive && $pdo->inTransaction()) {
+            $pdo->commit();
+        }
     } catch (Throwable $exception) {
-        if ($pdo->inTransaction()) {
+        if ($transactionActive && $pdo->inTransaction()) {
             $pdo->rollBack();
         }
         error_log('Unable to cancel customer order: ' . $exception->getMessage());
@@ -634,25 +673,39 @@ $statusLabels = [
                     $customerNote = trim((string) ($order['customer_note'] ?? $order['notes'] ?? ''));
                     $paymentProofUrl = '';
                     if ($paymentProofPath !== '') {
-                        $candidatePaths = [$paymentProofPath];
-                        $normalizedProof = normalizePaymentProofPath($paymentProofPath, '');
-                        if ($normalizedProof !== '' && !in_array($normalizedProof, $candidatePaths, true)) {
-                            $candidatePaths[] = $normalizedProof;
-                        }
-
-                        foreach ($candidatePaths as $candidatePath) {
-                            $url = assetUrl($candidatePath);
-                            if ($url !== '' && $url !== '/') {
-                                $paymentProofUrl = $url;
-                                break;
+                        $normalizedUrl = normalizePaymentProofPath($paymentProofPath);
+                        if ($normalizedUrl !== '' && $normalizedUrl !== '/' && strncmp($normalizedUrl, '../', 3) !== 0) {
+                            $paymentProofUrl = $normalizedUrl;
+                        } else {
+                            $candidatePaths = [$paymentProofPath];
+                            $normalizedRelative = normalizePaymentProofPath($paymentProofPath, '');
+                            if ($normalizedRelative !== '' && !in_array($normalizedRelative, $candidatePaths, true)) {
+                                $candidatePaths[] = $normalizedRelative;
                             }
 
-                            $prefixed = 'dgz_motorshop_system/' . ltrim($candidatePath, '/');
-                            if ($prefixed !== $candidatePath) {
-                                $url = assetUrl($prefixed);
+                            foreach ($candidatePaths as $candidatePath) {
+                                if ($candidatePath === '') {
+                                    continue;
+                                }
+
+                                if (preg_match('#^(?:[a-z][a-z0-9+.-]*:)?//#i', $candidatePath) === 1 || strncmp($candidatePath, 'data:', 5) === 0) {
+                                    $paymentProofUrl = $candidatePath;
+                                    break;
+                                }
+
+                                $url = assetUrl($candidatePath);
                                 if ($url !== '' && $url !== '/') {
                                     $paymentProofUrl = $url;
                                     break;
+                                }
+
+                                $prefixed = 'dgz_motorshop_system/' . ltrim($candidatePath, '/');
+                                if ($prefixed !== $candidatePath) {
+                                    $url = assetUrl($prefixed);
+                                    if ($url !== '' && $url !== '/') {
+                                        $paymentProofUrl = $url;
+                                        break;
+                                    }
                                 }
                             }
                         }
@@ -756,7 +809,7 @@ $statusLabels = [
                         <?php $hasStoredPaymentDetails = ($referenceNumber !== '' || $paymentProofUrl !== ''); ?>
                         <?php if ($hasStoredPaymentDetails || $canUpdatePayment): ?>
                             <div class="customer-order-card__section customer-order-card__section--payment">
-                                <div class="customer-payment-card">
+                                <div class="customer-payment-card" data-payment-card>
                                     <div class="customer-payment-card__intro">
                                         <div>
                                             <h3>Payment details</h3>
@@ -767,7 +820,7 @@ $statusLabels = [
                                         <?php endif; ?>
                                     </div>
                                     <?php if ($hasStoredPaymentDetails): ?>
-                                        <div class="customer-payment-card__stored">
+                                        <div class="customer-payment-card__stored" data-payment-stored>
                                             <?php if ($referenceNumber !== ''): ?>
                                                 <div class="customer-payment-card__stored-item">
                                                     <span class="customer-payment-card__stored-label">Reference #</span>
@@ -775,11 +828,14 @@ $statusLabels = [
                                                 </div>
                                             <?php endif; ?>
                                             <?php if ($paymentProofPreviewUrl !== ''): ?>
-                                                <figure class="customer-payment-card__preview">
-                                                    <img src="<?= htmlspecialchars($paymentProofPreviewUrl) ?>" alt="Proof of payment preview">
+                                                <figure class="customer-payment-card__preview" data-payment-preview>
+                                                    <img src="<?= htmlspecialchars($paymentProofPreviewUrl) ?>" alt="Proof of payment preview" data-payment-preview-image>
                                                 </figure>
+                                                <?php if ($paymentProofUrl !== ''): ?>
+                                                    <p class="customer-payment-card__note" data-payment-preview-fallback hidden>Proof of payment uploaded.</p>
+                                                <?php endif; ?>
                                             <?php elseif ($paymentProofUrl !== ''): ?>
-                                                <p class="customer-payment-card__note">Proof of payment uploaded.</p>
+                                                <p class="customer-payment-card__note" data-payment-preview-fallback>Proof of payment uploaded.</p>
                                             <?php endif; ?>
                                         </div>
                                     <?php endif; ?>
@@ -795,7 +851,7 @@ $statusLabels = [
                                                 <div class="customer-payment-card__field">
                                                     <label for="payment-proof-<?= (int) $order['id'] ?>">Upload proof of payment</label>
                                                     <div class="customer-payment-card__file">
-                                                        <input type="file" name="payment_proof" id="payment-proof-<?= (int) $order['id'] ?>" accept="image/*">
+                                                        <input type="file" name="payment_proof" id="payment-proof-<?= (int) $order['id'] ?>" accept="image/*" data-payment-proof-input>
                                                     </div>
                                                     <p class="customer-payment-card__help">Accepted formats: JPG, PNG, GIF, or WEBP.</p>
                                                 </div>

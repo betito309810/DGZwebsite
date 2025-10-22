@@ -361,6 +361,106 @@
         });
     });
 
+    const paymentCards = document.querySelectorAll('[data-payment-card]');
+    if (paymentCards.length > 0) {
+        const attachPreviewErrorHandler = (img, fallback) => {
+            if (!img) {
+                return;
+            }
+            const handleError = () => {
+                const figure = img.closest('[data-payment-preview]');
+                if (figure) {
+                    figure.remove();
+                }
+                if (fallback) {
+                    fallback.hidden = false;
+                }
+            };
+            img.addEventListener('error', handleError);
+        };
+
+        paymentCards.forEach((card) => {
+            const form = card.querySelector('.customer-payment-card__form');
+            let fallbackNote = card.querySelector('[data-payment-preview-fallback]');
+            const existingPreviewImg = card.querySelector('[data-payment-preview-image]');
+            attachPreviewErrorHandler(existingPreviewImg, fallbackNote);
+
+            const ensureStoredSection = () => {
+                let section = card.querySelector('[data-payment-stored]');
+                if (section) {
+                    return section;
+                }
+                section = document.createElement('div');
+                section.className = 'customer-payment-card__stored';
+                section.setAttribute('data-payment-stored', '');
+                if (form) {
+                    card.insertBefore(section, form);
+                } else {
+                    card.appendChild(section);
+                }
+                if (!fallbackNote) {
+                    fallbackNote = document.createElement('p');
+                    fallbackNote.className = 'customer-payment-card__note';
+                    fallbackNote.textContent = 'Proof of payment uploaded.';
+                    fallbackNote.setAttribute('data-payment-preview-fallback', '');
+                    fallbackNote.hidden = true;
+                    section.appendChild(fallbackNote);
+                }
+                return section;
+            };
+
+            const ensurePreviewFigure = () => {
+                let figure = card.querySelector('[data-payment-preview]');
+                if (figure) {
+                    return figure;
+                }
+                const section = ensureStoredSection();
+                figure = document.createElement('figure');
+                figure.className = 'customer-payment-card__preview';
+                figure.setAttribute('data-payment-preview', '');
+                const img = document.createElement('img');
+                img.setAttribute('alt', 'Proof of payment preview');
+                img.setAttribute('data-payment-preview-image', '');
+                figure.appendChild(img);
+                section.insertBefore(figure, section.firstChild);
+                attachPreviewErrorHandler(img, fallbackNote);
+                return figure;
+            };
+
+            const fileInput = card.querySelector('[data-payment-proof-input]');
+            if (fileInput) {
+                fileInput.addEventListener('change', () => {
+                    const files = fileInput.files;
+                    if (!files || files.length === 0) {
+                        return;
+                    }
+                    const [file] = files;
+                    if (!file || typeof file.type !== 'string' || file.type.toLowerCase().indexOf('image/') !== 0) {
+                        return;
+                    }
+
+                    const reader = new FileReader();
+                    reader.addEventListener('load', () => {
+                        const result = typeof reader.result === 'string' ? reader.result : '';
+                        if (result === '') {
+                            return;
+                        }
+
+                        const figure = ensurePreviewFigure();
+                        const img = figure.querySelector('[data-payment-preview-image]');
+                        if (img) {
+                            img.src = result;
+                        }
+                        if (fallbackNote) {
+                            fallbackNote.hidden = true;
+                        }
+                    });
+                    reader.readAsDataURL(file);
+                });
+            }
+        });
+    }
+
     // Utility to expose acceptance state
     document.addEventListener('terms:reset', () => {
         try {
