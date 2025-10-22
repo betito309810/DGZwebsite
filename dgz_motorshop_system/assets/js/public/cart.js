@@ -9,15 +9,16 @@
         function redirectToCheckout(cartData) {
             const body = document.body;
             const isAuthenticated = body && body.dataset && body.dataset.customerSession === 'authenticated';
+            const separator = checkoutBaseUrl.includes('?') ? '&' : '?';
+            const checkoutDestination = `${checkoutBaseUrl}${separator}cart=${cartData}`;
             if (!isAuthenticated) {
                 if (window.customerAuth && typeof window.customerAuth.openGate === 'function') {
-                    window.customerAuth.openGate();
+                    window.customerAuth.openGate({ redirectTo: checkoutDestination });
                 }
                 return;
             }
 
-            const separator = checkoutBaseUrl.includes('?') ? '&' : '?';
-            window.location.href = `${checkoutBaseUrl}${separator}cart=${cartData}`;
+            window.location.href = checkoutDestination;
         }
 
         const HIGH_VALUE_WARNING_THRESHOLD = 70000;

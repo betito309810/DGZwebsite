@@ -73,11 +73,70 @@
     // Auth gate modal handling
     const authGate = document.querySelector('[data-auth-gate]');
     const authRequired = body.dataset.authRequired || '';
+    const authGateLoginBase = authGate ? (authGate.getAttribute('data-auth-gate-login-base') || '') : '';
+    const authGateRegisterBase = authGate ? (authGate.getAttribute('data-auth-gate-register-base') || '') : '';
+    const authGateDefaultRedirect = authGate ? (authGate.getAttribute('data-auth-gate-default-redirect') || '') : '';
+    const authGateLoginLink = authGate ? authGate.querySelector('[data-auth-gate-login-link]') : null;
+    const authGateRegisterLink = authGate ? authGate.querySelector('[data-auth-gate-register-link]') : null;
 
-    function openAuthGate() {
+    const normaliseBaseUrl = (value, fallback) => {
+        if (typeof value === 'string' && value.trim() !== '') {
+            return value.trim();
+        }
+        if (typeof fallback === 'string' && fallback.trim() !== '') {
+            return fallback.trim();
+        }
+        return '';
+    };
+
+    const composeRedirectUrl = (baseUrl, redirectTarget) => {
+        const trimmedBase = normaliseBaseUrl(baseUrl);
+        if (trimmedBase === '') {
+            return '';
+        }
+
+        if (typeof redirectTarget !== 'string' || redirectTarget.trim() === '') {
+            return trimmedBase;
+        }
+
+        const normalizedRedirect = redirectTarget.trim();
+
+        try {
+            const url = new URL(trimmedBase, window.location.origin);
+            url.searchParams.set('redirect', normalizedRedirect);
+            return url.toString();
+        } catch (error) {
+            const separator = trimmedBase.includes('?') ? '&' : '?';
+            return `${trimmedBase}${separator}redirect=${encodeURIComponent(normalizedRedirect)}`;
+        }
+    };
+
+    const updateAuthGateLinks = (redirectTarget) => {
+        const loginBase = normaliseBaseUrl(authGateLoginBase, authGateLoginLink ? authGateLoginLink.getAttribute('href') : '');
+        const registerBase = normaliseBaseUrl(authGateRegisterBase, authGateRegisterLink ? authGateRegisterLink.getAttribute('href') : '');
+        const loginHref = composeRedirectUrl(loginBase, redirectTarget);
+        const registerHref = composeRedirectUrl(registerBase, redirectTarget);
+
+        if (authGateLoginLink && loginHref !== '') {
+            authGateLoginLink.setAttribute('href', loginHref);
+        }
+
+        if (authGateRegisterLink && registerHref !== '') {
+            authGateRegisterLink.setAttribute('href', registerHref);
+        }
+    };
+
+    function openAuthGate(options = {}) {
         if (!authGate) {
             return;
         }
+
+        const redirectOption = typeof options.redirectTo === 'string' && options.redirectTo.trim() !== ''
+            ? options.redirectTo.trim()
+            : authGateDefaultRedirect;
+
+        updateAuthGateLinks(redirectOption);
+
         authGate.removeAttribute('hidden');
         body.classList.add('auth-gate-open');
     }
@@ -86,8 +145,17 @@
         if (!authGate) {
             return;
         }
+
         authGate.setAttribute('hidden', '');
         body.classList.remove('auth-gate-open');
+
+        if (authGateDefaultRedirect) {
+            updateAuthGateLinks(authGateDefaultRedirect);
+        }
+    }
+
+    if (authGateDefaultRedirect) {
+        updateAuthGateLinks(authGateDefaultRedirect);
     }
 
     window.customerAuth = {

@@ -127,6 +127,13 @@ $registerUrl = orderingUrl('register.php');
 $myOrdersUrl = orderingUrl('my_orders.php');
 $logoutUrl = orderingUrl('logout.php');
 $settingsUrl = orderingUrl('settings.php');
+$loginGateLoginUrl = $loginUrl;
+$loginGateRegisterUrl = $registerUrl;
+$loginGateRedirect = orderingUrl('checkout.php');
+$currentQueryString = isset($_SERVER['QUERY_STRING']) ? trim((string) $_SERVER['QUERY_STRING']) : '';
+if ($currentQueryString !== '') {
+    $loginGateRedirect .= (strpos($loginGateRedirect, '?') === false ? '?' : '&') . $currentQueryString;
+}
 
 $customerAddressColumn = tableFindColumn($pdo, 'customers', ['address_line1', 'address', 'address1', 'street']);
 $customerCityColumn = tableFindColumn($pdo, 'customers', ['city', 'town', 'municipality']);
