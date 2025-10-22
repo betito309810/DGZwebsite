@@ -630,57 +630,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
 
                             if (strtolower(trim($customerName)) !== 'walk-in') {
                                 $itemData = prepareOrderItemsData($pdo, $orderId);
-                                $itemsTotal = (float) ($itemData['items_total'] ?? 0.0);
                                 $summaryTableHtml = (string) ($itemData['table_html'] ?? '');
 
-                                $invoiceNumber = trim((string) ($orderInfo['invoice_number'] ?? ''));
                                 $createdAt = (string) ($orderInfo['created_at'] ?? '');
-                                $orderTotal = (float) ($orderInfo['total'] ?? $itemsTotal);
 
                                 $prettyDate = $createdAt !== ''
                                     ? date('F j, Y g:i A', strtotime($createdAt))
                                     : date('F j, Y g:i A');
-                                $displayInvoice = $invoiceNumber !== ''
-                                    ? $invoiceNumber
-                                    : 'INV-' . str_pad((string) $orderId, 6, '0', STR_PAD_LEFT);
 
-                                $subject = 'Order Approved - DGZ Motorshop Invoice ' . $displayInvoice;
+                                $subject = 'Order Approved - DGZ Motorshop Update';
 
                                 $body = '<div style="font-family: Arial, sans-serif; font-size:14px; color:#333;">'
                                     . '<h2 style="color:#111; margin-bottom:8px;">Your Order is Approved</h2>'
                                     . '<p style="margin:0 0 12px;">Hi ' . htmlspecialchars($customerName, ENT_QUOTES, 'UTF-8') . ',</p>'
                                     . '<p style="margin:0 0 12px;">Good news! Your order #' . (int) $orderId . ' has been approved and is now being processed.</p>'
-                                    . '<p style="margin:0 0 12px;">Invoice Number: <strong>' . htmlspecialchars($displayInvoice, ENT_QUOTES, 'UTF-8') . '</strong><br>'
-                                    . 'Order Date: ' . htmlspecialchars($prettyDate, ENT_QUOTES, 'UTF-8') . '</p>'
+                                    . '<p style="margin:0 0 12px;">Order Date: ' . htmlspecialchars($prettyDate, ENT_QUOTES, 'UTF-8') . '</p>'
                                     . $summaryTableHtml
-                                    . '<p style="margin:16px 0 0;">Thank you for shopping with <strong>DGZ Motorshop</strong>!</p>'
+                                    . '<p style="margin:16px 0 0;">We\'ll let you know once it\'s on the way. Thank you for shopping with <strong>DGZ Motorshop</strong>!</p>'
                                     . '</div>';
 
-                                $receiptData = [
-                                    'order_id' => $orderId,
-                                    'invoice_number' => $invoiceNumber,
-                                    'customer_name' => $customerName,
-                                    'created_at' => $createdAt,
-                                    'sales_total' => $orderTotal,
-                                    'vatable' => $orderTotal / 1.12,
-                                    'vat' => $orderTotal - ($orderTotal / 1.12),
-                                    'amount_paid' => $orderTotal,
-                                    'change' => 0.0,
-                                    'cashier' => currentSessionUserDisplayName() ?? 'Cashier',
-                                    'items' => array_map(static function (array $item): array {
-                                        return [
-                                            'name' => $item['name'] ?? 'Item',
-                                            'quantity' => (int) ($item['quantity'] ?? 0),
-                                            'price' => (float) ($item['price'] ?? 0),
-                                            'total' => (float) ($item['total'] ?? 0),
-                                        ];
-                                    }, $itemData['items'] ?? [])
-                                ];
-
-                                $pdfContent = generateReceiptPDF($receiptData);
-                                $pdfFilename = 'receipt_' . $orderId . '.pdf';
-
-                                try { sendEmail($customerEmail, $subject, $body, $pdfContent, $pdfFilename); } catch (Throwable $e) { /* logged */ }
+                                try { sendEmail($customerEmail, $subject, $body); } catch (Throwable $e) { /* logged */ }
                     }
                 }
             }
