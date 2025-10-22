@@ -831,6 +831,28 @@
     justify-content: flex-end;
 }
 
+.customer-payment-card__instructions {
+    margin: 0.75rem 0 0;
+    font-size: 0.85rem;
+    color: #1f2937;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.customer-payment-card__instructions-label {
+    font-weight: 600;
+}
+
+.customer-payment-card__instructions-value {
+    font-variant-numeric: tabular-nums;
+}
+
+.customer-payment-card__instructions-separator {
+    color: rgba(31, 41, 55, 0.6);
+}
+
 .customer-payment-card__submit {
     background: linear-gradient(135deg, #2563eb, #4f46e5);
     color: #ffffff;
