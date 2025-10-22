@@ -171,10 +171,19 @@ try {
 
     // Normalise values for consistent display in the UI.
     $status = strtolower((string) ($order['status'] ?? 'pending'));
+    if ($status === 'completed') {
+        $status = 'complete';
+    } elseif ($status === 'cancelled') {
+        $status = 'cancelled';
+    }
+
     $statusMessages = [
         'pending' => 'Your order is being reviewed by our team.',
         'approved' => 'Great news! Your order has been approved and is moving to fulfillment.',
-        'completed' => 'Your order has been completed. Thank you for shopping with us!',
+        'delivery' => 'Your order has been handed to the courier and is on its way.',
+        'complete' => 'Your order has been completed. Thank you for shopping with us!',
+        'cancelled_by_staff' => 'This order was cancelled by our team. Please contact us for more details.',
+        'cancelled_by_customer' => 'This order was cancelled at your request.',
         'disapproved' => 'Unfortunately this order was disapproved. Please contact our team for help.',
         'cancelled' => 'This order has been cancelled.',
         'canceled' => 'This order has been cancelled.',

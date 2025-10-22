@@ -13,6 +13,31 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- customers table
+CREATE TABLE IF NOT EXISTS customers (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  full_name VARCHAR(150) NOT NULL,
+  email VARCHAR(190) NULL,
+  phone VARCHAR(40) NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CHECK (email IS NOT NULL OR phone IS NOT NULL),
+  UNIQUE KEY idx_customers_email (email),
+  UNIQUE KEY idx_customers_phone (phone)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- customer password reset requests
+CREATE TABLE IF NOT EXISTS customer_password_resets (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  customer_id INT UNSIGNED NOT NULL,
+  token CHAR(64) NOT NULL,
+  contact VARCHAR(190) NULL,
+  expires_at DATETIME NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY idx_customer_password_resets_token (token),
+  CONSTRAINT fk_customer_password_resets_customer FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- products table
 CREATE TABLE IF NOT EXISTS products (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -71,16 +96,20 @@ CREATE TABLE IF NOT EXISTS stock_entries (
 CREATE TABLE IF NOT EXISTS orders (
   id INT AUTO_INCREMENT PRIMARY KEY,
   customer_name VARCHAR(200),
+  customer_id INT UNSIGNED NULL,
   contact VARCHAR(100),
   address TEXT,
   total DECIMAL(12,2),
   payment_method VARCHAR(50),
   payment_proof VARCHAR(255),
-  status VARCHAR(50) DEFAULT 'pending',
+  status ENUM('pending','approved','delivery','complete','cancelled_by_staff','cancelled_by_customer','completed','disapproved','cancelled','canceled') NOT NULL DEFAULT 'pending',
   processed_by_user_id INT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL,
   FOREIGN KEY (processed_by_user_id) REFERENCES users(id)
 );
+
+CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders(customer_id);
 
 -- order_items
 CREATE TABLE IF NOT EXISTS order_items (

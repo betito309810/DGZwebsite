@@ -1,6 +1,7 @@
 <?php
 require __DIR__ . '/dgz_motorshop_system/config/config.php';
 require_once __DIR__ . '/dgz_motorshop_system/includes/product_variants.php'; // Added: load helpers for variant-aware storefront rendering.
+require_once __DIR__ . '/dgz_motorshop_system/includes/customer_session.php';
 $pdo = db();
 $products = $pdo->query('SELECT * FROM products ORDER BY name')->fetchAll();
 $productVariantMap = fetchVariantsForProducts($pdo, array_column($products, 'id')); // Added: preload variant rows for customer UI.
@@ -22,6 +23,19 @@ $aboutUrl = orderingUrl('about.php');
 $trackOrderUrl = orderingUrl('track-order.php');
 $checkoutUrl = orderingUrl('checkout.php');
 $productImagesEndpoint = orderingUrl('api/product-images.php');
+
+$customerStylesheet = assetUrl('assets/css/public/customer.css');
+$customerScript = assetUrl('assets/js/public/customer.js');
+$customerSessionState = customerSessionExport();
+$isCustomerAuthenticated = !empty($customerSessionState['authenticated']);
+$customerFirstName = $customerSessionState['firstName'] ?? null;
+$loginUrl = orderingUrl('login.php');
+$registerUrl = orderingUrl('register.php');
+$myOrdersUrl = orderingUrl('my_orders.php');
+$logoutUrl = orderingUrl('logout.php');
+
+$bodyCustomerState = $isCustomerAuthenticated ? 'authenticated' : 'guest';
+$bodyCustomerFirstName = $customerFirstName !== null ? $customerFirstName : '';
 
 $categories = [];
 foreach ($products as $product) {
@@ -48,12 +62,10 @@ natcasesort($categories);
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="<?= htmlspecialchars($indexStylesheet) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars($checkoutModalStylesheet) ?>">
-    <style>
-
-    </style>
+    <link rel="stylesheet" href="<?= htmlspecialchars($customerStylesheet) ?>">
 </head>
 
-<body>
+<body data-customer-session="<?= htmlspecialchars($bodyCustomerState) ?>" data-customer-first-name="<?= htmlspecialchars($bodyCustomerFirstName) ?>">
     <!-- Header -->
     <header class="header">
         <div class="header-content">
@@ -73,6 +85,26 @@ natcasesort($categories);
                     <i class="fas fa-search"></i>
                 </button>
                 
+            </div>
+
+
+            <div class="account-menu" data-account-menu>
+                <?php if ($isCustomerAuthenticated): ?>
+                    <button type="button" class="account-menu__trigger" data-account-trigger aria-haspopup="true" aria-expanded="false">
+                        <span class="account-menu__avatar" aria-hidden="true"><i class="fas fa-user-circle"></i></span>
+                        <span class="account-menu__label"><?= htmlspecialchars($customerFirstName ?? 'Account') ?></span>
+                        <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                    </button>
+                    <div class="account-menu__dropdown" data-account-dropdown hidden>
+                        <a href="<?= htmlspecialchars($myOrdersUrl) ?>" class="account-menu__link">My Orders</a>
+                        <a href="<?= htmlspecialchars($logoutUrl) ?>" class="account-menu__link">Logout</a>
+                    </div>
+                <?php else: ?>
+                    <a href="<?= htmlspecialchars($loginUrl) ?>" class="account-menu__guest" data-account-login>
+                        <span class="account-menu__avatar" aria-hidden="true"><i class="fas fa-user-circle"></i></span>
+                        <span class="account-menu__label">Log In</span>
+                    </a>
+                <?php endif; ?>
             </div>
 
             <a href="#" class="cart-btn" id="cartButton">
@@ -95,6 +127,8 @@ natcasesort($categories);
     </nav>
 
     <div class="nav-backdrop" id="navBackdrop" hidden></div>
+
+    <?php require __DIR__ . '/dgz_motorshop_system/includes/login_required_modal.php'; ?>
 
     <div class="mobile-toolbar" id="mobileCatalogToolbar" aria-label="Catalog controls">
         <button type="button" class="toolbar-btn" id="mobileFilterToggle" aria-controls="categorySidebar" aria-expanded="false">
@@ -301,14 +335,16 @@ natcasesort($categories);
         <div class="terms-overlay__backdrop" aria-hidden="true"></div>
         <div class="terms-overlay__dialog" role="document">
             <h2 class="terms-overlay__title" id="termsTitle">Before you continue</h2>
-            <p class="terms-overlay__description">
-                By placing an order with DGZ Motorshop, you agree that:
-            </p>
-            <ol class="terms-overlay__list">
-                <li>The customer who confirms the booking will arrange the courier and shoulder the delivery fee.</li>
-                <li>Once the items are handed over to the courier, the shop is not responsible for any damages during transit.</li>
-            </ol>
-            <button type="button" class="terms-overlay__button" id="termsAcceptButton">I Understand and Accept</button>
+            <div class="terms-overlay__content" id="termsScrollRegion" tabindex="0" data-terms-scroll>
+                <p class="terms-overlay__description">
+                    By placing an order with DGZ Motorshop, you agree that:
+                </p>
+                <ol class="terms-overlay__list">
+                    <li>The customer who confirms the booking will arrange the courier and shoulder the delivery fee.</li>
+                    <li>Once the items are handed over to the courier, the shop is not responsible for any damages during transit.</li>
+                </ol>
+            </div>
+            <button type="button" class="terms-overlay__button" id="termsAcceptButton" disabled data-terms-accept>I Understand and Accept</button>
         </div>
     </div>
     <!-- Updated: Modal container now mirrors a marketplace-style product detail layout for richer previews. -->
@@ -385,6 +421,7 @@ natcasesort($categories);
     <!-- Added: storefront gallery controller that powers the modal defined above. -->
     <script src="<?= htmlspecialchars($galleryScript) ?>"></script>
     <!-- Terms acknowledgement overlay -->
+    <script src="<?= htmlspecialchars($customerScript) ?>" defer></script>
     <script src="<?= htmlspecialchars($termsScript) ?>"></script>
     <!-- Live inventory watcher -->
     <script src="<?= htmlspecialchars($inventoryAvailabilityScript) ?>"></script>

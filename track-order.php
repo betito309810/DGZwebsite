@@ -1,5 +1,6 @@
 <?php
 require __DIR__ . '/dgz_motorshop_system/config/config.php';
+require __DIR__ . '/dgz_motorshop_system/includes/customer_session.php';
 
 $logoAsset = assetUrl('assets/logo.png');
 $indexStylesheet = assetUrl('assets/css/public/index.css');
@@ -14,6 +15,17 @@ $checkoutUrl = orderingUrl('checkout.php');
 $orderStatusEndpoint = orderingUrl('order_status.php');
 $productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
 $checkoutModalStylesheet = assetUrl('assets/css/public/checkoutModals.css');
+$customerStylesheet = assetUrl('assets/css/public/customer.css');
+$customerScript = assetUrl('assets/js/public/customer.js');
+$customerSessionState = customerSessionExport();
+$isCustomerAuthenticated = !empty($customerSessionState['authenticated']);
+$customerFirstName = $customerSessionState['firstName'] ?? null;
+$loginUrl = orderingUrl('login.php');
+$registerUrl = orderingUrl('register.php');
+$myOrdersUrl = orderingUrl('my_orders.php');
+$logoutUrl = orderingUrl('logout.php');
+$bodyCustomerState = $isCustomerAuthenticated ? 'authenticated' : 'guest';
+$bodyCustomerFirstName = $customerFirstName ?? '';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -29,8 +41,9 @@ $checkoutModalStylesheet = assetUrl('assets/css/public/checkoutModals.css');
     <!-- Page specific stylesheet lives alongside the other public assets -->
     <link rel="stylesheet" href="<?= htmlspecialchars($trackStylesheet) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars($checkoutModalStylesheet) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars($customerStylesheet) ?>">
 </head>
-<body>
+<body data-customer-session="<?= htmlspecialchars($bodyCustomerState) ?>" data-customer-first-name="<?= htmlspecialchars($bodyCustomerFirstName) ?>">
     <!-- Header: mirrors the home page layout so the experience feels seamless -->
     <header class="header">
         <div class="header-content">
@@ -42,6 +55,25 @@ $checkoutModalStylesheet = assetUrl('assets/css/public/checkoutModals.css');
                 <a href="<?= htmlspecialchars($homeUrl) ?>" aria-label="Go to DGZ Motorshop home">
                     <img src="<?= htmlspecialchars($logoAsset) ?>" alt="DGZ Motorshop Logo">
                 </a>
+            </div>
+
+            <div class="account-menu" data-account-menu>
+                <?php if ($isCustomerAuthenticated): ?>
+                    <button type="button" class="account-menu__trigger" data-account-trigger aria-haspopup="true" aria-expanded="false">
+                        <span class="account-menu__avatar" aria-hidden="true"><i class="fas fa-user-circle"></i></span>
+                        <span class="account-menu__label"><?= htmlspecialchars($customerFirstName ?? 'Account') ?></span>
+                        <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                    </button>
+                    <div class="account-menu__dropdown" data-account-dropdown hidden>
+                        <a href="<?= htmlspecialchars($myOrdersUrl) ?>" class="account-menu__link">My Orders</a>
+                        <a href="<?= htmlspecialchars($logoutUrl) ?>" class="account-menu__link">Logout</a>
+                    </div>
+                <?php else: ?>
+                    <a href="<?= htmlspecialchars($loginUrl) ?>" class="account-menu__guest" data-account-login>
+                        <span class="account-menu__avatar" aria-hidden="true"><i class="fas fa-user-circle"></i></span>
+                        <span class="account-menu__label">Log In</span>
+                    </a>
+                <?php endif; ?>
             </div>
 
             <a href="#" class="cart-btn" id="cartButton">
@@ -64,6 +96,8 @@ $checkoutModalStylesheet = assetUrl('assets/css/public/checkoutModals.css');
     </nav>
 
     <div class="nav-backdrop" id="navBackdrop" hidden></div>
+
+    <?php require __DIR__ . '/dgz_motorshop_system/includes/login_required_modal.php'; ?>
 
     <!-- Main tracker module -->
     <main class="tracker-wrapper">
@@ -119,6 +153,7 @@ $checkoutModalStylesheet = assetUrl('assets/css/public/checkoutModals.css');
             productPlaceholder: <?= json_encode($productPlaceholder) ?>
         });
     </script>
+    <script src="<?= htmlspecialchars($customerScript) ?>" defer></script>
     <script src="<?= htmlspecialchars($cartScript) ?>"></script>
     <script src="<?= htmlspecialchars($mobileNavScript) ?>"></script>
     <!-- Page specific logic for handling status lookups -->

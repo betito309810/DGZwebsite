@@ -1,6 +1,7 @@
 <?php
 require __DIR__ . '/dgz_motorshop_system/config/config.php';
 require_once __DIR__ . '/dgz_motorshop_system/includes/product_variants.php'; // Added: variant helpers for checkout validation.
+require_once __DIR__ . '/dgz_motorshop_system/includes/customer_session.php';
 require_once __DIR__ . '/dgz_motorshop_system/includes/email.php';
 $pdo = db();
 $errors = [];
@@ -21,6 +22,31 @@ $currentQrAsset = $selectedPaymentMethod === 'Maya' ? $mayaQrAsset : $qrAsset;
 $currentQrAlt = $selectedPaymentMethod === 'Maya' ? 'Maya payment QR code' : 'GCash payment QR code';
 $shopUrl = orderingUrl('index.php');
 $inventoryAvailabilityApi = orderingUrl('api/inventory-availability.php');
+
+$customerStylesheet = assetUrl('assets/css/public/customer.css');
+$customerScript = assetUrl('assets/js/public/customer.js');
+$customerSessionState = customerSessionExport();
+$isCustomerAuthenticated = !empty($customerSessionState['authenticated']);
+$customerFirstName = $customerSessionState['firstName'] ?? null;
+$customerAccount = $isCustomerAuthenticated ? getAuthenticatedCustomer() : null;
+$bodyCustomerState = $isCustomerAuthenticated ? 'authenticated' : 'guest';
+$bodyCustomerFirstName = $customerFirstName ?? '';
+$loginUrl = orderingUrl('login.php');
+$registerUrl = orderingUrl('register.php');
+$myOrdersUrl = orderingUrl('my_orders.php');
+$logoutUrl = orderingUrl('logout.php');
+
+if ($customerAccount) {
+    if (!isset($_POST['customer_name']) || trim((string) $_POST['customer_name']) === '') {
+        $_POST['customer_name'] = $customerAccount['full_name'] ?? '';
+    }
+    if (!isset($_POST['email']) || trim((string) $_POST['email']) === '') {
+        $_POST['email'] = $customerAccount['email'] ?? '';
+    }
+    if (!isset($_POST['phone']) || trim((string) $_POST['phone']) === '') {
+        $_POST['phone'] = $customerAccount['phone'] ?? '';
+    }
+}
 
 
 if (!function_exists('ensureOrdersTrackingCodeColumn')) {
@@ -385,6 +411,9 @@ if (empty($cartItems) && !(isset($_GET['success']) && $_GET['success'] === '1'))
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
+    if (!$isCustomerAuthenticated || !$customerAccount) {
+        $errors[] = 'Please log in or create an account before checking out.';
+    }
     // Treat customer_name as full name
     $customer_name = trim($_POST['customer_name']);
     $email = trim($_POST['email'] ?? '');
@@ -397,6 +426,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
     if (mb_strlen($customerNote) > 500) {
         $customerNote = mb_substr($customerNote, 0, 500); // Added guard to keep notes reasonably short
     }
+    if ($customerAccount) {
+        $customer_name = $customerAccount['full_name'] ?? $customer_name;
+        if (!empty($customerAccount['email'])) {
+            $email = (string) $customerAccount['email'];
+        }
+        if (!empty($customerAccount['phone'])) {
+            $phone = (string) $customerAccount['phone'];
+        }
+    }
+
     $payment_method = $_POST['payment_method'] ?? '';
     $referenceInput = trim($_POST['reference_number'] ?? '');
     $proof_path = null;
@@ -561,6 +600,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
         try { $hasPostalCodeColumn = ordersHasColumn($pdo, 'postal_code'); } catch (Exception $e) { $hasPostalCodeColumn = false; }
         try { $hasCityColumn = ordersHasColumn($pdo, 'city'); } catch (Exception $e) { $hasCityColumn = false; }
 
+        try { $hasCustomerIdColumn = ordersHasColumn($pdo, 'customer_id'); } catch (Exception $e) { $hasCustomerIdColumn = false; }
+
         if ($hasEmailColumn) { $columns[] = 'email'; $values[] = $email; }
         if ($hasPhoneColumn) { $columns[] = 'phone'; $values[] = $phone; }
         if ($hasLegacyContact) { $columns[] = 'contact'; $values[] = $email; }
@@ -572,6 +613,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
         elseif ($hasLegacyNotesColumn) { $columns[] = 'notes'; $values[] = $customerNote !== '' ? $customerNote : null; } // Added fallback storage for systems that already expose a generic notes column
         if ($hasPostalCodeColumn) { $columns[] = 'postal_code'; $values[] = $postalCode; }
         if ($hasCityColumn) { $columns[] = 'city'; $values[] = $city; }
+
+        if ($hasCustomerIdColumn) { $columns[] = 'customer_id'; $values[] = $customerAccount ? (int) $customerAccount['id'] : null; }
 
         if (ordersHasColumn($pdo, 'order_type')) {
             $columns[] = 'order_type';
@@ -706,8 +749,9 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="<?= htmlspecialchars($checkoutStylesheet) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars($checkoutModalStylesheet) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars($customerStylesheet) ?>">
 </head>
-<body>
+<body data-customer-session="<?= htmlspecialchars($bodyCustomerState) ?>" data-customer-first-name="<?= htmlspecialchars($bodyCustomerFirstName) ?>" data-auth-required="checkout">
     <header class="header">
         <div class="header-content">
             <div class="logo">
@@ -715,15 +759,40 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                     <img src="<?= htmlspecialchars($logoAsset) ?>" alt="Company Logo">
                 </a>
             </div>
+
+            <div class="account-menu" data-account-menu>
+                <?php if ($isCustomerAuthenticated): ?>
+                    <button type="button" class="account-menu__trigger" data-account-trigger aria-haspopup="true" aria-expanded="false">
+                        <span class="account-menu__avatar" aria-hidden="true"><i class="fas fa-user-circle"></i></span>
+                        <span class="account-menu__label"><?= htmlspecialchars($customerFirstName ?? 'Account') ?></span>
+                        <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                    </button>
+                    <div class="account-menu__dropdown" data-account-dropdown hidden>
+                        <a href="<?= htmlspecialchars($myOrdersUrl) ?>" class="account-menu__link">My Orders</a>
+                        <a href="<?= htmlspecialchars($logoutUrl) ?>" class="account-menu__link">Logout</a>
+                    </div>
+                <?php else: ?>
+                    <a href="<?= htmlspecialchars($loginUrl) ?>" class="account-menu__guest" data-account-login>
+                        <span class="account-menu__avatar" aria-hidden="true"><i class="fas fa-user-circle"></i></span>
+                        <span class="account-menu__label">Log In</span>
+                    </a>
+                <?php endif; ?>
+            </div>
+
             <a href="<?= htmlspecialchars($shopUrl) ?>" class="continue-shopping-btn">
-            <i class="fas fa-arrow-left"></i> Continue Shopping
-        </a>
+                <i class="fas fa-arrow-left"></i> Continue Shopping
+            </a>
         </div>
     </header>
+
+    <?php require __DIR__ . '/dgz_motorshop_system/includes/login_required_modal.php'; ?>
 
     <div class="container">
         <!-- Left Column - Checkout Form -->
         <div class="checkout-form">
+            <?php if (!$isCustomerAuthenticated): ?>
+                <div class="checkout-login-alert">Log in or create an account to finish checkout.</div>
+            <?php endif; ?>
             <?php if (!empty($errors)): ?>
             <div class="form-alert">
                 <strong>We couldn't process your order:</strong>
@@ -947,6 +1016,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
         </div>
     </div>
 
+    <script src="<?= htmlspecialchars($customerScript) ?>" defer></script>
     <script>
         const proofInput = document.getElementById('proof');
         const proofLabel = document.querySelector('label[for="proof"]');

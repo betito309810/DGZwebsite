@@ -19,11 +19,28 @@
         document.body.classList.remove('terms-overlay-active');
     }
 
+    function enableAccept(button) {
+        if (!button) {
+            return;
+        }
+        button.disabled = false;
+        button.classList.remove('is-disabled');
+    }
+
+    function disableAccept(button) {
+        if (!button) {
+            return;
+        }
+        button.disabled = true;
+        button.classList.add('is-disabled');
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         const overlay = document.getElementById('termsOverlay');
         const acceptButton = document.getElementById('termsAcceptButton');
+        const scrollRegion = document.querySelector('[data-terms-scroll]');
 
-        if (!overlay || !acceptButton) {
+        if (!overlay || !acceptButton || !scrollRegion) {
             return;
         }
 
@@ -34,7 +51,6 @@
                 hasAcceptedTerms = window.localStorage.getItem(storageKey) === 'accepted';
             }
         } catch (error) {
-            // Accessing localStorage can throw in privacy modes. Treat as not yet accepted.
             hasAcceptedTerms = false;
         }
 
@@ -42,13 +58,25 @@
             return;
         }
 
+        disableAccept(acceptButton);
         showOverlay(overlay);
+
+        function handleScroll() {
+            const reachedBottom = scrollRegion.scrollTop + scrollRegion.clientHeight >= scrollRegion.scrollHeight - 4;
+            if (reachedBottom) {
+                enableAccept(acceptButton);
+                scrollRegion.removeEventListener('scroll', handleScroll);
+            }
+        }
+
+        scrollRegion.addEventListener('scroll', handleScroll);
+        // Trigger check in case content fits without scrolling
+        handleScroll();
 
         acceptButton.addEventListener('click', function () {
             try {
                 window.localStorage && window.localStorage.setItem(storageKey, 'accepted');
             } catch (error) {
-                // If localStorage is not available, fail silently and just hide the modal.
             }
             hideOverlay(overlay);
         });
