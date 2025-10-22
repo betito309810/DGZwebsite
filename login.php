@@ -109,8 +109,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $candidate = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
             }
 
-            if (!$candidate || !verifyCustomerPassword($pdo, $candidate, $password)) {
+            // Differentiate between: (1) no matching account, and (2) wrong password
+            if (!$candidate) {
+                // Only show the big banner when the identifier has no record
                 $errors['general'] = 'We could not find a matching account. Double check your details and try again.';
+            } elseif (!verifyCustomerPassword($pdo, $candidate, $password)) {
+                // Keep the account existence private but guide the user clearly
+                $errors['password'] = 'Incorrect password. Please try again.';
             } else {
                 customerLogin((int) $candidate['id']);
                 $redirect = $_POST['redirect'] ?? ($_GET['redirect'] ?? orderingUrl('my_orders.php'));

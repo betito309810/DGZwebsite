@@ -27,6 +27,49 @@ if (!function_exists('dgzCustomerSessionCache')) {
     }
 }
 
+if (!function_exists('customerTableDescribe')) {
+    function customerTableDescribe(PDO $pdo): array
+    {
+        static $cache;
+        if ($cache !== null) {
+            return $cache;
+        }
+
+        try {
+            $stmt = $pdo->query('SHOW COLUMNS FROM customers');
+            $rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+        } catch (Throwable $exception) {
+            error_log('Unable to inspect customers table: ' . $exception->getMessage());
+            $rows = [];
+        }
+
+        $cache = [];
+        foreach ($rows as $row) {
+            if (!isset($row['Field'])) {
+                continue;
+            }
+            $cache[strtolower((string) $row['Field'])] = (string) $row['Field'];
+        }
+
+        return $cache;
+    }
+}
+
+if (!function_exists('customerFindColumn')) {
+    function customerFindColumn(PDO $pdo, array $candidates): ?string
+    {
+        $columns = customerTableDescribe($pdo);
+        foreach ($candidates as $candidate) {
+            $normalized = strtolower($candidate);
+            if (isset($columns[$normalized])) {
+                return $columns[$normalized];
+            }
+        }
+
+        return null;
+    }
+}
+
 if (!function_exists('getAuthenticatedCustomer')) {
     /**
      * Fetch the authenticated customer from the session (if any).
@@ -49,16 +92,71 @@ if (!function_exists('getAuthenticatedCustomer')) {
 
         try {
             $pdo = customerRepository();
-            $stmt = $pdo->prepare('SELECT id, full_name, email, phone, address_line1, city, postal_code, created_at, updated_at FROM customers WHERE id = ? LIMIT 1');
+
+            $baseColumns = ['id', 'full_name', 'email', 'phone'];
+            $optional = [
+                'address_line1', 'address', 'address1', 'street',
+                'city', 'town', 'municipality',
+                'postal_code', 'postal', 'zip_code', 'zipcode', 'zip',
+                'facebook_account', 'facebook', 'fb_account',
+            ];
+
+            $columnList = $baseColumns;
+            foreach ($optional as $candidate) {
+                $found = customerFindColumn($pdo, [$candidate]);
+                if ($found !== null && !in_array($found, $columnList, true)) {
+                    $columnList[] = $found;
+                }
+            }
+
+            $projection = implode(', ', array_map(static function (string $column): string {
+                return '`' . $column . '`';
+            }, $columnList));
+
+            $stmt = $pdo->prepare('SELECT ' . $projection . ' FROM customers WHERE id = ? LIMIT 1');
             $stmt->execute([$customerId]);
             $customer = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
-            if ($customer) {
-                $customer['first_name'] = extractCustomerFirstName($customer['full_name'] ?? '');
-                $customer['address_completed'] = customerAddressCompleted($customer);
-            }
         } catch (Throwable $exception) {
             error_log('Unable to load authenticated customer: ' . $exception->getMessage());
             $customer = null;
+        }
+
+        if ($customer) {
+            // Normalise address-related aliases so downstream code can rely on the modern keys
+            $addressAliases = ['address_line1', 'address', 'address1', 'street'];
+            foreach ($addressAliases as $alias) {
+                if (isset($customer[$alias]) && trim((string) $customer[$alias]) !== '') {
+                    $customer['address_line1'] = $customer[$alias];
+                    break;
+                }
+            }
+
+            $cityAliases = ['city', 'town', 'municipality'];
+            foreach ($cityAliases as $alias) {
+                if (isset($customer[$alias]) && trim((string) $customer[$alias]) !== '') {
+                    $customer['city'] = $customer[$alias];
+                    break;
+                }
+            }
+
+            $postalAliases = ['postal_code', 'postal', 'zip_code', 'zipcode', 'zip'];
+            foreach ($postalAliases as $alias) {
+                if (isset($customer[$alias]) && trim((string) $customer[$alias]) !== '') {
+                    $customer['postal_code'] = $customer[$alias];
+                    break;
+                }
+            }
+
+            $facebookAliases = ['facebook_account', 'facebook', 'fb_account'];
+            foreach ($facebookAliases as $alias) {
+                if (isset($customer[$alias]) && trim((string) $customer[$alias]) !== '') {
+                    $customer['facebook_account'] = $customer[$alias];
+                    break;
+                }
+            }
+
+            $customer['first_name'] = extractCustomerFirstName($customer['full_name'] ?? '');
+            $customer['address_completed'] = customerAddressCompleted($customer);
         }
 
         if ($customer === null) {
@@ -73,9 +171,36 @@ if (!function_exists('getAuthenticatedCustomer')) {
 if (!function_exists('customerAddressCompleted')) {
     function customerAddressCompleted(array $customer): bool
     {
-        $address = trim((string)($customer['address_line1'] ?? ''));
-        $city = trim((string)($customer['city'] ?? ''));
-        $postalCode = trim((string)($customer['postal_code'] ?? ''));
+        $addressAliases = ['address_line1', 'address', 'address1', 'street'];
+        $cityAliases = ['city', 'town', 'municipality'];
+        $postalAliases = ['postal_code', 'postal', 'zip_code', 'zipcode', 'zip'];
+
+        $address = '';
+        foreach ($addressAliases as $alias) {
+            $candidate = trim((string)($customer[$alias] ?? ''));
+            if ($candidate !== '') {
+                $address = $candidate;
+                break;
+            }
+        }
+
+        $city = '';
+        foreach ($cityAliases as $alias) {
+            $candidate = trim((string)($customer[$alias] ?? ''));
+            if ($candidate !== '') {
+                $city = $candidate;
+                break;
+            }
+        }
+
+        $postalCode = '';
+        foreach ($postalAliases as $alias) {
+            $candidate = trim((string)($customer[$alias] ?? ''));
+            if ($candidate !== '') {
+                $postalCode = $candidate;
+                break;
+            }
+        }
 
         return $address !== '' && $city !== '' && $postalCode !== '';
     }

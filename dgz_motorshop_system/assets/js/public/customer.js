@@ -118,6 +118,80 @@
         }
     }
 
+    const contactSection = document.querySelector('[data-contact-section]');
+    if (contactSection) {
+        const modeInput = contactSection.querySelector('[data-contact-mode-input]');
+        const summary = contactSection.querySelector('[data-contact-summary]');
+        const form = contactSection.querySelector('[data-contact-form]');
+        const editButton = contactSection.querySelector('[data-contact-edit]');
+        const cancelButton = contactSection.querySelector('[data-contact-cancel]');
+        const requiredFields = form ? Array.from(form.querySelectorAll('[data-contact-required]')) : [];
+
+        const syncFromSummary = () => {
+            if (!summary || !form) {
+                return;
+            }
+            const emailField = form.querySelector('input[name="email"]');
+            const phoneField = form.querySelector('input[name="phone"]');
+            const facebookField = form.querySelector('input[name="facebook_account"]');
+            if (emailField && summary.dataset.contactEmail !== undefined) {
+                emailField.value = summary.dataset.contactEmail;
+            }
+            if (phoneField && summary.dataset.contactPhone !== undefined) {
+                phoneField.value = summary.dataset.contactPhone;
+            }
+            if (facebookField && summary.dataset.contactFacebook !== undefined) {
+                facebookField.value = summary.dataset.contactFacebook;
+            }
+        };
+
+        const setMode = (mode) => {
+            const nextMode = mode === 'edit' ? 'edit' : 'summary';
+            contactSection.dataset.contactMode = nextMode;
+            if (modeInput) {
+                modeInput.value = nextMode;
+            }
+
+            if (nextMode === 'edit') {
+                summary?.setAttribute('hidden', '');
+                if (form) {
+                    form.classList.remove('is-hidden');
+                    form.removeAttribute('hidden');
+                }
+                requiredFields.forEach((field) => field.setAttribute('required', ''));
+                const firstEditable = form ? form.querySelector('input, textarea') : null;
+                if (firstEditable && typeof firstEditable.focus === 'function') {
+                    window.requestAnimationFrame(() => firstEditable.focus());
+                }
+            } else {
+                summary?.removeAttribute('hidden');
+                if (form) {
+                    form.classList.add('is-hidden');
+                    form.setAttribute('hidden', '');
+                }
+                syncFromSummary();
+                requiredFields.forEach((field) => field.removeAttribute('required'));
+            }
+        };
+
+        if (contactSection.dataset.contactMode === 'edit') {
+            requiredFields.forEach((field) => field.setAttribute('required', ''));
+        } else {
+            requiredFields.forEach((field) => field.removeAttribute('required'));
+            syncFromSummary();
+        }
+
+        editButton?.addEventListener('click', (event) => {
+            event.preventDefault();
+            setMode('edit');
+        });
+
+        cancelButton?.addEventListener('click', (event) => {
+            event.preventDefault();
+            setMode('summary');
+        });
+    }
+
     const billingSection = document.querySelector('[data-billing-section]');
     if (billingSection) {
         const modeInput = document.querySelector('[data-billing-mode-input]');

@@ -274,8 +274,8 @@
     justify-content: space-between;
     align-items: center;
     padding: 1.5rem 2.5rem;
-    background: linear-gradient(135deg, #1d4ed8, #0ea5e9);
-    box-shadow: 0 20px 45px rgba(14, 116, 144, 0.35);
+    /* Match index.php header background */
+    background: #43d6ff;
     color: #ffffff;
 }
 
@@ -316,13 +316,51 @@
     transform: translateY(-1px);
 }
 
+.customer-orders-cart {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.55rem 1.15rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.18);
+    color: #ffffff;
+    text-decoration: none;
+    font-weight: 600;
+    transition: background 0.2s ease, transform 0.2s ease;
+    position: relative;
+}
+
+.customer-orders-cart:hover,
+.customer-orders-cart:focus-visible {
+    background: rgba(255, 255, 255, 0.28);
+    transform: translateY(-1px);
+}
+
+.customer-orders-cart__count {
+    background: #ff4757;
+    color: #ffffff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0 0.4rem;
+}
+
+.customer-orders-cart__label {
+    display: inline-block;
+}
+
 .customer-orders-continue i {
     font-size: 0.9rem;
 }
 
 .customer-orders-header .account-menu__trigger,
 .customer-orders-header .account-menu__guest {
-    background: rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.25);
     color: #ffffff;
 }
 
@@ -356,6 +394,30 @@
     font-size: 1.9rem;
     margin-bottom: 1.5rem;
     color: #0f172a;
+}
+
+/* Tabs for order filtering */
+.customer-orders-tabs {
+    display: inline-flex;
+    gap: 0.5rem;
+    margin: 0.25rem 0 1.25rem;
+    background: rgba(255, 255, 255, 0.6);
+    padding: 0.35rem;
+    border-radius: 999px;
+}
+
+.customer-orders-tab {
+    display: inline-block;
+    padding: 0.5rem 0.9rem;
+    border-radius: 999px;
+    text-decoration: none;
+    font-weight: 600;
+    color: #0f172a;
+}
+
+.customer-orders-tab.is-active {
+    background: #2563eb;
+    color: #ffffff;
 }
 
 .customer-orders-alert {

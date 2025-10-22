@@ -3,6 +3,97 @@ require __DIR__ . '/dgz_motorshop_system/config/config.php';
 require_once __DIR__ . '/dgz_motorshop_system/includes/product_variants.php'; // Added: variant helpers for checkout validation.
 require_once __DIR__ . '/dgz_motorshop_system/includes/customer_session.php';
 require_once __DIR__ . '/dgz_motorshop_system/includes/email.php';
+
+if (!function_exists('tableDescribe')) {
+    function tableDescribe(PDO $pdo, string $table): array
+    {
+        static $cache = [];
+        $normalized = preg_replace('/[^A-Za-z0-9_]/', '', $table);
+        if ($normalized === '') {
+            return [];
+        }
+
+        if (isset($cache[$normalized])) {
+            return $cache[$normalized];
+        }
+
+        try {
+            $stmt = $pdo->query('SHOW COLUMNS FROM `' . $normalized . '`');
+            $rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+        } catch (Throwable $e) {
+            error_log('Unable to inspect columns for table ' . $normalized . ': ' . $e->getMessage());
+            $rows = [];
+        }
+
+        $metadata = [];
+        foreach ($rows as $row) {
+            if (!isset($row['Field'])) {
+                continue;
+            }
+            $metadata[strtolower((string) $row['Field'])] = $row;
+        }
+
+        $cache[$normalized] = $metadata;
+        return $metadata;
+    }
+}
+
+if (!function_exists('tableHasColumn')) {
+    function tableHasColumn(PDO $pdo, string $table, string $column): bool
+    {
+        $columns = tableDescribe($pdo, $table);
+        return isset($columns[strtolower($column)]);
+    }
+}
+
+if (!function_exists('tableFindColumn')) {
+    function tableFindColumn(PDO $pdo, string $table, array $candidates): ?string
+    {
+        $columns = tableDescribe($pdo, $table);
+        foreach ($candidates as $candidate) {
+            $normalized = strtolower($candidate);
+            if (isset($columns[$normalized]['Field'])) {
+                return $columns[$normalized]['Field'];
+            }
+        }
+
+        return null;
+    }
+}
+
+if (!function_exists('ordersHasColumn')) {
+    function ordersHasColumn(PDO $pdo, string $column): bool
+    {
+        return tableHasColumn($pdo, 'orders', $column);
+    }
+}
+
+if (!function_exists('ordersSupportsTrackingCodes')) {
+    function ordersSupportsTrackingCodes(PDO $pdo): bool
+    {
+        static $hasColumn = null;
+        if ($hasColumn !== null) {
+            return $hasColumn;
+        }
+
+        try {
+            $hasColumn = tableHasColumn($pdo, 'orders', 'tracking_code');
+        } catch (Exception $e) {
+            error_log('Unable to detect orders.tracking_code column: ' . $e->getMessage());
+            $hasColumn = false;
+        }
+
+        return $hasColumn;
+    }
+}
+
+if (!function_exists('orderItemsFindColumn')) {
+    function orderItemsFindColumn(PDO $pdo, array $candidates): ?string
+    {
+        return tableFindColumn($pdo, 'order_items', $candidates);
+    }
+}
+
 $pdo = db();
 $errors = [];
 $referenceInput = '';
@@ -35,14 +126,64 @@ $loginUrl = orderingUrl('login.php');
 $registerUrl = orderingUrl('register.php');
 $myOrdersUrl = orderingUrl('my_orders.php');
 $logoutUrl = orderingUrl('logout.php');
+$settingsUrl = orderingUrl('settings.php');
+
+$customerAddressColumn = tableFindColumn($pdo, 'customers', ['address_line1', 'address', 'address1', 'street']);
+$customerCityColumn = tableFindColumn($pdo, 'customers', ['city', 'town', 'municipality']);
+$customerPostalColumn = tableFindColumn($pdo, 'customers', ['postal_code', 'postal', 'zip_code', 'zipcode', 'zip']);
+$customerEmailColumn = tableFindColumn($pdo, 'customers', ['email', 'email_address']);
+$customerPhoneColumn = tableFindColumn($pdo, 'customers', ['phone', 'mobile', 'contact_number', 'contact']);
+$customerFacebookColumn = tableFindColumn($pdo, 'customers', ['facebook_account', 'facebook', 'fb_account']);
+$customerFullNameColumn = tableFindColumn($pdo, 'customers', ['full_name', 'name']);
+$customerUpdatedAtColumn = tableHasColumn($pdo, 'customers', 'updated_at') ? 'updated_at' : null;
 
 $storedFullName = trim((string) ($customerAccount['full_name'] ?? ''));
 $storedEmail = trim((string) ($customerAccount['email'] ?? ''));
+if ($customerEmailColumn !== null) {
+    $storedEmail = trim((string) ($customerAccount[$customerEmailColumn] ?? $storedEmail));
+}
 $storedPhone = trim((string) ($customerAccount['phone'] ?? ''));
-$storedAddress = trim((string) ($customerAccount['address_line1'] ?? ''));
-$storedCity = trim((string) ($customerAccount['city'] ?? ''));
-$storedPostal = trim((string) ($customerAccount['postal_code'] ?? ''));
+if ($customerPhoneColumn !== null) {
+    $storedPhone = trim((string) ($customerAccount[$customerPhoneColumn] ?? $storedPhone));
+}
+$storedFacebook = trim((string) ($customerAccount['facebook_account'] ?? ''));
+if ($customerFacebookColumn !== null) {
+    $storedFacebook = trim((string) ($customerAccount[$customerFacebookColumn] ?? $storedFacebook));
+}
+
+$storedAddress = '';
+if ($customerAddressColumn !== null) {
+    $storedAddress = trim((string) ($customerAccount[$customerAddressColumn] ?? ''));
+}
+if ($storedAddress === '') {
+    $storedAddress = trim((string) ($customerAccount['address_line1'] ?? ''));
+}
+
+$storedCity = '';
+if ($customerCityColumn !== null) {
+    $storedCity = trim((string) ($customerAccount[$customerCityColumn] ?? ''));
+}
+if ($storedCity === '') {
+    $storedCity = trim((string) ($customerAccount['city'] ?? ''));
+}
+
+$storedPostal = '';
+if ($customerPostalColumn !== null) {
+    $storedPostal = trim((string) ($customerAccount[$customerPostalColumn] ?? ''));
+}
+if ($storedPostal === '') {
+    $storedPostal = trim((string) ($customerAccount['postal_code'] ?? ''));
+}
+
+$customerHasSavedContact = $storedEmail !== '' && $storedPhone !== '' && $storedFacebook !== '';
 $customerHasSavedAddress = $storedAddress !== '' && $storedCity !== '' && $storedPostal !== '';
+
+$defaultContactMode = ($customerHasSavedContact && !isset($_GET['edit_contact'])) ? 'summary' : 'edit';
+$contactMode = isset($_POST['contact_mode']) ? (string) $_POST['contact_mode'] : $defaultContactMode;
+if ($contactMode !== 'summary' && $contactMode !== 'edit') {
+    $contactMode = $defaultContactMode;
+}
+$showContactSummary = $customerHasSavedContact && $contactMode === 'summary';
 
 $defaultAddressMode = ($customerHasSavedAddress && !isset($_GET['edit_address'])) ? 'summary' : 'edit';
 $addressMode = isset($_POST['address_mode']) ? (string) $_POST['address_mode'] : $defaultAddressMode;
@@ -69,8 +210,17 @@ if ($customerAccount) {
     if ($formValues['phone'] === '' && $storedPhone !== '') {
         $formValues['phone'] = $storedPhone;
     }
+    if ($formValues['facebook_account'] === '' && $storedFacebook !== '') {
+        $formValues['facebook_account'] = $storedFacebook;
+    }
     if ($formValues['customer_name'] === '' && $storedFullName !== '') {
         $formValues['customer_name'] = $storedFullName;
+    }
+
+    if ($contactMode === 'summary' && $customerHasSavedContact) {
+        $formValues['email'] = $storedEmail;
+        $formValues['phone'] = $storedPhone;
+        $formValues['facebook_account'] = $storedFacebook;
     }
 
     if ($addressMode === 'summary' && $customerHasSavedAddress) {
@@ -150,41 +300,100 @@ if (!function_exists('ordersHasReferenceColumn')) {
 }
 
 
-if (!function_exists('ordersHasColumn')) {
-    function ordersHasColumn(PDO $pdo, string $column): bool
+
+
+if (!function_exists('insertOrderItemDynamic')) {
+    function insertOrderItemDynamic(PDO $pdo, int $orderId, array $item, ?array $variantRow = null): void
     {
-        static $cache = [];
-        if (array_key_exists($column, $cache)) {
-            return $cache[$column];
-        }
-        try {
-            $stmt = $pdo->prepare("SHOW COLUMNS FROM orders LIKE ?");
-            $stmt->execute([$column]);
-            $cache[$column] = $stmt !== false && $stmt->fetch() !== false;
-        } catch (Exception $e) {
-            $cache[$column] = false;
-        }
-        return $cache[$column];
-    }
-}
+        $columns = [];
+        $values = [];
+        $seen = [];
 
-if (!function_exists('ordersSupportsTrackingCodes')) {
-    function ordersSupportsTrackingCodes(PDO $pdo): bool
-    {
-        static $hasColumn = null;
-        if ($hasColumn !== null) {
-            return $hasColumn;
-        }
+        $append = static function (?string $column, $value) use (&$columns, &$values, &$seen): void {
+            if ($column === null) {
+                return;
+            }
+            if (isset($seen[$column])) {
+                return;
+            }
+            $columns[] = '`' . $column . '`';
+            $values[] = $value;
+            $seen[$column] = true;
+        };
 
-        try {
-            $stmt = $pdo->query("SHOW COLUMNS FROM orders LIKE 'tracking_code'");
-            $hasColumn = $stmt !== false && $stmt->fetch() !== false;
-        } catch (Exception $e) {
-            error_log('Unable to detect orders.tracking_code column: ' . $e->getMessage());
-            $hasColumn = false;
+        $orderIdColumn = orderItemsFindColumn($pdo, ['order_id', 'orderid', 'orderID', 'orderId']);
+        if ($orderIdColumn === null) {
+            error_log('Unable to persist order items because order_id column is missing.');
+            return;
+        }
+        $append($orderIdColumn, $orderId);
+
+        $productId = $item['product_id'] ?? $item['id'] ?? null;
+        if ($productId !== null) {
+            $append(orderItemsFindColumn($pdo, ['product_id', 'productid', 'productID', 'productId']), (int) $productId);
         }
 
-        return $hasColumn;
+        $variantId = $item['variant_id'] ?? null;
+        if ($variantId === null && $variantRow && isset($variantRow['id'])) {
+            $variantId = (int) $variantRow['id'];
+        }
+        if ($variantId !== null) {
+            $append(orderItemsFindColumn($pdo, ['variant_id', 'variantid', 'variantID', 'variantId']), (int) $variantId);
+        }
+
+        $variantLabel = $item['variant_label'] ?? ($variantRow['label'] ?? null);
+        if ($variantLabel !== null && $variantLabel !== '') {
+            $append(orderItemsFindColumn($pdo, ['variant_label', 'variant', 'variant_name']), $variantLabel);
+        }
+
+        $quantity = $item['quantity'] ?? $item['qty'] ?? null;
+        if ($quantity === null || (int) $quantity <= 0) {
+            $quantity = 1;
+        }
+        $append(orderItemsFindColumn($pdo, ['qty', 'quantity', 'qty_ordered']), (int) $quantity);
+
+        $price = $item['price'] ?? $item['variant_price'] ?? null;
+        if ($price === null && isset($variantRow['price'])) {
+            $price = $variantRow['price'];
+        }
+        if ($price !== null) {
+            $append(orderItemsFindColumn($pdo, ['price', 'unit_price', 'amount', 'total_price']), (float) $price);
+        }
+
+        $nameCandidates = [
+            $item['name'] ?? null,
+            $item['product_name'] ?? null,
+            $item['description'] ?? null,
+            $variantRow['label'] ?? null,
+            $variantRow['name'] ?? null,
+        ];
+        $itemName = '';
+        foreach ($nameCandidates as $candidate) {
+            $trimmed = trim((string) ($candidate ?? ''));
+            if ($trimmed !== '') {
+                $itemName = $trimmed;
+                break;
+            }
+        }
+        if ($itemName !== '') {
+            foreach (['description', 'product_name', 'item_name', 'name', 'label'] as $candidate) {
+                $column = orderItemsFindColumn($pdo, [$candidate]);
+                $append($column, $itemName);
+            }
+        }
+
+        if (count($columns) === 1) {
+            // Ensure at least one extra field for portability; default quantity column if available.
+            $fallbackQtyColumn = orderItemsFindColumn($pdo, ['qty', 'quantity']);
+            if ($fallbackQtyColumn !== null && !isset($seen[$fallbackQtyColumn])) {
+                $append($fallbackQtyColumn, 1);
+            }
+        }
+
+        $placeholders = implode(', ', array_fill(0, count($columns), '?'));
+        $sql = 'INSERT INTO order_items (' . implode(', ', $columns) . ') VALUES (' . $placeholders . ')';
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($values);
     }
 }
 
@@ -472,20 +681,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $customerNote = mb_substr($customerNote, 0, 500); // Added guard to keep notes reasonably short
     }
     if ($customerAccount) {
+        if ($contactMode === 'summary' && $customerHasSavedContact) {
+            $email = $storedEmail !== '' ? $storedEmail : $email;
+            $phone = $storedPhone !== '' ? $storedPhone : $phone;
+            $facebookAccount = $storedFacebook !== '' ? $storedFacebook : $facebookAccount;
+        }
+
         if ($addressMode === 'summary' && $customerHasSavedAddress) {
             $customer_name = $storedFullName !== '' ? $storedFullName : $customer_name;
             $address = $storedAddress !== '' ? $storedAddress : $address;
             $postalCode = $storedPostal !== '' ? $storedPostal : $postalCode;
             $city = $storedCity !== '' ? $storedCity : $city;
         }
+
         if ($storedFullName !== '' && $addressMode !== 'edit') {
             $customer_name = $storedFullName;
         }
-        if ($storedEmail !== '') {
+        if ($storedEmail !== '' && $contactMode !== 'edit') {
             $email = $storedEmail;
         }
-        if ($storedPhone !== '') {
+        if ($storedPhone !== '' && $contactMode !== 'edit') {
             $phone = $storedPhone;
+        }
+        if ($storedFacebook !== '' && $contactMode !== 'edit') {
+            $facebookAccount = $storedFacebook;
         }
     }
 
@@ -699,28 +918,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $updates = [];
             $updateValues = [];
 
-            if ($customer_name !== '' && $customer_name !== $storedFullName) {
-                $updates[] = 'full_name = ?';
+            if ($customerFullNameColumn !== null && $customer_name !== '' && $customer_name !== $storedFullName) {
+                $updates[] = '`' . $customerFullNameColumn . '` = ?';
                 $updateValues[] = $customer_name;
+            }
+            if ($customerEmailColumn !== null && $email !== '' && $email !== $storedEmail) {
+                $updates[] = '`' . $customerEmailColumn . '` = ?';
+                $updateValues[] = $email;
+            }
+            if ($customerPhoneColumn !== null && $phone !== '' && $phone !== $storedPhone) {
+                $updates[] = '`' . $customerPhoneColumn . '` = ?';
+                $updateValues[] = $phone;
+            }
+            if ($customerFacebookColumn !== null && $facebookAccount !== '' && $facebookAccount !== $storedFacebook) {
+                $updates[] = '`' . $customerFacebookColumn . '` = ?';
+                $updateValues[] = $facebookAccount;
             }
 
             if ($shouldSyncAddress) {
-                if ($address !== '' && $address !== $storedAddress) {
-                    $updates[] = 'address_line1 = ?';
+                if ($customerAddressColumn !== null && $address !== '' && $address !== $storedAddress) {
+                    $updates[] = '`' . $customerAddressColumn . '` = ?';
                     $updateValues[] = $address;
                 }
-                if ($city !== '' && $city !== $storedCity) {
-                    $updates[] = 'city = ?';
+                if ($customerCityColumn !== null && $city !== '' && $city !== $storedCity) {
+                    $updates[] = '`' . $customerCityColumn . '` = ?';
                     $updateValues[] = $city;
                 }
-                if ($postalCode !== '' && $postalCode !== $storedPostal) {
-                    $updates[] = 'postal_code = ?';
+                if ($customerPostalColumn !== null && $postalCode !== '' && $postalCode !== $storedPostal) {
+                    $updates[] = '`' . $customerPostalColumn . '` = ?';
                     $updateValues[] = $postalCode;
                 }
             }
 
             if (!empty($updates)) {
-                $updates[] = 'updated_at = NOW()';
+                if ($customerUpdatedAtColumn !== null) {
+                    $updates[] = '`' . $customerUpdatedAtColumn . '` = NOW()';
+                }
                 $updateValues[] = (int) $customerAccount['id'];
                 $updateSql = 'UPDATE customers SET ' . implode(', ', $updates) . ' WHERE id = ?';
                 $updateStmt = $pdo->prepare($updateSql);
@@ -733,34 +966,67 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         foreach ($cartItems as $item) {
             $variantId = $item['variant_id'] ?? null;
             if ($variantId) {
-                $variantStmt = $pdo->prepare('SELECT id, product_id, quantity, label FROM product_variants WHERE id = ?');
+                $variantStmt = $pdo->prepare('SELECT id, product_id, quantity, label, price FROM product_variants WHERE id = ?');
                 $variantStmt->execute([(int) $variantId]);
-                $variantRow = $variantStmt->fetch();
+                $variantRow = $variantStmt->fetch(PDO::FETCH_ASSOC);
 
                 if ($variantRow && $item['quantity'] <= (int) $variantRow['quantity']) {
-                    $stmt2 = $pdo->prepare('INSERT INTO order_items (order_id, product_id, variant_id, variant_label, qty, price) VALUES (?, ?, ?, ?, ?, ?)');
-                    $stmt2->execute([
-                        $order_id,
-                        (int) $variantRow['product_id'],
-                        (int) $variantRow['id'],
-                        $item['variant_label'] ?? ($variantRow['label'] ?? null),
-                        $item['quantity'],
-                        $item['price'],
-                    ]);
+                    $productRow = null;
+                    try {
+                        $productQuery = $pdo->prepare('SELECT id, name FROM products WHERE id = ?');
+                        $productQuery->execute([(int) $variantRow['product_id']]);
+                        $productRow = $productQuery->fetch(PDO::FETCH_ASSOC) ?: null;
+                    } catch (Throwable $ignored) {
+                        $productRow = null;
+                    }
+
+                    $itemPayload = [
+                        'id' => (int) $variantRow['product_id'],
+                        'variant_id' => (int) $variantRow['id'],
+                        'variant_label' => $item['variant_label'] ?? ($variantRow['label'] ?? null),
+                        'quantity' => $item['quantity'],
+                        'price' => $item['price'],
+                        'name' => $item['name'] ?? ($productRow['name'] ?? ''),
+                    ];
+
+                    insertOrderItemDynamic($pdo, (int) $order_id, $itemPayload, $variantRow);
 
                     $pdo->prepare('UPDATE product_variants SET quantity = quantity - ? WHERE id = ?')->execute([$item['quantity'], (int) $variantRow['id']]);
                     $pdo->prepare('UPDATE products SET quantity = quantity - ? WHERE id = ?')->execute([$item['quantity'], (int) $variantRow['product_id']]);
                 }
             } else {
-                $product = $pdo->prepare('SELECT * FROM products WHERE id = ?');
+                $product = $pdo->prepare('SELECT id, name, quantity FROM products WHERE id = ?');
                 $product->execute([$item['id']]);
-                $p = $product->fetch();
+                $p = $product->fetch(PDO::FETCH_ASSOC);
 
-                if ($p && $item['quantity'] <= $p['quantity']) {
-                    $stmt2 = $pdo->prepare('INSERT INTO order_items (order_id, product_id, variant_id, variant_label, qty, price) VALUES (?, ?, ?, ?, ?, ?)');
-                    $stmt2->execute([$order_id, $item['id'], null, null, $item['quantity'], $item['price']]);
+                if ($p && $item['quantity'] <= (int) $p['quantity']) {
+                    $itemPayload = [
+                        'id' => (int) $p['id'],
+                        'quantity' => $item['quantity'],
+                        'price' => $item['price'],
+                        'name' => $item['name'] ?? ($p['name'] ?? ''),
+                    ];
 
-                    $pdo->prepare('UPDATE products SET quantity = quantity - ? WHERE id = ?')->execute([$item['quantity'], $item['id']]);
+                    insertOrderItemDynamic($pdo, (int) $order_id, $itemPayload, null);
+
+                    $pdo->prepare('UPDATE products SET quantity = quantity - ? WHERE id = ?')->execute([$item['quantity'], (int) $p['id']]);
+                }
+            }
+        }
+
+        // Fallback: if, for any reason, no order_items were created, write minimal rows using description only
+        try {
+            $chk = $pdo->prepare('SELECT COUNT(*) FROM order_items WHERE order_id = ?');
+            $chk->execute([$order_id]);
+            $itemCount = (int)$chk->fetchColumn();
+        } catch (Throwable $e) { $itemCount = -1; }
+
+        if ($itemCount === 0) {
+            foreach ($cartItems as $item) {
+                try {
+                    insertOrderItemDynamic($pdo, (int) $order_id, $item, null);
+                } catch (Throwable $ignored) {
+                    // best effort; continue
                 }
             }
         }
@@ -871,6 +1137,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                         </button>
                         <div class="account-menu__dropdown" data-account-dropdown hidden>
                             <a href="<?= htmlspecialchars($myOrdersUrl) ?>" class="account-menu__link">My Orders</a>
+                            <a href="<?= htmlspecialchars($settingsUrl) ?>" class="account-menu__link">Settings</a>
                             <a href="<?= htmlspecialchars($logoutUrl) ?>" class="account-menu__link">Logout</a>
                         </div>
                     <?php else: ?>
@@ -904,26 +1171,53 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             <?php endif; ?>
             <form method="post" enctype="multipart/form-data">
                 <input type="hidden" name="cart" value='<?= htmlspecialchars(json_encode($cartItems)) ?>'>
+                <input type="hidden" name="contact_mode" value="<?= htmlspecialchars($contactMode) ?>" data-contact-mode-input>
                 <input type="hidden" name="address_mode" value="<?= htmlspecialchars($addressMode) ?>" data-billing-mode-input>
                 
                 <!-- Contact Section -->
-                <div class="section">
+                <div class="section section--contact" data-contact-section data-contact-mode="<?= htmlspecialchars($contactMode) ?>">
                     <h2 class="section-title">
                         <i class="fas fa-user"></i>
                         Contact
                     </h2>
-                    <div class="form-group">
-                        <!-- Required indicator styling hook: edit .required-indicator in dgz_motorshop_system/assets/css/public/checkout.css -->
-                        <label>Email <span class="required-indicator">*</span></label>
-                        <input type="email" name="email" placeholder="you@example.com" value="<?= htmlspecialchars($formValues['email']) ?>" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Mobile number <span class="required-indicator">*</span></label>
-                        <input type="tel" name="phone" placeholder="Mobile No." inputmode="numeric" maxlength="12" value="<?= htmlspecialchars($formValues['phone']) ?>" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Facebook account <span class="required-indicator">*</span></label>
-                        <input type="text" name="facebook_account" placeholder="Facebook profile or link" value="<?= htmlspecialchars($formValues['facebook_account']) ?>" required>
+                    <?php if ($showContactSummary): ?>
+                        <div class="billing-summary contact-summary" data-contact-summary data-contact-email="<?= htmlspecialchars($storedEmail, ENT_QUOTES, 'UTF-8') ?>" data-contact-phone="<?= htmlspecialchars($storedPhone, ENT_QUOTES, 'UTF-8') ?>" data-contact-facebook="<?= htmlspecialchars($storedFacebook, ENT_QUOTES, 'UTF-8') ?>">
+                            <dl class="billing-summary__details">
+                                <div>
+                                    <dt>Email</dt>
+                                    <dd><?= htmlspecialchars($storedEmail) ?></dd>
+                                </div>
+                                <div>
+                                    <dt>Mobile</dt>
+                                    <dd><?= htmlspecialchars($storedPhone) ?></dd>
+                                </div>
+                                <div>
+                                    <dt>Facebook</dt>
+                                    <dd><?= htmlspecialchars($storedFacebook) ?></dd>
+                                </div>
+                            </dl>
+                            <button type="button" class="billing-summary__edit" data-contact-edit>
+                                <i class="fas fa-pen"></i>
+                                Edit contact details
+                            </button>
+                        </div>
+                    <?php endif; ?>
+                    <div class="billing-form contact-form<?= $showContactSummary ? ' is-hidden' : '' ?>" data-contact-form <?= $showContactSummary ? 'hidden' : '' ?>>
+                        <div class="form-group">
+                            <label>Email <span class="required-indicator">*</span></label>
+                            <input type="email" name="email" placeholder="you@example.com" value="<?= htmlspecialchars($formValues['email']) ?>" <?= $showContactSummary ? '' : 'required' ?> data-contact-required>
+                        </div>
+                        <div class="form-group">
+                            <label>Mobile number <span class="required-indicator">*</span></label>
+                            <input type="tel" name="phone" placeholder="Mobile No." inputmode="numeric" maxlength="12" value="<?= htmlspecialchars($formValues['phone']) ?>" <?= $showContactSummary ? '' : 'required' ?> data-contact-required>
+                        </div>
+                        <div class="form-group">
+                            <label>Facebook account <span class="required-indicator">*</span></label>
+                            <input type="text" name="facebook_account" placeholder="Facebook profile or link" value="<?= htmlspecialchars($formValues['facebook_account']) ?>" <?= $showContactSummary ? '' : 'required' ?> data-contact-required>
+                        </div>
+                        <?php if ($showContactSummary): ?>
+                            <button type="button" class="billing-form__cancel contact-form__cancel" data-contact-cancel>Cancel</button>
+                        <?php endif; ?>
                     </div>
                 </div>
 
@@ -981,14 +1275,14 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                                 <input type="text" name="city" value="<?= htmlspecialchars($formValues['city']) ?>" <?= $showAddressSummary ? '' : 'required' ?> data-billing-required>
                             </div>
                         </div>
-                        <div class="form-group">
-                            <!-- Added note textarea so customers can leave instructions for the cashier -->
-                            <label for="customer_note">Notes for the cashier</label>
-                            <textarea name="customer_note" id="customer_note" maxlength="500" placeholder="Add delivery instructions, preferred pickup time, etc."><?= htmlspecialchars($formValues['customer_note']) ?></textarea>
-                        </div>
                         <?php if ($showAddressSummary): ?>
                             <button type="button" class="billing-form__cancel" data-billing-cancel>Cancel</button>
                         <?php endif; ?>
+                    </div>
+                    <div class="form-group billing-notes">
+                        <!-- Added note textarea so customers can leave instructions for the cashier -->
+                        <label for="customer_note">Notes for the cashier</label>
+                        <textarea name="customer_note" id="customer_note" maxlength="500" placeholder="Add delivery instructions, preferred pickup time, etc."><?= htmlspecialchars($formValues['customer_note']) ?></textarea>
                     </div>
                 </div>
 

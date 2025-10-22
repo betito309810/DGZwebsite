@@ -60,6 +60,7 @@ body {
     transform: translateY(-1px);
     color: white;
 }
+
 .container {
     max-width: 1240px;
     margin: 0 auto;
@@ -840,6 +841,7 @@ textarea {
         width: 100%;
         justify-content: center;
     }
+
 
     .qr-code {
         margin: 14px 0 0;

@@ -11,10 +11,13 @@ $customerFirstName = $customerSessionState['firstName'] ?? extractCustomerFirstN
 $customerStylesheet = assetUrl('assets/css/public/customer.css');
 $indexStylesheet = assetUrl('assets/css/public/index.css');
 $customerScript = assetUrl('assets/js/public/customer.js');
+$cartScript = assetUrl('assets/js/public/cart.js');
 $logoAsset = assetUrl('assets/logo.png');
 $homeUrl = orderingUrl('index.php');
 $logoutUrl = orderingUrl('logout.php');
 $myOrdersUrl = orderingUrl('my_orders.php');
+$settingsUrl = orderingUrl('settings.php');
+$cartUrl = orderingUrl('checkout.php');
 
 $pdo = db();
 $alerts = [
@@ -92,6 +95,27 @@ if (!function_exists('ordersColumnExists')) {
     }
 }
 
+if (!function_exists('orderItemsColumnExists')) {
+    function orderItemsColumnExists(PDO $pdo, string $column): bool
+    {
+        static $cache = [];
+        if (array_key_exists($column, $cache)) {
+            return $cache[$column];
+        }
+
+        try {
+            $stmt = $pdo->prepare("SHOW COLUMNS FROM order_items LIKE ?");
+            $stmt->execute([$column]);
+            $cache[$column] = $stmt !== false && $stmt->fetch() !== false;
+        } catch (Throwable $exception) {
+            error_log('Unable to inspect order_items column ' . $column . ': ' . $exception->getMessage());
+            $cache[$column] = false;
+        }
+
+        return $cache[$column];
+    }
+}
+
 $orderColumns = ['id', 'tracking_code', 'created_at', 'total', 'status', 'customer_name', 'address'];
 foreach (['postal_code', 'city', 'email', 'phone', 'facebook_account', 'customer_note', 'reference_no'] as $column) {
     if (ordersColumnExists($pdo, $column)) {
@@ -100,7 +124,8 @@ foreach (['postal_code', 'city', 'email', 'phone', 'facebook_account', 'customer
 }
 
 $orderColumns = array_unique($orderColumns);
-$orderSql = 'SELECT ' . implode(', ', $orderColumns) . ' FROM orders WHERE customer_id = ? ORDER BY created_at DESC';
+$statusFilter = isset($_GET['status']) ? strtolower(trim((string) $_GET['status'])) : '';
+$orderSql = 'SELECT ' . implode(', ', $orderColumns) . ' FROM orders WHERE customer_id = ?' . ($statusFilter === 'complete' ? " AND status = 'complete'" : '') . ' ORDER BY created_at DESC';
 $orderStmt = $pdo->prepare($orderSql);
 $orderStmt->execute([(int) $customer['id']]);
 $orders = $orderStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -109,9 +134,16 @@ $orderItemsMap = [];
 if (!empty($orders)) {
     $orderIds = array_column($orders, 'id');
     $placeholders = implode(',', array_fill(0, count($orderIds), '?'));
-    $itemsSql = 'SELECT oi.order_id, oi.qty, oi.price, oi.variant_label, oi.description, p.name AS product_name '
-        . 'FROM order_items oi '
-        . 'LEFT JOIN products p ON oi.product_id = p.id '
+    $selectParts = ['oi.*'];
+    $joinClause = '';
+    if (orderItemsColumnExists($pdo, 'product_id')) {
+        $selectParts[] = 'p.name AS product_join_name';
+        $joinClause = 'LEFT JOIN products p ON oi.product_id = p.id ';
+    }
+
+    $itemsSql = 'SELECT ' . implode(', ', $selectParts)
+        . ' FROM order_items oi '
+        . $joinClause
         . 'WHERE oi.order_id IN (' . $placeholders . ') '
         . 'ORDER BY oi.id';
     $itemStmt = $pdo->prepare($itemsSql);
@@ -125,12 +157,29 @@ if (!empty($orders)) {
         if (!isset($orderItemsMap[$orderId])) {
             $orderItemsMap[$orderId] = [];
         }
-        $productName = trim((string) ($row['product_name'] ?? ''));
-        $description = trim((string) ($row['description'] ?? ''));
-        $displayName = $productName !== '' ? $productName : ($description !== '' ? $description : 'Item');
-        $variantLabel = trim((string) ($row['variant_label'] ?? ''));
-        $quantity = (int) ($row['qty'] ?? 0);
-        $price = isset($row['price']) ? (float) $row['price'] : 0.0;
+        $nameCandidates = [
+            trim((string) ($row['product_join_name'] ?? '')),
+            trim((string) ($row['product_name'] ?? '')),
+            trim((string) ($row['description'] ?? '')),
+            trim((string) ($row['name'] ?? '')),
+            trim((string) ($row['item_name'] ?? '')),
+            trim((string) ($row['label'] ?? '')),
+        ];
+        $displayName = 'Item';
+        foreach ($nameCandidates as $candidate) {
+            if ($candidate !== '') {
+                $displayName = $candidate;
+                break;
+            }
+        }
+
+        $variantLabel = trim((string) ($row['variant_label'] ?? $row['variant'] ?? ''));
+        $quantity = (int) ($row['qty'] ?? $row['quantity'] ?? 0);
+        if ($quantity <= 0) {
+            $quantity = 1;
+        }
+        $price = $row['price'] ?? $row['unit_price'] ?? $row['amount'] ?? 0.0;
+        $price = (float) $price;
         $orderItemsMap[$orderId][] = [
             'name' => $displayName,
             'variant' => $variantLabel,
@@ -172,6 +221,11 @@ $statusLabels = [
             <i class="fas fa-arrow-left" aria-hidden="true"></i>
             Continue Shopping
         </a>
+        <a href="<?= htmlspecialchars($cartUrl) ?>" class="customer-orders-cart" id="cartButton">
+            <i class="fas fa-shopping-cart" aria-hidden="true"></i>
+            <span class="customer-orders-cart__label">Cart</span>
+            <span class="customer-orders-cart__count" id="cartCount">0</span>
+        </a>
         <div class="account-menu" data-account-menu>
             <button type="button" class="account-menu__trigger" data-account-trigger aria-haspopup="true" aria-expanded="false">
                 <span class="account-menu__avatar" aria-hidden="true"><i class="fas fa-user-circle"></i></span>
@@ -180,6 +234,7 @@ $statusLabels = [
             </button>
             <div class="account-menu__dropdown" data-account-dropdown hidden>
                 <a href="<?= htmlspecialchars($myOrdersUrl) ?>" class="account-menu__link">My Orders</a>
+                <a href="<?= htmlspecialchars($settingsUrl) ?>" class="account-menu__link">Settings</a>
                 <a href="<?= htmlspecialchars($logoutUrl) ?>" class="account-menu__link">Logout</a>
             </div>
         </div>
@@ -187,6 +242,11 @@ $statusLabels = [
 </header>
 <main class="customer-orders-wrapper">
     <h1>My Orders</h1>
+    <nav class="customer-orders-tabs" aria-label="Order filters">
+        <?php $isCompleted = ($statusFilter === 'complete'); ?>
+        <a class="customer-orders-tab<?= $isCompleted ? '' : ' is-active' ?>" href="<?= htmlspecialchars($myOrdersUrl) ?>">All</a>
+        <a class="customer-orders-tab<?= $isCompleted ? ' is-active' : '' ?>" href="<?= htmlspecialchars($myOrdersUrl) ?>?status=complete">Completed</a>
+    </nav>
     <?php foreach ($alerts as $type => $messages): ?>
         <?php foreach ($messages as $message): ?>
             <div class="customer-orders-alert customer-orders-alert--<?= htmlspecialchars($type) ?>" role="alert"><?= htmlspecialchars($message) ?></div>
@@ -194,7 +254,11 @@ $statusLabels = [
     <?php endforeach; ?>
 
     <?php if (empty($orders)): ?>
-        <p class="customer-orders-empty">You have not placed any orders yet. <a href="<?= htmlspecialchars($homeUrl) ?>">Start shopping</a>.</p>
+        <?php if ($statusFilter === 'complete'): ?>
+            <p class="customer-orders-empty">No completed orders yet. <a href="<?= htmlspecialchars($homeUrl) ?>">Start shopping</a></p>
+        <?php else: ?>
+            <p class="customer-orders-empty">You have not placed any orders yet. <a href="<?= htmlspecialchars($homeUrl) ?>">Start shopping</a>.</p>
+        <?php endif; ?>
     <?php else: ?>
         <div class="customer-orders-list">
             <?php foreach ($orders as $order): ?>
@@ -316,7 +380,7 @@ $statusLabels = [
                                 </div>
                             <?php endif; ?>
                         </div>
-                        <?php if ($order['status'] === 'approved'): ?>
+                        <?php if (in_array($order['status'], ['approved', 'pending'], true)): ?>
                             <div class="customer-order-card__footer">
                                 <form method="post" class="customer-order-card__actions" data-customer-cancel-form>
                                     <input type="hidden" name="cancel_order_id" value="<?= (int) $order['id'] ?>">
@@ -330,6 +394,12 @@ $statusLabels = [
         </div>
     <?php endif; ?>
 </main>
+<script>
+    window.dgzPaths = Object.assign({}, window.dgzPaths || {}, {
+        checkout: <?= json_encode($cartUrl) ?>
+    });
+</script>
+<script src="<?= htmlspecialchars($cartScript) ?>"></script>
 <script src="<?= htmlspecialchars($customerScript) ?>" defer></script>
 </body>
 </html>
