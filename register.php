@@ -4,7 +4,7 @@ require __DIR__ . '/dgz_motorshop_system/includes/customer_session.php';
 
 $customerSession = getAuthenticatedCustomer();
 if ($customerSession !== null) {
-    header('Location: ' . orderingUrl('my_orders.php'));
+    header('Location: ' . orderingUrl('index.php'));
     exit;
 }
 
@@ -137,9 +137,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 customerPersistPasswordHash($pdo, $customerId, $passwordHash);
                 customerLogin($customerId);
 
-                $redirect = $_GET['redirect'] ?? orderingUrl('my_orders.php');
+                $redirect = $_GET['redirect'] ?? orderingUrl('index.php');
                 if (!is_string($redirect) || $redirect === '') {
-                    $redirect = orderingUrl('my_orders.php');
+                    $redirect = orderingUrl('index.php');
                 }
                 header('Location: ' . $redirect);
                 exit;

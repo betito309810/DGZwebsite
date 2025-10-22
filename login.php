@@ -59,7 +59,7 @@ function verifyCustomerPassword(PDO $pdo, array $candidate, string $password): b
 
 $customerSession = getAuthenticatedCustomer();
 if ($customerSession !== null) {
-    header('Location: ' . orderingUrl('my_orders.php'));
+    header('Location: ' . orderingUrl('index.php'));
     exit;
 }
 
@@ -118,9 +118,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $errors['password'] = 'Incorrect password. Please try again.';
             } else {
                 customerLogin((int) $candidate['id']);
-                $redirect = $_POST['redirect'] ?? ($_GET['redirect'] ?? orderingUrl('my_orders.php'));
+                $redirect = $_POST['redirect'] ?? ($_GET['redirect'] ?? orderingUrl('index.php'));
                 if (!is_string($redirect) || $redirect === '') {
-                    $redirect = orderingUrl('my_orders.php');
+                    $redirect = orderingUrl('index.php');
                 }
                 header('Location: ' . $redirect);
                 exit;
