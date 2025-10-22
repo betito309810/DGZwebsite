@@ -74,27 +74,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_order_id'])) {
     }
 }
 
-if (!function_exists('ordersColumnExists')) {
-    function ordersColumnExists(PDO $pdo, string $column): bool
-    {
-        static $cache = [];
-        if (array_key_exists($column, $cache)) {
-            return $cache[$column];
-        }
-
-        try {
-            $stmt = $pdo->prepare("SHOW COLUMNS FROM orders LIKE ?");
-            $stmt->execute([$column]);
-            $cache[$column] = $stmt !== false && $stmt->fetch() !== false;
-        } catch (Throwable $exception) {
-            error_log('Unable to inspect orders column ' . $column . ': ' . $exception->getMessage());
-            $cache[$column] = false;
-        }
-
-        return $cache[$column];
-    }
-}
-
 if (!function_exists('orderItemsColumnExists')) {
     function orderItemsColumnExists(PDO $pdo, string $column): bool
     {
@@ -116,19 +95,169 @@ if (!function_exists('orderItemsColumnExists')) {
     }
 }
 
-$orderColumns = ['id', 'tracking_code', 'created_at', 'total', 'status', 'customer_name', 'address'];
-foreach (['postal_code', 'city', 'email', 'phone', 'facebook_account', 'customer_note', 'reference_no'] as $column) {
-    if (ordersColumnExists($pdo, $column)) {
-        $orderColumns[] = $column;
+if (!function_exists('ordersDescribe')) {
+    function ordersDescribe(PDO $pdo): array
+    {
+        static $columns = null;
+        if ($columns !== null) {
+            return $columns;
+        }
+
+        try {
+            $stmt = $pdo->query('SHOW COLUMNS FROM orders');
+            $rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+        } catch (Throwable $exception) {
+            error_log('Unable to describe orders table: ' . $exception->getMessage());
+            $rows = [];
+        }
+
+        $columns = [];
+        foreach ($rows as $row) {
+            if (!isset($row['Field'])) {
+                continue;
+            }
+            $columns[strtolower((string) $row['Field'])] = (string) $row['Field'];
+        }
+
+        return $columns;
     }
 }
 
-$orderColumns = array_unique($orderColumns);
+if (!function_exists('ordersFindColumn')) {
+    function ordersFindColumn(PDO $pdo, array $candidates): ?string
+    {
+        $columns = ordersDescribe($pdo);
+        foreach ($candidates as $candidate) {
+            $normalized = strtolower($candidate);
+            if (isset($columns[$normalized])) {
+                return $columns[$normalized];
+            }
+        }
+
+        return null;
+    }
+}
+
+$orderIdColumn = ordersFindColumn($pdo, ['id', 'order_id']);
+$customerIdColumn = ordersFindColumn($pdo, ['customer_id', 'customerId', 'customerID', 'customerid']);
+$orderTotalColumn = ordersFindColumn($pdo, ['total', 'grand_total', 'amount', 'total_amount']);
+$orderStatusColumn = ordersFindColumn($pdo, ['status', 'order_status']);
+$orderTrackingColumn = ordersFindColumn($pdo, ['tracking_code', 'tracking_number', 'tracking_no']);
+$orderCreatedAtColumn = ordersFindColumn($pdo, ['created_at', 'order_date', 'date_created', 'created']);
+$orderCustomerNameColumn = ordersFindColumn($pdo, ['customer_name', 'name']);
+$orderAddressColumn = ordersFindColumn($pdo, ['address', 'address_line1', 'address1', 'street']);
+$orderPostalColumn = ordersFindColumn($pdo, ['postal_code', 'postal', 'zip_code', 'zipcode', 'zip']);
+$orderCityColumn = ordersFindColumn($pdo, ['city', 'town', 'municipality']);
+$orderEmailColumn = ordersFindColumn($pdo, ['email', 'email_address']);
+$orderPhoneColumn = ordersFindColumn($pdo, ['phone', 'mobile', 'contact_number', 'contact']);
+$orderFacebookColumn = ordersFindColumn($pdo, ['facebook_account', 'facebook', 'fb_account']);
+$orderCustomerNoteColumn = ordersFindColumn($pdo, ['customer_note', 'notes', 'note']);
+$orderReferenceColumn = ordersFindColumn($pdo, ['reference_no', 'reference_number', 'reference', 'ref_no']);
+
+$orderSelectParts = [];
+$appendSelect = static function (?string $column, string $alias) use (&$orderSelectParts): void {
+    if ($column === null) {
+        return;
+    }
+
+    $orderSelectParts[] = '`' . $column . '` AS `' . $alias . '`';
+};
+
+if ($orderIdColumn === null) {
+    $alerts['error'][] = 'We could not load your orders because the orders table is missing an ID column.';
+} else {
+    $appendSelect($orderIdColumn, 'id');
+}
+
+if ($orderTrackingColumn !== null) {
+    $appendSelect($orderTrackingColumn, 'tracking_code');
+}
+
+if ($orderCreatedAtColumn !== null) {
+    $appendSelect($orderCreatedAtColumn, 'created_at');
+} else {
+    $orderSelectParts[] = 'NULL AS `created_at`';
+}
+
+if ($orderTotalColumn !== null) {
+    $appendSelect($orderTotalColumn, 'total');
+} else {
+    $orderSelectParts[] = '0 AS `total`';
+}
+
+if ($orderStatusColumn !== null) {
+    $appendSelect($orderStatusColumn, 'status');
+} else {
+    $orderSelectParts[] = "'pending' AS `status`";
+}
+
+if ($orderCustomerNameColumn !== null) {
+    $appendSelect($orderCustomerNameColumn, 'customer_name');
+}
+
+if ($orderAddressColumn !== null) {
+    $appendSelect($orderAddressColumn, 'address');
+}
+
+if ($orderPostalColumn !== null) {
+    $appendSelect($orderPostalColumn, 'postal_code');
+}
+
+if ($orderCityColumn !== null) {
+    $appendSelect($orderCityColumn, 'city');
+}
+
+if ($orderEmailColumn !== null) {
+    $appendSelect($orderEmailColumn, 'email');
+}
+
+if ($orderPhoneColumn !== null) {
+    $appendSelect($orderPhoneColumn, 'phone');
+}
+
+if ($orderFacebookColumn !== null) {
+    $appendSelect($orderFacebookColumn, 'facebook_account');
+}
+
+if ($orderCustomerNoteColumn !== null) {
+    $appendSelect($orderCustomerNoteColumn, 'customer_note');
+}
+
+if ($orderReferenceColumn !== null) {
+    $appendSelect($orderReferenceColumn, 'reference_no');
+}
+
 $statusFilter = isset($_GET['status']) ? strtolower(trim((string) $_GET['status'])) : '';
-$orderSql = 'SELECT ' . implode(', ', $orderColumns) . ' FROM orders WHERE customer_id = ?' . ($statusFilter === 'complete' ? " AND status = 'complete'" : '') . ' ORDER BY created_at DESC';
-$orderStmt = $pdo->prepare($orderSql);
-$orderStmt->execute([(int) $customer['id']]);
-$orders = $orderStmt->fetchAll(PDO::FETCH_ASSOC);
+$orderWhereParts = [];
+$orderParams = [];
+
+if ($customerIdColumn === null) {
+    $alerts['error'][] = 'We could not match orders to your account because the orders table does not track customer IDs.';
+} else {
+    $orderWhereParts[] = '`' . $customerIdColumn . '` = ?';
+    $orderParams[] = (int) $customer['id'];
+}
+
+if ($statusFilter === 'complete') {
+    if ($orderStatusColumn !== null) {
+        $orderWhereParts[] = "`" . $orderStatusColumn . "` = 'complete'";
+    } else {
+        $alerts['error'][] = 'Unable to filter by status because the orders table is missing a status column.';
+    }
+}
+
+$orders = [];
+if ($orderIdColumn !== null && $customerIdColumn !== null) {
+    $orderSql = 'SELECT ' . implode(', ', $orderSelectParts) . ' FROM orders';
+    if (!empty($orderWhereParts)) {
+        $orderSql .= ' WHERE ' . implode(' AND ', $orderWhereParts);
+    }
+    $orderSql .= ' ORDER BY ' . ($orderCreatedAtColumn !== null ? '`' . $orderCreatedAtColumn . '`' : '`' . $orderIdColumn . '`') . ' DESC';
+
+    $orderStmt = $pdo->prepare($orderSql);
+    $orderStmt->execute($orderParams);
+    $orders = $orderStmt->fetchAll(PDO::FETCH_ASSOC);
+}
 
 $orderItemsMap = [];
 if (!empty($orders)) {

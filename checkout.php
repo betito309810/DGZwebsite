@@ -68,6 +68,13 @@ if (!function_exists('ordersHasColumn')) {
     }
 }
 
+if (!function_exists('ordersFindColumn')) {
+    function ordersFindColumn(PDO $pdo, array $candidates): ?string
+    {
+        return tableFindColumn($pdo, 'orders', $candidates);
+    }
+}
+
 if (!function_exists('ordersSupportsTrackingCodes')) {
     function ordersSupportsTrackingCodes(PDO $pdo): bool
     {
@@ -286,27 +293,6 @@ if (!function_exists('ensureOrdersTrackingCodeColumn')) {
         }
     }
 }
-
-
-if (!function_exists('ordersHasReferenceColumn')) {
-    function ordersHasReferenceColumn(PDO $pdo) {
-        static $hasColumn = null;
-        if ($hasColumn !== null) {
-            return $hasColumn;
-        }
-
-        try {
-            $stmt = $pdo->query("SHOW COLUMNS FROM orders LIKE 'reference_no'");
-            $hasColumn = $stmt !== false && $stmt->fetch() !== false;
-        } catch (Exception $e) {
-            $hasColumn = false;
-        }
-
-        return $hasColumn;
-    }
-}
-
-
 
 
 if (!function_exists('insertOrderItemDynamic')) {
@@ -862,6 +848,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    $orderTotalColumn = null;
+    $orderStatusColumn = null;
+
+    if (empty($errors)) {
+        $orderTotalColumn = ordersFindColumn($pdo, ['total', 'grand_total', 'amount', 'total_amount']);
+        if ($orderTotalColumn === null) {
+            $errors[] = 'We could not place your order because the orders table is missing a total column.';
+        }
+
+        $orderStatusColumn = ordersFindColumn($pdo, ['status', 'order_status']);
+        if ($orderStatusColumn === null) {
+            $errors[] = 'We could not place your order because the orders table is missing a status column.';
+        }
+    }
+
     if (empty($errors) && $supportsTrackingCodes) {
         try {
             $trackingCodeForRedirect = generateUniqueTrackingCode($pdo);
@@ -873,47 +874,69 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (empty($errors)) {
 
-        $hasReferenceColumn = ordersHasReferenceColumn($pdo);
+        $columns = [];
+        $values = [];
 
-        $columns = ['customer_name', 'address', 'total', 'payment_method', 'payment_proof'];
-        $values  = [$customer_name, $address, $total, $payment_method, $proof_path];
+        $appendColumn = static function (?string $column, $value) use (&$columns, &$values): void {
+            if ($column === null) {
+                return;
+            }
 
-        // Write to new columns when present
-        try { $hasEmailColumn = ordersHasColumn($pdo, 'email'); } catch (Exception $e) { $hasEmailColumn = false; }
-        try { $hasPhoneColumn = ordersHasColumn($pdo, 'phone'); } catch (Exception $e) { $hasPhoneColumn = false; }
-        try { $hasLegacyContact = ordersHasColumn($pdo, 'contact'); } catch (Exception $e) { $hasLegacyContact = false; }
-        try { $hasFacebookColumn = ordersHasColumn($pdo, 'facebook_account'); } catch (Exception $e) { $hasFacebookColumn = false; }
-        try { $hasCustomerNoteColumn = ordersHasColumn($pdo, 'customer_note'); } catch (Exception $e) { $hasCustomerNoteColumn = false; } // Added detection for dedicated notes column
-        try { $hasLegacyNotesColumn = ordersHasColumn($pdo, 'notes'); } catch (Exception $e) { $hasLegacyNotesColumn = false; } // Added fallback for legacy installs using generic notes
-        try { $hasPostalCodeColumn = ordersHasColumn($pdo, 'postal_code'); } catch (Exception $e) { $hasPostalCodeColumn = false; }
-        try { $hasCityColumn = ordersHasColumn($pdo, 'city'); } catch (Exception $e) { $hasCityColumn = false; }
+            if (in_array($column, $columns, true)) {
+                return;
+            }
 
-        try { $hasCustomerIdColumn = ordersHasColumn($pdo, 'customer_id'); } catch (Exception $e) { $hasCustomerIdColumn = false; }
+            $columns[] = $column;
+            $values[] = $value;
+        };
 
-        if ($hasEmailColumn) { $columns[] = 'email'; $values[] = $email; }
-        if ($hasPhoneColumn) { $columns[] = 'phone'; $values[] = $phone; }
-        if ($hasLegacyContact) { $columns[] = 'contact'; $values[] = $email; }
+        $appendColumn(ordersFindColumn($pdo, ['customer_name', 'name']), $customer_name);
+        $appendColumn(ordersFindColumn($pdo, ['address', 'address_line1', 'address1', 'street']), $address);
+        $appendColumn($orderTotalColumn, $total);
+        $appendColumn(ordersFindColumn($pdo, ['payment_method', 'payment', 'payment_option']), $payment_method);
+        $appendColumn(ordersFindColumn($pdo, ['payment_proof', 'proof_of_payment', 'payment_proof_path', 'proof']), $proof_path);
 
-        if ($hasReferenceColumn) { $columns[] = 'reference_no'; $values[] = $referenceNumber; }
-        if ($supportsTrackingCodes && $trackingCodeForRedirect !== null) { $columns[] = 'tracking_code'; $values[] = $trackingCodeForRedirect; }
-        if ($hasFacebookColumn) { $columns[] = 'facebook_account'; $values[] = $facebookAccount; }
-        if ($hasCustomerNoteColumn) { $columns[] = 'customer_note'; $values[] = $customerNote !== '' ? $customerNote : null; } // Added storage for cashier notes when column exists
-        elseif ($hasLegacyNotesColumn) { $columns[] = 'notes'; $values[] = $customerNote !== '' ? $customerNote : null; } // Added fallback storage for systems that already expose a generic notes column
-        if ($hasPostalCodeColumn) { $columns[] = 'postal_code'; $values[] = $postalCode; }
-        if ($hasCityColumn) { $columns[] = 'city'; $values[] = $city; }
+        $appendColumn(ordersFindColumn($pdo, ['email', 'email_address']), $email);
+        $phoneColumn = ordersFindColumn($pdo, ['phone', 'mobile', 'contact_number']);
+        $appendColumn($phoneColumn, $phone);
 
-        if ($hasCustomerIdColumn) { $columns[] = 'customer_id'; $values[] = $customerAccount ? (int) $customerAccount['id'] : null; }
-
-        if (ordersHasColumn($pdo, 'order_type')) {
-            $columns[] = 'order_type';
-            $values[] = 'online';
+        $legacyContactColumn = ordersFindColumn($pdo, ['contact']);
+        if ($legacyContactColumn !== null && $legacyContactColumn !== $phoneColumn) {
+            $appendColumn($legacyContactColumn, $email);
         }
 
-        $columns[] = 'status';
-        $values[]  = 'pending';
+        $appendColumn(ordersFindColumn($pdo, ['reference_no', 'reference_number', 'reference', 'ref_no']), $referenceNumber);
+
+        $trackingColumn = ordersFindColumn($pdo, ['tracking_code']);
+        if ($supportsTrackingCodes && $trackingCodeForRedirect !== null && $trackingColumn !== null) {
+            $appendColumn($trackingColumn, $trackingCodeForRedirect);
+        }
+
+        $appendColumn(ordersFindColumn($pdo, ['facebook_account', 'facebook', 'fb_account']), $facebookAccount);
+
+        $customerNoteColumn = ordersFindColumn($pdo, ['customer_note']);
+        $legacyNotesColumn = ordersFindColumn($pdo, ['notes', 'note']);
+        if ($customerNoteColumn !== null) {
+            $appendColumn($customerNoteColumn, $customerNote !== '' ? $customerNote : null);
+        } elseif ($legacyNotesColumn !== null) {
+            $appendColumn($legacyNotesColumn, $customerNote !== '' ? $customerNote : null);
+        }
+
+        $appendColumn(ordersFindColumn($pdo, ['postal_code', 'postal', 'zip_code', 'zipcode', 'zip']), $postalCode);
+        $appendColumn(ordersFindColumn($pdo, ['city', 'town', 'municipality']), $city);
+
+        $appendColumn(ordersFindColumn($pdo, ['customer_id', 'customerid', 'customerID', 'customerId']), $customerAccount ? (int) $customerAccount['id'] : null);
+
+        $appendColumn(ordersFindColumn($pdo, ['order_type']), 'online');
+
+        $appendColumn($orderStatusColumn, 'pending');
+
+        $columnsSql = array_map(static function (string $column): string {
+            return '`' . $column . '`';
+        }, $columns);
 
         $placeholders = implode(', ', array_fill(0, count($columns), '?'));
-        $sql = 'INSERT INTO orders (' . implode(', ', $columns) . ') VALUES (' . $placeholders . ')';
+        $sql = 'INSERT INTO orders (' . implode(', ', $columnsSql) . ') VALUES (' . $placeholders . ')';
         $stmt = $pdo->prepare($sql);
         $stmt->execute($values);
 
