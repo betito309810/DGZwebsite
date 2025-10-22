@@ -48,19 +48,54 @@ if (!isset($_GET['order_id'])) {
 
 $pdo = db();
 $supportsProcessedBy = ordersSupportsProcessedBy($pdo);
+$supportsCustomerAccounts = ordersSupportsCustomerAccounts($pdo);
 $order_id = (int)$_GET['order_id'];
 
 try {
     // Get order details
-    $cashierSelect = $supportsProcessedBy
-        ? 'u.username AS cashier_username, u.name AS cashier_name'
-        : 'NULL AS cashier_username, NULL AS cashier_name';
-    $cashierJoin = $supportsProcessedBy ? 'LEFT JOIN users u ON u.id = o.processed_by_user_id' : '';
-    $sql = "SELECT o.*, r.label AS decline_reason_label, $cashierSelect
-         FROM orders o
-         LEFT JOIN order_decline_reasons r ON r.id = o.decline_reason_id
-         $cashierJoin
-         WHERE o.id = ?";
+    $buildOrderDetailsQuery = static function (bool $withProcessedBy) use ($supportsCustomerAccounts): string {
+        $selectParts = [
+            'o.*',
+            'r.label AS decline_reason_label',
+        ];
+
+        if ($withProcessedBy) {
+            $selectParts[] = 'u.username AS cashier_username';
+            $selectParts[] = 'u.name AS cashier_name';
+        } else {
+            $selectParts[] = 'NULL AS cashier_username';
+            $selectParts[] = 'NULL AS cashier_name';
+        }
+
+        if ($supportsCustomerAccounts) {
+            $selectParts[] = 'c.full_name AS customer_full_name';
+            $selectParts[] = 'c.email AS customer_email';
+            $selectParts[] = 'c.phone AS customer_phone';
+            $selectParts[] = 'c.facebook_account AS customer_facebook_account';
+            $selectParts[] = 'c.address AS customer_address';
+            $selectParts[] = 'c.postal_code AS customer_postal_code';
+            $selectParts[] = 'c.city AS customer_city';
+        }
+
+        $joins = [
+            'LEFT JOIN order_decline_reasons r ON r.id = o.decline_reason_id',
+        ];
+
+        if ($withProcessedBy) {
+            $joins[] = 'LEFT JOIN users u ON u.id = o.processed_by_user_id';
+        }
+
+        if ($supportsCustomerAccounts) {
+            $joins[] = 'LEFT JOIN customers c ON c.id = o.customer_id';
+        }
+
+        return 'SELECT ' . implode(', ', $selectParts)
+            . ' FROM orders o '
+            . implode(' ', $joins)
+            . ' WHERE o.id = ?';
+    };
+
+    $sql = $buildOrderDetailsQuery($supportsProcessedBy);
 
     $stmt = null;
     try {
@@ -70,11 +105,7 @@ try {
         if ($supportsProcessedBy) {
             error_log('Cashier join failed, retrying without processed_by_user_id: ' . $e->getMessage());
             $supportsProcessedBy = false;
-            $fallbackSql = "SELECT o.*, r.label AS decline_reason_label,
-                     NULL AS cashier_username, NULL AS cashier_name
-                 FROM orders o
-                 LEFT JOIN order_decline_reasons r ON r.id = o.decline_reason_id
-                 WHERE o.id = ?";
+            $fallbackSql = $buildOrderDetailsQuery(false);
             $stmt = $pdo->prepare($fallbackSql);
             $stmt->execute([$order_id]);
         } else {

@@ -481,22 +481,33 @@ function prepareOrderItemsData(PDO $pdo, int $orderId): array
  */
 function fetchOrderNotificationContext(PDO $pdo, int $orderId): array
 {
-    $columns = ['customer_name', 'total', 'created_at'];
+    $supportsCustomerAccounts = ordersSupportsCustomerAccounts($pdo);
+    $columns = ['o.customer_name', 'o.total', 'o.created_at'];
 
     if (ordersHasColumn($pdo, 'email')) {
-        $columns[] = 'email';
+        $columns[] = 'o.email';
     }
     if (ordersHasColumn($pdo, 'phone')) {
-        $columns[] = 'phone';
+        $columns[] = 'o.phone';
     }
     if (ordersHasColumn($pdo, 'contact')) {
-        $columns[] = 'contact AS legacy_contact';
+        $columns[] = 'o.contact AS legacy_contact';
     }
     if (ordersSupportsInvoiceNumbers($pdo)) {
-        $columns[] = 'invoice_number';
+        $columns[] = 'o.invoice_number';
     }
 
-    $sql = 'SELECT ' . implode(', ', $columns) . ' FROM orders WHERE id = ? LIMIT 1';
+    if ($supportsCustomerAccounts) {
+        $columns[] = 'c.email AS customer_email';
+        $columns[] = 'c.phone AS customer_phone';
+        $columns[] = 'c.full_name AS customer_full_name';
+    }
+
+    $sql = 'SELECT ' . implode(', ', $columns) . ' FROM orders o';
+    if ($supportsCustomerAccounts) {
+        $sql .= ' LEFT JOIN customers c ON c.id = o.customer_id';
+    }
+    $sql .= ' WHERE o.id = ? LIMIT 1';
     $stmt = $pdo->prepare($sql);
     $stmt->execute([$orderId]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
@@ -512,6 +523,9 @@ function fetchOrderNotificationContext(PDO $pdo, int $orderId): array
     if (!empty($row['legacy_contact'])) {
         $emailCandidates[] = $row['legacy_contact'];
     }
+    if (!empty($row['customer_email'])) {
+        $emailCandidates[] = $row['customer_email'];
+    }
 
     $email = '';
     foreach ($emailCandidates as $candidate) {
@@ -522,10 +536,20 @@ function fetchOrderNotificationContext(PDO $pdo, int $orderId): array
         }
     }
 
+    $customerName = trim((string) ($row['customer_name'] ?? ''));
+    if ($customerName === '' && !empty($row['customer_full_name'])) {
+        $customerName = trim((string) $row['customer_full_name']);
+    }
+
+    $phone = trim((string) ($row['phone'] ?? ''));
+    if ($phone === '' && !empty($row['customer_phone'])) {
+        $phone = trim((string) $row['customer_phone']);
+    }
+
     return [
-        'customer_name' => trim((string) ($row['customer_name'] ?? '')),
+        'customer_name' => $customerName,
         'email' => $email,
-        'phone' => trim((string) ($row['phone'] ?? '')),
+        'phone' => $phone,
         'invoice_number' => trim((string) ($row['invoice_number'] ?? '')),
         'total' => (float) ($row['total'] ?? 0.0),
         'created_at' => (string) ($row['created_at'] ?? ''),
@@ -675,123 +699,176 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                                 $pdfFilename = 'receipt_' . $orderId . '.pdf';
 
                                 try { sendEmail($customerEmail, $subject, $body, $pdfContent, $pdfFilename); } catch (Throwable $e) { /* logged */ }
-                            }
-                        }
                     }
+                }
+            }
 
-                    if ($success && $newStatus === 'payment_verification') {
-                        $orderInfo = fetchOrderNotificationContext($pdo, $orderId);
-                        $customerEmail = $orderInfo['email'] ?? '';
+            if ($success && $newStatus === 'payment_verification') {
+                $orderInfo = fetchOrderNotificationContext($pdo, $orderId);
+                $customerEmail = $orderInfo['email'] ?? '';
 
-                        if ($customerEmail !== '' && filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
-                            $customerName = $orderInfo['customer_name'] !== ''
-                                ? $orderInfo['customer_name']
-                                : 'Customer';
+                if ($customerEmail !== '' && filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
+                    $customerName = $orderInfo['customer_name'] !== ''
+                        ? $orderInfo['customer_name']
+                        : 'Customer';
 
-                            if (strtolower(trim($customerName)) !== 'walk-in') {
-                                $itemData = prepareOrderItemsData($pdo, $orderId);
-                                $summaryTableHtml = (string) ($itemData['table_html'] ?? '');
+                    if (strtolower(trim($customerName)) !== 'walk-in') {
+                        $itemData = prepareOrderItemsData($pdo, $orderId);
+                        $summaryTableHtml = (string) ($itemData['table_html'] ?? '');
 
-                                $createdAt = (string) ($orderInfo['created_at'] ?? '');
-                                $prettyDate = $createdAt !== ''
-                                    ? date('F j, Y g:i A', strtotime($createdAt))
-                                    : date('F j, Y g:i A');
+                        $createdAt = (string) ($orderInfo['created_at'] ?? '');
+                        $prettyDate = $createdAt !== ''
+                            ? date('F j, Y g:i A', strtotime($createdAt))
+                            : date('F j, Y g:i A');
 
-                                $supportEmail = 'dgzstoninocapstone@gmail.com';
-                                $supportPhone = '(123) 456-7890';
+                        $supportEmail = 'dgzstoninocapstone@gmail.com';
+                        $supportPhone = '(123) 456-7890';
 
-                                $subject = 'Payment Verification Needed - DGZ Motorshop Order #' . (int) $orderId;
-                                $body = '<div style="font-family: Arial, sans-serif; font-size:14px; color:#333;">'
-                                    . '<h2 style="color:#b45309; margin-bottom:8px;">Action Needed: Payment Verification</h2>'
-                                    . '<p style="margin:0 0 12px;">Hi ' . htmlspecialchars($customerName, ENT_QUOTES, 'UTF-8') . ',</p>'
-                                    . '<p style="margin:0 0 12px;">We reviewed your order #' . (int) $orderId . ' placed on '
-                                    . htmlspecialchars($prettyDate, ENT_QUOTES, 'UTF-8') . ', but we could not match any payment on our records.</p>'
-                                    . '<p style="margin:0 0 12px;">Please reach us within <strong>5 working days</strong> via '
-                                    . '<a href="mailto:' . htmlspecialchars($supportEmail, ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($supportEmail, ENT_QUOTES, 'UTF-8') . '</a>'
-                                    . ' or call us at ' . htmlspecialchars($supportPhone, ENT_QUOTES, 'UTF-8') . '.</p>'
-                                    . $summaryTableHtml
-                                    . '<p style="margin:0;">If we don\'t hear back within 5 working days, the order will be automatically cancelled.</p>'
-                                    . '<p style="margin:12px 0 0;">Thank you,<br>DGZ Motorshop Team</p>'
-                                    . '</div>';
+                        $subject = 'Payment Verification Needed - DGZ Motorshop Order #' . (int) $orderId;
+                        $body = '<div style="font-family: Arial, sans-serif; font-size:14px; color:#333;">'
+                            . '<h2 style="color:#b45309; margin-bottom:8px;">Action Needed: Payment Verification</h2>'
+                            . '<p style="margin:0 0 12px;">Hi ' . htmlspecialchars($customerName, ENT_QUOTES, 'UTF-8') . ',</p>'
+                            . '<p style="margin:0 0 12px;">We reviewed your order #' . (int) $orderId . ' placed on '
+                            . htmlspecialchars($prettyDate, ENT_QUOTES, 'UTF-8') . ', but we could not match any payment on our records.</p>'
+                            . '<p style="margin:0 0 12px;">Please reach us within <strong>5 working days</strong> via '
+                            . '<a href="mailto:' . htmlspecialchars($supportEmail, ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($supportEmail, ENT_QUOTES, 'UTF-8') . '</a>'
+                            . ' or call us at ' . htmlspecialchars($supportPhone, ENT_QUOTES, 'UTF-8') . '.</p>'
+                            . $summaryTableHtml
+                            . '<p style="margin:0;">If we don\'t hear back within 5 working days, the order will be automatically cancelled.</p>'
+                            . '<p style="margin:12px 0 0;">Thank you,<br>DGZ Motorshop Team</p>'
+                            . '</div>';
 
-                                try { sendEmail($customerEmail, $subject, $body); } catch (Throwable $e) { /* logged */ }
-                            }
-                        }
+                        try { sendEmail($customerEmail, $subject, $body); } catch (Throwable $e) { /* logged */ }
                     }
+                }
+            }
 
-                    if ($success && $newStatus === 'completed') {
-                        // Added: let the customer know that the order was handed off to the courier.
-                        $orderInfo = fetchOrderNotificationContext($pdo, $orderId);
-                        $customerEmail = $orderInfo['email'] ?? '';
+            if ($success && $newStatus === 'delivery') {
+                $orderInfo = fetchOrderNotificationContext($pdo, $orderId);
+                $customerEmail = $orderInfo['email'] ?? '';
 
-                        if ($customerEmail !== '' && filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
-                            $customerName = $orderInfo['customer_name'] !== ''
-                                ? $orderInfo['customer_name']
-                                : 'Customer';
+                if ($customerEmail !== '' && filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
+                    $customerName = $orderInfo['customer_name'] !== ''
+                        ? $orderInfo['customer_name']
+                        : 'Customer';
 
-                            if (strtolower(trim($customerName)) !== 'walk-in') {
-                                $itemData = prepareOrderItemsData($pdo, $orderId);
-                                $itemsTotal = (float) ($itemData['items_total'] ?? 0.0);
-                                $summaryTableHtml = (string) ($itemData['table_html'] ?? '');
+                    if (strtolower(trim($customerName)) !== 'walk-in') {
+                        $itemData = prepareOrderItemsData($pdo, $orderId);
+                        $itemsTotal = (float) ($itemData['items_total'] ?? 0.0);
+                        $summaryTableHtml = (string) ($itemData['table_html'] ?? '');
 
-                                $createdAt = (string) ($orderInfo['created_at'] ?? '');
-                                $prettyDate = $createdAt !== ''
-                                    ? date('F j, Y g:i A', strtotime($createdAt))
-                                    : date('F j, Y g:i A');
+                        $createdAt = (string) ($orderInfo['created_at'] ?? '');
+                        $prettyDate = $createdAt !== ''
+                            ? date('F j, Y g:i A', strtotime($createdAt))
+                            : date('F j, Y g:i A');
 
-                                $orderTotal = (float) ($orderInfo['total'] ?? $itemsTotal);
-                                $invoiceNumber = trim((string) ($orderInfo['invoice_number'] ?? ''));
-                                $displayInvoice = $invoiceNumber !== ''
-                                    ? $invoiceNumber
-                                    : 'INV-' . str_pad((string) $orderId, 6, '0', STR_PAD_LEFT);
+                        $orderTotal = (float) ($orderInfo['total'] ?? $itemsTotal);
+                        $invoiceNumber = trim((string) ($orderInfo['invoice_number'] ?? ''));
+                        $displayInvoice = $invoiceNumber !== ''
+                            ? $invoiceNumber
+                            : 'INV-' . str_pad((string) $orderId, 6, '0', STR_PAD_LEFT);
 
-                                $subject = 'Order Update - DGZ Motorshop Order #' . (int) $orderId . ' is with the Courier';
-                                $body = '<div style="font-family: Arial, sans-serif; font-size:14px; color:#333;">'
-                                    . '<h2 style="color:#047857; margin-bottom:8px;">Your Order Is On Its Way</h2>'
-                                    . '<p style="margin:0 0 12px;">Hi ' . htmlspecialchars($customerName, ENT_QUOTES, 'UTF-8') . ',</p>'
-                                    . '<p style="margin:0 0 12px;">We\'re happy to let you know that your order #' . (int) $orderId
-                                    . ' has been handed over to our trusted courier partner for delivery.</p>'
-                                    . '<p style="margin:0 0 12px;">Invoice Number: <strong>'
-                                    . htmlspecialchars($displayInvoice, ENT_QUOTES, 'UTF-8') . '</strong><br>'
-                                    . 'Order Date: ' . htmlspecialchars($prettyDate, ENT_QUOTES, 'UTF-8') . '</p>'
-                                    . $summaryTableHtml
-                                    . '<p style="margin:12px 0 0;">We\'ll share another update once the delivery is complete. '
-                                    . 'Thank you for choosing <strong>DGZ Motorshop</strong>!</p>'
-                                    . '</div>';
+                        $subject = 'Order Update - DGZ Motorshop Order #' . (int) $orderId . ' is with the Courier';
+                        $body = '<div style="font-family: Arial, sans-serif; font-size:14px; color:#333;">'
+                            . '<h2 style="color:#047857; margin-bottom:8px;">Your Order Is On Its Way</h2>'
+                            . '<p style="margin:0 0 12px;">Hi ' . htmlspecialchars($customerName, ENT_QUOTES, 'UTF-8') . ',</p>'
+                            . '<p style="margin:0 0 12px;">We\'re happy to let you know that your order #' . (int) $orderId
+                            . ' has been handed over to our trusted courier partner for delivery.</p>'
+                            . '<p style="margin:0 0 12px;">Invoice Number: <strong>'
+                            . htmlspecialchars($displayInvoice, ENT_QUOTES, 'UTF-8') . '</strong><br>'
+                            . 'Order Date: ' . htmlspecialchars($prettyDate, ENT_QUOTES, 'UTF-8') . '</p>'
+                            . $summaryTableHtml
+                            . '<p style="margin:12px 0 0;">We\'ll share another update once the delivery is complete. '
+                            . 'Thank you for choosing <strong>DGZ Motorshop</strong>!</p>'
+                            . '</div>';
 
-                                // Added: attach the same PDF receipt that approved customers receive.
-                                $receiptData = [
-                                    'order_id' => $orderId,
-                                    'invoice_number' => $invoiceNumber,
-                                    'customer_name' => $customerName,
-                                    'created_at' => $createdAt,
-                                    'sales_total' => $orderTotal,
-                                    'vatable' => $orderTotal / 1.12,
-                                    'vat' => $orderTotal - ($orderTotal / 1.12),
-                                    'amount_paid' => $orderTotal,
-                                    'change' => 0.0,
-                                    'cashier' => currentSessionUserDisplayName() ?? 'Cashier',
-                                    'items' => array_map(static function (array $item): array {
-                                        return [
-                                            'name' => $item['name'] ?? 'Item',
-                                            'quantity' => (int) ($item['quantity'] ?? 0),
-                                            'price' => (float) ($item['price'] ?? 0),
-                                            'total' => (float) ($item['total'] ?? 0),
-                                        ];
-                                    }, $itemData['items'] ?? []),
+                        $receiptData = [
+                            'order_id' => $orderId,
+                            'invoice_number' => $invoiceNumber,
+                            'customer_name' => $customerName,
+                            'created_at' => $createdAt,
+                            'sales_total' => $orderTotal,
+                            'vatable' => $orderTotal / 1.12,
+                            'vat' => $orderTotal - ($orderTotal / 1.12),
+                            'amount_paid' => $orderTotal,
+                            'change' => 0.0,
+                            'cashier' => currentSessionUserDisplayName() ?? 'Cashier',
+                            'items' => array_map(static function (array $item): array {
+                                return [
+                                    'name' => $item['name'] ?? 'Item',
+                                    'quantity' => (int) ($item['quantity'] ?? 0),
+                                    'price' => (float) ($item['price'] ?? 0),
+                                    'total' => (float) ($item['total'] ?? 0),
                                 ];
+                            }, $itemData['items'] ?? []),
+                        ];
 
-                                $pdfContent = generateReceiptPDF($receiptData);
-                                $pdfFilename = 'receipt_' . $orderId . '.pdf';
+                        $pdfContent = generateReceiptPDF($receiptData);
+                        $pdfFilename = 'receipt_' . $orderId . '.pdf';
 
-                                try {
-                                    sendEmail($customerEmail, $subject, $body, $pdfContent, $pdfFilename);
-                                } catch (Throwable $e) {
-                                    /* logged */
-                                }
-                            }
+                        try {
+                            sendEmail($customerEmail, $subject, $body, $pdfContent, $pdfFilename);
+                        } catch (Throwable $e) {
+                            /* logged */
                         }
                     }
+                }
+            }
+
+            if ($success && $newStatus === 'completed') {
+                $orderInfo = fetchOrderNotificationContext($pdo, $orderId);
+                $customerEmail = $orderInfo['email'] ?? '';
+
+                if ($customerEmail !== '' && filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
+                    $customerName = $orderInfo['customer_name'] !== ''
+                        ? $orderInfo['customer_name']
+                        : 'Customer';
+
+                    if (strtolower(trim($customerName)) !== 'walk-in') {
+                        $createdAt = (string) ($orderInfo['created_at'] ?? '');
+                        $prettyDate = '';
+                        if ($createdAt !== '') {
+                            $timestamp = strtotime($createdAt);
+                            if ($timestamp !== false) {
+                                $prettyDate = date('F j, Y g:i A', $timestamp);
+                            }
+                        }
+
+                        $invoiceNumber = trim((string) ($orderInfo['invoice_number'] ?? ''));
+                        $displayInvoice = $invoiceNumber !== ''
+                            ? $invoiceNumber
+                            : 'INV-' . str_pad((string) $orderId, 6, '0', STR_PAD_LEFT);
+
+                        $detailLines = [];
+                        if ($displayInvoice !== '') {
+                            $detailLines[] = 'Invoice Number: <strong>' . htmlspecialchars($displayInvoice, ENT_QUOTES, 'UTF-8') . '</strong>';
+                        }
+                        if ($prettyDate !== '') {
+                            $detailLines[] = 'Order Date: ' . htmlspecialchars($prettyDate, ENT_QUOTES, 'UTF-8');
+                        }
+
+                        $detailsHtml = '';
+                        if (!empty($detailLines)) {
+                            $detailsHtml = '<p style="margin:0 0 12px;">' . implode('<br>', $detailLines) . '</p>';
+                        }
+
+                        $subject = 'Thank You - DGZ Motorshop Order #' . (int) $orderId;
+                        $body = '<div style="font-family: Arial, sans-serif; font-size:14px; color:#333;">'
+                            . '<h2 style="color:#1f2937; margin-bottom:8px;">Thank You!</h2>'
+                            . '<p style="margin:0 0 12px;">Hi ' . htmlspecialchars($customerName, ENT_QUOTES, 'UTF-8') . ',</p>'
+                            . '<p style="margin:0 0 12px;">Your DGZ Motorshop order #' . (int) $orderId . ' has been completed. Thank you for trusting us with your purchase.</p>'
+                            . $detailsHtml
+                            . '<p style="margin:12px 0 0;">We appreciate your support and hope to serve you again soon.</p>'
+                            . '</div>';
+
+                        try {
+                            sendEmail($customerEmail, $subject, $body);
+                        } catch (Throwable $e) {
+                            /* logged */
+                        }
+                    }
+                }
+            }
 
                     if ($success && $newStatus === 'approved' && $supportsInvoiceNumbers) {
                         $invoiceStmt = $pdo->prepare('SELECT invoice_number FROM orders WHERE id = ?');

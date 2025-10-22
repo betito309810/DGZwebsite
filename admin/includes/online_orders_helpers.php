@@ -47,13 +47,13 @@ if (!function_exists('normalizeOnlineOrderRow')) {
             }
         };
 
-        $setStringField('customer_name', ['customer_name', 'full_name', 'name']);
+        $setStringField('customer_name', ['customer_name', 'full_name', 'name', 'customer_full_name']);
         $setStringField('email', ['email', 'customer_email', 'email_address', 'contact_email']);
         $setStringField('phone', ['phone', 'customer_phone', 'contact', 'contact_number', 'mobile', 'telephone']);
-        $setStringField('facebook_account', ['facebook_account', 'facebook', 'fb_account', 'facebook_profile']);
+        $setStringField('facebook_account', ['facebook_account', 'facebook', 'fb_account', 'facebook_profile', 'customer_facebook_account']);
         $setStringField('address', ['address', 'customer_address', 'shipping_address', 'address_line1', 'address1', 'street']);
-        $setStringField('postal_code', ['postal_code', 'postal', 'zip_code', 'zipcode', 'zip']);
-        $setStringField('city', ['city', 'town', 'municipality']);
+        $setStringField('postal_code', ['postal_code', 'postal', 'zip_code', 'zipcode', 'zip', 'customer_postal_code']);
+        $setStringField('city', ['city', 'town', 'municipality', 'customer_city']);
         $setStringField('reference_no', ['reference_no', 'reference_number', 'reference', 'ref_no']);
         $setStringField('invoice_number', ['invoice_number', 'invoice', 'invoice_no']);
         $setStringField('customer_note', ['customer_note', 'notes', 'note']);
@@ -162,7 +162,23 @@ if (!function_exists('fetchOnlineOrdersData')) {
             $offset = 0;
         }
 
-        $sql = 'SELECT * FROM orders WHERE ' . $whereClause . ' ORDER BY created_at DESC LIMIT ' . (int) $perPage . ' OFFSET ' . (int) $offset;
+        $supportsCustomerAccounts = ordersSupportsCustomerAccounts($pdo);
+        $customerSelect = '';
+        $customerJoin = '';
+        if ($supportsCustomerAccounts) {
+            $customerSelect = ',
+                c.full_name AS full_name,
+                c.email AS customer_email,
+                c.phone AS customer_phone,
+                c.facebook_account AS customer_facebook_account,
+                c.address AS customer_address,
+                c.postal_code AS customer_postal_code,
+                c.city AS customer_city';
+            $customerJoin = ' LEFT JOIN customers c ON c.id = orders.customer_id';
+        }
+
+        $sql = 'SELECT orders.*' . $customerSelect . ' FROM orders' . $customerJoin . ' WHERE ' . $whereClause
+            . ' ORDER BY orders.created_at DESC LIMIT ' . (int) $perPage . ' OFFSET ' . (int) $offset;
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);

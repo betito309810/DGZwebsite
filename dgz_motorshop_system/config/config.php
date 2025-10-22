@@ -568,6 +568,39 @@ if (!function_exists('ordersSupportsProcessedBy')) {
     }
 }
 
+if (!function_exists('ordersSupportsCustomerAccounts')) {
+    function ordersSupportsCustomerAccounts(PDO $pdo): bool
+    {
+        static $supports = null;
+
+        if (is_bool($supports)) {
+            return $supports;
+        }
+
+        try {
+            $columnStmt = $pdo->query("SHOW COLUMNS FROM orders LIKE 'customer_id'");
+            if ($columnStmt === false || $columnStmt->fetch(PDO::FETCH_ASSOC) === false) {
+                $supports = false;
+                return $supports;
+            }
+        } catch (Throwable $e) {
+            error_log('Unable to determine customer_id support: ' . $e->getMessage());
+            $supports = false;
+            return $supports;
+        }
+
+        try {
+            $tableStmt = $pdo->query("SHOW TABLES LIKE 'customers'");
+            $supports = $tableStmt !== false && $tableStmt->fetch(PDO::FETCH_NUM) !== false;
+        } catch (Throwable $e) {
+            error_log('Unable to detect customers table: ' . $e->getMessage());
+            $supports = false;
+        }
+
+        return $supports;
+    }
+}
+
 if (!function_exists('resolveUserDisplayName')) {
     function resolveUserDisplayName(array $user, array $fallbacks = []): ?string
     {
