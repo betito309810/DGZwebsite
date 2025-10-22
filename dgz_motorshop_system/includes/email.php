@@ -19,6 +19,8 @@ function sendEmail(string $to, string $subject, string $body, ?string $pdfConten
     error_log("Starting email send process to: $to");
     error_log("Subject: $subject");
 
+    $mail = null;
+
     try {
         $mail = getMailer();
 
@@ -96,7 +98,10 @@ function sendEmail(string $to, string $subject, string $body, ?string $pdfConten
 
         return $result;
     } catch (Exception $e) {
-        error_log("Message could not be sent. Mailer Error: {$mail->ErrorInfo}");
+        $errorInfo = ($mail instanceof \PHPMailer\PHPMailer\PHPMailer)
+            ? $mail->ErrorInfo
+            : 'Mailer not initialized';
+        error_log("Message could not be sent. Mailer Error: {$errorInfo}");
         error_log("Exception: " . $e->getMessage());
         return false;
     }

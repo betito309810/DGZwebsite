@@ -732,9 +732,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $referenceNumber = preg_replace('/[^A-Za-z0-9\- ]/', '', $referenceInput);
     $referenceNumber = strtoupper(substr($referenceNumber, 0, 50));
-    if ($referenceNumber === '') {
-        $errors[] = 'Reference number is required.';
-    }
 
     if ($payment_method === '') {
         $errors[] = 'Please select a payment method.';
@@ -815,9 +812,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         }
-    } else {
-        // Require proof of payment image upload
-        $errors[] = 'Proof of payment image is required.';
     }
 
     // Calculate total from cart items
@@ -894,7 +888,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $appendColumn(ordersFindColumn($pdo, ['address', 'address_line1', 'address1', 'street']), $address);
         $appendColumn($orderTotalColumn, $total);
         $appendColumn(ordersFindColumn($pdo, ['payment_method', 'payment', 'payment_option']), $payment_method);
-        $appendColumn(ordersFindColumn($pdo, ['payment_proof', 'proof_of_payment', 'payment_proof_path', 'proof']), $proof_path);
+        if ($proof_path !== null && $proof_path !== '') {
+            $appendColumn(ordersFindColumn($pdo, ['payment_proof', 'proof_of_payment', 'payment_proof_path', 'proof']), $proof_path);
+        }
 
         $appendColumn(ordersFindColumn($pdo, ['email', 'email_address']), $email);
         $phoneColumn = ordersFindColumn($pdo, ['phone', 'mobile', 'contact_number']);
@@ -905,7 +901,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $appendColumn($legacyContactColumn, $email);
         }
 
-        $appendColumn(ordersFindColumn($pdo, ['reference_no', 'reference_number', 'reference', 'ref_no']), $referenceNumber);
+        if ($referenceNumber !== '') {
+            $appendColumn(ordersFindColumn($pdo, ['reference_no', 'reference_number', 'reference', 'ref_no']), $referenceNumber);
+        }
 
         $trackingColumn = ordersFindColumn($pdo, ['tracking_code']);
         if ($supportsTrackingCodes && $trackingCodeForRedirect !== null && $trackingColumn !== null) {
@@ -1360,12 +1358,12 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                     </div>
 
                     <div class="form-group">
-                        <label for="reference_number">Reference Number <span class="required-indicator">*</span></label>
-                        <input type="text" name="reference_number" id="reference_number" maxlength="50" value="<?= htmlspecialchars($referenceInput) ?>" placeholder="e.g. GCASH123456" required>
+                        <label for="reference_number">Reference Number (optional)</label>
+                        <input type="text" name="reference_number" id="reference_number" maxlength="50" value="<?= htmlspecialchars($referenceInput) ?>" placeholder="e.g. GCASH123456">
                     </div>
 
                     <div class="file-upload">
-                        <input type="file" name="proof" id="proof" accept="image/*" required>
+                        <input type="file" name="proof" id="proof" accept="image/*">
                         <label for="proof">
                             <i class="fas fa-cloud-upload-alt"></i>
                             Upload Proof of Payment
@@ -1642,7 +1640,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             const emailField = checkoutForm.querySelector('input[name="email"]');
             const addressField = checkoutForm.querySelector('textarea[name="address"]');
             const referenceField = checkoutForm.querySelector('#reference_number');
-            const requiredFields = [emailField, addressField, referenceField];
+            const requiredFields = [emailField, addressField];
 
             let invalidField = null;
             requiredFields.forEach((field) => {
