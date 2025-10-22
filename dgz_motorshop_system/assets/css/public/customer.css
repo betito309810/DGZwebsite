@@ -689,6 +689,175 @@
     word-break: break-word;
 }
 
+.customer-order-card__section--payment {
+    grid-column: 1 / -1;
+}
+
+.customer-payment-card {
+    background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%);
+    border-radius: 1rem;
+    padding: 1.25rem;
+    border: 1px solid rgba(79, 70, 229, 0.18);
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.customer-payment-card__intro {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1.25rem;
+}
+
+.customer-payment-card__subtitle {
+    margin: 0.35rem 0 0;
+    font-size: 0.9rem;
+    color: #475569;
+}
+
+.customer-payment-card__view-proof {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.5rem 0.95rem;
+    border-radius: 999px;
+    background: rgba(37, 99, 235, 0.12);
+    color: #1d4ed8;
+    font-weight: 600;
+    text-decoration: none;
+    transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+.customer-payment-card__view-proof:hover,
+.customer-payment-card__view-proof:focus-visible {
+    transform: translateY(-1px);
+    background: rgba(37, 99, 235, 0.2);
+    outline: none;
+}
+
+.customer-payment-card__stored {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    background: rgba(79, 70, 229, 0.08);
+    border-radius: 0.9rem;
+    padding: 1rem;
+}
+
+.customer-payment-card__stored-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.customer-payment-card__stored-label {
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #6366f1;
+    font-weight: 700;
+}
+
+.customer-payment-card__stored-value {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #1e1b4b;
+    word-break: break-word;
+}
+
+.customer-payment-card__preview {
+    margin: 0;
+    border-radius: 0.75rem;
+    overflow: hidden;
+    box-shadow: 0 18px 35px rgba(79, 70, 229, 0.2);
+    max-width: 240px;
+}
+
+.customer-payment-card__preview img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.customer-payment-card__note {
+    margin: 0;
+    color: #3730a3;
+    font-weight: 600;
+}
+
+.customer-payment-card__form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.customer-payment-card__fields {
+    display: grid;
+    gap: 1.25rem;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.customer-payment-card__field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.customer-payment-card__field label {
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.customer-payment-card__field input[type="text"],
+.customer-payment-card__field input[type="file"] {
+    font-size: 0.95rem;
+}
+
+.customer-payment-card__field input[type="text"] {
+    padding: 0.75rem 0.9rem;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(79, 70, 229, 0.28);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.customer-payment-card__field input[type="text"]:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+
+.customer-payment-card__file input[type="file"] {
+    border: 1px dashed rgba(99, 102, 241, 0.45);
+    padding: 0.75rem;
+    border-radius: 0.75rem;
+    background: rgba(99, 102, 241, 0.08);
+}
+
+.customer-payment-card__help {
+    margin: 0;
+    font-size: 0.8rem;
+    color: #6366f1;
+}
+
+.customer-payment-card__actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.customer-payment-card__submit {
+    background: linear-gradient(135deg, #2563eb, #4f46e5);
+    color: #ffffff;
+    box-shadow: 0 18px 32px rgba(79, 70, 229, 0.3);
+}
+
+.customer-payment-card__submit:hover,
+.customer-payment-card__submit:focus-visible {
+    transform: translateY(-1px);
+    box-shadow: 0 22px 38px rgba(79, 70, 229, 0.35);
+    outline: none;
+}
+
 .customer-order-card__actions {
     display: flex;
     justify-content: flex-end;
@@ -760,6 +929,23 @@
     .customer-order-card__toggle {
         width: 100%;
         justify-content: center;
+    }
+    .customer-order-card__section--payment {
+        grid-column: auto;
+    }
+    .customer-payment-card {
+        padding: 1rem;
+    }
+    .customer-payment-card__intro {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .customer-payment-card__view-proof {
+        width: 100%;
+        justify-content: center;
+    }
+    .customer-payment-card__stored {
+        grid-template-columns: 1fr;
     }
 }
 

@@ -25,6 +25,69 @@ $alerts = [
     'error' => [],
 ];
 
+if (!function_exists('orderItemsColumnExists')) {
+    function orderItemsColumnExists(PDO $pdo, string $column): bool
+    {
+        static $cache = [];
+        if (array_key_exists($column, $cache)) {
+            return $cache[$column];
+        }
+
+        try {
+            $stmt = $pdo->prepare("SHOW COLUMNS FROM order_items LIKE ?");
+            $stmt->execute([$column]);
+            $cache[$column] = $stmt !== false && $stmt->fetch() !== false;
+        } catch (Throwable $exception) {
+            error_log('Unable to inspect order_items column ' . $column . ': ' . $exception->getMessage());
+            $cache[$column] = false;
+        }
+
+        return $cache[$column];
+    }
+}
+
+if (!function_exists('ordersDescribe')) {
+    function ordersDescribe(PDO $pdo): array
+    {
+        try {
+            $stmt = $pdo->query('SHOW COLUMNS FROM orders');
+            $rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+        } catch (Throwable $exception) {
+            error_log('Unable to describe orders table: ' . $exception->getMessage());
+            return [];
+        }
+
+        $columns = [];
+        foreach ($rows as $row) {
+            if (!isset($row['Field'])) {
+                continue;
+            }
+            $columns[strtolower((string) $row['Field'])] = (string) $row['Field'];
+        }
+
+        return $columns;
+    }
+}
+
+if (!function_exists('ordersFindColumn')) {
+    function ordersFindColumn(PDO $pdo, array $candidates): ?string
+    {
+        static $columnCache = null;
+        if ($columnCache === null) {
+            $columnCache = ordersDescribe($pdo);
+        }
+
+        foreach ($candidates as $candidate) {
+            $normalized = strtolower($candidate);
+            if (isset($columnCache[$normalized])) {
+                return $columnCache[$normalized];
+            }
+        }
+
+        return null;
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_update_order_id'])) {
     $orderId = (int) $_POST['payment_update_order_id'];
     $referenceInput = trim((string) ($_POST['reference_number'] ?? ''));
@@ -263,70 +326,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_order_id'])) {
         }
         error_log('Unable to cancel customer order: ' . $exception->getMessage());
         $alerts['error'][] = 'We could not cancel that order. Please try again or contact support.';
-    }
-}
-
-if (!function_exists('orderItemsColumnExists')) {
-    function orderItemsColumnExists(PDO $pdo, string $column): bool
-    {
-        static $cache = [];
-        if (array_key_exists($column, $cache)) {
-            return $cache[$column];
-        }
-
-        try {
-            $stmt = $pdo->prepare("SHOW COLUMNS FROM order_items LIKE ?");
-            $stmt->execute([$column]);
-            $cache[$column] = $stmt !== false && $stmt->fetch() !== false;
-        } catch (Throwable $exception) {
-            error_log('Unable to inspect order_items column ' . $column . ': ' . $exception->getMessage());
-            $cache[$column] = false;
-        }
-
-        return $cache[$column];
-    }
-}
-
-if (!function_exists('ordersDescribe')) {
-    function ordersDescribe(PDO $pdo): array
-    {
-        static $columns = null;
-        if ($columns !== null) {
-            return $columns;
-        }
-
-        try {
-            $stmt = $pdo->query('SHOW COLUMNS FROM orders');
-            $rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
-        } catch (Throwable $exception) {
-            error_log('Unable to describe orders table: ' . $exception->getMessage());
-            $rows = [];
-        }
-
-        $columns = [];
-        foreach ($rows as $row) {
-            if (!isset($row['Field'])) {
-                continue;
-            }
-            $columns[strtolower((string) $row['Field'])] = (string) $row['Field'];
-        }
-
-        return $columns;
-    }
-}
-
-if (!function_exists('ordersFindColumn')) {
-    function ordersFindColumn(PDO $pdo, array $candidates): ?string
-    {
-        $columns = ordersDescribe($pdo);
-        foreach ($candidates as $candidate) {
-            $normalized = strtolower($candidate);
-            if (isset($columns[$normalized])) {
-                return $columns[$normalized];
-            }
-        }
-
-        return null;
     }
 }
 
@@ -658,6 +657,18 @@ $statusLabels = [
                             }
                         }
                     }
+                    $paymentProofPreviewUrl = '';
+                    if ($paymentProofUrl !== '') {
+                        $previewPath = $paymentProofUrl;
+                        $urlPath = parse_url($paymentProofUrl, PHP_URL_PATH);
+                        if (is_string($urlPath) && $urlPath !== '') {
+                            $previewPath = $urlPath;
+                        }
+                        $extension = strtolower((string) pathinfo($previewPath, PATHINFO_EXTENSION));
+                        if (in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true)) {
+                            $paymentProofPreviewUrl = $paymentProofUrl;
+                        }
+                    }
                     $canUpdatePayment = $canCancel;
                 ?>
                 <article class="customer-order-card" data-order-card>
@@ -745,27 +756,56 @@ $statusLabels = [
                         <?php $hasStoredPaymentDetails = ($referenceNumber !== '' || $paymentProofUrl !== ''); ?>
                         <?php if ($hasStoredPaymentDetails || $canUpdatePayment): ?>
                             <div class="customer-order-card__section customer-order-card__section--payment">
-                                <h3>Payment details</h3>
-                                <?php if ($referenceNumber !== ''): ?>
-                                    <p><strong>Reference #:</strong> <?= htmlspecialchars($referenceNumber) ?></p>
-                                <?php endif; ?>
-                                <?php if ($paymentProofUrl !== ''): ?>
-                                    <p><a href="<?= htmlspecialchars($paymentProofUrl) ?>" target="_blank" rel="noopener">View uploaded proof of payment</a></p>
-                                <?php endif; ?>
-                                <?php if ($canUpdatePayment): ?>
-                                    <form method="post" enctype="multipart/form-data" class="customer-order-card__payment-form">
-                                        <input type="hidden" name="payment_update_order_id" value="<?= (int) $order['id'] ?>">
-                                        <div class="customer-order-card__field">
-                                            <label for="payment-reference-<?= (int) $order['id'] ?>">Reference number</label>
-                                            <input type="text" name="reference_number" id="payment-reference-<?= (int) $order['id'] ?>" maxlength="50" value="<?= htmlspecialchars($referenceNumber) ?>">
+                                <div class="customer-payment-card">
+                                    <div class="customer-payment-card__intro">
+                                        <div>
+                                            <h3>Payment details</h3>
+                                            <p class="customer-payment-card__subtitle">Add or update your payment reference so we can verify your order faster.</p>
                                         </div>
-                                        <div class="customer-order-card__field">
-                                            <label for="payment-proof-<?= (int) $order['id'] ?>">Upload proof of payment</label>
-                                            <input type="file" name="payment_proof" id="payment-proof-<?= (int) $order['id'] ?>" accept="image/*">
+                                        <?php if ($paymentProofUrl !== ''): ?>
+                                            <a class="customer-payment-card__view-proof" href="<?= htmlspecialchars($paymentProofUrl) ?>" target="_blank" rel="noopener">View proof</a>
+                                        <?php endif; ?>
+                                    </div>
+                                    <?php if ($hasStoredPaymentDetails): ?>
+                                        <div class="customer-payment-card__stored">
+                                            <?php if ($referenceNumber !== ''): ?>
+                                                <div class="customer-payment-card__stored-item">
+                                                    <span class="customer-payment-card__stored-label">Reference #</span>
+                                                    <span class="customer-payment-card__stored-value"><?= htmlspecialchars($referenceNumber) ?></span>
+                                                </div>
+                                            <?php endif; ?>
+                                            <?php if ($paymentProofPreviewUrl !== ''): ?>
+                                                <figure class="customer-payment-card__preview">
+                                                    <img src="<?= htmlspecialchars($paymentProofPreviewUrl) ?>" alt="Proof of payment preview">
+                                                </figure>
+                                            <?php elseif ($paymentProofUrl !== ''): ?>
+                                                <p class="customer-payment-card__note">Proof of payment uploaded.</p>
+                                            <?php endif; ?>
                                         </div>
-                                        <button type="submit" class="customer-order-card__button">Save payment details</button>
-                                    </form>
-                                <?php endif; ?>
+                                    <?php endif; ?>
+                                    <?php if ($canUpdatePayment): ?>
+                                        <form method="post" enctype="multipart/form-data" class="customer-payment-card__form">
+                                            <input type="hidden" name="payment_update_order_id" value="<?= (int) $order['id'] ?>">
+                                            <div class="customer-payment-card__fields">
+                                                <div class="customer-payment-card__field">
+                                                    <label for="payment-reference-<?= (int) $order['id'] ?>">Reference number</label>
+                                                    <input type="text" name="reference_number" id="payment-reference-<?= (int) $order['id'] ?>" maxlength="50" value="<?= htmlspecialchars($referenceNumber) ?>" placeholder="e.g. DGZ123456789">
+                                                    <p class="customer-payment-card__help">Letters, numbers, spaces, and hyphens only.</p>
+                                                </div>
+                                                <div class="customer-payment-card__field">
+                                                    <label for="payment-proof-<?= (int) $order['id'] ?>">Upload proof of payment</label>
+                                                    <div class="customer-payment-card__file">
+                                                        <input type="file" name="payment_proof" id="payment-proof-<?= (int) $order['id'] ?>" accept="image/*">
+                                                    </div>
+                                                    <p class="customer-payment-card__help">Accepted formats: JPG, PNG, GIF, or WEBP.</p>
+                                                </div>
+                                            </div>
+                                            <div class="customer-payment-card__actions">
+                                                <button type="submit" class="customer-order-card__button customer-payment-card__submit">Save payment details</button>
+                                            </div>
+                                        </form>
+                                    <?php endif; ?>
+                                </div>
                             </div>
                         <?php endif; ?>
                         <?php if ($canCancel): ?>
