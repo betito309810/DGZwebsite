@@ -25,6 +25,186 @@ $alerts = [
     'error' => [],
 ];
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_update_order_id'])) {
+    $orderId = (int) $_POST['payment_update_order_id'];
+    $referenceInput = trim((string) ($_POST['reference_number'] ?? ''));
+    $referenceNumber = preg_replace('/[^A-Za-z0-9\- ]/', '', $referenceInput);
+    $referenceNumber = strtoupper(substr($referenceNumber, 0, 50));
+
+    $orderIdColumn = ordersFindColumn($pdo, ['id', 'order_id']);
+    $customerIdColumn = ordersFindColumn($pdo, ['customer_id', 'customerId', 'customerID', 'customerid']);
+    $orderStatusColumn = ordersFindColumn($pdo, ['status', 'order_status']);
+    $orderReferenceColumn = ordersFindColumn($pdo, ['reference_no', 'reference_number', 'reference', 'ref_no']);
+    $orderProofColumn = ordersFindColumn($pdo, ['payment_proof', 'proof_of_payment', 'payment_proof_path', 'proof']);
+
+    if ($orderIdColumn === null || $customerIdColumn === null) {
+        $alerts['error'][] = 'We could not update that order because the orders table is missing required columns.';
+    } else {
+        $errors = [];
+        $newProofPath = null;
+
+        if (!empty($_FILES['payment_proof']['tmp_name'] ?? '')) {
+            $fileError = (int) ($_FILES['payment_proof']['error'] ?? UPLOAD_ERR_NO_FILE);
+            if ($fileError !== UPLOAD_ERR_OK) {
+                $errors[] = 'Unable to upload the proof of payment. Please try again.';
+            } else {
+                $allowed = [
+                    'image/jpeg' => 'jpg',
+                    'image/png' => 'png',
+                    'image/gif' => 'gif',
+                    'image/webp' => 'webp',
+                ];
+
+                $finfo = finfo_open(FILEINFO_MIME_TYPE);
+                $mime = $finfo ? finfo_file($finfo, $_FILES['payment_proof']['tmp_name']) : null;
+                if ($finfo) {
+                    finfo_close($finfo);
+                }
+
+                if (!$mime || !isset($allowed[$mime])) {
+                    $errors[] = 'Please upload a valid image (JPG, PNG, GIF, or WEBP).';
+                } else {
+                    $uploadsRoot = __DIR__ . '/dgz_motorshop_system/uploads';
+                    $uploadDir = $uploadsRoot . '/payment-proofs';
+                    $publicUploadDir = 'dgz_motorshop_system/uploads/payment-proofs';
+
+                    $setupOk = true;
+                    if (!is_dir($uploadsRoot) && !mkdir($uploadsRoot, 0777, true) && !is_dir($uploadsRoot)) {
+                        $errors[] = 'Failed to prepare the uploads storage.';
+                        $setupOk = false;
+                    }
+
+                    if ($setupOk && !is_dir($uploadDir) && !mkdir($uploadDir, 0777, true) && !is_dir($uploadDir)) {
+                        $errors[] = 'Failed to prepare the uploads storage.';
+                        $setupOk = false;
+                    }
+
+                    if ($setupOk && !is_writable($uploadDir) && !chmod($uploadDir, 0777)) {
+                        $errors[] = 'Uploads folder is not writable.';
+                        $setupOk = false;
+                    }
+
+                    if ($setupOk) {
+                        try {
+                            $random = bin2hex(random_bytes(8));
+                        } catch (Exception $e) {
+                            $random = (string) time();
+                        }
+
+                        $storedFileName = sprintf('%s.%s', $random, $allowed[$mime]);
+                        $targetPath = $uploadDir . '/' . $storedFileName;
+
+                        $moved = move_uploaded_file($_FILES['payment_proof']['tmp_name'], $targetPath);
+                        if (!$moved) {
+                            $fileContents = @file_get_contents($_FILES['payment_proof']['tmp_name']);
+                            if ($fileContents === false || @file_put_contents($targetPath, $fileContents) === false) {
+                                $errors[] = 'Failed to save the uploaded proof of payment.';
+                            } else {
+                                $newProofPath = $publicUploadDir . '/' . $storedFileName;
+                            }
+                        } else {
+                            $newProofPath = $publicUploadDir . '/' . $storedFileName;
+                        }
+                    }
+                }
+            }
+        }
+
+        if ($orderReferenceColumn === null && $referenceNumber !== '') {
+            $errors[] = 'We could not update the reference number because the orders table is missing a reference column.';
+        }
+
+        if ($orderProofColumn === null && $newProofPath !== null) {
+            $errors[] = 'We could not save the proof of payment because the orders table is missing a payment proof column.';
+        }
+
+        if (!empty($errors)) {
+            foreach ($errors as $error) {
+                $alerts['error'][] = $error;
+            }
+        } else {
+            try {
+                $pdo->beginTransaction();
+
+                $selectParts = ['`' . $orderIdColumn . '` AS `id`'];
+                if ($orderStatusColumn !== null) {
+                    $selectParts[] = '`' . $orderStatusColumn . '` AS `status`';
+                }
+                if ($orderReferenceColumn !== null) {
+                    $selectParts[] = '`' . $orderReferenceColumn . '` AS `current_reference`';
+                }
+                if ($orderProofColumn !== null) {
+                    $selectParts[] = '`' . $orderProofColumn . '` AS `current_proof`';
+                }
+
+                $sql = 'SELECT ' . implode(', ', $selectParts)
+                    . ' FROM orders WHERE `' . $orderIdColumn . '` = ? AND `' . $customerIdColumn . '` = ? FOR UPDATE';
+                $stmt = $pdo->prepare($sql);
+                $stmt->execute([$orderId, (int) $customer['id']]);
+                $order = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                if (!$order) {
+                    $alerts['error'][] = 'We could not find that order.';
+                    $pdo->rollBack();
+                } else {
+                    $status = strtolower((string) ($order['status'] ?? ''));
+                    if ($status === '') {
+                        $status = 'pending';
+                    }
+
+                    $lockedStatuses = ['delivery'];
+                    $terminalStatuses = ['complete', 'completed', 'cancelled_by_staff', 'cancelled_by_customer', 'disapproved'];
+
+                    if (in_array($status, $lockedStatuses, true) || in_array($status, $terminalStatuses, true)) {
+                        $alerts['error'][] = 'This order can no longer be updated.';
+                        $pdo->rollBack();
+                    } else {
+                        $updates = [];
+                        $params = [];
+
+                        if ($orderReferenceColumn !== null) {
+                            $updates[] = '`' . $orderReferenceColumn . '` = ?';
+                            $params[] = $referenceNumber !== '' ? $referenceNumber : null;
+                        }
+
+                        if ($orderProofColumn !== null && $newProofPath !== null) {
+                            $updates[] = '`' . $orderProofColumn . '` = ?';
+                            $params[] = $newProofPath;
+                        }
+
+                        if (empty($updates)) {
+                            $alerts['error'][] = 'There were no changes to save for that order.';
+                            $pdo->rollBack();
+                        } else {
+                            try {
+                                $pdo->exec("ALTER TABLE orders ADD COLUMN updated_at TIMESTAMP NULL DEFAULT NULL");
+                            } catch (Throwable $e) {
+                                // Column already exists; ignore errors.
+                            }
+
+                            $updates[] = "`updated_at` = NOW()";
+                            $sql = 'UPDATE orders SET ' . implode(', ', $updates) . ' WHERE `' . $orderIdColumn . '` = ?';
+                            $params[] = $orderId;
+
+                            $updateStmt = $pdo->prepare($sql);
+                            $updateStmt->execute($params);
+                            $pdo->commit();
+
+                            $alerts['success'][] = 'Payment details updated for your order.';
+                        }
+                    }
+                }
+            } catch (Throwable $exception) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                error_log('Unable to update customer payment details: ' . $exception->getMessage());
+                $alerts['error'][] = 'We could not update that order. Please try again or contact support.';
+            }
+        }
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_order_id'])) {
     $orderId = (int) $_POST['cancel_order_id'];
     try {
@@ -165,6 +345,7 @@ $orderPhoneColumn = ordersFindColumn($pdo, ['phone', 'mobile', 'contact_number',
 $orderFacebookColumn = ordersFindColumn($pdo, ['facebook_account', 'facebook', 'fb_account']);
 $orderCustomerNoteColumn = ordersFindColumn($pdo, ['customer_note', 'notes', 'note']);
 $orderReferenceColumn = ordersFindColumn($pdo, ['reference_no', 'reference_number', 'reference', 'ref_no']);
+$orderProofColumn = ordersFindColumn($pdo, ['payment_proof', 'proof_of_payment', 'payment_proof_path', 'proof']);
 
 $orderSelectParts = [];
 $appendSelect = static function (?string $column, string $alias) use (&$orderSelectParts): void {
@@ -237,6 +418,10 @@ if ($orderCustomerNoteColumn !== null) {
 
 if ($orderReferenceColumn !== null) {
     $appendSelect($orderReferenceColumn, 'reference_no');
+}
+
+if ($orderProofColumn !== null) {
+    $appendSelect($orderProofColumn, 'payment_proof');
 }
 
 $statusFilter = isset($_GET['status']) ? strtolower(trim((string) $_GET['status'])) : '';
@@ -432,6 +617,7 @@ $statusLabels = [
                     $contactPhone = trim((string) ($order['phone'] ?? $order['customer_phone'] ?? $order['contact'] ?? ''));
                     $facebookAccount = trim((string) ($order['facebook_account'] ?? $order['facebook'] ?? ''));
                     $referenceNumber = trim((string) ($order['reference_no'] ?? $order['reference_number'] ?? ''));
+                    $paymentProofPath = trim((string) ($order['payment_proof'] ?? $order['proof_of_payment'] ?? ''));
                     $addressLine = trim((string) ($order['address'] ?? $order['customer_address'] ?? ''));
                     $postalCode = trim((string) ($order['postal_code'] ?? $order['postal'] ?? $order['zip_code'] ?? ''));
                     $city = trim((string) ($order['city'] ?? $order['town'] ?? $order['municipality'] ?? ''));
@@ -447,6 +633,32 @@ $statusLabels = [
                     }
                     $billingDisplay = implode("\n", $billingLines);
                     $customerNote = trim((string) ($order['customer_note'] ?? $order['notes'] ?? ''));
+                    $paymentProofUrl = '';
+                    if ($paymentProofPath !== '') {
+                        $candidatePaths = [$paymentProofPath];
+                        $normalizedProof = normalizePaymentProofPath($paymentProofPath, '');
+                        if ($normalizedProof !== '' && !in_array($normalizedProof, $candidatePaths, true)) {
+                            $candidatePaths[] = $normalizedProof;
+                        }
+
+                        foreach ($candidatePaths as $candidatePath) {
+                            $url = assetUrl($candidatePath);
+                            if ($url !== '' && $url !== '/') {
+                                $paymentProofUrl = $url;
+                                break;
+                            }
+
+                            $prefixed = 'dgz_motorshop_system/' . ltrim($candidatePath, '/');
+                            if ($prefixed !== $candidatePath) {
+                                $url = assetUrl($prefixed);
+                                if ($url !== '' && $url !== '/') {
+                                    $paymentProofUrl = $url;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    $canUpdatePayment = $canCancel;
                 ?>
                 <article class="customer-order-card" data-order-card>
                     <header class="customer-order-card__header">
@@ -501,7 +713,7 @@ $statusLabels = [
                             <?php endif; ?>
                         </div>
                         <div class="customer-order-card__info-grid">
-                            <?php if ($contactEmail !== '' || $contactPhone !== '' || $facebookAccount !== '' || $referenceNumber !== ''): ?>
+                            <?php if ($contactEmail !== '' || $contactPhone !== '' || $facebookAccount !== ''): ?>
                                 <div class="customer-order-card__section">
                                     <h3>Contact details</h3>
                                     <dl>
@@ -513,9 +725,6 @@ $statusLabels = [
                                         <?php endif; ?>
                                         <?php if ($facebookAccount !== ''): ?>
                                             <div><dt>Facebook</dt><dd><?= htmlspecialchars($facebookAccount) ?></dd></div>
-                                        <?php endif; ?>
-                                        <?php if ($referenceNumber !== ''): ?>
-                                            <div><dt>Reference #</dt><dd><?= htmlspecialchars($referenceNumber) ?></dd></div>
                                         <?php endif; ?>
                                     </dl>
                                 </div>
@@ -533,6 +742,32 @@ $statusLabels = [
                                 </div>
                             <?php endif; ?>
                         </div>
+                        <?php $hasStoredPaymentDetails = ($referenceNumber !== '' || $paymentProofUrl !== ''); ?>
+                        <?php if ($hasStoredPaymentDetails || $canUpdatePayment): ?>
+                            <div class="customer-order-card__section customer-order-card__section--payment">
+                                <h3>Payment details</h3>
+                                <?php if ($referenceNumber !== ''): ?>
+                                    <p><strong>Reference #:</strong> <?= htmlspecialchars($referenceNumber) ?></p>
+                                <?php endif; ?>
+                                <?php if ($paymentProofUrl !== ''): ?>
+                                    <p><a href="<?= htmlspecialchars($paymentProofUrl) ?>" target="_blank" rel="noopener">View uploaded proof of payment</a></p>
+                                <?php endif; ?>
+                                <?php if ($canUpdatePayment): ?>
+                                    <form method="post" enctype="multipart/form-data" class="customer-order-card__payment-form">
+                                        <input type="hidden" name="payment_update_order_id" value="<?= (int) $order['id'] ?>">
+                                        <div class="customer-order-card__field">
+                                            <label for="payment-reference-<?= (int) $order['id'] ?>">Reference number</label>
+                                            <input type="text" name="reference_number" id="payment-reference-<?= (int) $order['id'] ?>" maxlength="50" value="<?= htmlspecialchars($referenceNumber) ?>">
+                                        </div>
+                                        <div class="customer-order-card__field">
+                                            <label for="payment-proof-<?= (int) $order['id'] ?>">Upload proof of payment</label>
+                                            <input type="file" name="payment_proof" id="payment-proof-<?= (int) $order['id'] ?>" accept="image/*">
+                                        </div>
+                                        <button type="submit" class="customer-order-card__button">Save payment details</button>
+                                    </form>
+                                <?php endif; ?>
+                            </div>
+                        <?php endif; ?>
                         <?php if ($canCancel): ?>
                             <div class="customer-order-card__footer">
                                 <form method="post" class="customer-order-card__actions" data-customer-cancel-form>
