@@ -32,6 +32,7 @@ $customerFirstName = $customerSessionState['firstName'] ?? null;
 $loginUrl = orderingUrl('login.php');
 $registerUrl = orderingUrl('register.php');
 $myOrdersUrl = orderingUrl('my_orders.php');
+$settingsUrl = orderingUrl('settings.php');
 $logoutUrl = orderingUrl('logout.php');
 
 $bodyCustomerState = $isCustomerAuthenticated ? 'authenticated' : 'guest';
@@ -104,6 +105,7 @@ natcasesort($categories);
                         </button>
                         <div class="account-menu__dropdown" data-account-dropdown hidden>
                             <a href="<?= htmlspecialchars($myOrdersUrl) ?>" class="account-menu__link">My Orders</a>
+                            <a href="<?= htmlspecialchars($settingsUrl) ?>" class="account-menu__link">Settings</a>
                             <a href="<?= htmlspecialchars($logoutUrl) ?>" class="account-menu__link">Logout</a>
                         </div>
                     <?php else: ?>

@@ -1,5 +1,6 @@
 <?php
 require __DIR__ . '/dgz_motorshop_system/config/config.php';
+require __DIR__ . '/dgz_motorshop_system/includes/customer_session.php';
 
 $logoAsset = assetUrl('assets/logo.png');
 $mobileNavScript = assetUrl('assets/js/public/mobileNav.js');
@@ -7,11 +8,23 @@ $aboutStylesheet = assetUrl('assets/css/public/about.css');
 $faqStylesheet = assetUrl('assets/css/public/faq.css');
 $cartScript = assetUrl('assets/js/public/cart.js');
 $checkoutModalStylesheet = assetUrl('assets/css/public/checkoutModals.css');
+$customerStylesheet = assetUrl('assets/css/public/customer.css');
+$customerScript = assetUrl('assets/js/public/customer.js');
 $homeUrl = orderingUrl('index.php');
 $aboutUrl = orderingUrl('about.php');
 $trackOrderUrl = orderingUrl('track-order.php');
 $checkoutUrl = orderingUrl('checkout.php');
+$loginUrl = orderingUrl('login.php');
+$myOrdersUrl = orderingUrl('my_orders.php');
+$settingsUrl = orderingUrl('settings.php');
+$logoutUrl = orderingUrl('logout.php');
 $productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
+
+$customerSessionState = customerSessionExport();
+$isCustomerAuthenticated = !empty($customerSessionState['authenticated']);
+$customerFirstName = $customerSessionState['firstName'] ?? null;
+$bodyCustomerState = $isCustomerAuthenticated ? 'authenticated' : 'guest';
+$bodyCustomerFirstName = $customerFirstName !== null ? $customerFirstName : '';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -24,8 +37,9 @@ $productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
     <link rel="stylesheet" href="<?= htmlspecialchars($aboutStylesheet) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars($faqStylesheet) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars($checkoutModalStylesheet) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars($customerStylesheet) ?>">
 </head>
-<body>
+<body data-customer-session="<?= htmlspecialchars($bodyCustomerState) ?>" data-customer-first-name="<?= htmlspecialchars($bodyCustomerFirstName) ?>">
     <!-- Header -->
     <header class="header">
         <div class="header-content">
@@ -38,11 +52,32 @@ $productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
                     <img src="<?= htmlspecialchars($logoAsset) ?>" alt="DGZ Motorshop Logo">
                 </a>
             </div>
-            <a href="#" class="cart-btn" id="cartButton">
-                <i class="fas fa-shopping-cart"></i>
-                <span>Cart</span>
-                <div class="cart-count" id="cartCount">0</div>
-            </a>
+            <div class="header-actions">
+                <a href="#" class="cart-btn" id="cartButton">
+                    <i class="fas fa-shopping-cart"></i>
+                    <span>Cart</span>
+                    <div class="cart-count" id="cartCount">0</div>
+                </a>
+                <div class="account-menu" data-account-menu>
+                    <?php if ($isCustomerAuthenticated): ?>
+                        <button type="button" class="account-menu__trigger" data-account-trigger aria-haspopup="true" aria-expanded="false">
+                            <span class="account-menu__avatar" aria-hidden="true"><i class="fas fa-user-circle"></i></span>
+                            <span class="account-menu__label"><?= htmlspecialchars($customerFirstName ?? 'Account') ?></span>
+                            <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                        </button>
+                        <div class="account-menu__dropdown" data-account-dropdown hidden>
+                            <a href="<?= htmlspecialchars($myOrdersUrl) ?>" class="account-menu__link">My Orders</a>
+                            <a href="<?= htmlspecialchars($settingsUrl) ?>" class="account-menu__link">Settings</a>
+                            <a href="<?= htmlspecialchars($logoutUrl) ?>" class="account-menu__link">Logout</a>
+                        </div>
+                    <?php else: ?>
+                        <a href="<?= htmlspecialchars($loginUrl) ?>" class="account-menu__guest" data-account-login>
+                            <span class="account-menu__avatar" aria-hidden="true"><i class="fas fa-user-circle"></i></span>
+                            <span class="account-menu__label">Log In</span>
+                        </a>
+                    <?php endif; ?>
+                </div>
+            </div>
         </div>
     </header>
 
@@ -127,6 +162,7 @@ $productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
             productPlaceholder: <?= json_encode($productPlaceholder) ?>
         });
     </script>
+    <script src="<?= htmlspecialchars($customerScript) ?>" defer></script>
     <script src="<?= htmlspecialchars($cartScript) ?>"></script>
     <script src="<?= htmlspecialchars($mobileNavScript) ?>"></script>
 </body>
