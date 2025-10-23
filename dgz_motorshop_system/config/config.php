@@ -296,6 +296,74 @@ if (!function_exists('db')) {
     }
 }
 
+if (!function_exists('tableDescribe')) {
+    function tableDescribe(PDO $pdo, string $table): array
+    {
+        $normalized = preg_replace('/[^A-Za-z0-9_]/', '', $table);
+        if ($normalized === '') {
+            return [];
+        }
+
+        try {
+            $stmt = $pdo->query('SHOW COLUMNS FROM `' . $normalized . '`');
+            $rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+        } catch (Throwable $e) {
+            error_log('Unable to inspect columns for table ' . $normalized . ': ' . $e->getMessage());
+            $rows = [];
+        }
+
+        $metadata = [];
+        foreach ($rows as $row) {
+            if (!isset($row['Field'])) {
+                continue;
+            }
+
+            $metadata[strtolower((string) $row['Field'])] = $row;
+        }
+
+        return $metadata;
+    }
+}
+
+if (!function_exists('tableHasColumn')) {
+    function tableHasColumn(PDO $pdo, string $table, string $column): bool
+    {
+        $columns = tableDescribe($pdo, $table);
+        return isset($columns[strtolower($column)]);
+    }
+}
+
+if (!function_exists('tableFindColumn')) {
+    function tableFindColumn(PDO $pdo, string $table, array $candidates): ?string
+    {
+        $columns = tableDescribe($pdo, $table);
+
+        foreach ($candidates as $candidate) {
+            $normalized = strtolower($candidate);
+
+            if (isset($columns[$normalized]['Field'])) {
+                return (string) $columns[$normalized]['Field'];
+            }
+        }
+
+        return null;
+    }
+}
+
+if (!function_exists('ordersHasColumn')) {
+    function ordersHasColumn(PDO $pdo, string $column): bool
+    {
+        return tableHasColumn($pdo, 'orders', $column);
+    }
+}
+
+if (!function_exists('ordersFindColumn')) {
+    function ordersFindColumn(PDO $pdo, array $candidates): ?string
+    {
+        return tableFindColumn($pdo, 'orders', $candidates);
+    }
+}
+
 if (!function_exists('appBasePath')) {
     function appBasePath(): string
     {
@@ -1214,6 +1282,156 @@ if (!function_exists('recordSystemLog')) {
         }
     }
 }
+
+if (!function_exists('autoDisapproveStaleApprovedOrders')) {
+    function autoDisapproveStaleApprovedOrders(): void
+    {
+        static $processed = false;
+
+        if ($processed) {
+            return;
+        }
+
+        $processed = true;
+
+        try {
+            $pdo = db();
+        } catch (Throwable $e) {
+            error_log('Unable to enforce automatic disapproval: ' . $e->getMessage());
+            return;
+        }
+
+        if (!$pdo instanceof PDO) {
+            return;
+        }
+
+        $quoteColumn = static function (string $column): string {
+            return '`' . str_replace('`', '``', $column) . '`';
+        };
+
+        $idColumn = ordersFindColumn($pdo, ['id', 'order_id']);
+        $statusColumn = ordersFindColumn($pdo, ['status', 'order_status']);
+
+        if ($idColumn === null || $statusColumn === null) {
+            return;
+        }
+
+        $createdAtColumn = ordersFindColumn($pdo, ['created_at', 'date_created', 'order_date', 'ordered_at', 'createddate']);
+        $updatedAtColumn = ordersFindColumn($pdo, ['updated_at', 'modified_at', 'updatedon']);
+
+        $timestampExpressions = [];
+        if ($updatedAtColumn !== null) {
+            $timestampExpressions[] = $quoteColumn($updatedAtColumn);
+        }
+        if ($createdAtColumn !== null) {
+            $timestampExpressions[] = $quoteColumn($createdAtColumn);
+        }
+
+        if (empty($timestampExpressions)) {
+            return;
+        }
+
+        $timestampExpr = count($timestampExpressions) === 1
+            ? $timestampExpressions[0]
+            : 'COALESCE(' . implode(', ', $timestampExpressions) . ')';
+
+        $referenceColumn = ordersFindColumn($pdo, ['reference_no', 'reference_number', 'reference', 'ref_no']);
+        $proofColumn = ordersFindColumn($pdo, ['payment_proof', 'proof_of_payment', 'payment_proof_path', 'proof']);
+
+        if ($referenceColumn === null && $proofColumn === null) {
+            return;
+        }
+
+        $conditions = [];
+        $conditions[] = $quoteColumn($statusColumn) . " = 'approved'";
+        $conditions[] = $timestampExpr . ' <= (NOW() - INTERVAL 1 DAY)';
+
+        $missingEvidence = [];
+        if ($referenceColumn !== null) {
+            $missingEvidence[] = 'TRIM(COALESCE(' . $quoteColumn($referenceColumn) . ", '')) = ''";
+        }
+        if ($proofColumn !== null) {
+            $missingEvidence[] = 'TRIM(COALESCE(' . $quoteColumn($proofColumn) . ", '')) = ''";
+        }
+
+        if (!empty($missingEvidence)) {
+            $conditions[] = '(' . implode(' AND ', $missingEvidence) . ')';
+        }
+
+        $paymentMethodColumn = ordersFindColumn($pdo, ['payment_method', 'paymentmethod', 'payment_type']);
+        if ($paymentMethodColumn !== null) {
+            $conditions[] = 'LOWER(TRIM(COALESCE(' . $quoteColumn($paymentMethodColumn) . ", ''))) IN ('gcash','maya')";
+        }
+
+        $whereClause = implode(' AND ', $conditions);
+
+        $selectSql = 'SELECT ' . $quoteColumn($idColumn) . ' FROM orders WHERE ' . $whereClause . ' LIMIT 25';
+
+        try {
+            $stmt = $pdo->query($selectSql);
+        } catch (Throwable $e) {
+            error_log('Unable to query stale approved orders: ' . $e->getMessage());
+            return;
+        }
+
+        if (!$stmt) {
+            return;
+        }
+
+        $orderIds = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $orderId) {
+            $orderId = (int) $orderId;
+            if ($orderId > 0) {
+                $orderIds[] = $orderId;
+            }
+        }
+
+        if (empty($orderIds)) {
+            return;
+        }
+
+        $setParts = [$quoteColumn($statusColumn) . " = 'disapproved'"];
+        $updateParams = [];
+
+        if ($updatedAtColumn !== null) {
+            $setParts[] = $quoteColumn($updatedAtColumn) . ' = NOW()';
+        }
+
+        $declineNoteColumn = ordersFindColumn($pdo, ['decline_reason_note', 'decline_note', 'disapproval_note']);
+        if ($declineNoteColumn !== null) {
+            $autoNote = 'Automatically disapproved after 1 day without confirmed payment.';
+            $setParts[] = $quoteColumn($declineNoteColumn) . ' = ?';
+            $updateParams[] = $autoNote;
+        }
+
+        $declineReasonColumn = ordersFindColumn($pdo, ['decline_reason_id', 'disapproval_reason_id']);
+        if ($declineReasonColumn !== null) {
+            $setParts[] = $quoteColumn($declineReasonColumn) . ' = NULL';
+        }
+
+        $placeholders = implode(',', array_fill(0, count($orderIds), '?'));
+        $updateSql = 'UPDATE orders SET ' . implode(', ', $setParts)
+            . ' WHERE ' . $quoteColumn($idColumn) . ' IN (' . $placeholders . ')';
+
+        foreach ($orderIds as $orderId) {
+            $updateParams[] = $orderId;
+        }
+
+        try {
+            $updateStmt = $pdo->prepare($updateSql);
+            $updateStmt->execute($updateParams);
+        } catch (Throwable $e) {
+            error_log('Unable to automatically disapprove unpaid orders: ' . $e->getMessage());
+            return;
+        }
+
+        foreach ($orderIds as $orderId) {
+            recordSystemLog($pdo, 'order_auto_disapproved', 'Order #' . $orderId . ' automatically disapproved after missing the payment window.');
+        }
+    }
+}
+
+autoDisapproveStaleApprovedOrders();
 
 if (!function_exists('enforceSingleActiveSession')) {
     function enforceSingleActiveSession(): void
