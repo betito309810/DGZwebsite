@@ -50,6 +50,8 @@ CREATE TABLE IF NOT EXISTS products (
   description TEXT,
   price DECIMAL(10,2),
   quantity INT DEFAULT 0,
+  is_archived TINYINT(1) NOT NULL DEFAULT 0,
+  archived_at DATETIME NULL DEFAULT NULL,
   low_stock_threshold INT DEFAULT 5,
   image VARCHAR(255),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

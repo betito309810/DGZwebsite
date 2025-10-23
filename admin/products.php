@@ -20,6 +20,7 @@ if (isset($_SESSION['products_success'])) {
     $productFormSuccess = (string) $_SESSION['products_success'];
     unset($_SESSION['products_success']);
 }
+ensureProductArchiveColumns($pdo);
 // Added: helper utilities that manage product image uploads in a single place.
 if (!function_exists('ensureProductImageDirectory')) {
     /**
@@ -195,6 +196,146 @@ if (!function_exists('persistGalleryUploads')) {
     }
 }
 
+if (!function_exists('ensureProductArchiveColumns')) {
+    /**
+     * Ensure the products table exposes the archive flag used by the UI.
+     */
+    function ensureProductArchiveColumns(PDO $pdo): void
+    {
+        static $ensured = false;
+        if ($ensured) {
+            return;
+        }
+        $ensured = true;
+
+        $hasArchiveFlag = false;
+        try {
+            $columnStmt = $pdo->query("SHOW COLUMNS FROM products LIKE 'is_archived'");
+            $hasArchiveFlag = $columnStmt && $columnStmt->fetch(PDO::FETCH_ASSOC);
+        } catch (PDOException $columnLookupError) {
+            error_log('Unable to inspect products.is_archived column: ' . $columnLookupError->getMessage());
+        }
+
+        if (!$hasArchiveFlag) {
+            try {
+                $pdo->exec("ALTER TABLE products ADD COLUMN is_archived TINYINT(1) NOT NULL DEFAULT 0 AFTER quantity");
+            } catch (PDOException $addFlagError) {
+                error_log('Unable to add products.is_archived column: ' . $addFlagError->getMessage());
+            }
+        }
+
+        $hasArchivedAt = false;
+        try {
+            $archivedAtStmt = $pdo->query("SHOW COLUMNS FROM products LIKE 'archived_at'");
+            $hasArchivedAt = $archivedAtStmt && $archivedAtStmt->fetch(PDO::FETCH_ASSOC);
+        } catch (PDOException $archivedAtLookupError) {
+            error_log('Unable to inspect products.archived_at column: ' . $archivedAtLookupError->getMessage());
+        }
+
+        if (!$hasArchivedAt) {
+            try {
+                $pdo->exec("ALTER TABLE products ADD COLUMN archived_at DATETIME NULL DEFAULT NULL AFTER is_archived");
+            } catch (PDOException $addArchivedAtError) {
+                error_log('Unable to add products.archived_at column: ' . $addArchivedAtError->getMessage());
+            }
+        }
+
+        try {
+            $indexStmt = $pdo->query("SHOW INDEX FROM products WHERE Key_name = 'idx_products_archived'");
+            $hasIndex = $indexStmt && $indexStmt->fetch(PDO::FETCH_ASSOC);
+        } catch (PDOException $indexLookupError) {
+            error_log('Unable to inspect products archive index: ' . $indexLookupError->getMessage());
+            $hasIndex = false;
+        }
+
+        if (empty($hasIndex)) {
+            try {
+                $pdo->exec('CREATE INDEX idx_products_archived ON products (is_archived)');
+            } catch (PDOException $createIndexError) {
+                $errorInfo = $createIndexError->errorInfo ?? [];
+                if (($errorInfo[1] ?? null) !== 1061) {
+                    error_log('Unable to create products archive index: ' . $createIndexError->getMessage());
+                }
+            }
+        }
+    }
+}
+
+if (!function_exists('buildProductHistorySnapshot')) {
+    /**
+     * Capture the current product state for audit history records.
+     */
+    function buildProductHistorySnapshot(PDO $pdo, array $productRow): array
+    {
+        $productId = isset($productRow['id']) ? (int) $productRow['id'] : 0;
+
+        $snapshot = [
+            'code' => $productRow['code'] ?? null,
+            'name' => $productRow['name'] ?? null,
+            'description' => $productRow['description'] ?? null,
+            'price' => isset($productRow['price']) ? (float) $productRow['price'] : null,
+            'quantity' => isset($productRow['quantity']) ? (int) $productRow['quantity'] : null,
+            'low_stock_threshold' => isset($productRow['low_stock_threshold']) ? (int) $productRow['low_stock_threshold'] : null,
+            'brand' => $productRow['brand'] ?? null,
+            'category' => $productRow['category'] ?? null,
+            'supplier' => $productRow['supplier'] ?? null,
+            'image' => $productRow['image'] ?? null,
+            'variants' => [],
+        ];
+
+        if ($productId > 0) {
+            try {
+                $snapshot['variants'] = fetchProductVariants($pdo, $productId);
+            } catch (PDOException $variantError) {
+                if (!pdoErrorIndicatesMissingSchema($variantError)) {
+                    throw $variantError;
+                }
+            }
+        }
+
+        return $snapshot;
+    }
+}
+
+if (!function_exists('buildProductHistorySummary')) {
+    /**
+     * Assemble a human-readable sentence describing the action performed.
+     */
+    function buildProductHistorySummary(array $productRow, string $verb): string
+    {
+        $parts = [];
+        $productName = trim((string) ($productRow['name'] ?? ''));
+        $productCode = trim((string) ($productRow['code'] ?? ''));
+
+        $parts[] = sprintf(
+            '%s %s (%s).',
+            ucfirst($verb),
+            $productName !== '' ? $productName : 'product',
+            $productCode !== '' ? $productCode : 'no code'
+        );
+
+        if (isset($productRow['quantity'])) {
+            $parts[] = 'Stock: ' . number_format((int) $productRow['quantity']);
+        }
+
+        if (isset($productRow['price'])) {
+            $parts[] = 'Price: ₱' . number_format((float) $productRow['price'], 2);
+        }
+
+        $brandLabel = trim((string) ($productRow['brand'] ?? ''));
+        if ($brandLabel !== '') {
+            $parts[] = 'Brand: ' . $brandLabel;
+        }
+
+        $categoryLabel = trim((string) ($productRow['category'] ?? ''));
+        if ($categoryLabel !== '') {
+            $parts[] = 'Category: ' . $categoryLabel;
+        }
+
+        return implode(' • ', $parts);
+    }
+}
+
 if (!function_exists('pdoErrorMatchesState')) {
     /**
      * Determine whether the given PDOException corresponds to one of the supplied SQLSTATE codes.
@@ -274,130 +415,6 @@ if (!function_exists('columnAllowsNull')) {
 
         $cache[$key] = false;
         return false;
-    }
-}
-
-if (!function_exists('fetchProductForeignKeyReferences')) {
-    /**
-     * Inspect INFORMATION_SCHEMA to identify tables that reference products.id.
-     */
-    function fetchProductForeignKeyReferences(PDO $pdo): array
-    {
-        static $cache = null;
-        if (is_array($cache)) {
-            return $cache;
-        }
-
-        try {
-            $sql = "
-                SELECT
-                    kcu.TABLE_NAME,
-                    kcu.COLUMN_NAME,
-                    rc.DELETE_RULE
-                FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS kcu
-                JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS AS rc
-                  ON rc.CONSTRAINT_SCHEMA = kcu.CONSTRAINT_SCHEMA
-                 AND rc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME
-                WHERE kcu.TABLE_SCHEMA = DATABASE()
-                  AND kcu.REFERENCED_TABLE_SCHEMA = DATABASE()
-                  AND kcu.REFERENCED_TABLE_NAME = 'products'
-                  AND kcu.REFERENCED_COLUMN_NAME = 'id'
-            ";
-
-            $stmt = $pdo->query($sql);
-            $cache = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
-        } catch (Throwable $error) {
-            error_log('Unable to inspect product foreign keys: ' . $error->getMessage());
-            $cache = [];
-        }
-
-        return $cache;
-    }
-}
-
-if (!function_exists('releaseProductForeignKeyReferences')) {
-    /**
-     * Clear or delete referencing rows for tables that block product deletion.
-     */
-    function releaseProductForeignKeyReferences(PDO $pdo, int $productId, array $skipTables = []): void
-    {
-        if ($productId <= 0) {
-            return;
-        }
-
-        $skipLookup = [];
-        foreach ($skipTables as $tableName) {
-            $skipLookup[strtolower($tableName)] = true;
-        }
-
-        $references = fetchProductForeignKeyReferences($pdo);
-        if (empty($references)) {
-            return;
-        }
-
-        foreach ($references as $reference) {
-            $table = (string) ($reference['TABLE_NAME'] ?? '');
-            $column = (string) ($reference['COLUMN_NAME'] ?? '');
-            $deleteRule = strtoupper((string) ($reference['DELETE_RULE'] ?? ''));
-
-            if ($table === '' || $column === '') {
-                continue;
-            }
-
-            if (isset($skipLookup[strtolower($table)])) {
-                continue;
-            }
-
-            if (in_array($deleteRule, ['CASCADE', 'SET NULL'], true)) {
-                continue;
-            }
-
-            if (!preg_match('/^[A-Za-z0-9_]+$/', $table) || !preg_match('/^[A-Za-z0-9_]+$/', $column)) {
-                error_log(sprintf('Skipping cleanup for %s.%s due to unsafe identifier.', $table, $column));
-                continue;
-            }
-
-            $qualifiedTable = '`' . $table . '`';
-            $qualifiedColumn = '`' . $column . '`';
-
-            $resolved = false;
-
-            if (columnAllowsNull($pdo, $table, $column)) {
-                try {
-                    $update = $pdo->prepare("UPDATE $qualifiedTable SET $qualifiedColumn = NULL WHERE $qualifiedColumn = ?");
-                    if ($update) {
-                        $update->execute([$productId]);
-                        $resolved = true;
-                    }
-                } catch (PDOException $updateError) {
-                    if (pdoErrorIndicatesMissingSchema($updateError)) {
-                        continue;
-                    }
-
-                    if (!pdoErrorIndicatesConstraintFailure($updateError)) {
-                        throw $updateError;
-                    }
-                    // Otherwise fall through to delete attempt.
-                }
-            }
-
-            if ($resolved) {
-                continue;
-            }
-
-            try {
-                $delete = $pdo->prepare("DELETE FROM $qualifiedTable WHERE $qualifiedColumn = ?");
-                if ($delete) {
-                    $delete->execute([$productId]);
-                }
-            } catch (PDOException $deleteError) {
-                if (pdoErrorIndicatesMissingSchema($deleteError)) {
-                    continue;
-                }
-
-                throw $deleteError;
-            }
-        }
     }
 }
 
@@ -820,6 +837,14 @@ if (isset($_GET['history']) && $_GET['history'] == '1') {
                                     $actionClass .= ' action-edit';
                                     $actionText = 'Edited';
                                     break;
+                                case 'archive':
+                                    $actionClass .= ' action-delete';
+                                    $actionText = 'Archived';
+                                    break;
+                                case 'restore':
+                                    $actionClass .= ' action-add';
+                                    $actionText = 'Restored';
+                                    break;
                                 case 'delete':
                                     $actionClass .= ' action-delete';
                                     $actionText = 'Deleted';
@@ -884,211 +909,173 @@ $profile_name = $current_user['name'] ?? 'N/A';
 $profile_role = !empty($current_user['role']) ? ucfirst($current_user['role']) : 'N/A';
 $profile_created = format_profile_date($current_user['created_at'] ?? null);
 
-if(isset($_GET['delete'])) {
-    $product_id = intval($_GET['delete']);
-    $foreignKeysTemporarilyDisabled = false;
+if (isset($_GET['delete'])) {
+    $redirectParams = $_GET;
+    unset($redirectParams['delete']);
+    $redirectQuery = http_build_query($redirectParams);
+    $redirectUrl = 'products.php' . ($redirectQuery ? '?' . $redirectQuery : '');
+
+    if ($isStaff) {
+        $_SESSION['products_error'] = 'You do not have permission to archive products.';
+        header('Location: ' . $redirectUrl);
+        exit;
+    }
+
+    $product_id = (int) $_GET['delete'];
 
     try {
         $pdo->beginTransaction();
 
-        try {
-            $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
-            $foreignKeysTemporarilyDisabled = true;
-        } catch (Throwable $toggleError) {
-            error_log('Unable to disable foreign key checks prior to product delete: ' . $toggleError->getMessage());
-        }
-
-        $stmt = $pdo->prepare('SELECT * FROM products WHERE id = ?');
+        $stmt = $pdo->prepare('SELECT * FROM products WHERE id = ? FOR UPDATE');
         $stmt->execute([$product_id]);
         $product = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$product) {
             $pdo->rollBack();
             $_SESSION['products_error'] = 'Product not found.';
-            header('Location: products.php');
+            header('Location: ' . $redirectUrl);
             exit;
         }
 
-        $productSnapshot = [
-            'code' => $product['code'] ?? null,
-            'name' => $product['name'] ?? null,
-            'description' => $product['description'] ?? null,
-            'price' => isset($product['price']) ? (float) $product['price'] : null,
-            'quantity' => isset($product['quantity']) ? (int) $product['quantity'] : null,
-            'low_stock_threshold' => isset($product['low_stock_threshold']) ? (int) $product['low_stock_threshold'] : null,
-            'brand' => $product['brand'] ?? null,
-            'category' => $product['category'] ?? null,
-            'supplier' => $product['supplier'] ?? null,
-            'image' => $product['image'] ?? null,
-            'variants' => [],
-        ];
+        $alreadyArchived = (int) ($product['is_archived'] ?? 0) === 1;
 
-        try {
-            $productSnapshot['variants'] = fetchProductVariants($pdo, $product_id);
-        } catch (PDOException $variantLookupError) {
-            if (!pdoErrorIndicatesMissingSchema($variantLookupError)) {
-                throw $variantLookupError;
-            }
-        }
+        if ($alreadyArchived) {
+            $_SESSION['products_success'] = 'Product is already archived.';
+        } else {
+            $snapshot = buildProductHistorySnapshot($pdo, $product);
 
-        $summaryParts = [];
-        $productName = trim((string) ($product['name'] ?? ''));
-        $productCode = trim((string) ($product['code'] ?? ''));
-        $summaryParts[] = sprintf(
-            'Deleted %s (%s).',
-            $productName !== '' ? $productName : 'product',
-            $productCode !== '' ? $productCode : 'no code'
-        );
+            $pdo->prepare(
+                'UPDATE products SET is_archived = 1, archived_at = IF(archived_at IS NULL, NOW(), archived_at) WHERE id = ?'
+            )->execute([$product_id]);
 
-        if (isset($productSnapshot['quantity'])) {
-            $summaryParts[] = 'Stock: ' . number_format((int) $productSnapshot['quantity']);
-        }
-
-        if (isset($productSnapshot['price'])) {
-            $summaryParts[] = 'Price: ₱' . number_format((float) $productSnapshot['price'], 2);
-        }
-
-        $brandLabel = trim((string) ($product['brand'] ?? ''));
-        if ($brandLabel !== '') {
-            $summaryParts[] = 'Brand: ' . $brandLabel;
-        }
-
-        $categoryLabel = trim((string) ($product['category'] ?? ''));
-        if ($categoryLabel !== '') {
-            $summaryParts[] = 'Category: ' . $categoryLabel;
-        }
-
-        $historyPayload = [
-            'summary' => implode(' • ', $summaryParts),
-            'snapshot' => $productSnapshot,
-            'changes' => [],
-            'variant_changes' => [],
-            'removed_gallery_images' => [],
-            'removed_main_image' => ($product['image'] ?? null) !== null,
-            'deleted_product_id' => $product_id,
-            'deleted_at' => date('c'),
-        ];
-
-        $historyInsertSucceeded = false;
-        try {
-            $pdo->prepare('INSERT INTO product_add_history (product_id, user_id, action, details) VALUES (?, ?, ?, ?)')
-                ->execute([
-                    $product_id,
-                    isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null,
-                    'delete',
-                    json_encode($historyPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                ]);
-            $historyInsertSucceeded = true;
-        } catch (PDOException $historyError) {
-            if (pdoErrorIndicatesMissingSchema($historyError)) {
-                error_log('Skipping product delete history insert because product_add_history table is missing.');
-            } else {
-                throw $historyError;
-            }
-        }
-
-        if ($historyInsertSucceeded && columnAllowsNull($pdo, 'product_add_history', 'product_id')) {
             try {
-                $pdo->prepare('UPDATE product_add_history SET product_id = NULL WHERE product_id = ?')->execute([$product_id]);
-            } catch (PDOException $historyDetachError) {
-                if (!pdoErrorIndicatesMissingSchema($historyDetachError)) {
-                    throw $historyDetachError;
+                $pdo->prepare(
+                    "UPDATE inventory_notifications SET status = 'resolved', resolved_at = IF(resolved_at IS NULL, NOW(), resolved_at) WHERE product_id = ? AND status = 'active'"
+                )->execute([$product_id]);
+            } catch (PDOException $notificationError) {
+                if (!pdoErrorIndicatesMissingSchema($notificationError)) {
+                    throw $notificationError;
                 }
             }
-        }
 
-        $cleanupStatements = [
-            'stock_entries' => 'DELETE FROM stock_entries WHERE product_id = ?',
-            'product_images' => 'DELETE FROM product_images WHERE product_id = ?',
-            'product_variants' => 'DELETE FROM product_variants WHERE product_id = ?',
-            'inventory_notifications' => 'DELETE FROM inventory_notifications WHERE product_id = ?',
-        ];
-
-        foreach ($cleanupStatements as $tableName => $sql) {
             try {
-                $pdo->prepare($sql)->execute([$product_id]);
-            } catch (PDOException $cleanupError) {
-                if (pdoErrorIndicatesMissingSchema($cleanupError)) {
-                    error_log(sprintf(
-                        'Skipping %s cleanup during product delete because the table is missing: %s',
-                        $tableName,
-                        $cleanupError->getMessage()
-                    ));
-                    continue;
+                $historyPayload = [
+                    'summary' => buildProductHistorySummary($product, 'archived'),
+                    'snapshot' => $snapshot,
+                    'changes' => [],
+                    'variant_changes' => [],
+                    'removed_gallery_images' => [],
+                    'archived_product_id' => $product_id,
+                    'archived_at' => date('c'),
+                ];
+                $pdo->prepare('INSERT INTO product_add_history (product_id, user_id, action, details) VALUES (?, ?, ?, ?)')
+                    ->execute([
+                        $product_id,
+                        isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null,
+                        'archive',
+                        json_encode($historyPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    ]);
+            } catch (PDOException $historyError) {
+                if (!pdoErrorIndicatesMissingSchema($historyError)) {
+                    throw $historyError;
                 }
-
-                // Potential blocker: schema mismatches (wrong column names or extra NOT NULL fields)
-                // surface here as SQL errors and will abort the delete flow. Cross-check custom
-                // migrations to ensure the cleanup query still matches the live schema.
-
-                throw $cleanupError;
             }
+
+            $_SESSION['products_success'] = 'Product archived successfully.';
         }
 
-        try {
-            $pdo->prepare('UPDATE order_items SET product_id = NULL WHERE product_id = ?')->execute([$product_id]);
-        } catch (PDOException $orderItemsError) {
-            if (pdoErrorIndicatesMissingSchema($orderItemsError)) {
-                error_log('Skipping order_items reassignment during product delete because the table or column is missing.');
-            } elseif (pdoErrorIndicatesConstraintFailure($orderItemsError)) {
-                try {
-                    $pdo->prepare('DELETE FROM order_items WHERE product_id = ?')->execute([$product_id]);
-                } catch (PDOException $orderItemsDeleteError) {
-                    if (pdoErrorIndicatesMissingSchema($orderItemsDeleteError)) {
-                        error_log('Skipping order_items delete fallback during product delete because the table is missing.');
-                    } else {
-                        throw $orderItemsDeleteError;
-                    }
-                }
-            } else {
-                // Potential blocker: a NOT NULL column (e.g., product_id without SET NULL support)
-                // or a trigger on order_items may make this UPDATE fail without raising a classic
-                // FK error. Inspect the exception message in the PHP error log to confirm.
-                throw $orderItemsError;
-            }
+        if ($pdo->inTransaction()) {
+            $pdo->commit();
         }
-
-        releaseProductForeignKeyReferences($pdo, $product_id, [
-            'stock_entries',
-            'product_images',
-            'product_variants',
-            'inventory_notifications',
-            'product_add_history',
-            'order_items',
-        ]);
-
-        // Potential blocker: if any referencing table keeps ON DELETE RESTRICT (no cleanup or cascade),
-        // this delete statement will throw a foreign-key violation and the transaction will roll back.
-        // Run the INFORMATION_SCHEMA FK query shared earlier to confirm cascade rules in the live DB.
-        $pdo->prepare('DELETE FROM products WHERE id = ?')->execute([$product_id]);
-
-        $pdo->commit();
-
-        try {
-            deleteMainProductImage($product_id, $product['image'] ?? null);
-        } catch (Throwable $imageCleanupError) {
-            error_log('Failed to remove product image during delete: ' . $imageCleanupError->getMessage());
-        }
-
-        $_SESSION['products_success'] = 'Product deleted successfully.';
     } catch (Exception $e) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
 
-        error_log('Product deletion failed: ' . $e->getMessage());
-        $_SESSION['products_error'] = 'Unable to delete product. Please try again.';
-    } finally {
-        if ($foreignKeysTemporarilyDisabled) {
-            try {
-                $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
-            } catch (Throwable $toggleError) {
-                error_log('Unable to re-enable foreign key checks after product delete: ' . $toggleError->getMessage());
-            }
-        }
+        error_log('Product archive failed: ' . $e->getMessage());
+        $_SESSION['products_error'] = 'Unable to archive product. Please try again.';
     }
 
-    header('Location: products.php');
+    header('Location: ' . $redirectUrl);
+    exit;
+}
+
+if (isset($_GET['restore'])) {
+    $redirectParams = $_GET;
+    unset($redirectParams['restore']);
+    $redirectQuery = http_build_query($redirectParams);
+    $redirectUrl = 'products.php' . ($redirectQuery ? '?' . $redirectQuery : '');
+
+    if ($isStaff) {
+        $_SESSION['products_error'] = 'You do not have permission to restore products.';
+        header('Location: ' . $redirectUrl);
+        exit;
+    }
+
+    $product_id = (int) $_GET['restore'];
+
+    try {
+        $pdo->beginTransaction();
+
+        $stmt = $pdo->prepare('SELECT * FROM products WHERE id = ? FOR UPDATE');
+        $stmt->execute([$product_id]);
+        $product = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$product) {
+            $pdo->rollBack();
+            $_SESSION['products_error'] = 'Product not found.';
+            header('Location: ' . $redirectUrl);
+            exit;
+        }
+
+        $isArchived = (int) ($product['is_archived'] ?? 0) === 1;
+
+        if (!$isArchived) {
+            $_SESSION['products_success'] = 'Product is already active.';
+        } else {
+            $snapshot = buildProductHistorySnapshot($pdo, $product);
+
+            $pdo->prepare('UPDATE products SET is_archived = 0, archived_at = NULL WHERE id = ?')->execute([$product_id]);
+
+            try {
+                $historyPayload = [
+                    'summary' => buildProductHistorySummary($product, 'restored'),
+                    'snapshot' => $snapshot,
+                    'changes' => [],
+                    'variant_changes' => [],
+                    'removed_gallery_images' => [],
+                    'restored_product_id' => $product_id,
+                    'restored_at' => date('c'),
+                ];
+                $pdo->prepare('INSERT INTO product_add_history (product_id, user_id, action, details) VALUES (?, ?, ?, ?)')
+                    ->execute([
+                        $product_id,
+                        isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null,
+                        'restore',
+                        json_encode($historyPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    ]);
+            } catch (PDOException $historyError) {
+                if (!pdoErrorIndicatesMissingSchema($historyError)) {
+                    throw $historyError;
+                }
+            }
+
+            $_SESSION['products_success'] = 'Product restored successfully.';
+        }
+
+        if ($pdo->inTransaction()) {
+            $pdo->commit();
+        }
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        error_log('Product restore failed: ' . $e->getMessage());
+        $_SESSION['products_error'] = 'Unable to restore product. Please try again.';
+    }
+
+    header('Location: ' . $redirectUrl);
     exit;
 }
 if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_product'])){
@@ -1405,6 +1392,12 @@ $supplier_filter = $_GET['supplier'] ?? '';
 $sort = $_GET['sort'] ?? '';
 $direction = strtolower($_GET['direction'] ?? 'asc');
 $direction = $direction === 'desc' ? 'desc' : 'asc';
+$status_filter = $_GET['status'] ?? 'active';
+$validStatusFilters = ['active', 'archived', 'all'];
+if (!in_array($status_filter, $validStatusFilters, true)) {
+    $status_filter = 'active';
+}
+$isArchivedView = $status_filter === 'archived';
 
 // Pagination setup (matching sales.php style)
 $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
@@ -1435,6 +1428,11 @@ if ($supplier_filter !== '') {
     // Filter by specific supplier
     $where_sql .= ' AND supplier = :supplier_filter';
     $filter_params[':supplier_filter'] = $supplier_filter;
+}
+if ($status_filter === 'active') {
+    $where_sql .= ' AND (is_archived = 0 OR is_archived IS NULL)';
+} elseif ($status_filter === 'archived') {
+    $where_sql .= ' AND is_archived = 1';
 }
 
 // First, get total count for pagination (using filter params)
@@ -1481,6 +1479,16 @@ if ($currentSort === 'name') {
 } else {
     $nameSortIndicator = '↕';
 }
+$archiveToggleParams = $_GET;
+unset($archiveToggleParams['delete'], $archiveToggleParams['restore']);
+$archiveToggleParams['status'] = $isArchivedView ? 'active' : 'archived';
+$archiveToggleParams['page'] = 1;
+$archiveToggleQuery = http_build_query($archiveToggleParams);
+$archiveToggleUrl = 'products.php' . ($archiveToggleQuery ? '?' . $archiveToggleQuery : '');
+$archiveToggleLabel = $isArchivedView ? 'Back to Active' : 'View Archive';
+$actionBaseQuery = $_GET;
+unset($actionBaseQuery['delete'], $actionBaseQuery['restore']);
+$emptyTableMessage = $isArchivedView ? 'No archived products found.' : 'No products found matching the criteria.';
 ?>
 <!doctype html>
 <html>
@@ -1568,6 +1576,9 @@ if ($currentSort === 'name') {
                 <i class="fas fa-plus"></i> Add Product
             </button>
             <?php endif; ?>
+            <a href="<?= htmlspecialchars($archiveToggleUrl) ?>" class="archive-toggle-btn<?= $isArchivedView ? ' archive-toggle-btn--active' : '' ?>">
+                <i class="fas fa-box-archive"></i> <?= htmlspecialchars($archiveToggleLabel) ?>
+            </a>
             <button id="openHistoryModal" class="history-btn" type="button">
                 <i class="fas fa-history"></i> History
             </button>
@@ -1750,6 +1761,11 @@ if ($currentSort === 'name') {
                     </div>
                 </div>
                 <div class="filter-row filter-row--selects">
+                    <select name="status" aria-label="Filter by status" class="filter-select">
+                        <option value="active" <?= $status_filter === 'active' ? 'selected' : '' ?>>Active</option>
+                        <option value="archived" <?= $status_filter === 'archived' ? 'selected' : '' ?>>Archived</option>
+                        <option value="all" <?= $status_filter === 'all' ? 'selected' : '' ?>>All</option>
+                    </select>
                     <select name="brand" aria-label="Filter by brand" class="filter-select">
                         <option value="">All Brands</option>
                         <?php foreach ($brands as $b): ?>
@@ -1794,7 +1810,7 @@ if ($currentSort === 'name') {
                         <tr>
                             <td colspan="<?= $isStaff ? 4 : 5 ?>" style="text-align: center; padding: 40px; color: #6b7280;">
                                 <i class="fas fa-inbox" style="font-size: 36px; margin-bottom: 8px; display: block;"></i>
-                                No products found matching the criteria.
+                                <?= htmlspecialchars($emptyTableMessage) ?>
                             </td>
                         </tr>
                     <?php else: ?>
@@ -1841,6 +1857,15 @@ if ($currentSort === 'name') {
                         ];
                         $productDetailJson = htmlspecialchars(json_encode($productDetailPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8');
                         $galleryJson = htmlspecialchars(json_encode($galleryImagesForProduct, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8');
+                        $rowIsArchived = (int) ($p['is_archived'] ?? 0) === 1;
+                        $archiveParams = $actionBaseQuery;
+                        $archiveParams['delete'] = $p['id'];
+                        $archiveQuery = http_build_query($archiveParams);
+                        $archiveUrl = 'products.php' . ($archiveQuery ? '?' . $archiveQuery : '');
+                        $restoreParams = $actionBaseQuery;
+                        $restoreParams['restore'] = $p['id'];
+                        $restoreQuery = http_build_query($restoreParams);
+                        $restoreUrl = 'products.php' . ($restoreQuery ? '?' . $restoreQuery : '');
                     ?>
                         <tr class="product-row" data-product="<?=$productDetailJson?>">
                             <td><?=htmlspecialchars($p['code'])?></td>
@@ -1863,10 +1888,17 @@ if ($currentSort === 'name') {
                                     data-variants="<?=$variantsJson?>"
                                     data-gallery="<?=$galleryJson?>"
                                     data-default-variant="<?=htmlspecialchars($defaultVariantLabel)?>"><i class="fas fa-edit"></i>Edit</a>
-                                <a href="products.php?delete=<?=$p['id']?>" class="delete-btn action-btn"
+                                <?php if ($rowIsArchived): ?>
+                                <a href="<?= htmlspecialchars($restoreUrl) ?>" class="restore-btn action-btn"
                                     data-product-name="<?= htmlspecialchars($p['name'] ?? 'this product') ?>">
-                                    <i class="fas fa-trash"></i>Delete
+                                    <i class="fas fa-rotate-left"></i>Restore
                                 </a>
+                                <?php else: ?>
+                                <a href="<?= htmlspecialchars($archiveUrl) ?>" class="delete-btn action-btn"
+                                    data-product-name="<?= htmlspecialchars($p['name'] ?? 'this product') ?>">
+                                    <i class="fas fa-box-archive"></i>Archive
+                                </a>
+                                <?php endif; ?>
                             </td>
                             <?php endif; ?>
                         </tr>

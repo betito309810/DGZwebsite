@@ -161,6 +161,34 @@ h3 {
 .history-btn:hover {
     background: #2563eb;
 }
+.archive-toggle-btn {
+    background: #6b7280;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+    padding: 10px 20px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    width: fit-content;
+    text-decoration: none;
+    transition: background 0.2s;
+}
+
+.archive-toggle-btn:hover {
+    background: #4b5563;
+    color: #fff;
+}
+
+.archive-toggle-btn--active {
+    background: #10b981;
+}
+
+.archive-toggle-btn--active:hover {
+    background: #059669;
+}
 .add-btn:hover {
     background: #2563eb;
 }
@@ -594,6 +622,14 @@ table a:hover {
 
 .delete-btn:hover {
     background: #c53030;
+}
+.restore-btn {
+    background: #10b981;
+    color: #fff;
+}
+
+.restore-btn:hover {
+    background: #059669;
 }
 /*
 

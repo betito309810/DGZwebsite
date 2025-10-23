@@ -49,7 +49,7 @@ try {
 
 // Low stock items for the widget
 try {
-    $low = $pdo->query('SELECT * FROM products WHERE quantity <= low_stock_threshold')->fetchAll();
+    $low = $pdo->query('SELECT * FROM products WHERE (is_archived = 0 OR is_archived IS NULL) AND quantity <= low_stock_threshold')->fetchAll();
 } catch (Exception $e) {
     error_log("Low stock query failed: " . $e->getMessage());
     $low = [];

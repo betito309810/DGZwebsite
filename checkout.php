@@ -533,7 +533,7 @@ if (isset($_GET['cart'])) {
     // Enrich with stock and image from DB so UI can enforce limits and show thumbnails
     foreach ($cartItems as &$item) {
         try {
-            $productStmt = $pdo->prepare('SELECT id, image, quantity FROM products WHERE id = ?');
+            $productStmt = $pdo->prepare('SELECT id, image, quantity FROM products WHERE id = ? AND (is_archived = 0 OR is_archived IS NULL)');
             $productStmt->execute([(int) $item['id']]);
             $productRow = $productStmt->fetch();
 
@@ -563,7 +563,7 @@ if (isset($_GET['cart'])) {
 
 // Check if we have a single product but no cart
 if ($product_id > 0 && empty($cartItems)) {
-    $product = $pdo->prepare('SELECT * FROM products WHERE id=?');
+    $product = $pdo->prepare('SELECT * FROM products WHERE id=? AND (is_archived = 0 OR is_archived IS NULL)');
     $product->execute([$product_id]);
     $p = $product->fetch();
 
@@ -621,7 +621,7 @@ if (isset($_POST['cart'])) {
             $variantRow = $stmt->fetch();
             $item['stock'] = $variantRow ? (int) $variantRow['quantity'] : null;
         } else {
-            $stmt = $pdo->prepare('SELECT quantity FROM products WHERE id = ?');
+            $stmt = $pdo->prepare('SELECT quantity FROM products WHERE id = ? AND (is_archived = 0 OR is_archived IS NULL)');
             $stmt->execute([$item['id']]);
             $product = $stmt->fetch();
             $item['stock'] = $product ? (int)$product['quantity'] : null;
@@ -629,7 +629,7 @@ if (isset($_POST['cart'])) {
 
         // Attach product image if available
         try {
-            $imgStmt = $pdo->prepare('SELECT image FROM products WHERE id = ?');
+            $imgStmt = $pdo->prepare('SELECT image FROM products WHERE id = ? AND (is_archived = 0 OR is_archived IS NULL)');
             $imgStmt->execute([(int) $item['id']]);
             $imgRow = $imgStmt->fetch();
             if ($imgRow && !empty($imgRow['image'])) {
@@ -829,7 +829,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $variantRow = $variantStmt->fetch();
             $available = $variantRow ? (int) $variantRow['quantity'] : 0;
         } else {
-            $stmt = $pdo->prepare('SELECT quantity FROM products WHERE id = ?');
+            $stmt = $pdo->prepare('SELECT quantity FROM products WHERE id = ? AND (is_archived = 0 OR is_archived IS NULL)');
             $stmt->execute([$item['id']]);
             $product = $stmt->fetch();
             $available = $product ? (int)$product['quantity'] : 0;
@@ -1001,7 +1001,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($variantRow && $item['quantity'] <= (int) $variantRow['quantity']) {
                     $productRow = null;
                     try {
-                        $productQuery = $pdo->prepare('SELECT id, name FROM products WHERE id = ?');
+                        $productQuery = $pdo->prepare('SELECT id, name FROM products WHERE id = ? AND (is_archived = 0 OR is_archived IS NULL)');
                         $productQuery->execute([(int) $variantRow['product_id']]);
                         $productRow = $productQuery->fetch(PDO::FETCH_ASSOC) ?: null;
                     } catch (Throwable $ignored) {
@@ -1023,7 +1023,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $pdo->prepare('UPDATE products SET quantity = quantity - ? WHERE id = ?')->execute([$item['quantity'], (int) $variantRow['product_id']]);
                 }
             } else {
-                $product = $pdo->prepare('SELECT id, name, quantity FROM products WHERE id = ?');
+                $product = $pdo->prepare('SELECT id, name, quantity FROM products WHERE id = ? AND (is_archived = 0 OR is_archived IS NULL)');
                 $product->execute([$item['id']]);
                 $p = $product->fetch(PDO::FETCH_ASSOC);
 

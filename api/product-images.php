@@ -16,7 +16,7 @@ if ($productId <= 0) {
 try {
     $pdo = db();
 
-    $stmt = $pdo->prepare('SELECT image, name FROM products WHERE id = ? LIMIT 1');
+    $stmt = $pdo->prepare('SELECT image, name FROM products WHERE id = ? AND (is_archived = 0 OR is_archived IS NULL) LIMIT 1');
     $stmt->execute([$productId]);
     $product = $stmt->fetch();
 

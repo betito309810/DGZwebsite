@@ -100,7 +100,7 @@ try {
 
     if ($productIds !== []) {
         $placeholders = implode(',', array_fill(0, count($productIds), '?'));
-        $productStmt = $pdo->prepare("SELECT id, quantity FROM products WHERE id IN ($placeholders)");
+        $productStmt = $pdo->prepare("SELECT id, quantity FROM products WHERE id IN ($placeholders) AND (is_archived = 0 OR is_archived IS NULL)");
         $productStmt->execute(array_keys($productIds));
         while ($productRow = $productStmt->fetch(PDO::FETCH_ASSOC)) {
             $productId = (int) $productRow['id'];

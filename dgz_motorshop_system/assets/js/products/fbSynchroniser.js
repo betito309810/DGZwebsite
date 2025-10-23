@@ -145,46 +145,60 @@
             return CATEGORY_CODE_PREFIXES.get(key);
         }
 
-        const cleaned = key.replace(/[^A-Z0-9]+/g, ' ').trim();
-        if (!cleaned) {
-            return 'PRD';
-        }
-
-        const words = cleaned.split(/\s+/).filter(Boolean);
-        if (words.length === 0) {
+        const cleanedWords = key.replace(/[^A-Z0-9]+/g, ' ').trim().split(/\s+/).filter(Boolean);
+        if (cleanedWords.length === 0) {
             return 'PRD';
         }
 
         const candidateChars = [];
-
-        words.forEach((word) => {
-            if (candidateChars.length < 3 && word.length > 0) {
-                candidateChars.push(word[0]);
+        const pushChar = (char) => {
+            if (typeof char === 'string' && char.length > 0) {
+                candidateChars.push(char[0]);
             }
-        });
+        };
 
-        let offset = 1;
-        while (candidateChars.length < 3) {
-            let addedThisRound = false;
-            words.forEach((word) => {
-                if (candidateChars.length >= 3) {
-                    return;
-                }
-                if (word.length > offset) {
-                    candidateChars.push(word[offset]);
-                    addedThisRound = true;
-                }
-            });
-            if (!addedThisRound) {
-                break;
+        if (cleanedWords.length === 1) {
+            const [single] = cleanedWords;
+            for (let i = 0; i < single.length && candidateChars.length < 3; i += 1) {
+                pushChar(single[i]);
             }
-            offset += 1;
+        } else {
+            const firstWord = cleanedWords[0];
+            const lastWord = cleanedWords[cleanedWords.length - 1];
+
+            pushChar(firstWord[0]);
+            if (cleanedWords.length > 2) {
+                pushChar(cleanedWords[1][0]);
+            }
+            pushChar(lastWord[0]);
+
+            let offset = 1;
+            while (candidateChars.length < 3) {
+                let added = false;
+                const indices = cleanedWords.length > 1
+                    ? Array.from({ length: cleanedWords.length }, (_, index) => cleanedWords.length - 1 - index)
+                    : Array.from({ length: cleanedWords.length }, (_, index) => index);
+                for (const index of indices) {
+                    const word = cleanedWords[index];
+                    if (word.length > offset) {
+                        pushChar(word[offset]);
+                        added = true;
+                        if (candidateChars.length >= 3) {
+                            break;
+                        }
+                    }
+                }
+                if (!added) {
+                    break;
+                }
+                offset += 1;
+            }
         }
 
         if (candidateChars.length < 3) {
-            const joined = words.join('');
-            for (let i = 0; i < joined.length && candidateChars.length < 3; i += 1) {
-                candidateChars.push(joined[i]);
+            const fallback = cleanedWords.join('');
+            for (let i = 0; i < fallback.length && candidateChars.length < 3; i += 1) {
+                pushChar(fallback[i]);
             }
         }
 

@@ -453,11 +453,8 @@
                         return;
                     }
 
-                    // Potential blocker: if the backend expects a numeric id but the href contains a
-                    // product code or another identifier, the PHP delete handler will bail out without
-                    // removing anything. Double-check the rendered link value when deletions fail silently.
                     const productName = button.dataset.productName || 'this product';
-                    const confirmationMessage = `Deleting ${productName} will remove all related records. This action cannot be undone. Continue?`;
+                    const confirmationMessage = `Archiving ${productName} will hide it from the ordering site until you restore it. Continue?`;
 
                     if (!window.confirm(confirmationMessage)) {
                         event.preventDefault();

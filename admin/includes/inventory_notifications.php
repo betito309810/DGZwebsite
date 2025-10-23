@@ -62,7 +62,8 @@ if (!function_exists('loadInventoryNotifications')) {
     function syncInventoryNotifications(PDO $pdo): void
     {
         $lowStock = $pdo->query(
-            "SELECT id, name, quantity, low_stock_threshold FROM products WHERE quantity <= low_stock_threshold"
+            "SELECT id, name, quantity, low_stock_threshold FROM products "
+            . "WHERE (is_archived = 0 OR is_archived IS NULL) AND quantity <= low_stock_threshold"
         )->fetchAll(PDO::FETCH_ASSOC);
 
         $checkStmt = $pdo->prepare(
@@ -91,7 +92,7 @@ if (!function_exists('loadInventoryNotifications')) {
         }
 
         $activeRecords = $pdo->query(
-            "SELECT n.id, p.quantity, p.low_stock_threshold FROM inventory_notifications n "
+            "SELECT n.id, p.quantity, p.low_stock_threshold, p.is_archived FROM inventory_notifications n "
             . "LEFT JOIN products p ON p.id = n.product_id WHERE n.status = 'active'"
         )->fetchAll(PDO::FETCH_ASSOC);
 
@@ -104,7 +105,9 @@ if (!function_exists('loadInventoryNotifications')) {
             $quantity = isset($record['quantity']) ? (int) $record['quantity'] : null;
             $threshold = isset($record['low_stock_threshold']) ? (int) $record['low_stock_threshold'] : null;
 
-            if ($quantity === null || ($threshold !== null && $quantity > $threshold)) {
+            $isArchived = isset($record['is_archived']) && (int) $record['is_archived'] === 1;
+
+            if ($isArchived || $quantity === null || ($threshold !== null && $quantity > $threshold)) {
                 $resolveStmt->execute([$record['id']]);
             }
         }

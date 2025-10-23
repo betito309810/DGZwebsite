@@ -3,7 +3,7 @@ require __DIR__ . '/dgz_motorshop_system/config/config.php';
 require_once __DIR__ . '/dgz_motorshop_system/includes/product_variants.php'; // Added: load helpers for variant-aware storefront rendering.
 require_once __DIR__ . '/dgz_motorshop_system/includes/customer_session.php';
 $pdo = db();
-$products = $pdo->query('SELECT * FROM products ORDER BY name')->fetchAll();
+$products = $pdo->query('SELECT * FROM products WHERE is_archived = 0 OR is_archived IS NULL ORDER BY name')->fetchAll();
 $productVariantMap = fetchVariantsForProducts($pdo, array_column($products, 'id')); // Added: preload variant rows for customer UI.
 
 $logoAsset = assetUrl('assets/logo.png');

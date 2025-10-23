@@ -1465,7 +1465,7 @@ function fetchProductCatalog(PDO $pdo, array $capabilities): array
         $selectParts[] = 'NULL AS supplier';
     }
 
-    $sql = 'SELECT ' . implode(', ', $selectParts) . ' FROM products ORDER BY name';
+    $sql = 'SELECT ' . implode(', ', $selectParts) . ' FROM products WHERE is_archived = 0 OR is_archived IS NULL ORDER BY name';
 
     try {
         $stmt = $pdo->query($sql);
@@ -1491,7 +1491,7 @@ function fetchSuppliersList(PDO $pdo): array
 
     $productSuppliers = [];
     try {
-        $result = $pdo->query("SELECT DISTINCT supplier FROM products WHERE supplier IS NOT NULL AND supplier != ''");
+        $result = $pdo->query("SELECT DISTINCT supplier FROM products WHERE (is_archived = 0 OR is_archived IS NULL) AND supplier IS NOT NULL AND supplier != ''");
         $productSuppliers = $result->fetchAll(PDO::FETCH_COLUMN);
     } catch (Throwable $e) {
         // ignore missing column/table
@@ -2451,7 +2451,7 @@ function fetchStockInReport(PDO $pdo, array $filters, ?int $limit = 50, int $off
  */
 function buildInventoryWhereClause(array $filters, array &$params): string
 {
-    $clauses = ['1=1'];
+    $clauses = ['(p.is_archived = 0 OR p.is_archived IS NULL)'];
 
     if (!empty($filters['search'])) {
         $clauses[] = '(p.name LIKE :inv_search_name OR p.code LIKE :inv_search_code)';
