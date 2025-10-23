@@ -71,14 +71,16 @@ natcasesort($categories);
     <!-- Header -->
     <header class="header">
         <div class="header-content">
-            <button type="button" class="mobile-nav-toggle" id="mobileNavToggle" aria-controls="primaryNav" aria-expanded="false">
-                <span class="mobile-nav-toggle__icon" aria-hidden="true"></span>
-                <span class="sr-only">Toggle navigation</span>
-            </button>
-            <div class="logo">
-                <a href="<?= htmlspecialchars($homeUrl) ?>" aria-label="Go to DGZ Motorshop home">
-                    <img src="<?= htmlspecialchars($logoAsset) ?>" alt="Company Logo">
-                </a>
+            <div class="header-left">
+                <button type="button" class="mobile-nav-toggle" id="mobileNavToggle" aria-controls="primaryNav" aria-expanded="false">
+                    <span class="mobile-nav-toggle__icon" aria-hidden="true"></span>
+                    <span class="sr-only">Toggle navigation</span>
+                </button>
+                <div class="logo">
+                    <a href="<?= htmlspecialchars($homeUrl) ?>" aria-label="Go to DGZ Motorshop home">
+                        <img src="<?= htmlspecialchars($logoAsset) ?>" alt="Company Logo">
+                    </a>
+                </div>
             </div>
 
             <div class="search-container">
@@ -86,7 +88,7 @@ natcasesort($categories);
                 <button class="search-btn">
                     <i class="fas fa-search"></i>
                 </button>
-                
+
             </div>
 
 
@@ -179,6 +181,7 @@ natcasesort($categories);
             <!-- All Products -->
             <div id="all-products">
                 <div class="catalog-header">
+                    <div class="catalog-header__spacer" aria-hidden="true"></div>
                     <h2 id="productSectionTitle" class="catalog-title">All Products</h2>
                     <div class="catalog-toolbar-desktop" id="desktopCatalogToolbar" aria-label="Catalog sorting controls">
                         <div class="catalog-sort">

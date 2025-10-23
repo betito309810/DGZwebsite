@@ -44,12 +44,21 @@ body {
 
 .header-content {
     display: flex;
-    justify-content: space-between;
     align-items: center;
     gap: 20px;
     width: min(1200px, 100%);
     margin: 0 auto;
     padding: 0 16px;
+    justify-content: space-between;
+    position: relative;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1 1 0;
+    justify-content: flex-start;
 }
 
 .logo {
@@ -64,7 +73,7 @@ body {
 }
 
 .search-container {
-    flex: 1;
+    flex: 0 1 520px;
     max-width: 520px;
     position: relative;
     margin: 0;
@@ -74,10 +83,11 @@ body {
 }
 
 .header-actions {
-    margin-left: auto;
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 16px;
+    flex: 1 1 0;
 }
 
 .search-bar {
@@ -284,6 +294,10 @@ body.nav-open {
     text-align: center;
 }
 
+.catalog-header__spacer {
+    display: none;
+}
+
 .catalog-title {
     font-size: 28px;
     color: #2d3436;
@@ -366,23 +380,41 @@ body.nav-open {
 }
 
 @media (min-width: 992px) {
+    .header-left,
+    .header-actions {
+        flex: 0 0 auto;
+    }
+
+    .search-container {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        width: min(520px, 100%);
+        z-index: 1;
+    }
+
     .catalog-header {
-        flex-direction: row;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
         align-items: center;
         gap: 24px;
-        text-align: left;
+        text-align: center;
+    }
+
+    .catalog-header__spacer {
+        display: block;
     }
 
     .catalog-title {
-        flex: 1;
+        grid-column: 2;
         margin: 0;
         text-align: center;
     }
 
     .catalog-toolbar-desktop {
         display: flex;
-        width: auto;
-        justify-content: flex-end;
+        grid-column: 3;
+        justify-self: end;
     }
 }
 
@@ -1548,6 +1580,18 @@ body.modal-open {
         padding: 0 12px;
     }
 
+    .header-left {
+        flex: 1 1 100%;
+        order: 1;
+        justify-content: space-between;
+    }
+
+    .header-actions {
+        flex: 1 1 100%;
+        order: 2;
+        justify-content: flex-end;
+    }
+
     .logo {
         width: 100px;
     }
@@ -1562,6 +1606,7 @@ body.modal-open {
         display: flex;
         max-width: none;
         margin: 0;
+        flex: 1 1 100%;
     }
 
     .search-bar {
