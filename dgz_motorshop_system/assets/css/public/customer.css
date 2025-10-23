@@ -873,6 +873,12 @@
 .customer-order-card__actions {
     display: flex;
     justify-content: flex-end;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+}
+
+.customer-order-card__actions form {
     margin: 0;
 }
 
@@ -888,6 +894,18 @@
 .customer-order-card__button--danger {
     background: linear-gradient(135deg, #ef4444, #dc2626);
     color: #ffffff;
+}
+
+.customer-order-card__button--success {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: #ffffff;
+}
+
+.customer-order-card__button--success:hover,
+.customer-order-card__button--success:focus-visible {
+    transform: translateY(-1px);
+    box-shadow: 0 14px 26px rgba(5, 150, 105, 0.25);
+    outline: none;
 }
 
 .customer-order-card__button--danger:hover,

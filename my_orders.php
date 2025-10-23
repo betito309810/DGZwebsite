@@ -368,6 +368,75 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_order_id'])) {
     }
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['mark_received_order_id'])) {
+    $orderId = (int) $_POST['mark_received_order_id'];
+    $transactionActive = false;
+    try {
+        try {
+            if (!$pdo->inTransaction()) {
+                $transactionActive = $pdo->beginTransaction();
+            } else {
+                $transactionActive = true;
+            }
+        } catch (Throwable $transactionException) {
+            error_log('Database does not support transactions for customer receipt confirmations: ' . $transactionException->getMessage());
+            $transactionActive = false;
+        }
+
+        $stmt = $pdo->prepare('SELECT id, status FROM orders WHERE id = ? AND customer_id = ? FOR UPDATE');
+        $stmt->execute([$orderId, (int) $customer['id']]);
+        $order = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$order) {
+            $alerts['error'][] = 'We could not find that order.';
+            if ($transactionActive && $pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+        } else {
+            $status = strtolower((string) ($order['status'] ?? ''));
+            if ($status === '') {
+                $status = 'pending';
+            }
+
+            $deliveryStatuses = ['delivery', 'out_for_delivery', 'out for delivery'];
+            $completedStatuses = ['complete', 'completed'];
+
+            if (in_array($status, $completedStatuses, true)) {
+                $alerts['success'][] = 'Thanks! This order is already completed in our system.';
+                if ($transactionActive && $pdo->inTransaction()) {
+                    $pdo->commit();
+                }
+            } elseif (!in_array($status, $deliveryStatuses, true)) {
+                $alerts['error'][] = 'Only orders that are currently out for delivery can be marked as received.';
+                if ($transactionActive && $pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+            } else {
+                try {
+                    $pdo->exec("ALTER TABLE orders ADD COLUMN updated_at TIMESTAMP NULL DEFAULT NULL");
+                } catch (Throwable $e) {
+                    // Column already exists; ignore errors.
+                }
+
+                $update = $pdo->prepare("UPDATE orders SET status = 'completed', updated_at = NOW() WHERE id = ?");
+                $update->execute([$orderId]);
+
+                if ($transactionActive && $pdo->inTransaction()) {
+                    $pdo->commit();
+                }
+
+                $alerts['success'][] = 'Thanks for confirming! We have marked your order as completed.';
+            }
+        }
+    } catch (Throwable $exception) {
+        if ($transactionActive && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        error_log('Unable to mark customer order as received: ' . $exception->getMessage());
+        $alerts['error'][] = 'We could not update that order. Please try again or contact support.';
+    }
+}
+
 $orderIdColumn = ordersFindColumn($pdo, ['id', 'order_id']);
 $customerIdColumn = ordersFindColumn($pdo, ['customer_id', 'customerId', 'customerID', 'customerid']);
 $orderTotalColumn = ordersFindColumn($pdo, ['total', 'grand_total', 'amount', 'total_amount']);
@@ -664,6 +733,7 @@ $statusLabels = [
                     $facebookAccount = trim((string) ($order['facebook_account'] ?? $order['facebook'] ?? ''));
                     $referenceNumber = trim((string) ($order['reference_no'] ?? $order['reference_number'] ?? ''));
                     $paymentProofPath = trim((string) ($order['payment_proof'] ?? $order['proof_of_payment'] ?? ''));
+                    $canMarkReceived = ($statusKey === 'delivery');
                     $addressLine = trim((string) ($order['address'] ?? $order['customer_address'] ?? ''));
                     $postalCode = trim((string) ($order['postal_code'] ?? $order['postal'] ?? $order['zip_code'] ?? ''));
                     $city = trim((string) ($order['city'] ?? $order['town'] ?? $order['municipality'] ?? ''));
@@ -860,12 +930,22 @@ $statusLabels = [
                                 </div>
                             </div>
                         <?php endif; ?>
-                        <?php if ($canCancel): ?>
+                        <?php if ($canCancel || $canMarkReceived): ?>
                             <div class="customer-order-card__footer">
-                                <form method="post" class="customer-order-card__actions" data-customer-cancel-form>
-                                    <input type="hidden" name="cancel_order_id" value="<?= (int) $order['id'] ?>">
-                                    <button type="submit" class="customer-order-card__button customer-order-card__button--danger">Cancel order</button>
-                                </form>
+                                <div class="customer-order-card__actions">
+                                    <?php if ($canMarkReceived): ?>
+                                        <form method="post" data-customer-received-form>
+                                            <input type="hidden" name="mark_received_order_id" value="<?= (int) $order['id'] ?>">
+                                            <button type="submit" class="customer-order-card__button customer-order-card__button--success">Order received</button>
+                                        </form>
+                                    <?php endif; ?>
+                                    <?php if ($canCancel): ?>
+                                        <form method="post" data-customer-cancel-form>
+                                            <input type="hidden" name="cancel_order_id" value="<?= (int) $order['id'] ?>">
+                                            <button type="submit" class="customer-order-card__button customer-order-card__button--danger">Cancel order</button>
+                                        </form>
+                                    <?php endif; ?>
+                                </div>
                             </div>
                         <?php endif; ?>
                     </div>
