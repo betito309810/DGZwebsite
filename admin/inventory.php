@@ -1544,15 +1544,12 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                                 </a>
                             </th>
                             <th scope="col">Price</th>
-                            <?php if ($canManualAdjust): ?>
-                            <th scope="col">Action</th>
-                            <?php endif; ?>
                         </tr>
                     </thead>
                     <tbody>
                         <?php if (empty($inventoryProducts)): ?>
                         <tr>
-                            <td colspan="<?= $canManualAdjust ? 5 : 4 ?>" class="empty-state">
+                            <td colspan="4" class="empty-state">
                                 <i class="fas fa-inbox"></i>
                                 No inventory items found matching the criteria
                             </td>
@@ -1636,72 +1633,6 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                                 </div>
                             </td>
                             <td>₱<?= number_format($productPrice, 2) ?></td>
-                            <?php if ($canManualAdjust): ?>
-                            <td>
-                                <div class="manual-adjust">
-                                    <form method="post" class="manual-adjust-form">
-                                        <input type="hidden" name="id" value="<?= (int) $p['id'] ?>">
-                                        <input type="hidden" name="return_view" value="<?= htmlspecialchars($manualAdjustReturnView) ?>">
-                                        <?php if ($hasVariants): ?>
-                                        <div class="manual-adjust-field manual-adjust-field--variant">
-                                            <label class="manual-adjust-field__hint" for="manualAdjustVariant<?= (int) $p['id'] ?>">Variant</label>
-                                            <select
-                                                id="manualAdjustVariant<?= (int) $p['id'] ?>"
-                                                name="variant_id"
-                                                class="manual-adjust-select"
-                                            >
-                                                <option value=""<?= $lastAdjustedVariantId === 0 ? ' selected' : '' ?>>Select variant</option>
-                                                <?php foreach ($variantsForProduct as $variant):
-                                                    $variantOptionId = (int) ($variant['id'] ?? 0);
-                                                    if ($variantOptionId <= 0) {
-                                                        continue;
-                                                    }
-                                                    $variantLabelText = trim((string) ($variant['label'] ?? ''));
-                                                    $variantSkuText = trim((string) ($variant['sku'] ?? ''));
-                                                    $variantQuantityValue = isset($variant['quantity']) ? (int) $variant['quantity'] : 0;
-                                                    if ($variantLabelText === '' && $variantSkuText !== '') {
-                                                        $variantLabelText = $variantSkuText;
-                                                    }
-                                                    if ($variantLabelText === '') {
-                                                        $variantLabelText = 'Variant #' . $variantOptionId;
-                                                    }
-                                                    $skuNote = '';
-                                                    if ($variantSkuText !== '' && strcasecmp($variantSkuText, $variantLabelText) !== 0) {
-                                                        $skuNote = ' — SKU: ' . $variantSkuText;
-                                                    }
-                                                    $defaultNote = !empty($variant['is_default']) ? ' (Default)' : '';
-                                                    $optionLabel = $variantLabelText . $skuNote . $defaultNote;
-                                                    $isSelected = $lastAdjustedVariantId === $variantOptionId;
-                                                ?>
-                                                <option value="<?= $variantOptionId ?>" data-variant-quantity="<?= $variantQuantityValue ?>"<?= $isSelected ? ' selected' : '' ?>><?= htmlspecialchars($optionLabel) ?></option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                        </div>
-                                        <?php else: ?>
-                                        <input type="hidden" name="variant_id" value="0">
-                                        <div class="manual-adjust-field manual-adjust-field--variant-note">
-                                            <span class="manual-adjust-variant-note">Single SKU</span>
-                                        </div>
-                                        <?php endif; ?>
-                                        <div class="manual-adjust-field manual-adjust-field--quantity">
-                                            <label class="manual-adjust-field__hint" for="manualAdjust<?= (int) $p['id'] ?>">Quantity</label>
-                                            <input
-                                                type="number"
-                                                id="manualAdjust<?= (int) $p['id'] ?>"
-                                                name="change"
-                                                value="0"
-                                                step="1"
-                                                class="manual-adjust-input"
-                                            >
-                                        </div>
-                                        <button type="submit" name="update_stock" class="manual-adjust-button">Manual Adjust</button>
-                                    </form>
-                                    <div class="manual-adjust-meta">
-                                        Low stock threshold: <span class="manual-adjust-meta__value"><?= $thresholdValue ?></span>
-                                    </div>
-                                </div>
-                            </td>
-                            <?php endif; ?>
                         </tr>
                         <?php endforeach; ?>
                         <?php endif; ?>
