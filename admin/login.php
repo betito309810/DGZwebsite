@@ -82,6 +82,17 @@
                 $_SESSION['user_created_at'] = $u['date_created'];
             }
 
+            recordSystemLog(
+                $pdo,
+                'login_success',
+                'Admin portal authentication successful',
+                (int) $u['id'],
+                [
+                    'role' => $u['role'] ?? null,
+                    'email' => $u['email'] ?? null,
+                ]
+            );
+
             header('Location: dashboard.php'); exit;
         }
     }

@@ -179,6 +179,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['change_password'])) {
                 $updateStmt = $pdo->prepare('UPDATE users SET password = ? WHERE id = ?');
                 $updateStmt->execute([$hashedNewPassword, $_SESSION['user_id']]);
                 $successMessage = 'Password changed successfully.';
+                recordSystemLog(
+                    $pdo,
+                    'password_updated',
+                    'Password updated via admin settings',
+                    (int) $_SESSION['user_id'],
+                    ['context' => 'settings']
+                );
                 // Clear form fields after success
                 $_POST = [];
             }
@@ -195,6 +202,7 @@ $userManagementUsers = [];
 
 if ($role === 'admin') {
     require __DIR__ . '/includes/user_management_data.php';
+    require __DIR__ . '/includes/system_logs_data.php';
 }
 ?>
 <!doctype html>
@@ -206,7 +214,10 @@ if ($role === 'admin') {
     <title>Settings</title>
     <link rel="stylesheet" href="../dgz_motorshop_system/assets/css/style.css">
     <link rel="stylesheet" href="../dgz_motorshop_system/assets/css/dashboard/dashboard.css">
+    <?php if ($role === 'admin'): ?>
     <link rel="stylesheet" href="../dgz_motorshop_system/assets/css/users/userManagement.css">
+    <link rel="stylesheet" href="../dgz_motorshop_system/assets/css/users/systemLogs.css">
+    <?php endif; ?>
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
@@ -348,6 +359,18 @@ if ($role === 'admin') {
                     ?>
                 </div>
             </section>
+            <section class="settings-section card">
+                <button type="button" class="settings-toggle" data-target="systemLogsPanel" data-default-state="closed" aria-expanded="false">
+                    <span class="label">
+                        <i class="fas fa-clipboard-list"></i>
+                        System Logs
+                    </span>
+                    <i class="fas fa-chevron-down toggle-icon" aria-hidden="true"></i>
+                </button>
+                <div class="settings-panel" id="systemLogsPanel">
+                    <?php include __DIR__ . '/partials/system_logs_section.php'; ?>
+                </div>
+            </section>
             <?php endif; ?>
         </div>
     </main>
@@ -355,6 +378,7 @@ if ($role === 'admin') {
     <script src="../dgz_motorshop_system/assets/js/dashboard/userMenu.js"></script>
     <?php if ($role === 'admin'): ?>
     <script src="../dgz_motorshop_system/assets/js/users/userManagement.js"></script>
+    <script src="../dgz_motorshop_system/assets/js/users/systemLogs.js"></script>
     <?php endif; ?>
     <script src="../dgz_motorshop_system/assets/js/notifications.js"></script>
     <script>

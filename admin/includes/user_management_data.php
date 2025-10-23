@@ -56,6 +56,18 @@ if ($role === 'admin') {
                     $contact !== '' ? $contact : null,
                     $newRole
                 ]);
+                $newUserId = (int) $pdo->lastInsertId();
+                recordSystemLog(
+                    $pdo,
+                    'user_created',
+                    sprintf('Created %s account for %s', $newRole, $name),
+                    (int) ($_SESSION['user_id'] ?? 0),
+                    [
+                        'target_user_id' => $newUserId,
+                        'target_role' => $newRole,
+                        'target_email' => $email,
+                    ]
+                );
                 $userManagementSuccess = 'New user account created successfully.';
             } catch (Exception $e) {
                 $userManagementError = 'Failed to add user: ' . $e->getMessage();
@@ -77,7 +89,7 @@ if ($role === 'admin') {
             try {
                 $pdo->beginTransaction();
 
-                $stmt = $pdo->prepare('SELECT role, deleted_at FROM users WHERE id = ? FOR UPDATE');
+                $stmt = $pdo->prepare('SELECT role, deleted_at, name, email FROM users WHERE id = ? FOR UPDATE');
                 $stmt->execute([$userId]);
                 $userToToggle = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -95,10 +107,10 @@ if ($role === 'admin') {
                     $userManagementError = 'The staff account is already active.';
                 } else {
                     if ($action === 'deactivate') {
-                        $toggleStmt = $pdo->prepare('UPDATE users SET deleted_at = NOW() WHERE id = ?');
+                        $toggleStmt = $pdo->prepare('UPDATE users SET deleted_at = NOW(), current_session_token = NULL WHERE id = ?');
                         $toggleStmt->execute([$userId]);
                     } else {
-                        $toggleStmt = $pdo->prepare('UPDATE users SET deleted_at = NULL WHERE id = ?');
+                        $toggleStmt = $pdo->prepare('UPDATE users SET deleted_at = NULL, current_session_token = NULL WHERE id = ?');
                         $toggleStmt->execute([$userId]);
                     }
                     $pdo->commit();
@@ -106,6 +118,23 @@ if ($role === 'admin') {
                     $userManagementSuccess = ($action === 'deactivate')
                         ? 'Staff account deactivated successfully.'
                         : 'Staff account reactivated successfully.';
+                    $event = $action === 'deactivate' ? 'staff_deactivated' : 'staff_reactivated';
+                    $message = $action === 'deactivate'
+                        ? 'Staff account deactivated'
+                        : 'Staff account reactivated';
+
+                    recordSystemLog(
+                        $pdo,
+                        $event,
+                        $message,
+                        (int) ($_SESSION['user_id'] ?? 0),
+                        [
+                            'target_user_id' => $userId,
+                            'target_email' => $userToToggle['email'] ?? null,
+                            'target_name' => $userToToggle['name'] ?? null,
+                            'target_status' => $action === 'deactivate' ? 'inactive' : 'active',
+                        ]
+                    );
                 }
             } catch (Exception $e) {
                 if ($pdo->inTransaction()) {

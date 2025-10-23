@@ -1133,6 +1133,92 @@ if (!function_exists('logoutUser')) {
     }
 }
 
+if (!function_exists('ensureSystemLogsTable')) {
+    function ensureSystemLogsTable(PDO $pdo): void
+    {
+        static $ensured = false;
+
+        if ($ensured) {
+            return;
+        }
+
+        $createSql = <<<SQL
+CREATE TABLE IF NOT EXISTS system_logs (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    event VARCHAR(100) NOT NULL,
+    description TEXT NULL,
+    user_id INT NULL,
+    ip_address VARCHAR(45) NULL,
+    metadata TEXT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_system_logs_event (event),
+    KEY idx_system_logs_created_at (created_at),
+    KEY idx_system_logs_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL;
+
+        try {
+            $pdo->exec($createSql);
+            $ensured = true;
+        } catch (Throwable $e) {
+            $ensured = false;
+            error_log('Unable to ensure system_logs table: ' . $e->getMessage());
+        }
+    }
+}
+
+if (!function_exists('recordSystemLog')) {
+    function recordSystemLog(?PDO $pdo, string $event, string $description = '', ?int $userId = null, array $metadata = []): void
+    {
+        $event = trim($event);
+
+        if ($event === '') {
+            return;
+        }
+
+        if (!$pdo instanceof PDO) {
+            try {
+                $pdo = db();
+            } catch (Throwable $e) {
+                error_log('Unable to acquire database connection for logging: ' . $e->getMessage());
+                return;
+            }
+        }
+
+        ensureSystemLogsTable($pdo);
+
+        $description = trim($description);
+        $ipAddress = isset($_SERVER['REMOTE_ADDR']) ? trim((string) $_SERVER['REMOTE_ADDR']) : null;
+        $metadataJson = null;
+
+        if (!empty($metadata)) {
+            try {
+                $encoded = json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                if ($encoded !== false) {
+                    $metadataJson = $encoded;
+                }
+            } catch (Throwable $e) {
+                error_log('Unable to encode system log metadata: ' . $e->getMessage());
+            }
+        }
+
+        try {
+            $stmt = $pdo->prepare(
+                'INSERT INTO system_logs (event, description, user_id, ip_address, metadata, created_at) VALUES (?, ?, ?, ?, ?, NOW())'
+            );
+            $stmt->execute([
+                $event,
+                $description !== '' ? $description : null,
+                $userId !== null ? (int) $userId : null,
+                $ipAddress !== null && $ipAddress !== '' ? $ipAddress : null,
+                $metadataJson,
+            ]);
+        } catch (Throwable $e) {
+            error_log('Unable to record system log: ' . $e->getMessage());
+        }
+    }
+}
+
 if (!function_exists('enforceSingleActiveSession')) {
     function enforceSingleActiveSession(): void
     {
@@ -1172,6 +1258,67 @@ if (!function_exists('enforceSingleActiveSession')) {
 }
 
 enforceSingleActiveSession();
+
+if (!function_exists('enforceActiveAccount')) {
+    function enforceActiveAccount(): void
+    {
+        if (empty($_SESSION['user_id']) || empty($_SESSION['role'])) {
+            return;
+        }
+
+        static $checked = false;
+
+        if ($checked) {
+            return;
+        }
+
+        $checked = true;
+
+        try {
+            $pdo = db();
+        } catch (Throwable $e) {
+            error_log('Unable to verify account activity status: ' . $e->getMessage());
+            return;
+        }
+
+        $userId = (int) $_SESSION['user_id'];
+
+        try {
+            $stmt = $pdo->prepare('SELECT deleted_at FROM users WHERE id = ? LIMIT 1');
+            $stmt->execute([$userId]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        } catch (Throwable $e) {
+            error_log('Unable to inspect user account status: ' . $e->getMessage());
+            return;
+        }
+
+        $isInactive = !$row || !empty($row['deleted_at']);
+
+        if (!$isInactive) {
+            return;
+        }
+
+        try {
+            $clearToken = $pdo->prepare('UPDATE users SET current_session_token = NULL WHERE id = ?');
+            $clearToken->execute([$userId]);
+        } catch (Throwable $e) {
+            error_log('Unable to clear session token for deactivated account: ' . $e->getMessage());
+        }
+
+        recordSystemLog($pdo, 'session_revoked', 'Session terminated for deactivated account', $userId);
+
+        $_SESSION = [];
+        $_SESSION['forced_logout'] = true;
+        $_SESSION['forced_logout_message'] = 'Your account has been deactivated. Please contact an administrator.';
+
+        session_regenerate_id(true);
+
+        header('Location: ' . adminUrl('login.php'));
+        exit;
+    }
+}
+
+enforceActiveAccount();
 
 if (!function_exists('staffAllowedAdminPages')) {
     function staffAllowedAdminPages(): array
