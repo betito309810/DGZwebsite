@@ -219,10 +219,12 @@ $profile_created = format_profile_date($current_user['created_at'] ?? null);
                     <div class="stat-value"><?= intval($t['c']) ?></div>
                     <div class="stat-label">Today's Orders</div>
                 </a>
+                <?php if ($role !== 'staff'): ?>
                 <a class="stat-card" href="sales.php">
                     <div class="stat-value">₱<?= number_format($t['s'], 2) ?></div>
                     <div class="stat-label">Today's Sales</div>
                 </a>
+                <?php endif; ?>
                
             </div>
 

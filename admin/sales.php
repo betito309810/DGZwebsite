@@ -722,6 +722,7 @@ $buildPageUrl = static function (int $page) use ($queryParams): string {
 
         <!-- Sales Widget -->
         <!-- Add this after the Export Button and before the Table Container -->
+        <?php if ($role !== 'staff'): ?>
         <div class="stat-overview">
             <div class="sales-widget">
                 <div class="widget-header">
@@ -797,9 +798,10 @@ $buildPageUrl = static function (int $page) use ($queryParams): string {
                 </div>
                 
                 <div class="chart-legend" id="chartLegend" aria-live="polite"></div>
-               
+
             </div>
         </div>
+        <?php endif; ?>
     </main>
 
     <!-- Transaction Details Modal (styled like POS order details) -->
