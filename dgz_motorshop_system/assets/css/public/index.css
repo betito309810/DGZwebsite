@@ -380,17 +380,28 @@ body.nav-open {
 }
 
 @media (min-width: 992px) {
-    .header-left,
+    .header-content {
+        display: grid;
+        grid-template-columns: auto minmax(360px, 520px) auto;
+        align-items: center;
+        gap: 24px;
+        justify-items: center;
+    }
+
+    .header-left {
+        justify-self: start;
+    }
+
     .header-actions {
-        flex: 0 0 auto;
+        justify-self: end;
     }
 
     .search-container {
-        position: absolute;
-        left: 50%;
-        transform: translateX(-50%);
-        width: min(520px, 100%);
-        z-index: 1;
+        position: static;
+        transform: none;
+        width: 100%;
+        max-width: 520px;
+        margin: 0 auto;
     }
 
     .catalog-header {
@@ -403,6 +414,7 @@ body.nav-open {
 
     .catalog-header__spacer {
         display: block;
+        justify-self: stretch;
     }
 
     .catalog-title {
@@ -415,6 +427,7 @@ body.nav-open {
         display: flex;
         grid-column: 3;
         justify-self: end;
+        width: auto;
     }
 }
 
