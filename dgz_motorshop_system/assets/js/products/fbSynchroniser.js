@@ -144,17 +144,55 @@
         if (CATEGORY_CODE_PREFIXES.has(key)) {
             return CATEGORY_CODE_PREFIXES.get(key);
         }
-        const cleaned = key.replace(/[^A-Z0-9]/g, '');
-        if (cleaned.length >= 3) {
-            return cleaned.slice(0, 3);
+
+        const cleaned = key.replace(/[^A-Z0-9]+/g, ' ').trim();
+        if (!cleaned) {
+            return 'PRD';
         }
-        if (cleaned.length === 2) {
-            return `${cleaned}X`;
+
+        const words = cleaned.split(/\s+/).filter(Boolean);
+        if (words.length === 0) {
+            return 'PRD';
         }
-        if (cleaned.length === 1) {
-            return `${cleaned}XX`;
+
+        const candidateChars = [];
+
+        words.forEach((word) => {
+            if (candidateChars.length < 3 && word.length > 0) {
+                candidateChars.push(word[0]);
+            }
+        });
+
+        let offset = 1;
+        while (candidateChars.length < 3) {
+            let addedThisRound = false;
+            words.forEach((word) => {
+                if (candidateChars.length >= 3) {
+                    return;
+                }
+                if (word.length > offset) {
+                    candidateChars.push(word[offset]);
+                    addedThisRound = true;
+                }
+            });
+            if (!addedThisRound) {
+                break;
+            }
+            offset += 1;
         }
-        return 'PRD';
+
+        if (candidateChars.length < 3) {
+            const joined = words.join('');
+            for (let i = 0; i < joined.length && candidateChars.length < 3; i += 1) {
+                candidateChars.push(joined[i]);
+            }
+        }
+
+        while (candidateChars.length < 3) {
+            candidateChars.push('X');
+        }
+
+        return candidateChars.slice(0, 3).join('');
     };
 
     const getNextCodeForPrefix = (prefix) => {
