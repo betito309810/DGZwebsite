@@ -76,7 +76,7 @@ body {
     flex: 0 1 520px;
     max-width: 520px;
     position: relative;
-    margin: 0;
+    margin: 0 auto;
     display: flex;
     align-items: center;
     width: 100%;
@@ -92,7 +92,7 @@ body {
 
 .search-bar {
     width: 100%;
-    padding: 10px 45px 10px 15px;
+    padding: 10px 15px 10px 45px;
     border: none;
     border-radius: 20px;
     font-size: 14px;
@@ -101,7 +101,7 @@ body {
 
 .search-btn {
     position: absolute;
-    right: 10px;
+    left: 12px;
     top: 50%;
     transform: translateY(-50%);
     background: none;
@@ -382,10 +382,9 @@ body.nav-open {
 @media (min-width: 992px) {
     .header-content {
         display: grid;
-        grid-template-columns: auto minmax(360px, 520px) auto;
+        grid-template-columns: 1fr minmax(360px, 520px) 1fr;
         align-items: center;
         gap: 24px;
-        justify-items: center;
     }
 
     .header-left {
@@ -401,7 +400,7 @@ body.nav-open {
         transform: none;
         width: 100%;
         max-width: 520px;
-        margin: 0 auto;
+        justify-self: center;
     }
 
     .catalog-header {
@@ -428,6 +427,7 @@ body.nav-open {
         grid-column: 3;
         justify-self: end;
         width: auto;
+        margin-left: auto;
     }
 }
 
