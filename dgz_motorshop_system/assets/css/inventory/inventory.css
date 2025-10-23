@@ -508,6 +508,14 @@ table tr:last-child td {
     letter-spacing: 0.04em;
 }
 
+#inventoryTable .manual-inventory-table .inventory-variant-view {
+    margin-top: 12px;
+}
+
+#inventoryTable .manual-inventory-table .inventory-variant-view .manual-adjust-select {
+    width: 100%;
+}
+
 #inventoryTable .manual-inventory-table .manual-adjust-input {
     width: 72px; /* 4-digit friendly */
     max-width: 100%;

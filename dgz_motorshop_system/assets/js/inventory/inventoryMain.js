@@ -1111,6 +1111,17 @@
                     contextDisplay.textContent = nextContext;
                     contextDisplay.setAttribute('title', nextContext);
                 }
+
+                const thresholdRaw = row.dataset.lowThreshold || '0';
+                const lowThreshold = parseQuantity(thresholdRaw) ?? 0;
+                const defaultLowState = row.dataset.lowDefault === '1';
+                let isLow = defaultLowState;
+
+                if (resolvedVariantId && resolvedVariantId > 0) {
+                    isLow = defaultLowState || nextQuantity <= lowThreshold;
+                }
+
+                row.classList.toggle('low-stock', Boolean(isLow));
             };
 
             manualVariantSelects.forEach((select) => {
