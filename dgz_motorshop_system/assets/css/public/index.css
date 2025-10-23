@@ -273,12 +273,28 @@ body.nav-open {
     padding: 16px 16px 0;
 }
 
+.catalog-header {
+    width: min(1200px, 100%);
+    margin: 10px auto 30px;
+    padding: 0 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    text-align: center;
+}
+
+.catalog-title {
+    font-size: 28px;
+    color: #2d3436;
+    font-weight: 700;
+    margin: 0;
+}
+
 .catalog-toolbar-desktop {
     display: none;
-    width: min(1200px, 100%);
-    margin: 0 auto 24px;
-    padding: 0 16px;
-    justify-content: flex-end;
+    width: 100%;
+    justify-content: center;
 }
 
 .catalog-sort {
@@ -350,8 +366,23 @@ body.nav-open {
 }
 
 @media (min-width: 992px) {
+    .catalog-header {
+        flex-direction: row;
+        align-items: center;
+        gap: 24px;
+        text-align: left;
+    }
+
+    .catalog-title {
+        flex: 1;
+        margin: 0;
+        text-align: center;
+    }
+
     .catalog-toolbar-desktop {
         display: flex;
+        width: auto;
+        justify-content: flex-end;
     }
 }
 

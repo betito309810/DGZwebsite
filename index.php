@@ -178,22 +178,23 @@ natcasesort($categories);
 
             <!-- All Products -->
             <div id="all-products">
-                <h2 id="productSectionTitle" style="margin: 10px 0 30px 0; font-size: 28px; color: #2d3436; text-align: center;">All Products
-                </h2>
-                <div class="catalog-toolbar-desktop" id="desktopCatalogToolbar" aria-label="Catalog sorting controls">
-                    <div class="catalog-sort">
-                        <label for="desktopSortSelect" class="catalog-sort__label">
-                            <i class="fas fa-arrow-down-wide-short" aria-hidden="true"></i>
-                            <span>Sort by</span>
-                        </label>
-                        <div class="catalog-sort__select-wrapper">
-                            <select id="desktopSortSelect" class="catalog-sort__select" aria-label="Sort products">
-                                <option value="recommended">Recommended</option>
-                                <option value="newest">Newest</option>
-                                <option value="price-asc">Price: Low to High</option>
-                                <option value="price-desc">Price: High to Low</option>
-                                <option value="name-asc">Name: A to Z</option>
-                            </select>
+                <div class="catalog-header">
+                    <h2 id="productSectionTitle" class="catalog-title">All Products</h2>
+                    <div class="catalog-toolbar-desktop" id="desktopCatalogToolbar" aria-label="Catalog sorting controls">
+                        <div class="catalog-sort">
+                            <label for="desktopSortSelect" class="catalog-sort__label">
+                                <i class="fas fa-arrow-down-wide-short" aria-hidden="true"></i>
+                                <span>Sort by</span>
+                            </label>
+                            <div class="catalog-sort__select-wrapper">
+                                <select id="desktopSortSelect" class="catalog-sort__select" aria-label="Sort products">
+                                    <option value="recommended">Recommended</option>
+                                    <option value="newest">Newest</option>
+                                    <option value="price-asc">Price: Low to High</option>
+                                    <option value="price-desc">Price: High to Low</option>
+                                    <option value="name-asc">Name: A to Z</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
                 </div>
