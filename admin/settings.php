@@ -183,8 +183,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['change_password'])) {
                     $pdo,
                     'password_updated',
                     'Password updated via admin settings',
-                    (int) $_SESSION['user_id'],
-                    ['context' => 'settings']
+                    (int) $_SESSION['user_id']
                 );
                 // Clear form fields after success
                 $_POST = [];

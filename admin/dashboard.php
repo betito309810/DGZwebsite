@@ -39,7 +39,7 @@ try {
         "SELECT COUNT(*) as c, COALESCE(SUM(total),0) as s
            FROM orders
           WHERE DATE(created_at)=CURDATE()
-            AND status IN ('approved','completed')"
+            AND status IN ('delivery','completed','complete')"
     );
     $today->execute();
     $t = $today->fetch();

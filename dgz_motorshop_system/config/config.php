@@ -1149,7 +1149,6 @@ CREATE TABLE IF NOT EXISTS system_logs (
     description TEXT NULL,
     user_id INT NULL,
     ip_address VARCHAR(45) NULL,
-    metadata TEXT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     KEY idx_system_logs_event (event),
     KEY idx_system_logs_created_at (created_at),
@@ -1159,6 +1158,16 @@ SQL;
 
         try {
             $pdo->exec($createSql);
+
+            try {
+                $columnStmt = $pdo->query("SHOW COLUMNS FROM system_logs LIKE 'metadata'");
+                if ($columnStmt && $columnStmt->fetch()) {
+                    $pdo->exec('ALTER TABLE system_logs DROP COLUMN metadata');
+                }
+            } catch (Throwable $e) {
+                error_log('Unable to drop legacy system_logs.metadata column: ' . $e->getMessage());
+            }
+
             $ensured = true;
         } catch (Throwable $e) {
             $ensured = false;
@@ -1168,7 +1177,7 @@ SQL;
 }
 
 if (!function_exists('recordSystemLog')) {
-    function recordSystemLog(?PDO $pdo, string $event, string $description = '', ?int $userId = null, array $metadata = []): void
+    function recordSystemLog(?PDO $pdo, string $event, string $description = '', ?int $userId = null): void
     {
         $event = trim($event);
 
@@ -1189,29 +1198,16 @@ if (!function_exists('recordSystemLog')) {
 
         $description = trim($description);
         $ipAddress = isset($_SERVER['REMOTE_ADDR']) ? trim((string) $_SERVER['REMOTE_ADDR']) : null;
-        $metadataJson = null;
-
-        if (!empty($metadata)) {
-            try {
-                $encoded = json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-                if ($encoded !== false) {
-                    $metadataJson = $encoded;
-                }
-            } catch (Throwable $e) {
-                error_log('Unable to encode system log metadata: ' . $e->getMessage());
-            }
-        }
 
         try {
             $stmt = $pdo->prepare(
-                'INSERT INTO system_logs (event, description, user_id, ip_address, metadata, created_at) VALUES (?, ?, ?, ?, ?, NOW())'
+                'INSERT INTO system_logs (event, description, user_id, ip_address, created_at) VALUES (?, ?, ?, ?, NOW())'
             );
             $stmt->execute([
                 $event,
                 $description !== '' ? $description : null,
                 $userId !== null ? (int) $userId : null,
                 $ipAddress !== null && $ipAddress !== '' ? $ipAddress : null,
-                $metadataJson,
             ]);
         } catch (Throwable $e) {
             error_log('Unable to record system log: ' . $e->getMessage());

@@ -84,7 +84,7 @@ function fetchSystemLogEntries(PDO $pdo, array $filters, int $limit = 100): arra
         $where[] = '(l.event LIKE :term OR l.description LIKE :term OR u.name LIKE :term OR u.email LIKE :term)';
     }
 
-    $sql = 'SELECT l.id, l.event, l.description, l.created_at, l.ip_address, l.user_id, l.metadata, '
+    $sql = 'SELECT l.id, l.event, l.description, l.created_at, l.ip_address, l.user_id, '
         . 'u.name AS user_name, u.email AS user_email, u.role AS user_role '
         . 'FROM system_logs l '
         . 'LEFT JOIN users u ON l.user_id = u.id';
@@ -126,15 +126,6 @@ function fetchSystemLogEntries(PDO $pdo, array $filters, int $limit = 100): arra
  */
 function systemLogsTransformRow(array $row): array
 {
-    $metadata = [];
-
-    if (!empty($row['metadata'])) {
-        $decoded = json_decode((string) $row['metadata'], true);
-        if (is_array($decoded)) {
-            $metadata = $decoded;
-        }
-    }
-
     return [
         'id' => isset($row['id']) ? (int) $row['id'] : 0,
         'event' => (string) ($row['event'] ?? ''),
@@ -148,8 +139,6 @@ function systemLogsTransformRow(array $row): array
         'user_email' => isset($row['user_email']) ? (string) $row['user_email'] : null,
         'user_role' => isset($row['user_role']) ? (string) $row['user_role'] : null,
         'user_display' => systemLogsUserDisplayName($row),
-        'metadata' => $metadata,
-        'metadata_summary' => systemLogsMetadataSummary($metadata),
     ];
 }
 
@@ -212,60 +201,6 @@ function systemLogsUserDisplayName(array $row): string
 }
 
 /**
- * Create a short summary string from metadata key/value pairs.
- */
-function systemLogsMetadataSummary(array $metadata): string
-{
-    if ($metadata === []) {
-        return '';
-    }
-
-    $pairs = [];
-
-    foreach ($metadata as $key => $value) {
-        if (!is_string($key) || $key === '') {
-            continue;
-        }
-
-        if (is_scalar($value) || $value === null) {
-            if (is_bool($value)) {
-                $value = $value ? 'true' : 'false';
-            } elseif ($value === null) {
-                $value = 'null';
-            }
-            $pairs[] = $key . '=' . (string) $value;
-            continue;
-        }
-
-        try {
-            $encoded = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            if ($encoded !== false) {
-                $pairs[] = $key . '=' . $encoded;
-            }
-        } catch (Throwable $e) {
-            $pairs[] = $key . '=…';
-        }
-    }
-
-    if ($pairs === []) {
-        return '';
-    }
-
-    $summary = implode(', ', $pairs);
-
-    $length = function_exists('mb_strlen') ? mb_strlen($summary) : strlen($summary);
-
-    if ($length > 180) {
-        $summary = function_exists('mb_substr')
-            ? mb_substr($summary, 0, 177)
-            : substr($summary, 0, 177);
-        $summary .= '…';
-    }
-
-    return $summary;
-}
-
-/**
  * Render table rows for the logs list.
  */
 function renderSystemLogRows(array $logs): string
@@ -280,10 +215,6 @@ function renderSystemLogRows(array $logs): string
         $description = $log['description'] !== ''
             ? htmlspecialchars($log['description'], ENT_QUOTES, 'UTF-8')
             : '—';
-
-        $metadata = $log['metadata_summary'] !== ''
-            ? '<div class="system-logs__metadata">' . htmlspecialchars($log['metadata_summary'], ENT_QUOTES, 'UTF-8') . '</div>'
-            : '';
 
         $actorName = htmlspecialchars($log['user_display'], ENT_QUOTES, 'UTF-8');
         $actorDetails = '';
@@ -309,7 +240,7 @@ function renderSystemLogRows(array $logs): string
         $html .= '<tr>'
             . '<td>' . (int) $log['id'] . '</td>'
             . '<td><span class="system-logs__event">' . htmlspecialchars($log['event_label'], ENT_QUOTES, 'UTF-8') . '</span></td>'
-            . '<td>' . $description . $metadata . '</td>'
+            . '<td>' . $description . '</td>'
             . '<td><div class="system-logs__actor"><span class="system-logs__actor-name">' . $actorName . '</span>'
             . $actorDetails . '</div></td>'
             . '<td>' . $ip . '</td>'

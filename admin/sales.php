@@ -55,40 +55,40 @@ function generateSalesReport(PDO $pdo, string $period): array
     switch ($period) {
         case 'daily':
             // Sales for today
-            $sql = "SELECT 
-                        COUNT(*) AS total_orders, 
-                        COALESCE(SUM(total), 0) AS total_sales 
-                    FROM orders 
+            $sql = "SELECT
+                        COUNT(*) AS total_orders,
+                        COALESCE(SUM(total), 0) AS total_sales
+                    FROM orders
                     WHERE DATE(created_at) = CURDATE()
-                    AND status IN ('approved','completed')";
+                    AND status IN ('delivery','completed','complete')";
             break;
         case 'weekly':
             // Sales for current week (Monday to Sunday)
-            $sql = "SELECT 
-                        COUNT(*) AS total_orders, 
-                        COALESCE(SUM(total), 0) AS total_sales 
-                    FROM orders 
+            $sql = "SELECT
+                        COUNT(*) AS total_orders,
+                        COALESCE(SUM(total), 0) AS total_sales
+                    FROM orders
                     WHERE YEARWEEK(created_at, 1) = YEARWEEK(CURDATE(), 1)
-                    AND status IN ('approved','completed')";
+                    AND status IN ('delivery','completed','complete')";
             break;
         case 'monthly':
             // Sales for current month
-            $sql = "SELECT 
-                        COUNT(*) AS total_orders, 
-                        COALESCE(SUM(total), 0) AS total_sales 
-                    FROM orders 
-                    WHERE YEAR(created_at) = YEAR(CURDATE()) 
+            $sql = "SELECT
+                        COUNT(*) AS total_orders,
+                        COALESCE(SUM(total), 0) AS total_sales
+                    FROM orders
+                    WHERE YEAR(created_at) = YEAR(CURDATE())
                     AND MONTH(created_at) = MONTH(CURDATE())
-                    AND status IN ('approved','completed')";
+                    AND status IN ('delivery','completed','complete')";
             break;
         case 'annually':
             // Sales for current year
-            $sql = "SELECT 
-                        COUNT(*) AS total_orders, 
-                        COALESCE(SUM(total), 0) AS total_sales 
-                    FROM orders 
+            $sql = "SELECT
+                        COUNT(*) AS total_orders,
+                        COALESCE(SUM(total), 0) AS total_sales
+                    FROM orders
                     WHERE YEAR(created_at) = YEAR(CURDATE())
-                    AND status IN ('approved','completed')";
+                    AND status IN ('delivery','completed','complete')";
             break;
         default:
             // Invalid period, return zeros
@@ -238,7 +238,7 @@ $orderTypeFilterDetails = buildOrderTypeFilterCondition($orderTypeFilter, $hasOr
 
 // Handle CSV export FIRST - before any other queries
 if(isset($_GET['export']) && $_GET['export'] == 'csv') {
-    $exportConditions = ["o.status IN ('approved','completed')"];
+    $exportConditions = ["o.status IN ('approved','delivery','completed','complete','disapproved','cancelled_by_customer','cancelled_by_staff','cancelled','canceled')"];
     if ($orderTypeFilterDetails['clause'] !== '') {
         $exportConditions[] = $orderTypeFilterDetails['clause'];
     }
@@ -364,7 +364,7 @@ if ($current_page < 1) {
     $current_page = 1;
 }
 
-$baseConditions = ["o.status IN ('approved','completed','disapproved')"];
+$baseConditions = ["o.status IN ('approved','delivery','completed','complete','disapproved','cancelled_by_customer','cancelled_by_staff','cancelled','canceled')"];
 $sqlParams = [];
 
 if ($hasInvoiceSearch) {

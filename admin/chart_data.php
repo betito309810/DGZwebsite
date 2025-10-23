@@ -27,7 +27,7 @@ try {
         INNER JOIN products p ON p.id = oi.product_id
         WHERE o.created_at >= :start
           AND o.created_at < :end
-          AND o.status IN ('approved', 'completed')
+          AND o.status IN ('delivery', 'completed', 'complete')
         GROUP BY p.id, p.name
         ORDER BY total_qty DESC, p.name ASC
         LIMIT 10

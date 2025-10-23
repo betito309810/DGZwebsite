@@ -48,7 +48,7 @@ if (!in_array($customer_type, $valid_customer_types)) {
 $periodInfo = resolve_sales_period($period, $value);
 $period = $periodInfo['period'];
 
-$sql = "SELECT * FROM orders WHERE status IN ('approved','completed') AND created_at >= :start AND created_at < :end";
+$sql = "SELECT * FROM orders WHERE status IN ('delivery','completed','complete') AND created_at >= :start AND created_at < :end";
 $queryParams = [
     ':start' => $periodInfo['start'],
     ':end' => $periodInfo['end'],
@@ -84,7 +84,7 @@ $top_items_sql = "
     FROM order_items oi
     INNER JOIN orders o ON o.id = oi.order_id
     LEFT JOIN products p ON p.id = oi.product_id
-    WHERE o.status IN ('approved','completed')
+    WHERE o.status IN ('delivery','completed','complete')
     AND o.created_at >= :start AND o.created_at < :end
     $topItemsFilter
     GROUP BY item_name

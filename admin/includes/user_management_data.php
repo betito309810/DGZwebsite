@@ -57,16 +57,16 @@ if ($role === 'admin') {
                     $newRole
                 ]);
                 $newUserId = (int) $pdo->lastInsertId();
+                $creationMessage = sprintf('Created %s account for %s', $newRole, $name);
+                if ($email !== '') {
+                    $creationMessage .= ' (' . $email . ')';
+                }
+
                 recordSystemLog(
                     $pdo,
                     'user_created',
-                    sprintf('Created %s account for %s', $newRole, $name),
-                    (int) ($_SESSION['user_id'] ?? 0),
-                    [
-                        'target_user_id' => $newUserId,
-                        'target_role' => $newRole,
-                        'target_email' => $email,
-                    ]
+                    $creationMessage,
+                    (int) ($_SESSION['user_id'] ?? 0)
                 );
                 $userManagementSuccess = 'New user account created successfully.';
             } catch (Exception $e) {
@@ -123,17 +123,26 @@ if ($role === 'admin') {
                         ? 'Staff account deactivated'
                         : 'Staff account reactivated';
 
+                    $targetDetails = [];
+                    if (!empty($userToToggle['name'])) {
+                        $targetDetails[] = (string) $userToToggle['name'];
+                    }
+                    if (!empty($userToToggle['email'])) {
+                        $targetDetails[] = (string) $userToToggle['email'];
+                    }
+
+                    $messageParts = [$message];
+                    if ($targetDetails !== []) {
+                        $messageParts[] = implode(' · ', $targetDetails);
+                    }
+
+                    $finalMessage = implode(': ', $messageParts);
+
                     recordSystemLog(
                         $pdo,
                         $event,
-                        $message,
-                        (int) ($_SESSION['user_id'] ?? 0),
-                        [
-                            'target_user_id' => $userId,
-                            'target_email' => $userToToggle['email'] ?? null,
-                            'target_name' => $userToToggle['name'] ?? null,
-                            'target_status' => $action === 'deactivate' ? 'inactive' : 'active',
-                        ]
+                        $finalMessage,
+                        (int) ($_SESSION['user_id'] ?? 0)
                     );
                 }
             } catch (Exception $e) {

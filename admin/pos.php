@@ -598,7 +598,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                         ? (string) ($currentOrder['invoice_number'] ?? '')
                         : '';
                     $needsInvoice = $supportsInvoiceNumbers
-                        && in_array($newStatus, ['approved', 'delivery', 'completed'], true)
+                        && in_array($newStatus, ['delivery', 'completed'], true)
                         && $existingInvoice === '';
 
                     if ($needsInvoice) {
@@ -857,7 +857,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                         }
                     }
 
-                    if ($success && $newStatus === 'approved' && $supportsInvoiceNumbers) {
+                    if ($success && $supportsInvoiceNumbers && in_array($newStatus, ['delivery', 'completed'], true)) {
                         $invoiceStmt = $pdo->prepare('SELECT invoice_number FROM orders WHERE id = ?');
                         $invoiceStmt->execute([$orderId]);
                         $updatedInvoice = (string) ($invoiceStmt->fetchColumn() ?: '');

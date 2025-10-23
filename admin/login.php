@@ -82,15 +82,24 @@
                 $_SESSION['user_created_at'] = $u['date_created'];
             }
 
+            $logDetails = [];
+            if (!empty($u['role'])) {
+                $logDetails[] = ucfirst((string) $u['role']);
+            }
+            if (!empty($u['email'])) {
+                $logDetails[] = (string) $u['email'];
+            }
+
+            $logMessage = 'Admin portal authentication successful';
+            if ($logDetails !== []) {
+                $logMessage .= ' (' . implode(' · ', $logDetails) . ')';
+            }
+
             recordSystemLog(
                 $pdo,
                 'login_success',
-                'Admin portal authentication successful',
-                (int) $u['id'],
-                [
-                    'role' => $u['role'] ?? null,
-                    'email' => $u['email'] ?? null,
-                ]
+                $logMessage,
+                (int) $u['id']
             );
 
             header('Location: dashboard.php'); exit;

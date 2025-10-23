@@ -25,7 +25,7 @@ try {
         FROM orders
         WHERE created_at >= :start
           AND created_at < :end
-          AND status IN ('approved', 'completed')
+          AND status IN ('delivery', 'completed', 'complete')
     ";
 
     $stmt = $pdo->prepare($sql);
