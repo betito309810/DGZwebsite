@@ -15,6 +15,11 @@ if (is_file($productVariantHelpers)) {
     require_once $productVariantHelpers;
 }
 
+$productArchiveHelpers = __DIR__ . '/../includes/products_archive.php';
+if (is_file($productArchiveHelpers)) {
+    require_once $productArchiveHelpers;
+}
+
 // Resolve the project's public and system base paths so generated links work
 // regardless of where the project is deployed inside the web root. The
 // storefront PHP files live alongside this directory, so we compute both the

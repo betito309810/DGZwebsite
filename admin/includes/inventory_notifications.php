@@ -63,7 +63,8 @@ if (!function_exists('loadInventoryNotifications')) {
     {
         $lowStock = $pdo->query(
             "SELECT id, name, quantity, low_stock_threshold FROM products "
-            . "WHERE (is_archived = 0 OR is_archived IS NULL) AND quantity <= low_stock_threshold"
+            . "WHERE " . productsArchiveActiveCondition($pdo)
+            . " AND quantity <= low_stock_threshold"
         )->fetchAll(PDO::FETCH_ASSOC);
 
         $checkStmt = $pdo->prepare(
@@ -91,8 +92,11 @@ if (!function_exists('loadInventoryNotifications')) {
             }
         }
 
+        $archiveColumnExists = productsArchiveColumnExists($pdo);
+        $archiveSelect = $archiveColumnExists ? 'p.is_archived' : 'NULL AS is_archived';
         $activeRecords = $pdo->query(
-            "SELECT n.id, p.quantity, p.low_stock_threshold, p.is_archived FROM inventory_notifications n "
+            "SELECT n.id, p.quantity, p.low_stock_threshold, " . $archiveSelect
+            . " FROM inventory_notifications n "
             . "LEFT JOIN products p ON p.id = n.product_id WHERE n.status = 'active'"
         )->fetchAll(PDO::FETCH_ASSOC);
 

@@ -7,6 +7,7 @@ if (empty($_SESSION['user_id'])) {
 
 try {
 $pdo = db();
+$productsActiveClause = productsArchiveActiveCondition($pdo);
 } catch (Exception $e) {
     error_log("Database connection failed: " . $e->getMessage());
     die("Database connection error. Please try again later.");
@@ -49,7 +50,7 @@ try {
 
 // Low stock items for the widget
 try {
-    $low = $pdo->query('SELECT * FROM products WHERE (is_archived = 0 OR is_archived IS NULL) AND quantity <= low_stock_threshold')->fetchAll();
+    $low = $pdo->query('SELECT * FROM products WHERE ' . $productsActiveClause . ' AND quantity <= low_stock_threshold')->fetchAll();
 } catch (Exception $e) {
     error_log("Low stock query failed: " . $e->getMessage());
     $low = [];

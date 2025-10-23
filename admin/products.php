@@ -20,7 +20,7 @@ if (isset($_SESSION['products_success'])) {
     $productFormSuccess = (string) $_SESSION['products_success'];
     unset($_SESSION['products_success']);
 }
-ensureProductArchiveColumns($pdo);
+productsArchiveEnsureSchema($pdo);
 // Added: helper utilities that manage product image uploads in a single place.
 if (!function_exists('ensureProductImageDirectory')) {
     /**
@@ -192,71 +192,6 @@ if (!function_exists('persistGalleryUploads')) {
         foreach ($storedPaths as $path) {
             $sortOrder++;
             $insertStmt->execute([$productId, $path, $sortOrder]);
-        }
-    }
-}
-
-if (!function_exists('ensureProductArchiveColumns')) {
-    /**
-     * Ensure the products table exposes the archive flag used by the UI.
-     */
-    function ensureProductArchiveColumns(PDO $pdo): void
-    {
-        static $ensured = false;
-        if ($ensured) {
-            return;
-        }
-        $ensured = true;
-
-        $hasArchiveFlag = false;
-        try {
-            $columnStmt = $pdo->query("SHOW COLUMNS FROM products LIKE 'is_archived'");
-            $hasArchiveFlag = $columnStmt && $columnStmt->fetch(PDO::FETCH_ASSOC);
-        } catch (PDOException $columnLookupError) {
-            error_log('Unable to inspect products.is_archived column: ' . $columnLookupError->getMessage());
-        }
-
-        if (!$hasArchiveFlag) {
-            try {
-                $pdo->exec("ALTER TABLE products ADD COLUMN is_archived TINYINT(1) NOT NULL DEFAULT 0 AFTER quantity");
-            } catch (PDOException $addFlagError) {
-                error_log('Unable to add products.is_archived column: ' . $addFlagError->getMessage());
-            }
-        }
-
-        $hasArchivedAt = false;
-        try {
-            $archivedAtStmt = $pdo->query("SHOW COLUMNS FROM products LIKE 'archived_at'");
-            $hasArchivedAt = $archivedAtStmt && $archivedAtStmt->fetch(PDO::FETCH_ASSOC);
-        } catch (PDOException $archivedAtLookupError) {
-            error_log('Unable to inspect products.archived_at column: ' . $archivedAtLookupError->getMessage());
-        }
-
-        if (!$hasArchivedAt) {
-            try {
-                $pdo->exec("ALTER TABLE products ADD COLUMN archived_at DATETIME NULL DEFAULT NULL AFTER is_archived");
-            } catch (PDOException $addArchivedAtError) {
-                error_log('Unable to add products.archived_at column: ' . $addArchivedAtError->getMessage());
-            }
-        }
-
-        try {
-            $indexStmt = $pdo->query("SHOW INDEX FROM products WHERE Key_name = 'idx_products_archived'");
-            $hasIndex = $indexStmt && $indexStmt->fetch(PDO::FETCH_ASSOC);
-        } catch (PDOException $indexLookupError) {
-            error_log('Unable to inspect products archive index: ' . $indexLookupError->getMessage());
-            $hasIndex = false;
-        }
-
-        if (empty($hasIndex)) {
-            try {
-                $pdo->exec('CREATE INDEX idx_products_archived ON products (is_archived)');
-            } catch (PDOException $createIndexError) {
-                $errorInfo = $createIndexError->errorInfo ?? [];
-                if (($errorInfo[1] ?? null) !== 1061) {
-                    error_log('Unable to create products archive index: ' . $createIndexError->getMessage());
-                }
-            }
         }
     }
 }
@@ -1430,9 +1365,9 @@ if ($supplier_filter !== '') {
     $filter_params[':supplier_filter'] = $supplier_filter;
 }
 if ($status_filter === 'active') {
-    $where_sql .= ' AND (is_archived = 0 OR is_archived IS NULL)';
+    $where_sql .= ' AND ' . productsArchiveActiveCondition($pdo);
 } elseif ($status_filter === 'archived') {
-    $where_sql .= ' AND is_archived = 1';
+    $where_sql .= ' AND ' . productsArchiveOnlyCondition($pdo);
 }
 
 // First, get total count for pagination (using filter params)

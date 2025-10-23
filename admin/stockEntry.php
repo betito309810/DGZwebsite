@@ -6,6 +6,7 @@ if (empty($_SESSION['user_id'])) {
 }
 
 $pdo = db();
+$productsActiveClause = productsArchiveActiveCondition($pdo);
 $role = $_SESSION['role'] ?? '';
 enforceStaffAccess();
 $notificationManageLink = 'inventory.php';
@@ -1465,7 +1466,8 @@ function fetchProductCatalog(PDO $pdo, array $capabilities): array
         $selectParts[] = 'NULL AS supplier';
     }
 
-    $sql = 'SELECT ' . implode(', ', $selectParts) . ' FROM products WHERE is_archived = 0 OR is_archived IS NULL ORDER BY name';
+    $activeClause = productsArchiveActiveCondition($pdo);
+    $sql = 'SELECT ' . implode(', ', $selectParts) . ' FROM products WHERE ' . $activeClause . ' ORDER BY name';
 
     try {
         $stmt = $pdo->query($sql);
@@ -1491,7 +1493,7 @@ function fetchSuppliersList(PDO $pdo): array
 
     $productSuppliers = [];
     try {
-        $result = $pdo->query("SELECT DISTINCT supplier FROM products WHERE (is_archived = 0 OR is_archived IS NULL) AND supplier IS NOT NULL AND supplier != ''");
+        $result = $pdo->query('SELECT DISTINCT supplier FROM products WHERE ' . productsArchiveActiveCondition($pdo) . " AND supplier IS NOT NULL AND supplier != ''");
         $productSuppliers = $result->fetchAll(PDO::FETCH_COLUMN);
     } catch (Throwable $e) {
         // ignore missing column/table
@@ -2449,9 +2451,9 @@ function fetchStockInReport(PDO $pdo, array $filters, ?int $limit = 50, int $off
 /**
  * Build reusable WHERE clause pieces for inventory filters.
  */
-function buildInventoryWhereClause(array $filters, array &$params): string
+function buildInventoryWhereClause(PDO $pdo, array $filters, array &$params): string
 {
-    $clauses = ['(p.is_archived = 0 OR p.is_archived IS NULL)'];
+    $clauses = [productsArchiveActiveCondition($pdo, 'p')];
 
     if (!empty($filters['search'])) {
         $clauses[] = '(p.name LIKE :inv_search_name OR p.code LIKE :inv_search_code)';
@@ -2510,7 +2512,7 @@ function buildInventoryWhereClause(array $filters, array &$params): string
 function countCurrentInventoryRecords(PDO $pdo, array $filters): int
 {
     $params = [];
-    $whereClause = buildInventoryWhereClause($filters, $params);
+    $whereClause = buildInventoryWhereClause($pdo, $filters, $params);
     $sql = 'SELECT COUNT(*) FROM products p WHERE ' . $whereClause;
 
     $stmt = $pdo->prepare($sql);
@@ -2530,7 +2532,7 @@ function countCurrentInventoryRecords(PDO $pdo, array $filters): int
 function fetchCurrentInventorySnapshot(PDO $pdo, array $filters, int $limit, int $offset, string $sort): array
 {
     $params = [];
-    $whereClause = buildInventoryWhereClause($filters, $params);
+    $whereClause = buildInventoryWhereClause($pdo, $filters, $params);
 
     $orderClause = 'p.name ASC';
     if ($sort === 'name_desc') {

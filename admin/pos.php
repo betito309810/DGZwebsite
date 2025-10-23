@@ -110,6 +110,7 @@ if (empty($_SESSION['user_id'])) {
 }
 
 $pdo = db();
+$productsActiveClause = productsArchiveActiveCondition($pdo);
 if (!function_exists('ensureOrdersCustomerNoteColumn')) {
     /**
      * Added helper to upgrade the orders table so cashier notes can be saved from checkout.
@@ -885,7 +886,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pos_checkout'])) {
     $salesTotal = 0.0;
 
     $lineItemsInput = $_POST['line_items'] ?? [];
-    $productLookupStmt = $pdo->prepare('SELECT id, name, price, quantity FROM products WHERE id = ? AND (is_archived = 0 OR is_archived IS NULL)');
+    $productLookupStmt = $pdo->prepare('SELECT id, name, price, quantity FROM products WHERE id = ? AND ' . $productsActiveClause);
     $productVariantLookupStmt = $pdo->prepare(
         'SELECT id, product_id, label, price, quantity FROM product_variants WHERE id = ? AND product_id = ?'
     );
@@ -1211,12 +1212,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pos_checkout'])) {
     }
 }
 
-$productQuery = $pdo->query('SELECT id, name, price, quantity, brand, category FROM products WHERE is_archived = 0 OR is_archived IS NULL ORDER BY name');
+$productQuery = $pdo->query('SELECT id, name, price, quantity, brand, category FROM products WHERE ' . $productsActiveClause . ' ORDER BY name');
 $products = $productQuery->fetchAll();
 
 // Fetch unique brands and categories for filter dropdowns
-$brands = $pdo->query('SELECT DISTINCT brand FROM products WHERE (is_archived = 0 OR is_archived IS NULL) AND brand IS NOT NULL AND brand != "" ORDER BY brand')->fetchAll(PDO::FETCH_COLUMN);
-$categories = $pdo->query('SELECT DISTINCT category FROM products WHERE (is_archived = 0 OR is_archived IS NULL) AND category IS NOT NULL AND category != "" ORDER BY category')->fetchAll(PDO::FETCH_COLUMN);
+$brands = $pdo->query('SELECT DISTINCT brand FROM products WHERE ' . $productsActiveClause . ' AND brand IS NOT NULL AND brand != "" ORDER BY brand')->fetchAll(PDO::FETCH_COLUMN);
+$categories = $pdo->query('SELECT DISTINCT category FROM products WHERE ' . $productsActiveClause . ' AND category IS NOT NULL AND category != "" ORDER BY category')->fetchAll(PDO::FETCH_COLUMN);
 
 $productIds = array_column($products, 'id');
 $productVariantMap = !empty($productIds) ? fetchVariantsForProducts($pdo, $productIds) : [];

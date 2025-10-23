@@ -70,7 +70,8 @@ $profile_role = !empty($current_user['role']) ? ucfirst($current_user['role']) :
 $profile_created = format_profile_date($current_user['created_at'] ?? null);
 
 // Load products and their variants ahead of the restock workflow so validation can reference them.
-$allProducts = $pdo->query('SELECT * FROM products WHERE is_archived = 0 OR is_archived IS NULL ORDER BY created_at DESC')->fetchAll(PDO::FETCH_ASSOC);
+$productsActiveClause = productsArchiveActiveCondition($pdo);
+$allProducts = $pdo->query('SELECT * FROM products WHERE ' . $productsActiveClause . ' ORDER BY created_at DESC')->fetchAll(PDO::FETCH_ASSOC);
 $productVariantsMap = [];
 if (!empty($allProducts)) {
     $productIds = array_column($allProducts, 'id');
@@ -144,7 +145,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_restock_reques
     } else {
         if (!isset($error_message)) {
             try {
-                $productStmt = $pdo->prepare('SELECT category, brand, supplier FROM products WHERE id = ? AND (is_archived = 0 OR is_archived IS NULL)');
+                $productStmt = $pdo->prepare('SELECT category, brand, supplier FROM products WHERE id = ? AND ' . $productsActiveClause);
                 $productStmt->execute([$productId]);
                 $productMeta = $productStmt->fetch(PDO::FETCH_ASSOC);
                 if (!$productMeta) {
@@ -334,7 +335,7 @@ if ($canManualAdjust && isset($_POST['update_stock'])) {
         try {
             $pdo->beginTransaction();
 
-            $lookupStmt = $pdo->prepare('SELECT name, quantity FROM products WHERE id = ? AND (is_archived = 0 OR is_archived IS NULL) LIMIT 1');
+            $lookupStmt = $pdo->prepare('SELECT name, quantity FROM products WHERE id = ? AND ' . $productsActiveClause . ' LIMIT 1');
             $lookupStmt->execute([$id]);
             $productRow = $lookupStmt->fetch(PDO::FETCH_ASSOC);
 
@@ -529,9 +530,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_stock'])) {
 }
 
 // Lookups for restock request form selects
-$categoryOptions = $pdo->query('SELECT DISTINCT category FROM products WHERE (is_archived = 0 OR is_archived IS NULL) AND category IS NOT NULL AND category != "" ORDER BY category ASC')->fetchAll(PDO::FETCH_COLUMN);
-$brandOptions = $pdo->query('SELECT DISTINCT brand FROM products WHERE (is_archived = 0 OR is_archived IS NULL) AND brand IS NOT NULL AND brand != "" ORDER BY brand ASC')->fetchAll(PDO::FETCH_COLUMN);
-$supplierOptions = $pdo->query('SELECT DISTINCT supplier FROM products WHERE (is_archived = 0 OR is_archived IS NULL) AND supplier IS NOT NULL AND supplier != "" ORDER BY supplier ASC')->fetchAll(PDO::FETCH_COLUMN);
+$categoryOptions = $pdo->query('SELECT DISTINCT category FROM products WHERE ' . $productsActiveClause . ' AND category IS NOT NULL AND category != "" ORDER BY category ASC')->fetchAll(PDO::FETCH_COLUMN);
+$brandOptions = $pdo->query('SELECT DISTINCT brand FROM products WHERE ' . $productsActiveClause . ' AND brand IS NOT NULL AND brand != "" ORDER BY brand ASC')->fetchAll(PDO::FETCH_COLUMN);
+$supplierOptions = $pdo->query('SELECT DISTINCT supplier FROM products WHERE ' . $productsActiveClause . ' AND supplier IS NOT NULL AND supplier != "" ORDER BY supplier ASC')->fetchAll(PDO::FETCH_COLUMN);
 
 // Handle search/filter/pagination for the inventory listing
 $search = trim($_GET['search'] ?? '');
@@ -548,7 +549,7 @@ if (!in_array($direction, ['asc', 'desc'], true)) {
     $direction = 'asc';
 }
 
-$whereSql = 'WHERE (is_archived = 0 OR is_archived IS NULL)';
+$whereSql = 'WHERE ' . $productsActiveClause;
 $filterParams = [];
 
 if ($search !== '') {
