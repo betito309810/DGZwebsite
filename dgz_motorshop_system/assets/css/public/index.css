@@ -273,6 +273,88 @@ body.nav-open {
     padding: 16px 16px 0;
 }
 
+.catalog-toolbar-desktop {
+    display: none;
+    width: min(1200px, 100%);
+    margin: 0 auto 24px;
+    padding: 0 16px;
+    justify-content: flex-end;
+}
+
+.catalog-sort {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 18px;
+    border-radius: 999px;
+    border: 1px solid rgba(67, 214, 255, 0.3);
+    background: #ffffff;
+    box-shadow: 0 12px 24px rgba(33, 150, 243, 0.08);
+}
+
+.catalog-sort:focus-within {
+    border-color: #2196f3;
+    box-shadow: 0 12px 24px rgba(33, 150, 243, 0.18);
+}
+
+.catalog-sort__label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #0a3d62;
+}
+
+.catalog-sort__label i {
+    font-size: 16px;
+    color: #2196f3;
+}
+
+.catalog-sort__select-wrapper {
+    position: relative;
+    min-width: 170px;
+}
+
+.catalog-sort__select {
+    width: 100%;
+    border: none;
+    background: transparent;
+    font-weight: 600;
+    font-size: 14px;
+    color: #2196f3;
+    cursor: pointer;
+    padding: 6px 24px 6px 4px;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+}
+
+.catalog-sort__select:focus {
+    outline: none;
+}
+
+.catalog-sort__select-wrapper::after {
+    content: "\f078";
+    font-family: "Font Awesome 6 Free";
+    font-weight: 900;
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    color: #2196f3;
+    font-size: 12px;
+}
+
+@media (min-width: 992px) {
+    .catalog-toolbar-desktop {
+        display: flex;
+    }
+}
+
 .toolbar-btn {
     flex: 1 1 0;
     display: inline-flex;

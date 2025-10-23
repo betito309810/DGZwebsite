@@ -180,6 +180,23 @@ natcasesort($categories);
             <div id="all-products">
                 <h2 id="productSectionTitle" style="margin: 10px 0 30px 0; font-size: 28px; color: #2d3436; text-align: center;">All Products
                 </h2>
+                <div class="catalog-toolbar-desktop" id="desktopCatalogToolbar" aria-label="Catalog sorting controls">
+                    <div class="catalog-sort">
+                        <label for="desktopSortSelect" class="catalog-sort__label">
+                            <i class="fas fa-arrow-down-wide-short" aria-hidden="true"></i>
+                            <span>Sort by</span>
+                        </label>
+                        <div class="catalog-sort__select-wrapper">
+                            <select id="desktopSortSelect" class="catalog-sort__select" aria-label="Sort products">
+                                <option value="recommended">Recommended</option>
+                                <option value="newest">Newest</option>
+                                <option value="price-asc">Price: Low to High</option>
+                                <option value="price-desc">Price: High to Low</option>
+                                <option value="name-asc">Name: A to Z</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
                 <div class="products-grid">
                     <?php foreach($products as $p):
                         $category = isset($p['category']) ? $p['category'] : '';
@@ -223,6 +240,16 @@ natcasesort($categories);
                         $hasCustomImage = $rawImagePath !== '';
                         $normalizedImagePath = $hasCustomImage ? publicAsset($rawImagePath) : $productPlaceholder;
                     ?>
+                    <?php
+                        $createdAtRaw = $p['created_at'] ?? null;
+                        $createdTimestamp = 0;
+                        if (!empty($createdAtRaw)) {
+                            $createdParsed = strtotime((string) $createdAtRaw);
+                            if ($createdParsed !== false) {
+                                $createdTimestamp = (int) $createdParsed;
+                            }
+                        }
+                    ?>
                     <div class="product-card"
                         data-category="<?= htmlspecialchars($categorySlug) ?>"
                         data-brand="<?= htmlspecialchars(strtolower($brand)) ?>"
@@ -231,6 +258,7 @@ natcasesort($categories);
                         data-product-brand="<?= htmlspecialchars($brand) ?>"
                         data-product-category-label="<?= htmlspecialchars($category) ?>"
                         data-product-description="<?= htmlspecialchars($p['description'], ENT_QUOTES) ?>"
+                        data-product-created="<?= $createdTimestamp ?>"
                         data-product-price="<?= htmlspecialchars(number_format((float)$displayPrice, 2, '.', '')) ?>"
                         data-product-quantity="<?= $displayQuantity ?>"
                         data-product-variants="<?= $variantsJson ?>"
@@ -329,6 +357,7 @@ natcasesort($categories);
             </div>
             <div class="sort-sheet__options" role="radiogroup" aria-labelledby="sortSheetTitle">
                 <button type="button" class="sort-option is-active" data-sort="recommended" data-label="Recommended" data-short-label="Recommended" aria-pressed="true">Recommended</button>
+                <button type="button" class="sort-option" data-sort="newest" data-label="Newest" data-short-label="New" aria-pressed="false">Newest</button>
                 <button type="button" class="sort-option" data-sort="price-asc" data-label="Price: Low to High" data-short-label="Price ↑" aria-pressed="false">Price: Low to High</button>
                 <button type="button" class="sort-option" data-sort="price-desc" data-label="Price: High to Low" data-short-label="Price ↓" aria-pressed="false">Price: High to Low</button>
                 <button type="button" class="sort-option" data-sort="name-asc" data-label="Name: A to Z" data-short-label="Name A–Z" aria-pressed="false">Name: A to Z</button>

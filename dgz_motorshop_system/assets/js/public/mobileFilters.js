@@ -42,10 +42,11 @@
         const sortSheet = document.getElementById('sortSheet');
         const sortClose = document.getElementById('sortSheetClose');
         const sortOptions = sortSheet ? Array.from(sortSheet.querySelectorAll('.sort-option')) : [];
+        const desktopSortSelect = document.getElementById('desktopSortSelect');
         const productsGrid = document.querySelector('.products-grid');
         const categoryLinks = document.querySelectorAll('.category-link');
 
-        if (!filterToggle && !sortToggle) {
+        if (!filterToggle && !sortToggle && !desktopSortSelect) {
             return;
         }
 
@@ -166,7 +167,7 @@
         function applySort(mode, trigger) {
             if (!productsGrid || currentSort === mode) {
                 currentSort = mode;
-                updateSortButtonLabel(trigger);
+                updateSortButtonLabel(trigger, mode);
                 return;
             }
             const cards = Array.from(productsGrid.children);
@@ -178,6 +179,18 @@
             } else if (mode === 'price-desc') {
                 sorted = cards.sort(function (a, b) {
                     return parseFloat(b.dataset.productPrice || '0') - parseFloat(a.dataset.productPrice || '0');
+                });
+            } else if (mode === 'newest') {
+                sorted = cards.sort(function (a, b) {
+                    var createdB = parseInt(b.dataset.productCreated || '0', 10);
+                    var createdA = parseInt(a.dataset.productCreated || '0', 10);
+                    if (isNaN(createdB)) {
+                        createdB = 0;
+                    }
+                    if (isNaN(createdA)) {
+                        createdA = 0;
+                    }
+                    return createdB - createdA;
                 });
             } else if (mode === 'name-asc') {
                 sorted = cards.sort(function (a, b) {
@@ -192,23 +205,40 @@
             });
 
             currentSort = mode;
-            updateSortButtonLabel(trigger);
+            updateSortButtonLabel(trigger, mode);
             if (typeof window.applyFilters === 'function') {
                 window.applyFilters();
             }
         }
 
-        function updateSortButtonLabel(trigger) {
+        function updateSortButtonLabel(trigger, mode) {
+            const resolvedMode = mode || (trigger && trigger.dataset ? trigger.dataset.sort : currentSort);
+            let activeOption = null;
             sortOptions.forEach(function (option) {
-                const isActive = option === trigger || option.dataset.sort === currentSort;
+                const isActive = option.dataset.sort === resolvedMode;
                 option.classList.toggle('is-active', isActive);
                 option.setAttribute('aria-pressed', String(isActive));
+                if (isActive) {
+                    activeOption = option;
+                }
             });
-            if (sortValue && trigger) {
-                var label = trigger.dataset.shortLabel || trigger.dataset.label || trigger.textContent.trim();
-                sortValue.textContent = label;
-            } else if (sortValue && currentSort === 'recommended') {
-                sortValue.textContent = 'Recommended';
+            if (sortValue) {
+                if (activeOption) {
+                    var labelSource = activeOption;
+                    var label = labelSource.dataset.shortLabel || labelSource.dataset.label || labelSource.textContent.trim();
+                    sortValue.textContent = label;
+                } else if (resolvedMode === 'recommended') {
+                    sortValue.textContent = 'Recommended';
+                }
+            }
+            if (desktopSortSelect) {
+                const desktopOptions = Array.from(desktopSortSelect.options || []);
+                const hasMatch = desktopOptions.some(function (option) {
+                    return option.value === resolvedMode;
+                });
+                if (hasMatch && desktopSortSelect.value !== resolvedMode) {
+                    desktopSortSelect.value = resolvedMode;
+                }
             }
         }
 
@@ -217,7 +247,7 @@
                 return option.classList.contains('is-active');
             }) || sortOptions[0];
             if (initialOption) {
-                updateSortButtonLabel(initialOption);
+                updateSortButtonLabel(initialOption, currentSort);
             }
         }
 
@@ -275,6 +305,16 @@
                 closeSortSheet(sortToggle || option);
             });
         });
+
+        if (desktopSortSelect) {
+            desktopSortSelect.addEventListener('change', function (event) {
+                const selectedMode = event.target.value || 'recommended';
+                const matchingOption = sortOptions.find(function (option) {
+                    return option.dataset.sort === selectedMode;
+                }) || null;
+                applySort(selectedMode, matchingOption);
+            });
+        }
 
         categoryLinks.forEach(function (link) {
             link.addEventListener('click', function () {
