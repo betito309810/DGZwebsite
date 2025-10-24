@@ -206,7 +206,7 @@
 .taxonomy-modal__content {
     display: flex;
     flex-direction: column;
-    gap: 24px;
+    gap: 16px;
 }
 
 .taxonomy-modal__content h3 {
@@ -220,25 +220,25 @@
 
 .taxonomy-manager__grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 24px;
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+    gap: 12px;
 }
 
 .taxonomy-manager__section {
     background: #f9fafb;
     border: 1px solid #e5e7eb;
     border-radius: 18px;
-    padding: 20px;
+    padding: 12px;
     display: flex;
     flex-direction: column;
-    gap: 18px;
+    gap: 12px;
 }
 
 .taxonomy-manager__header {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    gap: 12px;
+    gap: 8px;
 }
 
 .taxonomy-manager__header h4 {
@@ -254,17 +254,17 @@
 .taxonomy-manager__add-form {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 8px;
     background: #fff;
     border: 1px solid #e5e7eb;
     border-radius: 14px;
-    padding: 16px;
+    padding: 10px;
 }
 
 .taxonomy-manager__add-label {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 4px;
     font-weight: 600;
     color: #1f2937;
 }
@@ -272,7 +272,7 @@
 .taxonomy-manager__add-label input {
     border-radius: 10px;
     border: 1px solid #d1d5db;
-    padding: 10px 12px;
+    padding: 8px 10px;
     font-size: 0.95rem;
 }
 
@@ -286,7 +286,7 @@
     background: #2563eb;
     color: #fff;
     font-weight: 600;
-    padding: 8px 16px;
+    padding: 6px 12px;
     cursor: pointer;
     transition: background 0.2s ease;
 }
@@ -300,7 +300,6 @@
     border: 1px solid #e5e7eb;
     border-radius: 14px;
     padding: 0;
-    overflow-x: auto; /* Allow horizontal scrolling so action buttons remain reachable on narrow viewports. */
 }
 
 .taxonomy-manager__tip {
@@ -318,13 +317,12 @@
 
 .taxonomy-manager__table {
     width: 100%;
-    min-width: 520px; /* Ensure the actions column has enough space before scrolling kicks in. */
     border-collapse: collapse;
 }
 
 .taxonomy-manager__table th,
 .taxonomy-manager__table td {
-    padding: 14px 16px;
+    padding: 10px 12px;
     text-align: left;
     border-bottom: 1px solid #e5e7eb;
     font-size: 0.95rem;
