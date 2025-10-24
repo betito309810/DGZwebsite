@@ -307,6 +307,12 @@
                     const meta = document.createElement('div');
                     meta.className = 'product-detail__variant-meta';
 
+                    const code = document.createElement('span');
+                    code.textContent = `Code: ${
+                        (variant?.variant_code && String(variant.variant_code).trim()) || '—'
+                    }`;
+                    meta.appendChild(code);
+
                     const sku = document.createElement('span');
                     sku.textContent = `SKU: ${
                         (variant?.sku && String(variant.sku).trim()) || '—'
@@ -322,6 +328,14 @@
                     const formattedQty = formatNumber(variant?.quantity);
                     qty.textContent = `Quantity: ${formattedQty ?? '—'}`;
                     meta.appendChild(qty);
+
+                    const threshold = document.createElement('span');
+                    const thresholdValue = variant?.low_stock_threshold ?? null;
+                    const formattedThreshold = thresholdValue !== null && thresholdValue !== ''
+                        ? formatNumber(thresholdValue)
+                        : null;
+                    threshold.textContent = `Low stock limit: ${formattedThreshold ?? '—'}`;
+                    meta.appendChild(threshold);
 
                     card.appendChild(meta);
                     list.appendChild(card);

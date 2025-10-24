@@ -1,14 +1,77 @@
 <?php
 // Added: helper utilities for loading, normalising, and summarising product variant data.
 
+if (!function_exists('ensureProductVariantSchema')) {
+    /**
+     * Ensure optional variant columns exist for legacy databases.
+     */
+    function ensureProductVariantSchema(PDO $pdo): void
+    {
+        static $checked = [];
+
+        $key = function_exists('spl_object_id')
+            ? (string) spl_object_id($pdo)
+            : spl_object_hash($pdo);
+
+        if (isset($checked[$key])) {
+            return;
+        }
+
+        $checked[$key] = true;
+
+        try {
+            $columnsStmt = $pdo->query('SHOW COLUMNS FROM product_variants');
+        } catch (PDOException $exception) {
+            error_log('Unable to inspect product_variants schema: ' . $exception->getMessage());
+            return;
+        }
+
+        if (!$columnsStmt) {
+            return;
+        }
+
+        $columns = [];
+        while ($column = $columnsStmt->fetch(PDO::FETCH_ASSOC)) {
+            $name = strtolower((string) ($column['Field'] ?? ''));
+            if ($name !== '') {
+                $columns[$name] = true;
+            }
+        }
+
+        if (!isset($columns['variant_code'])) {
+            try {
+                $pdo->exec('ALTER TABLE product_variants ADD COLUMN variant_code VARCHAR(100) DEFAULT NULL AFTER sku');
+            } catch (PDOException $exception) {
+                $errorInfo = $exception->errorInfo ?? [];
+                if (($errorInfo[1] ?? null) !== 1060) { // 1060 = duplicate column
+                    error_log('Unable to add product_variants.variant_code: ' . $exception->getMessage());
+                }
+            }
+        }
+
+        if (!isset($columns['low_stock_threshold'])) {
+            try {
+                $pdo->exec('ALTER TABLE product_variants ADD COLUMN low_stock_threshold INT DEFAULT NULL AFTER quantity');
+            } catch (PDOException $exception) {
+                $errorInfo = $exception->errorInfo ?? [];
+                if (($errorInfo[1] ?? null) !== 1060) {
+                    error_log('Unable to add product_variants.low_stock_threshold: ' . $exception->getMessage());
+                }
+            }
+        }
+    }
+}
+
 if (!function_exists('fetchProductVariants')) {
     /**
      * Load all variants for a given product ordered by sort priority and creation date.
      */
     function fetchProductVariants(PDO $pdo, int $productId): array
     {
+        ensureProductVariantSchema($pdo);
+
         $stmt = $pdo->prepare(
-            'SELECT id, product_id, label, sku, price, quantity, is_default, sort_order, created_at, updated_at
+            'SELECT id, product_id, label, sku, variant_code, price, quantity, low_stock_threshold, is_default, sort_order, created_at, updated_at
              FROM product_variants
              WHERE product_id = ?
              ORDER BY sort_order ASC, id ASC'
@@ -23,6 +86,19 @@ if (!function_exists('fetchProductVariants')) {
             $variant['quantity'] = (int) ($variant['quantity'] ?? 0);
             $variant['is_default'] = (int) ($variant['is_default'] ?? 0);
             $variant['sort_order'] = (int) ($variant['sort_order'] ?? 0);
+            $code = isset($variant['variant_code']) ? trim((string) $variant['variant_code']) : '';
+            $variant['variant_code'] = $code !== '' ? $code : null;
+
+            $threshold = $variant['low_stock_threshold'] ?? null;
+            if ($threshold !== null && $threshold !== '') {
+                $threshold = (int) $threshold;
+                if ($threshold <= 0) {
+                    $threshold = null;
+                }
+            } else {
+                $threshold = null;
+            }
+            $variant['low_stock_threshold'] = $threshold;
         }
         unset($variant);
 
@@ -41,9 +117,11 @@ if (!function_exists('fetchVariantsForProducts')) {
             return [];
         }
 
+        ensureProductVariantSchema($pdo);
+
         $placeholders = implode(',', array_fill(0, count($productIds), '?'));
         $stmt = $pdo->prepare(
-            "SELECT id, product_id, label, sku, price, quantity, is_default, sort_order, created_at, updated_at
+            "SELECT id, product_id, label, sku, variant_code, price, quantity, low_stock_threshold, is_default, sort_order, created_at, updated_at
              FROM product_variants
              WHERE product_id IN ($placeholders)
              ORDER BY product_id ASC, sort_order ASC, id ASC"
@@ -58,6 +136,19 @@ if (!function_exists('fetchVariantsForProducts')) {
             $row['quantity'] = (int) ($row['quantity'] ?? 0);
             $row['is_default'] = (int) ($row['is_default'] ?? 0);
             $row['sort_order'] = (int) ($row['sort_order'] ?? 0);
+            $code = isset($row['variant_code']) ? trim((string) $row['variant_code']) : '';
+            $row['variant_code'] = $code !== '' ? $code : null;
+
+            $threshold = $row['low_stock_threshold'] ?? null;
+            if ($threshold !== null && $threshold !== '') {
+                $threshold = (int) $threshold;
+                if ($threshold <= 0) {
+                    $threshold = null;
+                }
+            } else {
+                $threshold = null;
+            }
+            $row['low_stock_threshold'] = $threshold;
             $variantsByProduct[$productId][] = $row;
         }
 
@@ -147,12 +238,41 @@ if (!function_exists('normaliseVariantPayload')) {
             } elseif ($quantity > 9999) {
                 $quantity = 9999;
             }
+
+            $variantCode = trim((string) ($raw['variant_code'] ?? ''));
+            if ($variantCode !== '') {
+                if (function_exists('mb_substr')) {
+                    $variantCode = mb_substr($variantCode, 0, 100);
+                } else {
+                    $variantCode = substr($variantCode, 0, 100);
+                }
+            } else {
+                $variantCode = null;
+            }
+
+            $thresholdValue = $raw['low_stock_threshold'] ?? null;
+            $threshold = null;
+            if ($thresholdValue !== null && $thresholdValue !== '') {
+                $threshold = (int) $thresholdValue;
+                if ($threshold < 0) {
+                    $threshold = 0;
+                }
+                if ($threshold > 9999) {
+                    $threshold = 9999;
+                }
+                if ($threshold <= 0) {
+                    $threshold = null;
+                }
+            }
+
             $normalised[] = [
                 'id' => isset($raw['id']) ? (int) $raw['id'] : null,
                 'label' => $label,
                 'sku' => trim((string) ($raw['sku'] ?? '')) ?: null,
+                'variant_code' => $variantCode,
                 'price' => isset($raw['price']) ? max(0, (float) $raw['price']) : 0.0,
                 'quantity' => $quantity,
+                'low_stock_threshold' => $threshold,
                 'is_default' => !empty($raw['is_default']) ? 1 : 0,
                 'sort_order' => $sortOrder,
             ];

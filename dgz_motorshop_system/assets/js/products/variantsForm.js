@@ -45,6 +45,35 @@
         return clamped;
     };
 
+    const normaliseOptionalQuantityField = (field) => {
+        if (!field) {
+            return null;
+        }
+        const rawValue = typeof field.value === 'string' ? field.value : String(field.value ?? '');
+        const trimmed = rawValue.trim();
+        if (trimmed === '') {
+            field.value = '';
+            return null;
+        }
+        const digits = trimmed.replace(/\D+/g, '');
+        if (digits === '') {
+            field.value = '';
+            return null;
+        }
+        const limited = digits.slice(0, 4);
+        if (limited !== digits) {
+            field.value = limited;
+        }
+        const parsed = Number.parseInt(limited, 10);
+        const clamped = clampQuantityNumber(parsed);
+        if (!Number.isFinite(clamped) || clamped <= 0) {
+            field.value = '';
+            return null;
+        }
+        field.value = String(clamped);
+        return clamped;
+    };
+
     function initialiseVariantEditor(editor) {
         if (!editor) {
             return;
@@ -152,20 +181,26 @@
                 const idField = row.querySelector('[data-variant-id]');
                 const labelField = row.querySelector('[data-variant-label]');
                 const skuField = row.querySelector('[data-variant-sku]');
+                const codeField = row.querySelector('[data-variant-code]');
                 const priceField = row.querySelector('[data-variant-price]');
                 const qtyField = row.querySelector('[data-variant-quantity]');
+                const thresholdField = row.querySelector('[data-variant-threshold]');
                 const defaultRadio = row.querySelector('[data-variant-default]');
                 const label = labelField ? labelField.value.trim() : '';
                 if (label === '') {
                     return;
                 }
 
+                const variantCode = codeField && codeField.value.trim() !== '' ? codeField.value.trim() : null;
+                const lowStockThreshold = normaliseOptionalQuantityField(thresholdField);
                 data.push({
                     id: idField && idField.value ? parseInt(idField.value, 10) : null,
                     label,
                     sku: skuField && skuField.value.trim() !== '' ? skuField.value.trim() : null,
+                    variant_code: variantCode,
                     price: priceField ? parseFloat(priceField.value) || 0 : 0,
                     quantity: normaliseQuantityField(qtyField),
+                    low_stock_threshold: lowStockThreshold,
                     is_default: defaultRadio ? defaultRadio.checked : false,
                     sort_order: index + 1,
                 });
@@ -188,8 +223,10 @@
             const idField = row.querySelector('[data-variant-id]');
             const labelField = row.querySelector('[data-variant-label]');
             const skuField = row.querySelector('[data-variant-sku]');
+            const codeField = row.querySelector('[data-variant-code]');
             const priceField = row.querySelector('[data-variant-price]');
             const qtyField = row.querySelector('[data-variant-quantity]');
+            const thresholdField = row.querySelector('[data-variant-threshold]');
             const defaultRadio = row.querySelector('[data-variant-default]');
             const removeButton = row.querySelector('[data-variant-remove]');
 
@@ -202,6 +239,9 @@
             if (skuField) {
                 skuField.value = data.sku || '';
             }
+            if (codeField) {
+                codeField.value = data.variant_code || '';
+            }
             if (priceField) {
                 priceField.value = data.price !== undefined ? parseFloat(data.price).toFixed(2) : '';
             }
@@ -212,15 +252,31 @@
                     qtyField.value = '';
                 }
             }
+            if (thresholdField) {
+                if (data.low_stock_threshold !== undefined && data.low_stock_threshold !== null && data.low_stock_threshold !== '') {
+                    const thresholdValue = clampQuantityNumber(Number(data.low_stock_threshold));
+                    thresholdField.value = thresholdValue > 0 ? String(thresholdValue) : '';
+                } else {
+                    thresholdField.value = '';
+                }
+            }
             if (defaultRadio) {
                 defaultRadio.name = defaultRadioName;
                 defaultRadio.checked = Boolean(data.is_default);
             }
 
             const triggerUpdate = () => updateAggregates();
-            [labelField, skuField, priceField, qtyField].forEach((field) => {
+            [labelField, skuField, codeField, priceField, qtyField].forEach((field) => {
                 field?.addEventListener('input', triggerUpdate);
             });
+            if (thresholdField) {
+                const handleThresholdInput = () => {
+                    normaliseOptionalQuantityField(thresholdField);
+                    triggerUpdate();
+                };
+                thresholdField.addEventListener('input', handleThresholdInput);
+                thresholdField.addEventListener('blur', handleThresholdInput);
+            }
             defaultRadio?.addEventListener('change', triggerUpdate);
 
             if (removeButton) {
@@ -264,15 +320,17 @@
                 parsed = [];
             }
             if (!Array.isArray(parsed) || parsed.length === 0) {
-                addVariant({ label: '', price: 0, quantity: 0, is_default: true });
+                addVariant({ label: '', price: 0, quantity: 0, variant_code: '', low_stock_threshold: null, is_default: true });
             } else {
                 parsed.forEach((variant, index) => {
                     addVariant({
                         id: variant.id ?? null,
                         label: variant.label ?? '',
                         sku: variant.sku ?? '',
+                        variant_code: variant.variant_code ?? '',
                         price: variant.price ?? 0,
                         quantity: variant.quantity ?? 0,
+                        low_stock_threshold: variant.low_stock_threshold ?? null,
                         is_default: Boolean(variant.is_default),
                     });
                 });
@@ -283,7 +341,7 @@
 
         addButton?.addEventListener('click', (event) => {
             event.preventDefault();
-            addVariant({ label: '', price: 0, quantity: 0, is_default: rowsContainer.children.length === 0 });
+            addVariant({ label: '', price: 0, quantity: 0, variant_code: '', low_stock_threshold: null, is_default: rowsContainer.children.length === 0 });
         });
 
         hostForm?.addEventListener('submit', handleSubmit);

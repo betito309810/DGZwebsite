@@ -54,7 +54,22 @@ foreach ($inventoryNotifications as $note) {
                 <?php
                     $noteTitle = htmlspecialchars($note['title'] ?? '', ENT_QUOTES, 'UTF-8');
                     $noteMessage = htmlspecialchars($note['message'] ?? '', ENT_QUOTES, 'UTF-8');
-                    $noteProduct = htmlspecialchars($note['product_name'] ?? '', ENT_QUOTES, 'UTF-8');
+                    $rawProductName = trim((string) ($note['product_name'] ?? ''));
+                    $rawVariantLabel = trim((string) ($note['variant_label'] ?? ''));
+                    $rawVariantCode = trim((string) ($note['variant_code'] ?? ''));
+
+                    $noteProductDisplay = $rawProductName;
+                    if ($rawVariantLabel !== '') {
+                        $noteProductDisplay = $noteProductDisplay !== ''
+                            ? $noteProductDisplay . ' – ' . $rawVariantLabel
+                            : $rawVariantLabel;
+
+                        if ($rawVariantCode !== '') {
+                            $noteProductDisplay .= ' (' . $rawVariantCode . ')';
+                        }
+                    }
+
+                    $noteProduct = htmlspecialchars($noteProductDisplay, ENT_QUOTES, 'UTF-8');
                     $noteTime = htmlspecialchars($note['time_ago'] ?? '', ENT_QUOTES, 'UTF-8');
                     $noteStatus = htmlspecialchars($note['status'] ?? '', ENT_QUOTES, 'UTF-8');
                 ?>

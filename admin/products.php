@@ -549,15 +549,29 @@ if (!function_exists('syncProductVariants')) {
         $added = [];
         $updated = [];
 
-        $insertStmt = $pdo->prepare('INSERT INTO product_variants (product_id, label, sku, price, quantity, is_default, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)');
-        $updateStmt = $pdo->prepare('UPDATE product_variants SET label = ?, sku = ?, price = ?, quantity = ?, is_default = ?, sort_order = ? WHERE id = ? AND product_id = ?');
+        $insertStmt = $pdo->prepare('INSERT INTO product_variants (product_id, label, sku, variant_code, price, quantity, low_stock_threshold, is_default, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        $updateStmt = $pdo->prepare('UPDATE product_variants SET label = ?, sku = ?, variant_code = ?, price = ?, quantity = ?, low_stock_threshold = ?, is_default = ?, sort_order = ? WHERE id = ? AND product_id = ?');
 
         foreach ($variants as $variant) {
             $variantId = isset($variant['id']) && $variant['id'] ? (int) $variant['id'] : null;
             $label = $variant['label'];
             $sku = $variant['sku'] ?? null;
+            $variantCode = $variant['variant_code'] ?? null;
+            if ($variantCode !== null) {
+                $variantCode = trim((string) $variantCode);
+                if ($variantCode === '') {
+                    $variantCode = null;
+                }
+            }
             $price = (float) $variant['price'];
             $quantity = (int) $variant['quantity'];
+            $threshold = $variant['low_stock_threshold'] ?? null;
+            if ($threshold !== null) {
+                $threshold = (int) $threshold;
+                if ($threshold <= 0) {
+                    $threshold = null;
+                }
+            }
             $isDefault = !empty($variant['is_default']) ? 1 : 0;
             $sortOrder = (int) $variant['sort_order'];
 
@@ -566,14 +580,16 @@ if (!function_exists('syncProductVariants')) {
                 $needsUpdate = (
                     $label !== $original['label'] ||
                     $sku !== ($original['sku'] ?? null) ||
+                    $variantCode !== ($original['variant_code'] ?? null) ||
                     $price !== (float) $original['price'] ||
                     $quantity !== (int) $original['quantity'] ||
+                    $threshold !== ($original['low_stock_threshold'] ?? null) ||
                     $isDefault !== (int) $original['is_default'] ||
                     $sortOrder !== (int) $original['sort_order']
                 );
 
                 if ($needsUpdate) {
-                    $updateStmt->execute([$label, $sku, $price, $quantity, $isDefault, $sortOrder, $variantId, $productId]);
+                    $updateStmt->execute([$label, $sku, $variantCode, $price, $quantity, $threshold, $isDefault, $sortOrder, $variantId, $productId]);
                     $updated[] = [
                         'id' => $variantId,
                         'label' => $label,
@@ -581,8 +597,10 @@ if (!function_exists('syncProductVariants')) {
                         'after' => array_merge($original, [
                             'label' => $label,
                             'sku' => $sku,
+                            'variant_code' => $variantCode,
                             'price' => $price,
                             'quantity' => $quantity,
+                            'low_stock_threshold' => $threshold,
                             'is_default' => $isDefault,
                             'sort_order' => $sortOrder,
                         ]),
@@ -591,14 +609,16 @@ if (!function_exists('syncProductVariants')) {
 
                 $processedIds[] = $variantId;
             } else {
-                $insertStmt->execute([$productId, $label, $sku, $price, $quantity, $isDefault, $sortOrder]);
+                $insertStmt->execute([$productId, $label, $sku, $variantCode, $price, $quantity, $threshold, $isDefault, $sortOrder]);
                 $newId = (int) $pdo->lastInsertId();
                 $processedIds[] = $newId;
                 $added[] = [
                     'id' => $newId,
                     'label' => $label,
+                    'variant_code' => $variantCode,
                     'price' => $price,
                     'quantity' => $quantity,
+                    'low_stock_threshold' => $threshold,
                     'is_default' => $isDefault,
                 ];
             }
@@ -1063,6 +1083,26 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_product'])){
     $variantsPayloadJson = $_POST['variants_payload'] ?? '';
     $variantRecords = normaliseVariantPayload($variantsPayloadJson);
     if (!empty($variantRecords)) {
+        $seenVariantCodes = [];
+        foreach ($variantRecords as $record) {
+            $code = $record['variant_code'] ?? null;
+            if ($code === null || $code === '') {
+                continue;
+            }
+
+            $normalizedCode = function_exists('mb_strtolower')
+                ? mb_strtolower($code, 'UTF-8')
+                : strtolower($code);
+
+            if (isset($seenVariantCodes[$normalizedCode])) {
+                $_SESSION['products_error'] = sprintf('Variant code "%s" is already used by another variant for this product.', $code);
+                header('Location: products.php');
+                exit;
+            }
+
+            $seenVariantCodes[$normalizedCode] = true;
+        }
+
         atLeastOneVariantIsDefault($variantRecords);
         $variantSummary = summariseVariantStock($variantRecords);
         $qty = $clampQuantity($variantSummary['quantity'] ?? $qty);
@@ -1647,6 +1687,11 @@ $emptyTableMessage = $isArchivedView ? 'No archived products found.' : 'No produ
                                             </label>
                                         </div>
                                         <div class="variant-row__field">
+                                            <label>Variant Code (optional)
+                                                <input type="text" data-variant-code placeholder="Code shown in inventory">
+                                            </label>
+                                        </div>
+                                        <div class="variant-row__field">
                                             <label>Price
                                                 <input type="number" min="0" step="0.01" data-variant-price>
                                             </label>
@@ -1654,6 +1699,11 @@ $emptyTableMessage = $isArchivedView ? 'No archived products found.' : 'No produ
                                         <div class="variant-row__field">
                                             <label>Quantity
                                                 <input type="number" min="0" max="9999" maxlength="4" data-variant-quantity>
+                                            </label>
+                                        </div>
+                                        <div class="variant-row__field">
+                                            <label>Low Stock Threshold
+                                                <input type="number" min="0" max="9999" maxlength="4" data-variant-threshold placeholder="Leave blank to disable">
                                             </label>
                                         </div>
                                         <div class="variant-row__field variant-row__field--default">
@@ -2111,6 +2161,11 @@ $emptyTableMessage = $isArchivedView ? 'No archived products found.' : 'No produ
                                             </label>
                                         </div>
                                         <div class="variant-row__field">
+                                            <label>Variant Code (optional)
+                                                <input type="text" data-variant-code placeholder="Code shown in inventory">
+                                            </label>
+                                        </div>
+                                        <div class="variant-row__field">
                                             <label>Price
                                                 <input type="number" min="0" step="0.01" data-variant-price>
                                             </label>
@@ -2118,6 +2173,11 @@ $emptyTableMessage = $isArchivedView ? 'No archived products found.' : 'No produ
                                         <div class="variant-row__field">
                                             <label>Quantity
                                                 <input type="number" min="0" max="9999" maxlength="4" data-variant-quantity>
+                                            </label>
+                                        </div>
+                                        <div class="variant-row__field">
+                                            <label>Low Stock Threshold
+                                                <input type="number" min="0" max="9999" maxlength="4" data-variant-threshold placeholder="Leave blank to disable">
                                             </label>
                                         </div>
                                         <div class="variant-row__field variant-row__field--default">
