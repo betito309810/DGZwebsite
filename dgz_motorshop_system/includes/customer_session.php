@@ -99,6 +99,11 @@ if (!function_exists('getAuthenticatedCustomer')) {
                 'city', 'town', 'municipality',
                 'postal_code', 'postal', 'zip_code', 'zipcode', 'zip',
                 'facebook_account', 'facebook', 'fb_account',
+                'first_name', 'firstname', 'given_name',
+                'middle_name', 'middlename', 'middle',
+                'last_name', 'lastname', 'surname', 'family_name',
+                'email_verified_at', 'verified_at',
+                'verification_token', 'email_verification_token',
             ];
 
             $columnList = $baseColumns;
@@ -155,7 +160,45 @@ if (!function_exists('getAuthenticatedCustomer')) {
                 }
             }
 
-            $customer['first_name'] = extractCustomerFirstName($customer['full_name'] ?? '');
+            $firstNameAlias = customerFindColumn($pdo, ['first_name', 'firstname', 'given_name']);
+            if ($firstNameAlias !== null && isset($customer[$firstNameAlias])) {
+                $customer['first_name'] = trim((string) $customer[$firstNameAlias]);
+            }
+
+            $middleNameAlias = customerFindColumn($pdo, ['middle_name', 'middlename', 'middle']);
+            if ($middleNameAlias !== null && isset($customer[$middleNameAlias])) {
+                $customer['middle_name'] = trim((string) $customer[$middleNameAlias]);
+            }
+
+            $lastNameAlias = customerFindColumn($pdo, ['last_name', 'lastname', 'surname', 'family_name']);
+            if ($lastNameAlias !== null && isset($customer[$lastNameAlias])) {
+                $customer['last_name'] = trim((string) $customer[$lastNameAlias]);
+            }
+
+            $emailVerifiedAlias = customerFindColumn($pdo, ['email_verified_at', 'verified_at']);
+            if ($emailVerifiedAlias !== null && array_key_exists($emailVerifiedAlias, $customer)) {
+                $customer['email_verified_at'] = $customer[$emailVerifiedAlias];
+            }
+
+            $nameParts = [];
+            foreach (['first_name', 'middle_name', 'last_name'] as $nameKey) {
+                $part = trim((string) ($customer[$nameKey] ?? ''));
+                if ($part !== '') {
+                    $nameParts[] = $part;
+                }
+            }
+
+            if (!isset($customer['full_name']) || trim((string) $customer['full_name']) === '') {
+                $assembledName = trim(implode(' ', $nameParts));
+                if ($assembledName !== '') {
+                    $customer['full_name'] = $assembledName;
+                }
+            }
+
+            if (!isset($customer['first_name']) || $customer['first_name'] === '') {
+                $customer['first_name'] = extractCustomerFirstName($customer['full_name'] ?? '');
+            }
+
             $customer['address_completed'] = customerAddressCompleted($customer);
         }
 
@@ -381,6 +424,7 @@ if (!function_exists('customerSessionExport')) {
             'authenticated' => true,
             'firstName' => $customer['first_name'] ?? extractCustomerFirstName($customer['full_name'] ?? ''),
             'addressCompleted' => (bool) ($customer['address_completed'] ?? false),
+            'emailVerified' => isset($customer['email_verified_at']) && trim((string) $customer['email_verified_at']) !== '',
         ];
     }
 }

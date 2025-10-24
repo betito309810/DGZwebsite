@@ -172,9 +172,6 @@
     }
 
     if (authRequired === 'checkout' && sessionState !== 'authenticated') {
-        // Show modal immediately for guests
-        openAuthGate();
-
         const checkoutForm = document.querySelector('[data-auth-required="checkout"] .checkout-form form');
         if (checkoutForm) {
             checkoutForm.addEventListener('submit', (event) => {

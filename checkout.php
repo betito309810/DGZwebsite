@@ -153,6 +153,27 @@ $customerFullNameColumn = tableFindColumn($pdo, 'customers', ['full_name', 'name
 $customerUpdatedAtColumn = tableHasColumn($pdo, 'customers', 'updated_at') ? 'updated_at' : null;
 
 $storedFullName = trim((string) ($customerAccount['full_name'] ?? ''));
+$storedFirstName = trim((string) ($customerAccount['first_name'] ?? ''));
+$storedMiddleName = trim((string) ($customerAccount['middle_name'] ?? ''));
+$storedLastName = trim((string) ($customerAccount['last_name'] ?? ''));
+
+if ($storedFullName === '') {
+    $nameParts = [];
+    foreach ([
+        $storedFirstName,
+        $storedMiddleName,
+        $storedLastName,
+    ] as $part) {
+        $trimmedPart = trim($part);
+        if ($trimmedPart !== '') {
+            $nameParts[] = $trimmedPart;
+        }
+    }
+
+    if ($nameParts !== []) {
+        $storedFullName = implode(' ', $nameParts);
+    }
+}
 $storedEmail = trim((string) ($customerAccount['email'] ?? ''));
 if ($customerEmailColumn !== null) {
     $storedEmail = trim((string) ($customerAccount[$customerEmailColumn] ?? $storedEmail));

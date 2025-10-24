@@ -129,11 +129,29 @@
     text-align: left;
 }
 
+.customer-auth-alert--success {
+    background: rgba(16, 185, 129, 0.12);
+    color: #047857;
+}
+
+.customer-auth-alert--error {
+    background: rgba(239, 68, 68, 0.12);
+    color: #b91c1c;
+}
+
 .customer-auth-form {
     display: flex;
     flex-direction: column;
     gap: 1rem;
     text-align: left;
+}
+
+.customer-auth-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    width: 100%;
+    text-align: center;
 }
 
 .form-field label {

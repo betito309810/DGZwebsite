@@ -1,6 +1,7 @@
 <?php
 require __DIR__ . '/dgz_motorshop_system/config/config.php';
 require __DIR__ . '/dgz_motorshop_system/includes/customer_session.php';
+require __DIR__ . '/dgz_motorshop_system/includes/email.php';
 
 $customerSession = getAuthenticatedCustomer();
 if ($customerSession !== null) {
@@ -14,22 +15,32 @@ $customerScript = assetUrl('assets/js/public/customer.js');
 $logoAsset = assetUrl('assets/logo.png');
 
 $errors = [];
+$successMessage = '';
 $values = [
-    'full_name' => trim($_POST['full_name'] ?? ''),
+    'first_name' => trim($_POST['first_name'] ?? ''),
+    'middle_name' => trim($_POST['middle_name'] ?? ''),
+    'last_name' => trim($_POST['last_name'] ?? ''),
     'email' => trim($_POST['email'] ?? ''),
     'phone' => trim($_POST['phone'] ?? ''),
-    'facebook_account' => trim($_POST['facebook_account'] ?? ''),
     'address' => trim($_POST['address'] ?? ''),
     'postal_code' => trim($_POST['postal_code'] ?? ''),
     'city' => trim($_POST['city'] ?? ''),
 ];
 
+if (isset($_GET['success']) && $_GET['success'] === '1') {
+    $successMessage = 'Thank you for signing up! Please check your email for a verification link to activate your account.';
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $password = (string)($_POST['password'] ?? '');
     $confirmPassword = (string)($_POST['confirm_password'] ?? '');
 
-    if ($values['full_name'] === '') {
-        $errors['full_name'] = 'Please enter your full name.';
+    if ($values['first_name'] === '') {
+        $errors['first_name'] = 'Please enter your first name.';
+    }
+
+    if ($values['last_name'] === '') {
+        $errors['last_name'] = 'Please enter your last name.';
     }
 
     if ($values['email'] === '') {
@@ -47,10 +58,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $values['phone'] = $normalizedPhone;
         }
-    }
-
-    if ($values['facebook_account'] === '') {
-        $errors['facebook_account'] = 'Please share your Facebook account so we can contact you.';
     }
 
     if ($values['address'] === '') {
@@ -91,58 +98,119 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $addressColumn = customerFindColumn($pdo, ['address_line1', 'address', 'address1', 'street']);
                 $cityColumn = customerFindColumn($pdo, ['city', 'town', 'municipality']);
                 $postalColumn = customerFindColumn($pdo, ['postal_code', 'postal', 'zip_code', 'zipcode', 'zip']);
-                $facebookColumn = customerFindColumn($pdo, ['facebook_account', 'facebook', 'fb_account']);
+                $fullNameColumn = customerFindColumn($pdo, ['full_name', 'name']);
+                $firstNameColumn = customerFindColumn($pdo, ['first_name', 'firstname', 'given_name']);
+                $middleNameColumn = customerFindColumn($pdo, ['middle_name', 'middlename', 'middle']);
+                $lastNameColumn = customerFindColumn($pdo, ['last_name', 'lastname', 'surname', 'family_name']);
+                $verificationTokenColumn = customerFindColumn($pdo, ['verification_token', 'email_verification_token']);
+                $emailVerifiedColumn = customerFindColumn($pdo, ['email_verified_at', 'verified_at']);
 
-                $columns = ['full_name', 'email', 'phone', 'password_hash'];
-                $placeholders = ['?', '?', '?', '?'];
-                $insertValues = [
-                    $values['full_name'],
-                    $values['email'],
-                    $values['phone'],
-                    $passwordHash,
-                ];
+                $fullNameParts = [$values['first_name']];
+                if ($values['middle_name'] !== '') {
+                    $fullNameParts[] = $values['middle_name'];
+                }
+                $fullNameParts[] = $values['last_name'];
+                $resolvedFullName = trim(implode(' ', array_filter($fullNameParts, static function (string $part): bool {
+                    return trim($part) !== '';
+                })));
 
-                if ($facebookColumn !== null) {
-                    $columns[] = $facebookColumn;
+                $columns = [];
+                $placeholders = [];
+                $insertValues = [];
+
+                $emailColumn = customerFindColumn($pdo, ['email', 'email_address']);
+                $phoneColumn = customerFindColumn($pdo, ['phone', 'mobile', 'contact_number', 'contact']);
+                $passwordHashColumn = customerFindColumn($pdo, ['password_hash']);
+
+                if ($emailColumn === null || $phoneColumn === null || $passwordHashColumn === null) {
+                    throw new RuntimeException('Customer table is missing required columns.');
+                }
+
+                $pushColumn = static function (string $column, $value) use (&$columns, &$placeholders, &$insertValues): void {
+                    $columns[] = $column;
                     $placeholders[] = '?';
-                    $insertValues[] = $values['facebook_account'];
+                    $insertValues[] = $value;
+                };
+
+                $pushColumn($emailColumn, $values['email']);
+                $pushColumn($phoneColumn, $values['phone']);
+                $pushColumn($passwordHashColumn, $passwordHash);
+
+                if ($fullNameColumn !== null) {
+                    $pushColumn($fullNameColumn, $resolvedFullName);
+                }
+
+                if ($firstNameColumn !== null) {
+                    $pushColumn($firstNameColumn, $values['first_name']);
+                }
+
+                if ($middleNameColumn !== null) {
+                    $pushColumn($middleNameColumn, $values['middle_name'] !== '' ? $values['middle_name'] : null);
+                }
+
+                if ($lastNameColumn !== null) {
+                    $pushColumn($lastNameColumn, $values['last_name']);
                 }
 
                 if ($addressColumn !== null) {
-                    $columns[] = $addressColumn;
-                    $placeholders[] = '?';
-                    $insertValues[] = $values['address'];
+                    $pushColumn($addressColumn, $values['address']);
                 }
 
                 if ($postalColumn !== null) {
-                    $columns[] = $postalColumn;
-                    $placeholders[] = '?';
-                    $insertValues[] = $values['postal_code'];
+                    $pushColumn($postalColumn, $values['postal_code']);
                 }
 
                 if ($cityColumn !== null) {
-                    $columns[] = $cityColumn;
-                    $placeholders[] = '?';
-                    $insertValues[] = $values['city'];
+                    $pushColumn($cityColumn, $values['city']);
+                }
+
+                try {
+                    $verificationToken = bin2hex(random_bytes(32));
+                } catch (Throwable $tokenException) {
+                    $verificationToken = hash('sha256', uniqid('', true));
+                }
+                if ($verificationTokenColumn !== null) {
+                    $pushColumn($verificationTokenColumn, $verificationToken);
+                }
+
+                if ($emailVerifiedColumn !== null) {
+                    $pushColumn($emailVerifiedColumn, null);
+                }
+
+                $createdAtColumn = customerFindColumn($pdo, ['created_at']);
+                if ($createdAtColumn !== null) {
+                    $columns[] = $createdAtColumn;
+                    $placeholders[] = 'NOW()';
                 }
 
                 $quotedColumns = array_map(static function (string $column): string {
                     return '`' . $column . '`';
                 }, $columns);
 
-                $sql = 'INSERT INTO customers (' . implode(', ', $quotedColumns) . ', `created_at`) VALUES (' . implode(', ', $placeholders) . ', NOW())';
+                $sql = 'INSERT INTO customers (' . implode(', ', $quotedColumns) . ') VALUES (' . implode(', ', $placeholders) . ')';
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute($insertValues);
                 $customerId = (int) $pdo->lastInsertId();
                 customerPersistPasswordHash($pdo, $customerId, $passwordHash);
-                customerLogin($customerId);
 
-                $redirect = $_GET['redirect'] ?? orderingUrl('index.php');
-                if (!is_string($redirect) || $redirect === '') {
-                    $redirect = orderingUrl('index.php');
+                $verificationLink = absoluteUrl(orderingUrl('verify_account.php?token=' . urlencode($verificationToken)));
+                $emailSubject = 'Verify your DGZ Motorshop account';
+                $emailBody = '<p>Hi ' . htmlspecialchars($values['first_name']) . ',</p>'
+                    . '<p>Thanks for creating an account with DGZ Motorshop. Please confirm your email address to activate your account.</p>'
+                    . '<p><a href="' . htmlspecialchars($verificationLink) . '" style="display:inline-block;padding:12px 20px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;">Verify email address</a></p>'
+                    . '<p>If the button above does not work, copy and paste this link into your browser:<br>'
+                    . '<a href="' . htmlspecialchars($verificationLink) . '">' . htmlspecialchars($verificationLink) . '</a></p>'
+                    . '<p>If you did not create an account, you can ignore this email.</p>'
+                    . '<p>– DGZ Motorshop</p>';
+
+                if (!sendEmail($values['email'], $emailSubject, $emailBody)) {
+                    $pdo->prepare('DELETE FROM customers WHERE id = ?')->execute([$customerId]);
+                    $errors['general'] = 'We could not send the verification email. Please try again later.';
+                } else {
+                    $redirect = orderingUrl('register.php?success=1');
+                    header('Location: ' . $redirect);
+                    exit;
                 }
-                header('Location: ' . $redirect);
-                exit;
             }
         } catch (Throwable $exception) {
             error_log('Unable to register customer: ' . $exception->getMessage());
@@ -176,12 +244,28 @@ $redirectParam = isset($_GET['redirect']) ? (string) $_GET['redirect'] : '';
         <?php endif; ?>
         <form class="customer-auth-form" method="post" novalidate data-customer-form>
             <input type="hidden" name="redirect" value="<?= htmlspecialchars($redirectParam) ?>">
-            <div class="form-field<?= isset($errors['full_name']) ? ' has-error' : '' ?>">
-                <label for="full_name">Full name</label>
-                <input type="text" id="full_name" name="full_name" value="<?= htmlspecialchars($values['full_name']) ?>" required autocomplete="name">
-                <?php if (isset($errors['full_name'])): ?>
-                    <p class="field-error" role="alert"><?= htmlspecialchars($errors['full_name']) ?></p>
-                <?php endif; ?>
+            <?php if ($successMessage !== ''): ?>
+                <div class="customer-auth-alert customer-auth-alert--success" role="status"><?= htmlspecialchars($successMessage) ?></div>
+            <?php endif; ?>
+            <div class="form-split">
+                <div class="form-field<?= isset($errors['first_name']) ? ' has-error' : '' ?>">
+                    <label for="first_name">First name</label>
+                    <input type="text" id="first_name" name="first_name" value="<?= htmlspecialchars($values['first_name']) ?>" required autocomplete="given-name">
+                    <?php if (isset($errors['first_name'])): ?>
+                        <p class="field-error" role="alert"><?= htmlspecialchars($errors['first_name']) ?></p>
+                    <?php endif; ?>
+                </div>
+                <div class="form-field<?= isset($errors['last_name']) ? ' has-error' : '' ?>">
+                    <label for="last_name">Last name</label>
+                    <input type="text" id="last_name" name="last_name" value="<?= htmlspecialchars($values['last_name']) ?>" required autocomplete="family-name">
+                    <?php if (isset($errors['last_name'])): ?>
+                        <p class="field-error" role="alert"><?= htmlspecialchars($errors['last_name']) ?></p>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <div class="form-field">
+                <label for="middle_name">Middle name <span class="optional">(optional)</span></label>
+                <input type="text" id="middle_name" name="middle_name" value="<?= htmlspecialchars($values['middle_name']) ?>" autocomplete="additional-name">
             </div>
             <div class="form-split">
                 <div class="form-field<?= isset($errors['email']) ? ' has-error' : '' ?>">
@@ -198,13 +282,6 @@ $redirectParam = isset($_GET['redirect']) ? (string) $_GET['redirect'] : '';
                         <p class="field-error" role="alert"><?= htmlspecialchars($errors['phone']) ?></p>
                     <?php endif; ?>
                 </div>
-            </div>
-            <div class="form-field<?= isset($errors['facebook_account']) ? ' has-error' : '' ?>">
-                <label for="facebook_account">Facebook account <span class="required-indicator">*</span></label>
-                <input type="text" id="facebook_account" name="facebook_account" value="<?= htmlspecialchars($values['facebook_account']) ?>" autocomplete="off" required>
-                <?php if (isset($errors['facebook_account'])): ?>
-                    <p class="field-error" role="alert"><?= htmlspecialchars($errors['facebook_account']) ?></p>
-                <?php endif; ?>
             </div>
             <div class="form-field<?= isset($errors['address']) ? ' has-error' : '' ?>">
                 <label for="address">Address <span class="required-indicator">*</span></label>
