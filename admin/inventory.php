@@ -12,6 +12,7 @@ $allowedPriorities = ['low', 'medium', 'high'];
 $sortableColumns = [
     'name' => 'name',
     'quantity' => 'quantity',
+    'price' => 'price',
 ];
 $allowedSortKeys = array_keys($sortableColumns);
 
@@ -624,6 +625,21 @@ if ($currentSort === 'quantity') {
     $quantitySortIndicator = $currentDirection === 'asc' ? '▲' : '▼';
 } else {
     $quantitySortIndicator = '↕';
+}
+
+$priceSortDirection = ($currentSort === 'price' && $currentDirection === 'asc') ? 'desc' : 'asc';
+$priceSortParams = $_GET;
+unset($priceSortParams['page']);
+$priceSortParams['page'] = 1;
+$priceSortParams['sort'] = 'price';
+$priceSortParams['direction'] = $priceSortDirection;
+$priceSortQuery = http_build_query($priceSortParams);
+$priceSortUrl = 'inventory.php' . ($priceSortQuery ? '?' . $priceSortQuery : '');
+$priceSortIndicator = '';
+if ($currentSort === 'price') {
+    $priceSortIndicator = $currentDirection === 'asc' ? '▲' : '▼';
+} else {
+    $priceSortIndicator = '↕';
 }
 
 $manualAdjustReturnParams = [
@@ -1543,7 +1559,12 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                                     <span class="sort-indicator"><?= htmlspecialchars($quantitySortIndicator) ?></span>
                                 </a>
                             </th>
-                            <th scope="col">Price</th>
+                            <th scope="col">
+                                <a href="<?= htmlspecialchars($priceSortUrl) ?>" class="sort-link">
+                                    Price
+                                    <span class="sort-indicator"><?= htmlspecialchars($priceSortIndicator) ?></span>
+                                </a>
+                            </th>
                         </tr>
                     </thead>
                     <tbody>
