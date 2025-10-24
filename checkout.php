@@ -131,7 +131,6 @@ $customerCityColumn = tableFindColumn($pdo, 'customers', ['city', 'town', 'munic
 $customerPostalColumn = tableFindColumn($pdo, 'customers', ['postal_code', 'postal', 'zip_code', 'zipcode', 'zip']);
 $customerEmailColumn = tableFindColumn($pdo, 'customers', ['email', 'email_address']);
 $customerPhoneColumn = tableFindColumn($pdo, 'customers', ['phone', 'mobile', 'contact_number', 'contact']);
-$customerFacebookColumn = tableFindColumn($pdo, 'customers', ['facebook_account', 'facebook', 'fb_account']);
 $customerFullNameColumn = tableFindColumn($pdo, 'customers', ['full_name', 'name']);
 $customerUpdatedAtColumn = tableHasColumn($pdo, 'customers', 'updated_at') ? 'updated_at' : null;
 
@@ -165,10 +164,6 @@ $storedPhone = trim((string) ($customerAccount['phone'] ?? ''));
 if ($customerPhoneColumn !== null) {
     $storedPhone = trim((string) ($customerAccount[$customerPhoneColumn] ?? $storedPhone));
 }
-$storedFacebook = trim((string) ($customerAccount['facebook_account'] ?? ''));
-if ($customerFacebookColumn !== null) {
-    $storedFacebook = trim((string) ($customerAccount[$customerFacebookColumn] ?? $storedFacebook));
-}
 
 $storedAddress = '';
 if ($customerAddressColumn !== null) {
@@ -194,7 +189,7 @@ if ($storedPostal === '') {
     $storedPostal = trim((string) ($customerAccount['postal_code'] ?? ''));
 }
 
-$customerHasSavedContact = $storedEmail !== '' && $storedPhone !== '' && $storedFacebook !== '';
+$customerHasSavedContact = $storedEmail !== '' && $storedPhone !== '';
 $customerHasSavedAddress = $storedAddress !== '' && $storedCity !== '' && $storedPostal !== '';
 
 $defaultContactMode = ($customerHasSavedContact && !isset($_GET['edit_contact'])) ? 'summary' : 'edit';
@@ -214,7 +209,6 @@ $showAddressSummary = $customerHasSavedAddress && $addressMode === 'summary';
 $formValues = [
     'email' => trim((string) ($_POST['email'] ?? '')),
     'phone' => trim((string) ($_POST['phone'] ?? '')),
-    'facebook_account' => trim((string) ($_POST['facebook_account'] ?? '')),
     'customer_name' => trim((string) ($_POST['customer_name'] ?? '')),
     'address' => trim((string) ($_POST['address'] ?? '')),
     'postal_code' => trim((string) ($_POST['postal_code'] ?? '')),
@@ -229,9 +223,6 @@ if ($customerAccount) {
     if ($formValues['phone'] === '' && $storedPhone !== '') {
         $formValues['phone'] = $storedPhone;
     }
-    if ($formValues['facebook_account'] === '' && $storedFacebook !== '') {
-        $formValues['facebook_account'] = $storedFacebook;
-    }
     if ($formValues['customer_name'] === '' && $storedFullName !== '') {
         $formValues['customer_name'] = $storedFullName;
     }
@@ -239,7 +230,6 @@ if ($customerAccount) {
     if ($contactMode === 'summary' && $customerHasSavedContact) {
         $formValues['email'] = $storedEmail;
         $formValues['phone'] = $storedPhone;
-        $formValues['facebook_account'] = $storedFacebook;
     }
 
     if ($addressMode === 'summary' && $customerHasSavedAddress) {
@@ -670,7 +660,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $customer_name = $formValues['customer_name'];
     $email = $formValues['email'];
     $phone = $formValues['phone'];
-    $facebookAccount = $formValues['facebook_account'];
     $address = $formValues['address'];
     $postalCode = $formValues['postal_code'];
     $city = $formValues['city'];
@@ -682,7 +671,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($contactMode === 'summary' && $customerHasSavedContact) {
             $email = $storedEmail !== '' ? $storedEmail : $email;
             $phone = $storedPhone !== '' ? $storedPhone : $phone;
-            $facebookAccount = $storedFacebook !== '' ? $storedFacebook : $facebookAccount;
         }
 
         if ($addressMode === 'summary' && $customerHasSavedAddress) {
@@ -701,9 +689,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($storedPhone !== '' && $contactMode !== 'edit') {
             $phone = $storedPhone;
         }
-        if ($storedFacebook !== '' && $contactMode !== 'edit') {
-            $facebookAccount = $storedFacebook;
-        }
     }
 
     $formValues['customer_name'] = $customer_name;
@@ -713,22 +698,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $formValues['postal_code'] = $postalCode;
     $formValues['city'] = $city;
     $formValues['customer_note'] = $customerNote;
-    $formValues['facebook_account'] = $facebookAccount;
 
     // Validate required email
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $errors[] = 'A valid email address is required.';
     }
 
-    // Basic required checks for phone and facebook account
+    // Basic required checks for phone
     if ($phone === '') {
         $errors[] = 'Mobile number is required.';
     } elseif (mb_strlen(preg_replace('/\D+/', '', $phone)) > 12) {
         $errors[] = 'Mobile number must be at most 12 digits.';
-    }
-
-    if ($facebookAccount === '') {
-        $errors[] = 'Facebook account is required.';
     }
 
     // Basic server-side validation for required address parts
@@ -830,8 +810,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $appendColumn($trackingColumn, $trackingCodeForRedirect);
         }
 
-        $appendColumn(ordersFindColumn($pdo, ['facebook_account', 'facebook', 'fb_account']), $facebookAccount);
-
         $customerNoteColumn = ordersFindColumn($pdo, ['customer_note']);
         $legacyNotesColumn = ordersFindColumn($pdo, ['notes', 'note']);
         if ($customerNoteColumn !== null) {
@@ -877,10 +855,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($customerPhoneColumn !== null && $phone !== '' && $phone !== $storedPhone) {
                 $updates[] = '`' . $customerPhoneColumn . '` = ?';
                 $updateValues[] = $phone;
-            }
-            if ($customerFacebookColumn !== null && $facebookAccount !== '' && $facebookAccount !== $storedFacebook) {
-                $updates[] = '`' . $customerFacebookColumn . '` = ?';
-                $updateValues[] = $facebookAccount;
             }
 
             if ($shouldSyncAddress) {
@@ -1140,7 +1114,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                         Contact
                     </h2>
                     <?php if ($showContactSummary): ?>
-                        <div class="billing-summary contact-summary" data-contact-summary data-contact-email="<?= htmlspecialchars($storedEmail, ENT_QUOTES, 'UTF-8') ?>" data-contact-phone="<?= htmlspecialchars($storedPhone, ENT_QUOTES, 'UTF-8') ?>" data-contact-facebook="<?= htmlspecialchars($storedFacebook, ENT_QUOTES, 'UTF-8') ?>">
+                        <div class="billing-summary contact-summary" data-contact-summary data-contact-email="<?= htmlspecialchars($storedEmail, ENT_QUOTES, 'UTF-8') ?>" data-contact-phone="<?= htmlspecialchars($storedPhone, ENT_QUOTES, 'UTF-8') ?>">
                             <dl class="billing-summary__details">
                                 <div>
                                     <dt>Email</dt>
@@ -1149,10 +1123,6 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                                 <div>
                                     <dt>Mobile</dt>
                                     <dd><?= htmlspecialchars($storedPhone) ?></dd>
-                                </div>
-                                <div>
-                                    <dt>Facebook</dt>
-                                    <dd><?= htmlspecialchars($storedFacebook) ?></dd>
                                 </div>
                             </dl>
                             <button type="button" class="billing-summary__edit" data-contact-edit>
@@ -1169,10 +1139,6 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                         <div class="form-group">
                             <label>Mobile number <span class="required-indicator">*</span></label>
                             <input type="tel" name="phone" placeholder="Mobile No." inputmode="numeric" maxlength="12" value="<?= htmlspecialchars($formValues['phone']) ?>" <?= $showContactSummary ? '' : 'required' ?> data-contact-required>
-                        </div>
-                        <div class="form-group">
-                            <label>Facebook account <span class="required-indicator">*</span></label>
-                            <input type="text" name="facebook_account" placeholder="Facebook profile or link" value="<?= htmlspecialchars($formValues['facebook_account']) ?>" <?= $showContactSummary ? '' : 'required' ?> data-contact-required>
                         </div>
                         <?php if ($showContactSummary): ?>
                             <button type="button" class="billing-form__cancel contact-form__cancel" data-contact-cancel>Cancel</button>

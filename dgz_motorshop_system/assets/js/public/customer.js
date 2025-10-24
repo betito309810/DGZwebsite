@@ -198,15 +198,11 @@
             }
             const emailField = form.querySelector('input[name="email"]');
             const phoneField = form.querySelector('input[name="phone"]');
-            const facebookField = form.querySelector('input[name="facebook_account"]');
             if (emailField && summary.dataset.contactEmail !== undefined) {
                 emailField.value = summary.dataset.contactEmail;
             }
             if (phoneField && summary.dataset.contactPhone !== undefined) {
                 phoneField.value = summary.dataset.contactPhone;
-            }
-            if (facebookField && summary.dataset.contactFacebook !== undefined) {
-                facebookField.value = summary.dataset.contactFacebook;
             }
         };
 
