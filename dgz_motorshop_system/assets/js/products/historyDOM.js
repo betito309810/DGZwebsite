@@ -645,6 +645,41 @@
             });
 
             const taxonomyModal = document.getElementById('taxonomyModal');
+            const taxonomySwitcherButtons = taxonomyModal ? Array.from(taxonomyModal.querySelectorAll('[data-taxonomy-switch]')) : [];
+            const taxonomyPanels = taxonomyModal ? Array.from(taxonomyModal.querySelectorAll('[data-taxonomy-panel]')) : [];
+
+            const setActiveTaxonomy = (targetKey) => {
+                if (!taxonomyModal || taxonomySwitcherButtons.length === 0) {
+                    return;
+                }
+                const fallbackKey = taxonomySwitcherButtons[0]?.dataset.taxonomySwitch || '';
+                const resolvedKey = targetKey || fallbackKey;
+                if (!resolvedKey) {
+                    return;
+                }
+
+                taxonomySwitcherButtons.forEach((button) => {
+                    const isActive = (button.dataset.taxonomySwitch || '') === resolvedKey;
+                    button.classList.toggle('taxonomy-manager__switcher-button--active', isActive);
+                    button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+                });
+
+                taxonomyPanels.forEach((panel) => {
+                    const isActive = (panel.dataset.taxonomyPanel || '') === resolvedKey;
+                    panel.classList.toggle('taxonomy-manager__section--active', isActive);
+                });
+            };
+
+            taxonomySwitcherButtons.forEach((button) => {
+                button.addEventListener('click', () => {
+                    setActiveTaxonomy(button.dataset.taxonomySwitch || '');
+                });
+            });
+
+            if (taxonomySwitcherButtons.length > 0) {
+                const initiallyActive = taxonomySwitcherButtons.find((button) => button.classList.contains('taxonomy-manager__switcher-button--active'));
+                setActiveTaxonomy(initiallyActive?.dataset.taxonomySwitch || taxonomySwitcherButtons[0]?.dataset.taxonomySwitch || '');
+            }
 
             document.addEventListener('keydown', (event) => {
                 if (event.key === 'Escape') {
@@ -688,6 +723,10 @@
             document.getElementById('openTaxonomyModal')?.addEventListener('click', () => {
                 if (taxonomyModal) {
                     taxonomyModal.style.display = 'flex';
+                    if (taxonomySwitcherButtons.length > 0) {
+                        const activeButton = taxonomySwitcherButtons.find((button) => button.classList.contains('taxonomy-manager__switcher-button--active'));
+                        setActiveTaxonomy(activeButton?.dataset.taxonomySwitch || taxonomySwitcherButtons[0]?.dataset.taxonomySwitch || '');
+                    }
                 }
             });
 

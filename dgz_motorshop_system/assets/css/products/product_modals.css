@@ -206,7 +206,7 @@
 .taxonomy-modal__content {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 12px;
 }
 
 .taxonomy-modal__content h3 {
@@ -218,10 +218,38 @@
     font-size: 0.95rem;
 }
 
-.taxonomy-manager__grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
-    gap: 12px;
+
+.taxonomy-manager__switcher {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.taxonomy-manager__switcher-button {
+    flex: 1 1 0;
+    min-width: 0;
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
+    background: #f9fafb;
+    color: #1f2937;
+    font-weight: 600;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.taxonomy-manager__switcher-button:hover {
+    background: #e5e7eb;
+}
+
+.taxonomy-manager__switcher-button--active {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: #fff;
+}
+
+.taxonomy-manager__panels {
+    margin-top: 4px;
 }
 
 .taxonomy-manager__section {
@@ -229,9 +257,13 @@
     border: 1px solid #e5e7eb;
     border-radius: 18px;
     padding: 12px;
-    display: flex;
+    display: none;
     flex-direction: column;
     gap: 12px;
+}
+
+.taxonomy-manager__section--active {
+    display: flex;
 }
 
 .taxonomy-manager__header {

@@ -1706,10 +1706,23 @@ $emptyTableMessage = $isArchivedView ? 'No archived products found.' : 'No produ
                     <h3>Manage Catalog Lists</h3>
                     <p class="taxonomy-modal__intro">Archive brands, categories, or suppliers to hide them from the product forms without deleting existing records.</p>
                     <p class="taxonomy-manager__tip">Use the <strong>Archive</strong> or <strong>Restore</strong> action on each row to toggle availability.</p>
-                    <div class="taxonomy-manager__grid">
+                    <div class="taxonomy-manager__switcher" role="tablist" aria-label="Catalog lists">
+                        <?php $isFirstTaxonomy = true; ?>
+                        <?php foreach ($taxonomyLabels as $taxonomyKey => $taxonomyLabel): ?>
+                        <button type="button"
+                            class="taxonomy-manager__switcher-button<?= $isFirstTaxonomy ? ' taxonomy-manager__switcher-button--active' : '' ?>"
+                            data-taxonomy-switch="<?= htmlspecialchars($taxonomyKey) ?>"
+                            aria-pressed="<?= $isFirstTaxonomy ? 'true' : 'false' ?>">
+                            <?= htmlspecialchars($taxonomyLabel) ?>
+                        </button>
+                        <?php $isFirstTaxonomy = false; ?>
+                        <?php endforeach; ?>
+                    </div>
+                    <div class="taxonomy-manager__panels">
+                        <?php $isFirstTaxonomy = true; ?>
                         <?php foreach ($taxonomyLabels as $taxonomyKey => $taxonomyLabel): ?>
                         <?php $entries = $taxonomyManagementData[$taxonomyKey] ?? []; ?>
-                        <section class="taxonomy-manager__section">
+                        <section class="taxonomy-manager__section<?= $isFirstTaxonomy ? ' taxonomy-manager__section--active' : '' ?>" data-taxonomy-panel="<?= htmlspecialchars($taxonomyKey) ?>">
                             <header class="taxonomy-manager__header">
                                 <h4><?= htmlspecialchars($taxonomyLabel) ?> Options</h4>
                                 <span class="taxonomy-manager__count">Total: <?= count($entries) ?></span>
@@ -1778,6 +1791,7 @@ $emptyTableMessage = $isArchivedView ? 'No archived products found.' : 'No produ
                                 <?php endif; ?>
                             </div>
                         </section>
+                        <?php $isFirstTaxonomy = false; ?>
                         <?php endforeach; ?>
                     </div>
                 </div>
