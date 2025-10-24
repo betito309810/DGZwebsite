@@ -190,7 +190,7 @@ if ($storedPostal === '') {
     $storedPostal = trim((string) ($customerAccount['postal_code'] ?? ''));
 }
 
-$customerHasSavedContact = $storedEmail !== '' && $storedPhone !== '' && $storedFacebook !== '';
+$customerHasSavedContact = $storedFullName !== '' && $storedEmail !== '' && $storedPhone !== '' && $storedFacebook !== '';
 $customerHasSavedAddress = $storedAddress !== '' && $storedCity !== '' && $storedPostal !== '';
 
 $defaultContactMode = ($customerHasSavedContact && !isset($_GET['edit_contact'])) ? 'summary' : 'edit';
@@ -236,6 +236,7 @@ if ($customerAccount) {
         $formValues['email'] = $storedEmail;
         $formValues['phone'] = $storedPhone;
         $formValues['facebook_account'] = $storedFacebook;
+        $formValues['customer_name'] = $storedFullName;
     }
 
     if ($addressMode === 'summary' && $customerHasSavedAddress) {
@@ -711,7 +712,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $formValues['customer_note'] = $customerNote;
     $formValues['facebook_account'] = $facebookAccount;
 
-    $payment_method = $_POST['payment_method'] ?? '';
+    $payment_method = trim((string) ($_POST['payment_method'] ?? ''));
+    if ($payment_method === '') {
+        $payment_method = 'Pending';
+    }
     $referenceInput = trim($_POST['reference_number'] ?? '');
     $proof_path = null;
 
@@ -734,10 +738,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $referenceNumber = preg_replace('/[^A-Za-z0-9\- ]/', '', $referenceInput);
     $referenceNumber = strtoupper(substr($referenceNumber, 0, 50));
 
-    if ($payment_method === '') {
-        $errors[] = 'Please select a payment method.';
-    }
-
     // Basic server-side validation for required address parts
     if ($address === '') {
         $errors[] = 'Address is required.';
@@ -749,8 +749,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = 'City is required.';
     }
 
-    if (!empty($_FILES['proof']['tmp_name'])) {
-        if ($_FILES['proof']['error'] !== UPLOAD_ERR_OK) {
+    $proofUpload = $_FILES['proof'] ?? null;
+    if (!empty($proofUpload['tmp_name'] ?? '')) {
+        if (($proofUpload['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
             $errors[] = 'Unable to upload the proof of payment. Please try again.';
         } else {
             $allowed = [
@@ -761,7 +762,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ];
 
             $finfo = finfo_open(FILEINFO_MIME_TYPE);
-            $mime = $finfo ? finfo_file($finfo, $_FILES['proof']['tmp_name']) : null;
+            $mime = $finfo && $proofUpload ? finfo_file($finfo, $proofUpload['tmp_name']) : null;
             if ($finfo) {
                 finfo_close($finfo);
             }
@@ -799,9 +800,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $storedFileName = sprintf('%s.%s', $random, $allowed[$mime]);
                     $targetPath = $uploadDir . '/' . $storedFileName;
 
-                    $moved = move_uploaded_file($_FILES['proof']['tmp_name'], $targetPath);
+                    $moved = $proofUpload ? move_uploaded_file($proofUpload['tmp_name'], $targetPath) : false;
                     if (!$moved) {
-                        $fileContents = @file_get_contents($_FILES['proof']['tmp_name']);
+                        $fileContents = $proofUpload ? @file_get_contents($proofUpload['tmp_name']) : false;
                         if ($fileContents === false || @file_put_contents($targetPath, $fileContents) === false) {
                             $errors[] = 'Failed to save the uploaded proof of payment.';
                         } else {
@@ -1210,8 +1211,12 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                         Contact
                     </h2>
                     <?php if ($showContactSummary): ?>
-                        <div class="billing-summary contact-summary" data-contact-summary data-contact-email="<?= htmlspecialchars($storedEmail, ENT_QUOTES, 'UTF-8') ?>" data-contact-phone="<?= htmlspecialchars($storedPhone, ENT_QUOTES, 'UTF-8') ?>" data-contact-facebook="<?= htmlspecialchars($storedFacebook, ENT_QUOTES, 'UTF-8') ?>">
+                        <div class="billing-summary contact-summary" data-contact-summary data-contact-name="<?= htmlspecialchars($storedFullName, ENT_QUOTES, 'UTF-8') ?>" data-contact-email="<?= htmlspecialchars($storedEmail, ENT_QUOTES, 'UTF-8') ?>" data-contact-phone="<?= htmlspecialchars($storedPhone, ENT_QUOTES, 'UTF-8') ?>" data-contact-facebook="<?= htmlspecialchars($storedFacebook, ENT_QUOTES, 'UTF-8') ?>">
                             <dl class="billing-summary__details">
+                                <div>
+                                    <dt>Name</dt>
+                                    <dd><?= htmlspecialchars($storedFullName) ?></dd>
+                                </div>
                                 <div>
                                     <dt>Email</dt>
                                     <dd><?= htmlspecialchars($storedEmail) ?></dd>
@@ -1232,6 +1237,10 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                         </div>
                     <?php endif; ?>
                     <div class="billing-form contact-form<?= $showContactSummary ? ' is-hidden' : '' ?>" data-contact-form <?= $showContactSummary ? 'hidden' : '' ?>>
+                        <div class="form-group">
+                            <label>Full name <span class="required-indicator">*</span></label>
+                            <input type="text" name="customer_name" placeholder="Juan Dela Cruz" value="<?= htmlspecialchars($formValues['customer_name']) ?>" <?= $showContactSummary ? '' : 'required' ?> data-contact-required>
+                        </div>
                         <div class="form-group">
                             <label>Email <span class="required-indicator">*</span></label>
                             <input type="email" name="email" placeholder="you@example.com" value="<?= htmlspecialchars($formValues['email']) ?>" <?= $showContactSummary ? '' : 'required' ?> data-contact-required>
@@ -1260,10 +1269,6 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                         <div class="billing-summary" data-billing-summary>
                             <dl class="billing-summary__details">
                                 <div>
-                                    <dt>Name</dt>
-                                    <dd><?= htmlspecialchars($formValues['customer_name']) ?></dd>
-                                </div>
-                                <div>
                                     <dt>Address</dt>
                                     <dd><?= nl2br(htmlspecialchars($formValues['address'])) ?></dd>
                                 </div>
@@ -1286,10 +1291,6 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                         </div>
                     <?php endif; ?>
                     <div class="billing-form<?= $showAddressSummary ? ' is-hidden' : '' ?>" data-billing-form <?= $showAddressSummary ? 'hidden' : '' ?>>
-                        <div class="form-group">
-                            <label>Full name <span class="required-indicator">*</span></label>
-                            <input type="text" name="customer_name" value="<?= htmlspecialchars($formValues['customer_name']) ?>" <?= $showAddressSummary ? '' : 'required' ?> data-billing-required>
-                        </div>
                         <div class="form-group">
                             <label>Address <span class="required-indicator">*</span></label>
                             <textarea name="address" placeholder="Street address, apartment, suite, etc." <?= $showAddressSummary ? '' : 'required' ?> data-billing-required><?= htmlspecialchars($formValues['address']) ?></textarea>
@@ -1315,7 +1316,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                     </div>
                 </div>
 
-                <!-- Payment Section -->
+                <!-- Payment Section (temporarily hidden)
                 <div class="section">
                     <h2 class="section-title">
                         <i class="fas fa-credit-card"></i>
@@ -1371,6 +1372,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                         </label>
                     </div>
                 </div>
+                -->
 
                 <button type="submit" class="submit-btn">
                     <i class="fas fa-lock"></i>&nbsp; Submit Order
