@@ -1088,6 +1088,20 @@
 }
 
 /* Checkout specific adjustments */
+[data-auth-required="checkout"] .checkout-form {
+    position: relative;
+}
+
+.checkout-form--guest-disabled form {
+    pointer-events: none;
+    opacity: 0.55;
+    filter: grayscale(0.1);
+}
+
+.checkout-form--guest-disabled .checkout-login-alert {
+    opacity: 1;
+}
+
 .checkout-login-alert {
     background: rgba(37, 99, 235, 0.12);
     color: #1d4ed8;

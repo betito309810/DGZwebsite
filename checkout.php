@@ -104,21 +104,12 @@ if (!function_exists('orderItemsFindColumn')) {
 $pdo = db();
 $productsActiveClause = productsArchiveActiveCondition($pdo);
 $errors = [];
-$referenceInput = '';
 $supportsTrackingCodes = false;
 $trackingCodeForRedirect = null;
 $checkoutStylesheet = assetUrl('assets/css/public/checkout.css');
 $checkoutModalStylesheet = assetUrl('assets/css/public/checkoutModals.css');
 $logoAsset = assetUrl('assets/logo.png');
 $productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
-$qrAsset = assetUrl('assets/QR.png');
-$mayaQrAsset = assetUrl('assets/QR-maya.png'); // Maya QR asset (add the image at this path to enable the toggle)
-$selectedPaymentMethod = $_POST['payment_method'] ?? 'GCash';
-if (!in_array($selectedPaymentMethod, ['GCash', 'Maya'], true)) {
-    $selectedPaymentMethod = 'GCash';
-}
-$currentQrAsset = $selectedPaymentMethod === 'Maya' ? $mayaQrAsset : $qrAsset;
-$currentQrAlt = $selectedPaymentMethod === 'Maya' ? 'Maya payment QR code' : 'GCash payment QR code';
 $shopUrl = orderingUrl('index.php');
 $inventoryAvailabilityApi = orderingUrl('api/inventory-availability.php');
 
@@ -724,10 +715,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $formValues['customer_note'] = $customerNote;
     $formValues['facebook_account'] = $facebookAccount;
 
-    $payment_method = $_POST['payment_method'] ?? '';
-    $referenceInput = trim($_POST['reference_number'] ?? '');
-    $proof_path = null;
-
     // Validate required email
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $errors[] = 'A valid email address is required.';
@@ -744,13 +731,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = 'Facebook account is required.';
     }
 
-    $referenceNumber = preg_replace('/[^A-Za-z0-9\- ]/', '', $referenceInput);
-    $referenceNumber = strtoupper(substr($referenceNumber, 0, 50));
-
-    if ($payment_method === '') {
-        $errors[] = 'Please select a payment method.';
-    }
-
     // Basic server-side validation for required address parts
     if ($address === '') {
         $errors[] = 'Address is required.';
@@ -760,72 +740,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     if ($city === '') {
         $errors[] = 'City is required.';
-    }
-
-    if (!empty($_FILES['proof']['tmp_name'])) {
-        if ($_FILES['proof']['error'] !== UPLOAD_ERR_OK) {
-            $errors[] = 'Unable to upload the proof of payment. Please try again.';
-        } else {
-            $allowed = [
-                'image/jpeg' => 'jpg',
-                'image/png' => 'png',
-                'image/gif' => 'gif',
-                'image/webp' => 'webp',
-            ];
-
-            $finfo = finfo_open(FILEINFO_MIME_TYPE);
-            $mime = $finfo ? finfo_file($finfo, $_FILES['proof']['tmp_name']) : null;
-            if ($finfo) {
-                finfo_close($finfo);
-            }
-
-            if (!$mime || !isset($allowed[$mime])) {
-                $errors[] = 'Please upload a valid image (JPG, PNG, GIF, or WEBP).';
-            } else {
-                $uploadsRoot = __DIR__ . '/dgz_motorshop_system/uploads';
-                $uploadDir = $uploadsRoot . '/payment-proofs';
-                $publicUploadDir = 'dgz_motorshop_system/uploads/payment-proofs';
-
-                $setupOk = true;
-                if (!is_dir($uploadsRoot) && !mkdir($uploadsRoot, 0777, true) && !is_dir($uploadsRoot)) {
-                    $errors[] = 'Failed to prepare the uploads storage.';
-                    $setupOk = false;
-                }
-
-                if ($setupOk && !is_dir($uploadDir) && !mkdir($uploadDir, 0777, true) && !is_dir($uploadDir)) {
-                    $errors[] = 'Failed to prepare the uploads storage.';
-                    $setupOk = false;
-                }
-
-                if ($setupOk && !is_writable($uploadDir) && !chmod($uploadDir, 0777)) {
-                    $errors[] = 'Uploads folder is not writable.';
-                    $setupOk = false;
-                }
-
-                if ($setupOk) {
-                    try {
-                        $random = bin2hex(random_bytes(8));
-                    } catch (Exception $e) {
-                        $random = (string) time();
-                    }
-
-                    $storedFileName = sprintf('%s.%s', $random, $allowed[$mime]);
-                    $targetPath = $uploadDir . '/' . $storedFileName;
-
-                    $moved = move_uploaded_file($_FILES['proof']['tmp_name'], $targetPath);
-                    if (!$moved) {
-                        $fileContents = @file_get_contents($_FILES['proof']['tmp_name']);
-                        if ($fileContents === false || @file_put_contents($targetPath, $fileContents) === false) {
-                            $errors[] = 'Failed to save the uploaded proof of payment.';
-                        } else {
-                            $proof_path = $publicUploadDir . '/' . $storedFileName;
-                        }
-                    } else {
-                        $proof_path = $publicUploadDir . '/' . $storedFileName;
-                    }
-                }
-            }
-        }
     }
 
     // Calculate total from cart items
@@ -901,11 +815,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $appendColumn(ordersFindColumn($pdo, ['customer_name', 'name']), $customer_name);
         $appendColumn(ordersFindColumn($pdo, ['address', 'address_line1', 'address1', 'street']), $address);
         $appendColumn($orderTotalColumn, $total);
-        $appendColumn(ordersFindColumn($pdo, ['payment_method', 'payment', 'payment_option']), $payment_method);
-        if ($proof_path !== null && $proof_path !== '') {
-            $appendColumn(ordersFindColumn($pdo, ['payment_proof', 'proof_of_payment', 'payment_proof_path', 'proof']), $proof_path);
-        }
-
         $appendColumn(ordersFindColumn($pdo, ['email', 'email_address']), $email);
         $phoneColumn = ordersFindColumn($pdo, ['phone', 'mobile', 'contact_number']);
         $appendColumn($phoneColumn, $phone);
@@ -915,9 +824,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $appendColumn($legacyContactColumn, $email);
         }
 
-        if ($referenceNumber !== '') {
-            $appendColumn(ordersFindColumn($pdo, ['reference_no', 'reference_number', 'reference', 'ref_no']), $referenceNumber);
-        }
 
         $trackingColumn = ordersFindColumn($pdo, ['tracking_code']);
         if ($supportsTrackingCodes && $trackingCodeForRedirect !== null && $trackingColumn !== null) {
@@ -1169,7 +1075,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
     <link rel="stylesheet" href="<?= htmlspecialchars($checkoutModalStylesheet) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars($customerStylesheet) ?>">
 </head>
-<body data-customer-session="<?= htmlspecialchars($bodyCustomerState) ?>" data-customer-first-name="<?= htmlspecialchars($bodyCustomerFirstName) ?>">
+<body data-customer-session="<?= htmlspecialchars($bodyCustomerState) ?>" data-customer-first-name="<?= htmlspecialchars($bodyCustomerFirstName) ?>" data-auth-required="checkout">
     <header class="header">
         <div class="header-content">
             <div class="logo">
@@ -1208,7 +1114,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
 
     <div class="container">
         <!-- Left Column - Checkout Form -->
-        <div class="checkout-form">
+        <div class="checkout-form<?= $isCustomerAuthenticated ? '' : ' checkout-form--guest-disabled' ?>">
             <?php if (!$isCustomerAuthenticated): ?>
                 <div class="checkout-login-alert">Log in or create an account to finish checkout.</div>
             <?php endif; ?>
@@ -1222,7 +1128,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                 </ul>
             </div>
             <?php endif; ?>
-            <form method="post" enctype="multipart/form-data">
+            <form method="post">
                 <input type="hidden" name="cart" value='<?= htmlspecialchars(json_encode($cartItems)) ?>'>
                 <input type="hidden" name="contact_mode" value="<?= htmlspecialchars($contactMode) ?>" data-contact-mode-input>
                 <input type="hidden" name="address_mode" value="<?= htmlspecialchars($addressMode) ?>" data-billing-mode-input>
@@ -1339,63 +1245,6 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                     </div>
                 </div>
 
-                <!-- Payment Section -->
-                <div class="section">
-                    <h2 class="section-title">
-                        <i class="fas fa-credit-card"></i>
-                        Payment
-                    </h2>
-                    <div class="payment-methods" role="radiogroup" aria-label="Select a payment method">
-                        <div class="payment-option">
-                            <input
-                                type="radio"
-                                name="payment_method"
-                                value="GCash"
-                                id="payment_gcash"
-                                data-qr="<?= htmlspecialchars($qrAsset) ?>"
-                                data-qr-alt="GCash payment QR code"
-                                <?= $selectedPaymentMethod === 'GCash' ? 'checked' : '' ?>
-                            >
-                            <label for="payment_gcash">
-                                <i class="fas fa-mobile-alt" aria-hidden="true"></i>
-                                <span>GCash</span>
-                            </label>
-                        </div>
-                        <div class="payment-option">
-                            <input
-                                type="radio"
-                                name="payment_method"
-                                value="Maya"
-                                id="payment_maya"
-                                data-qr="<?= htmlspecialchars($mayaQrAsset) ?>"
-                                data-qr-alt="Maya payment QR code"
-                                <?= $selectedPaymentMethod === 'Maya' ? 'checked' : '' ?>
-                            >
-                            <label for="payment_maya">
-                                <i class="fas fa-wallet" aria-hidden="true"></i>
-                                <span>Maya</span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <div class="qr-code" data-default-qr="<?= htmlspecialchars($qrAsset) ?>">
-                        <img id="paymentQrImage" src="<?= htmlspecialchars($currentQrAsset) ?>" alt="<?= htmlspecialchars($currentQrAlt) ?>">
-                    </div>
-
-                    <div class="form-group">
-                        <label for="reference_number">Reference Number (optional)</label>
-                        <input type="text" name="reference_number" id="reference_number" maxlength="50" value="<?= htmlspecialchars($referenceInput) ?>" placeholder="e.g. GCASH123456">
-                    </div>
-
-                    <div class="file-upload">
-                        <input type="file" name="proof" id="proof" accept="image/*">
-                        <label for="proof">
-                            <i class="fas fa-cloud-upload-alt"></i>
-                            Upload Proof of Payment
-                        </label>
-                    </div>
-                </div>
-
                 <button type="submit" class="submit-btn">
                     <i class="fas fa-lock"></i>&nbsp; Submit Order
                 </button>
@@ -1495,78 +1344,6 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
 
     <script src="<?= htmlspecialchars($customerScript) ?>" defer></script>
     <script>
-        const proofInput = document.getElementById('proof');
-        const proofLabel = document.querySelector('label[for="proof"]');
-        const qrImage = document.getElementById('paymentQrImage');
-        const paymentRadios = Array.from(document.querySelectorAll('input[name="payment_method"]'));
-        const referenceField = document.getElementById('reference_number');
-
-        const defaultProofLabel = proofLabel ? proofLabel.innerHTML : '';
-
-        function resetProofUploadAppearance() {
-            if (!proofLabel) {
-                return;
-            }
-            proofLabel.innerHTML = defaultProofLabel;
-            proofLabel.style.background = '';
-            proofLabel.style.color = '';
-        }
-
-        // File upload feedback
-        proofInput?.addEventListener('change', (event) => {
-            if (!proofLabel) {
-                return;
-            }
-
-            if (event.target.files.length > 0) {
-                proofLabel.innerHTML = '<i class="fas fa-check"></i> ' + event.target.files[0].name;
-                proofLabel.style.background = '#00b894';
-                proofLabel.style.color = 'white';
-            } else {
-                resetProofUploadAppearance();
-            }
-        });
-
-        const referencePlaceholders = {
-            GCash: 'e.g. GCASH123456',
-            Maya: 'e.g. MAYA123456',
-        };
-
-        function applyPaymentSelection(selectedRadio) {
-            if (!selectedRadio) {
-                return;
-            }
-
-            const paymentValue = selectedRadio.value;
-            if (qrImage) {
-                const newSrc = selectedRadio.getAttribute('data-qr');
-                if (newSrc) {
-                    qrImage.src = newSrc;
-                }
-                const newAlt = selectedRadio.getAttribute('data-qr-alt');
-                if (newAlt) {
-                    qrImage.alt = newAlt;
-                }
-            }
-
-            if (referenceField && referencePlaceholders[paymentValue]) {
-                referenceField.placeholder = referencePlaceholders[paymentValue];
-            }
-        }
-
-        // Payment method toggle
-        paymentRadios.forEach((radio) => {
-            radio.addEventListener('change', () => {
-                applyPaymentSelection(radio);
-            });
-        });
-
-        // Apply initial selection state on page load
-        const initiallyChecked = paymentRadios.find((radio) => radio.checked) ?? paymentRadios[0] ?? null;
-        if (initiallyChecked) {
-            applyPaymentSelection(initiallyChecked);
-        }
-
         const cartInput = document.querySelector('input[name="cart"]');
         const orderItemsContainer = document.getElementById('orderItemsContainer');
         const emptyState = document.getElementById('orderEmptyState');
@@ -1660,7 +1437,6 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
         checkoutForm?.addEventListener('submit', (event) => {
             const emailField = checkoutForm.querySelector('input[name="email"]');
             const addressField = checkoutForm.querySelector('textarea[name="address"]');
-            const referenceField = checkoutForm.querySelector('#reference_number');
             const requiredFields = [emailField, addressField];
 
             let invalidField = null;
