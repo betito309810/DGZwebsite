@@ -1705,6 +1705,7 @@ $emptyTableMessage = $isArchivedView ? 'No archived products found.' : 'No produ
                 <div class="taxonomy-modal__content">
                     <h3>Manage Catalog Lists</h3>
                     <p class="taxonomy-modal__intro">Archive brands, categories, or suppliers to hide them from the product forms without deleting existing records.</p>
+                    <p class="taxonomy-manager__tip">Use the <strong>Archive</strong> or <strong>Restore</strong> action on each row to toggle availability.</p>
                     <div class="taxonomy-manager__grid">
                         <?php foreach ($taxonomyLabels as $taxonomyKey => $taxonomyLabel): ?>
                         <?php $entries = $taxonomyManagementData[$taxonomyKey] ?? []; ?>
@@ -1764,7 +1765,7 @@ $emptyTableMessage = $isArchivedView ? 'No archived products found.' : 'No produ
                                                     <input type="hidden" name="taxonomy_type" value="<?= htmlspecialchars($taxonomyKey) ?>">
                                                     <input type="hidden" name="taxonomy_id" value="<?= (int) ($entry['id'] ?? 0) ?>">
                                                     <input type="hidden" name="taxonomy_action" value="<?= $isArchived ? 'restore' : 'archive' ?>">
-                                                    <button type="submit" class="taxonomy-manager__action-button <?= $isArchived ? 'taxonomy-manager__action-button--restore' : 'taxonomy-manager__action-button--archive' ?>">
+                                                    <button type="submit" class="taxonomy-manager__action-button <?= $isArchived ? 'taxonomy-manager__action-button--restore' : 'taxonomy-manager__action-button--archive' ?>" title="<?= $isArchived ? 'Restore this ' . htmlspecialchars($taxonomyLabel) : 'Archive this ' . htmlspecialchars($taxonomyLabel) ?>">
                                                         <i class="fas <?= $isArchived ? 'fa-rotate-left' : 'fa-box-archive' ?>"></i>
                                                         <span><?= $isArchived ? 'Restore' : 'Archive' ?></span>
                                                     </button>

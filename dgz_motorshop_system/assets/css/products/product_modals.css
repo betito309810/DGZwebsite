@@ -303,6 +303,12 @@
     overflow: hidden;
 }
 
+.taxonomy-manager__tip {
+    margin: 0 0 18px;
+    color: #4b5563;
+    font-size: 0.95rem;
+}
+
 .taxonomy-manager__empty {
     margin: 0;
     padding: 18px;
@@ -348,24 +354,26 @@
 }
 
 .taxonomy-manager__actions {
-    width: 1%;
-    white-space: nowrap;
+    text-align: right;
 }
 
 .taxonomy-manager__actions form {
-    display: inline;
+    display: inline-block;
+    margin: 0;
 }
 
 .taxonomy-manager__action-button {
     display: inline-flex;
     align-items: center;
     gap: 6px;
+    justify-content: center;
     border: none;
     border-radius: 10px;
     padding: 6px 14px;
     font-weight: 600;
     cursor: pointer;
     transition: background 0.2s ease;
+    min-width: 110px;
 }
 
 .taxonomy-manager__action-button--archive {
