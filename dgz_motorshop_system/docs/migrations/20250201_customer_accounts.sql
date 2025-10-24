@@ -2,6 +2,9 @@
 
 CREATE TABLE IF NOT EXISTS customers (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    first_name VARCHAR(120) NULL,
+    middle_name VARCHAR(120) NULL,
+    last_name VARCHAR(120) NULL,
     full_name VARCHAR(150) NOT NULL,
     email VARCHAR(190) NULL,
     phone VARCHAR(40) NULL,
@@ -9,6 +12,8 @@ CREATE TABLE IF NOT EXISTS customers (
     address_line1 TEXT NULL,
     city VARCHAR(120) NULL,
     postal_code VARCHAR(20) NULL,
+    email_verified_at DATETIME NULL,
+    verification_token VARCHAR(120) NULL,
     updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CHECK (email IS NOT NULL OR phone IS NOT NULL),

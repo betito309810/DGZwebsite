@@ -7,16 +7,8 @@
             : 'checkout.php';
 
         function redirectToCheckout(cartData) {
-            const body = document.body;
-            const isAuthenticated = body && body.dataset && body.dataset.customerSession === 'authenticated';
             const separator = checkoutBaseUrl.includes('?') ? '&' : '?';
             const checkoutDestination = `${checkoutBaseUrl}${separator}cart=${cartData}`;
-            if (!isAuthenticated) {
-                if (window.customerAuth && typeof window.customerAuth.openGate === 'function') {
-                    window.customerAuth.openGate({ redirectTo: checkoutDestination });
-                }
-                return;
-            }
 
             window.location.href = checkoutDestination;
         }

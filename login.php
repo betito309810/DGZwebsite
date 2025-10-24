@@ -88,8 +88,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $candidate = null;
             $identifier = $values['identifier'];
 
+            $fullNameColumn = customerFindColumn($pdo, ['full_name', 'name']) ?? 'full_name';
+            $emailColumn = customerFindColumn($pdo, ['email', 'email_address']) ?? 'email';
+            $phoneColumn = customerFindColumn($pdo, ['phone', 'mobile', 'contact_number', 'contact']) ?? 'phone';
+            $passwordHashColumn = customerFindColumn($pdo, ['password_hash']) ?? 'password_hash';
+            $firstNameColumn = customerFindColumn($pdo, ['first_name', 'firstname', 'given_name']);
+            $middleNameColumn = customerFindColumn($pdo, ['middle_name', 'middlename', 'middle']);
+            $lastNameColumn = customerFindColumn($pdo, ['last_name', 'lastname', 'surname', 'family_name']);
+            $emailVerifiedColumn = customerFindColumn($pdo, ['email_verified_at', 'verified_at']);
+            $verificationTokenColumn = customerFindColumn($pdo, ['verification_token', 'email_verification_token']);
+
+            $selectColumns = [
+                '`id` AS id',
+                '`' . $fullNameColumn . '` AS full_name',
+                '`' . $emailColumn . '` AS email',
+                '`' . $phoneColumn . '` AS phone',
+                '`' . $passwordHashColumn . '` AS password_hash',
+            ];
+
+            if ($firstNameColumn !== null) {
+                $selectColumns[] = '`' . $firstNameColumn . '` AS first_name';
+            }
+
+            if ($middleNameColumn !== null) {
+                $selectColumns[] = '`' . $middleNameColumn . '` AS middle_name';
+            }
+
+            if ($lastNameColumn !== null) {
+                $selectColumns[] = '`' . $lastNameColumn . '` AS last_name';
+            }
+
+            if ($emailVerifiedColumn !== null) {
+                $selectColumns[] = '`' . $emailVerifiedColumn . '` AS email_verified_at';
+            }
+
+            if ($verificationTokenColumn !== null) {
+                $selectColumns[] = '`' . $verificationTokenColumn . '` AS verification_token';
+            }
+
+            $projection = implode(', ', array_unique($selectColumns));
+
             if (filter_var($identifier, FILTER_VALIDATE_EMAIL)) {
-                $stmt = $pdo->prepare('SELECT id, full_name, email, phone, password_hash FROM customers WHERE email = ? LIMIT 1');
+                $stmt = $pdo->prepare('SELECT ' . $projection . ' FROM customers WHERE `' . $emailColumn . '` = ? LIMIT 1');
                 $stmt->execute([$identifier]);
                 $candidate = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
             }
@@ -97,14 +137,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($candidate === null) {
                 $normalizedPhone = normalizeCustomerPhone($identifier);
                 if ($normalizedPhone !== '') {
-                    $stmt = $pdo->prepare('SELECT id, full_name, email, phone, password_hash FROM customers WHERE phone = ? LIMIT 1');
+                    $stmt = $pdo->prepare('SELECT ' . $projection . ' FROM customers WHERE `' . $phoneColumn . '` = ? LIMIT 1');
                     $stmt->execute([$normalizedPhone]);
                     $candidate = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
                 }
             }
 
             if ($candidate === null && $identifier !== '') {
-                $stmt = $pdo->prepare('SELECT id, full_name, email, phone, password_hash FROM customers WHERE phone = ? LIMIT 1');
+                $stmt = $pdo->prepare('SELECT ' . $projection . ' FROM customers WHERE `' . $phoneColumn . '` = ? LIMIT 1');
                 $stmt->execute([$identifier]);
                 $candidate = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
             }
@@ -117,13 +157,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Keep the account existence private but guide the user clearly
                 $errors['password'] = 'Incorrect password. Please try again.';
             } else {
-                customerLogin((int) $candidate['id']);
-                $redirect = $_POST['redirect'] ?? ($_GET['redirect'] ?? orderingUrl('index.php'));
-                if (!is_string($redirect) || $redirect === '') {
-                    $redirect = orderingUrl('index.php');
+                $emailVerifiedValue = $candidate['email_verified_at'] ?? null;
+                $isVerified = $emailVerifiedValue !== null && trim((string) $emailVerifiedValue) !== '';
+
+                if (!$isVerified) {
+                    $errors['general'] = 'Please verify your email address before logging in. Check your inbox for the verification link we sent you.';
+                } else {
+                    customerLogin((int) $candidate['id']);
+                    $redirect = $_POST['redirect'] ?? ($_GET['redirect'] ?? orderingUrl('index.php'));
+                    if (!is_string($redirect) || $redirect === '') {
+                        $redirect = orderingUrl('index.php');
+                    }
+                    header('Location: ' . $redirect);
+                    exit;
                 }
-                header('Location: ' . $redirect);
-                exit;
             }
         } catch (Throwable $exception) {
             error_log('Unable to log in customer: ' . $exception->getMessage());
