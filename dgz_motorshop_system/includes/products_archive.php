@@ -118,15 +118,25 @@ if (!function_exists('productsArchiveEnsureSchema')) {
 }
 
 if (!function_exists('productsArchiveActiveCondition')) {
-    function productsArchiveActiveCondition(PDO $pdo, string $alias = ''): string
+    function productsArchiveActiveCondition(PDO $pdo, string $alias = '', bool $includeCatalogTaxonomy = false): string
     {
-        if (!productsArchiveColumnExists($pdo)) {
-            return '1=1';
+        $clauses = [];
+
+        if (productsArchiveColumnExists($pdo)) {
+            $column = productsArchiveQualifiedColumn($alias);
+            $clauses[] = sprintf('(%1$s = 0 OR %1$s IS NULL)', $column);
+        } else {
+            $clauses[] = '1=1';
         }
 
-        $column = productsArchiveQualifiedColumn($alias);
+        if ($includeCatalogTaxonomy) {
+            $taxonomyClause = productsArchiveTaxonomyActiveCondition($pdo, $alias);
+            if ($taxonomyClause !== '') {
+                $clauses[] = $taxonomyClause;
+            }
+        }
 
-        return sprintf('(%1$s = 0 OR %1$s IS NULL)', $column);
+        return implode(' AND ', $clauses);
     }
 }
 
@@ -140,5 +150,127 @@ if (!function_exists('productsArchiveOnlyCondition')) {
         $column = productsArchiveQualifiedColumn($alias);
 
         return sprintf('%s = 1', $column);
+    }
+}
+
+if (!function_exists('productsArchiveTaxonomyActiveCondition')) {
+    function productsArchiveTaxonomyActiveCondition(PDO $pdo, string $alias = ''): string
+    {
+        if (!function_exists('catalogTaxonomyFetchOptions')) {
+            return '';
+        }
+
+        $archivedBrands = productsArchiveTaxonomyArchivedNames($pdo, 'brand');
+        $archivedCategories = productsArchiveTaxonomyArchivedNames($pdo, 'category');
+
+        if (empty($archivedBrands) && empty($archivedCategories)) {
+            return '';
+        }
+
+        $alias = trim($alias);
+        $prefix = $alias === '' ? '' : rtrim($alias, '.') . '.';
+
+        $clauses = [];
+        $buildClause = static function (array $values, string $column) use ($pdo, &$clauses): void {
+            if (empty($values)) {
+                return;
+            }
+
+            $normalizedColumn = sprintf('LOWER(TRIM(%s))', $column);
+            $coalescedColumn = sprintf("COALESCE(%s, '')", $normalizedColumn);
+
+            $quoted = [];
+            foreach ($values as $value) {
+                if (method_exists($pdo, 'quote')) {
+                    $quotedValue = $pdo->quote($value);
+                } else {
+                    $quotedValue = "'" . str_replace("'", "''", $value) . "'";
+                }
+
+                if ($quotedValue === false) {
+                    continue;
+                }
+
+                $quoted[] = $quotedValue;
+            }
+
+            if (empty($quoted)) {
+                return;
+            }
+
+            $clauses[] = sprintf("(%s = '' OR %s NOT IN (%s))", $coalescedColumn, $normalizedColumn, implode(', ', $quoted));
+        };
+
+        $buildClause($archivedBrands, $prefix . 'brand');
+        $buildClause($archivedCategories, $prefix . 'category');
+
+        if (empty($clauses)) {
+            return '';
+        }
+
+        return implode(' AND ', $clauses);
+    }
+}
+
+if (!function_exists('productsArchiveTaxonomyArchivedNames')) {
+    function productsArchiveTaxonomyArchivedNames(PDO $pdo, string $type): array
+    {
+        static $cache = [];
+
+        $normalizedType = strtolower(trim($type));
+        if (!in_array($normalizedType, ['brand', 'category'], true)) {
+            return [];
+        }
+
+        $cacheKey = productsArchiveSchemaKey($pdo) . ':taxonomy:' . $normalizedType;
+        if (array_key_exists($cacheKey, $cache)) {
+            return $cache[$cacheKey];
+        }
+
+        if (!function_exists('catalogTaxonomyFetchOptions')) {
+            $cache[$cacheKey] = [];
+            return [];
+        }
+
+        try {
+            $rows = catalogTaxonomyFetchOptions($pdo, $normalizedType, true);
+        } catch (Throwable $e) {
+            $cache[$cacheKey] = [];
+            return [];
+        }
+
+        $values = [];
+
+        foreach ($rows as $row) {
+            if ((int) ($row['is_archived'] ?? 0) !== 1) {
+                continue;
+            }
+
+            $label = (string) ($row['name'] ?? '');
+            if ($label === '') {
+                continue;
+            }
+
+            if (function_exists('catalogTaxonomyNormaliseName')) {
+                $normalized = catalogTaxonomyNormaliseName($label);
+            } else {
+                $normalized = strtolower(trim($label));
+            }
+
+            if ($normalized === '') {
+                continue;
+            }
+
+            $values[$normalized] = true;
+
+            $rawLower = strtolower(trim($label));
+            if ($rawLower !== '') {
+                $values[$rawLower] = true;
+            }
+        }
+
+        $cache[$cacheKey] = array_keys($values);
+
+        return $cache[$cacheKey];
     }
 }

@@ -102,7 +102,7 @@ if (!function_exists('orderItemsFindColumn')) {
 }
 
 $pdo = db();
-$productsActiveClause = productsArchiveActiveCondition($pdo);
+$productsActiveClause = productsArchiveActiveCondition($pdo, '', true);
 $errors = [];
 $referenceInput = '';
 $supportsTrackingCodes = false;

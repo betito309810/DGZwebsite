@@ -67,7 +67,7 @@ if ($normalizedItems === []) {
 
 try {
     $pdo = db();
-    $activeClause = productsArchiveActiveCondition($pdo);
+    $activeClause = productsArchiveActiveCondition($pdo, '', true);
 
     $productQuantities = [];
     $variantQuantities = [];

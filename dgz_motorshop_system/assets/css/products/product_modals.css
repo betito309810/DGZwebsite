@@ -358,7 +358,27 @@
     text-align: left;
     border-bottom: 1px solid #e5e7eb;
     font-size: 0.95rem;
+    background: transparent !important;
 }
+
+.taxonomy-manager__sort-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+}
+
+.taxonomy-manager__sort-button:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+}
+
+/* Removed auxiliary status sort label per design feedback */
 
 .taxonomy-manager__table tbody tr:last-child th,
 .taxonomy-manager__table tbody tr:last-child td {
@@ -386,12 +406,23 @@
 
 .taxonomy-manager__actions {
     text-align: right;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0;
+    border: none;
 }
 
 .taxonomy-manager__actions form {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
     margin: 0;
+    padding: 0;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
 }
+
 
 .taxonomy-manager__action-button {
     display: inline-flex;
@@ -399,25 +430,38 @@
     gap: 6px;
     justify-content: center;
     border: none;
-    border-radius: 10px;
+    border-radius: 999px;
     padding: 6px 14px;
     font-weight: 600;
     cursor: pointer;
-    transition: background 0.2s ease;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
     min-width: 110px;
+    box-shadow: none;
+    filter: none !important;
+    background-clip: padding-box;
+    margin: 0;
+}
+
+.taxonomy-manager__action-button::before,
+.taxonomy-manager__action-button::after {
+    content: none !important;
+}
+
+.taxonomy-manager__action-button:hover {
+    transform: translateY(-1px);
 }
 
 .taxonomy-manager__action-button--archive {
-    background: #fee2e2;
+    background: #fecaca;
     color: #b91c1c;
 }
 
 .taxonomy-manager__action-button--archive:hover {
-    background: #fecaca;
+    background: #fca5a5;
 }
 
 .taxonomy-manager__action-button--restore {
-    background: #dcfce7;
+    background: #bbf7d0;
     color: #166534;
 }
 

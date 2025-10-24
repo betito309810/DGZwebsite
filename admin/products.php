@@ -1767,7 +1767,12 @@ $emptyTableMessage = $isArchivedView ? 'No archived products found.' : 'No produ
                                     <thead>
                                         <tr>
                                             <th scope="col">Name</th>
-                                            <th scope="col">Status</th>
+                                            <th scope="col" data-taxonomy-sortable="status" aria-sort="ascending">
+                                                <button type="button" class="taxonomy-manager__sort-button" data-taxonomy-sort="status" aria-label="Sort Status">
+                                                    <span>Status</span>
+                                                    <i class="fas fa-arrow-down-wide-short" aria-hidden="true" data-taxonomy-sort-icon></i>
+                                                </button>
+                                            </th>
                                             <th scope="col">Products Using</th>
                                             <th scope="col" class="taxonomy-manager__actions-heading">Actions</th>
                                         </tr>
@@ -1782,7 +1787,7 @@ $emptyTableMessage = $isArchivedView ? 'No archived products found.' : 'No produ
                                             $isArchived = (int) ($entry['is_archived'] ?? 0) === 1;
                                             $usageCount = (int) ($entry['usage_count'] ?? 0);
                                         ?>
-                                        <tr class="<?= $isArchived ? 'taxonomy-manager__row--archived' : '' ?>">
+                                        <tr class="<?= $isArchived ? 'taxonomy-manager__row--archived' : '' ?>" data-taxonomy-status="<?= $isArchived ? 'archived' : 'active' ?>">
                                             <td><?= htmlspecialchars($entryName) ?></td>
                                             <td>
                                                 <span class="taxonomy-manager__status <?= $isArchived ? 'taxonomy-manager__status--archived' : 'taxonomy-manager__status--active' ?>">

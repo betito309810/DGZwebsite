@@ -15,7 +15,7 @@ if ($productId <= 0) {
 
 try {
     $pdo = db();
-    $activeClause = productsArchiveActiveCondition($pdo);
+    $activeClause = productsArchiveActiveCondition($pdo, '', true);
 
     $stmt = $pdo->prepare('SELECT image, name FROM products WHERE id = ? AND ' . $activeClause . ' LIMIT 1');
     $stmt->execute([$productId]);

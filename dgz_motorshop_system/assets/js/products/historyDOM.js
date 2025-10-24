@@ -647,6 +647,7 @@
             const taxonomyModal = document.getElementById('taxonomyModal');
             const taxonomySwitcherButtons = taxonomyModal ? Array.from(taxonomyModal.querySelectorAll('[data-taxonomy-switch]')) : [];
             const taxonomyPanels = taxonomyModal ? Array.from(taxonomyModal.querySelectorAll('[data-taxonomy-panel]')) : [];
+            const taxonomyTables = taxonomyModal ? Array.from(taxonomyModal.querySelectorAll('.taxonomy-manager__table')) : [];
 
             const setActiveTaxonomy = (targetKey) => {
                 if (!taxonomyModal || taxonomySwitcherButtons.length === 0) {
@@ -674,6 +675,51 @@
                 button.addEventListener('click', () => {
                     setActiveTaxonomy(button.dataset.taxonomySwitch || '');
                 });
+            });
+
+            taxonomyTables.forEach((table) => {
+                const sortButton = table.querySelector('[data-taxonomy-sort="status"]');
+                const sortHeader = table.querySelector('[data-taxonomy-sortable="status"]');
+                const sortIcon = sortButton?.querySelector('[data-taxonomy-sort-icon]');
+                const tbody = table.querySelector('tbody');
+
+                if (!sortButton || !sortHeader || !tbody) {
+                    return;
+                }
+
+                const originalOrder = Array.from(tbody.querySelectorAll('tr'));
+                const archivedOrder = originalOrder.filter((row) => (row.dataset.taxonomyStatus || '') === 'archived');
+                const activeOrder = originalOrder.filter((row) => (row.dataset.taxonomyStatus || '') !== 'archived');
+
+                const applySortState = (state) => {
+                    const normalizedState = state === 'archived-first' ? 'archived-first' : 'active-first';
+                    sortButton.dataset.sortState = normalizedState;
+
+                    sortHeader.setAttribute('aria-sort', normalizedState === 'archived-first' ? 'descending' : 'ascending');
+
+                    if (sortIcon) {
+                        sortIcon.classList.remove('fa-arrow-down-wide-short', 'fa-arrow-up-wide-short');
+                        sortIcon.classList.add(normalizedState === 'archived-first' ? 'fa-arrow-up-wide-short' : 'fa-arrow-down-wide-short');
+                    }
+
+                    const nextRows = normalizedState === 'archived-first'
+                        ? [...archivedOrder, ...activeOrder]
+                        : [...originalOrder];
+
+                    nextRows.forEach((row) => tbody.appendChild(row));
+
+                    sortButton.setAttribute('aria-label', normalizedState === 'archived-first'
+                        ? 'Sort status: archived entries first. Click to show active entries first.'
+                        : 'Sort status: active entries first. Click to show archived entries first.');
+                };
+
+                sortButton.addEventListener('click', () => {
+                    const currentState = sortButton.dataset.sortState || 'active-first';
+                    const nextState = currentState === 'archived-first' ? 'active-first' : 'archived-first';
+                    applySortState(nextState);
+                });
+
+                applySortState('active-first');
             });
 
             if (taxonomySwitcherButtons.length > 0) {

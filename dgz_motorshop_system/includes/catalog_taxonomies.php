@@ -173,7 +173,7 @@ if (!function_exists('catalogTaxonomyBackfillFromProducts')) {
             }
 
             foreach ($rows->fetchAll(PDO::FETCH_COLUMN) as $value) {
-                catalogTaxonomyEnsureTerm($pdo, $type, (string) $value);
+                catalogTaxonomyEnsureTerm($pdo, $type, (string) $value, false);
             }
         }
     }
