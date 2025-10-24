@@ -106,15 +106,32 @@ body {
     margin-bottom: 6px;
 }
 
-.checkout-login-alert a {
+.checkout-login-alert__link {
     color: #2563eb;
     font-weight: 600;
-    text-decoration: none;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
 }
 
-.checkout-login-alert a:hover,
-.checkout-login-alert a:focus {
-    text-decoration: underline;
+.checkout-login-alert__link::after {
+    content: '›';
+    font-size: 1.1em;
+    line-height: 1;
+    transition: transform 0.2s ease;
+}
+
+.checkout-login-alert__link:hover,
+.checkout-login-alert__link:focus {
+    text-decoration-thickness: 2px;
+}
+
+.checkout-login-alert__link:hover::after,
+.checkout-login-alert__link:focus-visible::after,
+.checkout-login-alert__link:focus::after {
+    transform: translateX(3px);
 }
 
 .order-summary {

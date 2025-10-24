@@ -1163,8 +1163,8 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
         <div class="checkout-form<?= $isCustomerAuthenticated ? '' : ' checkout-form--guest-disabled' ?>">
             <?php if (!$isCustomerAuthenticated): ?>
                 <div class="checkout-login-alert">
-                    <a href="<?= htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') ?>">Log in</a> or
-                    <a href="<?= htmlspecialchars($registerUrl, ENT_QUOTES, 'UTF-8') ?>">create an account</a> to finish checkout.
+                    <a class="checkout-login-alert__link" href="<?= htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') ?>">Log in</a> or
+                    <a class="checkout-login-alert__link" href="<?= htmlspecialchars($registerUrl, ENT_QUOTES, 'UTF-8') ?>">create an account</a> to finish checkout.
                 </div>
             <?php endif; ?>
             <?php if (!empty($errors)): ?>
