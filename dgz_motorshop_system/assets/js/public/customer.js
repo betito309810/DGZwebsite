@@ -190,20 +190,72 @@
         const form = contactSection.querySelector('[data-contact-form]');
         const editButton = contactSection.querySelector('[data-contact-edit]');
         const cancelButton = contactSection.querySelector('[data-contact-cancel]');
+        const saveButton = contactSection.querySelector('[data-contact-save]');
         const requiredFields = form ? Array.from(form.querySelectorAll('[data-contact-required]')) : [];
+        const summaryName = summary ? summary.querySelector('[data-contact-summary-name]') : null;
+        const summaryEmail = summary ? summary.querySelector('[data-contact-summary-email]') : null;
+        const summaryPhone = summary ? summary.querySelector('[data-contact-summary-phone]') : null;
+
+        const firstNameField = form ? form.querySelector('input[name="first_name"]') : null;
+        const middleNameField = form ? form.querySelector('input[name="middle_name"]') : null;
+        const lastNameField = form ? form.querySelector('input[name="last_name"]') : null;
+        const emailField = form ? form.querySelector('input[name="email"]') : null;
+        const phoneField = form ? form.querySelector('input[name="phone"]') : null;
+
+        const buildFullName = (first, middle, last) => {
+            return [first, middle, last]
+                .map((value) => (typeof value === 'string' ? value.trim() : ''))
+                .filter((value) => value !== '')
+                .join(' ');
+        };
+
+        const setTextContent = (element, value) => {
+            if (!element) {
+                return;
+            }
+            element.textContent = value;
+        };
 
         const syncFromSummary = () => {
             if (!summary || !form) {
                 return;
             }
-            const emailField = form.querySelector('input[name="email"]');
-            const phoneField = form.querySelector('input[name="phone"]');
+            if (firstNameField && summary.dataset.contactFirstName !== undefined) {
+                firstNameField.value = summary.dataset.contactFirstName;
+            }
+            if (middleNameField && summary.dataset.contactMiddleName !== undefined) {
+                middleNameField.value = summary.dataset.contactMiddleName;
+            }
+            if (lastNameField && summary.dataset.contactLastName !== undefined) {
+                lastNameField.value = summary.dataset.contactLastName;
+            }
             if (emailField && summary.dataset.contactEmail !== undefined) {
                 emailField.value = summary.dataset.contactEmail;
             }
             if (phoneField && summary.dataset.contactPhone !== undefined) {
                 phoneField.value = summary.dataset.contactPhone;
             }
+        };
+
+        const syncSummaryFromForm = () => {
+            if (!summary || !form) {
+                return;
+            }
+            const firstValue = firstNameField ? firstNameField.value.trim() : '';
+            const middleValue = middleNameField ? middleNameField.value.trim() : '';
+            const lastValue = lastNameField ? lastNameField.value.trim() : '';
+            const emailValue = emailField ? emailField.value.trim() : '';
+            const phoneValue = phoneField ? phoneField.value.trim() : '';
+
+            summary.dataset.contactFirstName = firstValue;
+            summary.dataset.contactMiddleName = middleValue;
+            summary.dataset.contactLastName = lastValue;
+            summary.dataset.contactEmail = emailValue;
+            summary.dataset.contactPhone = phoneValue;
+
+            setTextContent(summaryName, buildFullName(firstValue, middleValue, lastValue));
+            setTextContent(summaryEmail, emailValue);
+            setTextContent(summaryPhone, phoneValue);
         };
 
         const setMode = (mode) => {
@@ -251,6 +303,12 @@
             event.preventDefault();
             setMode('summary');
         });
+
+        saveButton?.addEventListener('click', (event) => {
+            event.preventDefault();
+            syncSummaryFromForm();
+            setMode('summary');
+        });
     }
 
     const billingSection = document.querySelector('[data-billing-section]');
@@ -260,7 +318,66 @@
         const form = billingSection.querySelector('[data-billing-form]');
         const editButton = billingSection.querySelector('[data-billing-edit]');
         const cancelButton = billingSection.querySelector('[data-billing-cancel]');
+        const saveButton = billingSection.querySelector('[data-billing-save]');
         const requiredFields = form ? Array.from(form.querySelectorAll('[data-billing-required]')) : [];
+        const summaryAddress = summary ? summary.querySelector('[data-billing-summary-address]') : null;
+        const summaryCity = summary ? summary.querySelector('[data-billing-summary-city]') : null;
+        const summaryPostal = summary ? summary.querySelector('[data-billing-summary-postal]') : null;
+
+        const addressField = form ? form.querySelector('textarea[name="address"]') : null;
+        const postalField = form ? form.querySelector('input[name="postal_code"]') : null;
+        const cityField = form ? form.querySelector('input[name="city"]') : null;
+
+        const setMultilineText = (element, value) => {
+            if (!element) {
+                return;
+            }
+            const normalized = typeof value === 'string' ? value : '';
+            const fragment = document.createDocumentFragment();
+            normalized.split(/\r?\n/).forEach((part, index) => {
+                if (index > 0) {
+                    fragment.appendChild(document.createElement('br'));
+                }
+                fragment.appendChild(document.createTextNode(part));
+            });
+            element.replaceChildren(fragment);
+        };
+
+        const syncFromSummary = () => {
+            if (!summary || !form) {
+                return;
+            }
+            if (addressField && summary.dataset.billingAddress !== undefined) {
+                addressField.value = summary.dataset.billingAddress;
+            }
+            if (postalField && summary.dataset.billingPostal !== undefined) {
+                postalField.value = summary.dataset.billingPostal;
+            }
+            if (cityField && summary.dataset.billingCity !== undefined) {
+                cityField.value = summary.dataset.billingCity;
+            }
+        };
+
+        const syncSummaryFromForm = () => {
+            if (!summary) {
+                return;
+            }
+            const addressValue = addressField ? addressField.value : '';
+            const postalValue = postalField ? postalField.value : '';
+            const cityValue = cityField ? cityField.value : '';
+
+            summary.dataset.billingAddress = addressValue;
+            summary.dataset.billingPostal = postalValue;
+            summary.dataset.billingCity = cityValue;
+
+            setMultilineText(summaryAddress, addressValue);
+            if (summaryCity) {
+                summaryCity.textContent = cityValue;
+            }
+            if (summaryPostal) {
+                summaryPostal.textContent = postalValue;
+            }
+        };
 
         const setMode = (mode) => {
             const nextMode = mode === 'edit' ? 'edit' : 'summary';
@@ -290,6 +407,7 @@
                     form.classList.add('is-hidden');
                     form.setAttribute('hidden', '');
                 }
+                syncFromSummary();
                 requiredFields.forEach((field) => field.removeAttribute('required'));
             }
         };
@@ -298,6 +416,7 @@
             requiredFields.forEach((field) => field.setAttribute('required', ''));
         } else {
             requiredFields.forEach((field) => field.removeAttribute('required'));
+            syncFromSummary();
         }
 
         editButton?.addEventListener('click', (event) => {
@@ -307,6 +426,12 @@
 
         cancelButton?.addEventListener('click', (event) => {
             event.preventDefault();
+            setMode('summary');
+        });
+
+        saveButton?.addEventListener('click', (event) => {
+            event.preventDefault();
+            syncSummaryFromForm();
             setMode('summary');
         });
     }

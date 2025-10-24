@@ -101,6 +101,21 @@ if (!function_exists('orderItemsFindColumn')) {
     }
 }
 
+if (!function_exists('combineNameParts')) {
+    function combineNameParts($first, $middle = '', $last = ''): string
+    {
+        $parts = [];
+        foreach ([$first, $middle, $last] as $part) {
+            $trimmed = trim((string) $part);
+            if ($trimmed !== '') {
+                $parts[] = $trimmed;
+            }
+        }
+
+        return implode(' ', $parts);
+    }
+}
+
 $pdo = db();
 $productsActiveClause = productsArchiveActiveCondition($pdo);
 $errors = [];
@@ -131,6 +146,9 @@ $customerCityColumn = tableFindColumn($pdo, 'customers', ['city', 'town', 'munic
 $customerPostalColumn = tableFindColumn($pdo, 'customers', ['postal_code', 'postal', 'zip_code', 'zipcode', 'zip']);
 $customerEmailColumn = tableFindColumn($pdo, 'customers', ['email', 'email_address']);
 $customerPhoneColumn = tableFindColumn($pdo, 'customers', ['phone', 'mobile', 'contact_number', 'contact']);
+$customerFirstNameColumn = tableFindColumn($pdo, 'customers', ['first_name', 'firstname', 'given_name', 'fname']);
+$customerMiddleNameColumn = tableFindColumn($pdo, 'customers', ['middle_name', 'middlename', 'mname']);
+$customerLastNameColumn = tableFindColumn($pdo, 'customers', ['last_name', 'lastname', 'surname', 'family_name', 'lname']);
 $customerFullNameColumn = tableFindColumn($pdo, 'customers', ['full_name', 'name']);
 $customerUpdatedAtColumn = tableHasColumn($pdo, 'customers', 'updated_at') ? 'updated_at' : null;
 
@@ -139,22 +157,18 @@ $storedFirstName = trim((string) ($customerAccount['first_name'] ?? ''));
 $storedMiddleName = trim((string) ($customerAccount['middle_name'] ?? ''));
 $storedLastName = trim((string) ($customerAccount['last_name'] ?? ''));
 
-if ($storedFullName === '') {
-    $nameParts = [];
-    foreach ([
-        $storedFirstName,
-        $storedMiddleName,
-        $storedLastName,
-    ] as $part) {
-        $trimmedPart = trim($part);
-        if ($trimmedPart !== '') {
-            $nameParts[] = $trimmedPart;
-        }
-    }
+if ($customerFirstNameColumn !== null) {
+    $storedFirstName = trim((string) ($customerAccount[$customerFirstNameColumn] ?? $storedFirstName));
+}
+if ($customerMiddleNameColumn !== null) {
+    $storedMiddleName = trim((string) ($customerAccount[$customerMiddleNameColumn] ?? $storedMiddleName));
+}
+if ($customerLastNameColumn !== null) {
+    $storedLastName = trim((string) ($customerAccount[$customerLastNameColumn] ?? $storedLastName));
+}
 
-    if ($nameParts !== []) {
-        $storedFullName = implode(' ', $nameParts);
-    }
+if ($storedFullName === '') {
+    $storedFullName = combineNameParts($storedFirstName, $storedMiddleName, $storedLastName);
 }
 $storedEmail = trim((string) ($customerAccount['email'] ?? ''));
 if ($customerEmailColumn !== null) {
@@ -189,7 +203,7 @@ if ($storedPostal === '') {
     $storedPostal = trim((string) ($customerAccount['postal_code'] ?? ''));
 }
 
-$customerHasSavedContact = $storedEmail !== '' && $storedPhone !== '';
+$customerHasSavedContact = $storedEmail !== '' && $storedPhone !== '' && $storedFirstName !== '' && $storedLastName !== '';
 $customerHasSavedAddress = $storedAddress !== '' && $storedCity !== '' && $storedPostal !== '';
 
 $defaultContactMode = ($customerHasSavedContact && !isset($_GET['edit_contact'])) ? 'summary' : 'edit';
@@ -209,7 +223,10 @@ $showAddressSummary = $customerHasSavedAddress && $addressMode === 'summary';
 $formValues = [
     'email' => trim((string) ($_POST['email'] ?? '')),
     'phone' => trim((string) ($_POST['phone'] ?? '')),
-    'customer_name' => trim((string) ($_POST['customer_name'] ?? '')),
+    'first_name' => trim((string) ($_POST['first_name'] ?? '')),
+    'middle_name' => trim((string) ($_POST['middle_name'] ?? '')),
+    'last_name' => trim((string) ($_POST['last_name'] ?? '')),
+    'customer_name' => '',
     'address' => trim((string) ($_POST['address'] ?? '')),
     'postal_code' => trim((string) ($_POST['postal_code'] ?? '')),
     'city' => trim((string) ($_POST['city'] ?? '')),
@@ -223,17 +240,25 @@ if ($customerAccount) {
     if ($formValues['phone'] === '' && $storedPhone !== '') {
         $formValues['phone'] = $storedPhone;
     }
-    if ($formValues['customer_name'] === '' && $storedFullName !== '') {
-        $formValues['customer_name'] = $storedFullName;
+    if ($formValues['first_name'] === '' && $storedFirstName !== '') {
+        $formValues['first_name'] = $storedFirstName;
+    }
+    if ($formValues['middle_name'] === '' && $storedMiddleName !== '') {
+        $formValues['middle_name'] = $storedMiddleName;
+    }
+    if ($formValues['last_name'] === '' && $storedLastName !== '') {
+        $formValues['last_name'] = $storedLastName;
     }
 
     if ($contactMode === 'summary' && $customerHasSavedContact) {
         $formValues['email'] = $storedEmail;
         $formValues['phone'] = $storedPhone;
+        $formValues['first_name'] = $storedFirstName;
+        $formValues['middle_name'] = $storedMiddleName;
+        $formValues['last_name'] = $storedLastName;
     }
 
     if ($addressMode === 'summary' && $customerHasSavedAddress) {
-        $formValues['customer_name'] = $storedFullName;
         $formValues['address'] = $storedAddress;
         $formValues['postal_code'] = $storedPostal;
         $formValues['city'] = $storedCity;
@@ -250,6 +275,15 @@ if ($customerAccount) {
             }
         }
     }
+}
+
+$formValues['customer_name'] = combineNameParts(
+    $formValues['first_name'],
+    $formValues['middle_name'],
+    $formValues['last_name']
+);
+if ($formValues['customer_name'] === '' && $storedFullName !== '') {
+    $formValues['customer_name'] = $storedFullName;
 }
 
 
@@ -656,8 +690,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$isCustomerAuthenticated || !$customerAccount) {
         $errors[] = 'Please log in or create an account before checking out.';
     }
-    // Treat customer_name as full name
-    $customer_name = $formValues['customer_name'];
+    $firstName = $formValues['first_name'];
+    $middleName = $formValues['middle_name'];
+    $lastName = $formValues['last_name'];
+    $customer_name = combineNameParts($firstName, $middleName, $lastName);
     $email = $formValues['email'];
     $phone = $formValues['phone'];
     $address = $formValues['address'];
@@ -671,6 +707,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($contactMode === 'summary' && $customerHasSavedContact) {
             $email = $storedEmail !== '' ? $storedEmail : $email;
             $phone = $storedPhone !== '' ? $storedPhone : $phone;
+            $firstName = $storedFirstName !== '' ? $storedFirstName : $firstName;
+            $middleName = $storedMiddleName !== '' ? $storedMiddleName : $middleName;
+            $lastName = $storedLastName !== '' ? $storedLastName : $lastName;
         }
 
         if ($addressMode === 'summary' && $customerHasSavedAddress) {
@@ -689,15 +728,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($storedPhone !== '' && $contactMode !== 'edit') {
             $phone = $storedPhone;
         }
+        if ($storedFirstName !== '' && $contactMode !== 'edit') {
+            $firstName = $storedFirstName;
+        }
+        if ($storedMiddleName !== '' && $contactMode !== 'edit') {
+            $middleName = $storedMiddleName;
+        }
+        if ($storedLastName !== '' && $contactMode !== 'edit') {
+            $lastName = $storedLastName;
+        }
     }
 
+    $customer_name = combineNameParts($firstName, $middleName, $lastName);
     $formValues['customer_name'] = $customer_name;
     $formValues['email'] = $email;
     $formValues['phone'] = $phone;
+    $formValues['first_name'] = $firstName;
+    $formValues['middle_name'] = $middleName;
+    $formValues['last_name'] = $lastName;
     $formValues['address'] = $address;
     $formValues['postal_code'] = $postalCode;
     $formValues['city'] = $city;
     $formValues['customer_note'] = $customerNote;
+
+    if ($firstName === '') {
+        $errors[] = 'First name is required.';
+    }
+
+    if ($lastName === '') {
+        $errors[] = 'Last name is required.';
+    }
 
     // Validate required email
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -847,6 +907,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($customerFullNameColumn !== null && $customer_name !== '' && $customer_name !== $storedFullName) {
                 $updates[] = '`' . $customerFullNameColumn . '` = ?';
                 $updateValues[] = $customer_name;
+            }
+            if ($customerFirstNameColumn !== null && $firstName !== '' && $firstName !== $storedFirstName) {
+                $updates[] = '`' . $customerFirstNameColumn . '` = ?';
+                $updateValues[] = $firstName;
+            }
+            if ($customerMiddleNameColumn !== null && $middleName !== $storedMiddleName) {
+                $updates[] = '`' . $customerMiddleNameColumn . '` = ?';
+                $updateValues[] = $middleName !== '' ? $middleName : null;
+            }
+            if ($customerLastNameColumn !== null && $lastName !== '' && $lastName !== $storedLastName) {
+                $updates[] = '`' . $customerLastNameColumn . '` = ?';
+                $updateValues[] = $lastName;
             }
             if ($customerEmailColumn !== null && $email !== '' && $email !== $storedEmail) {
                 $updates[] = '`' . $customerEmailColumn . '` = ?';
@@ -1090,7 +1162,10 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
         <!-- Left Column - Checkout Form -->
         <div class="checkout-form<?= $isCustomerAuthenticated ? '' : ' checkout-form--guest-disabled' ?>">
             <?php if (!$isCustomerAuthenticated): ?>
-                <div class="checkout-login-alert">Log in or create an account to finish checkout.</div>
+                <div class="checkout-login-alert">
+                    <a href="<?= htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') ?>">Log in</a> or
+                    <a href="<?= htmlspecialchars($registerUrl, ENT_QUOTES, 'UTF-8') ?>">create an account</a> to finish checkout.
+                </div>
             <?php endif; ?>
             <?php if (!empty($errors)): ?>
             <div class="form-alert">
@@ -1113,16 +1188,34 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                         <i class="fas fa-user"></i>
                         Contact
                     </h2>
+                    <?php
+                    $contactSummaryFirstName = $storedFirstName !== '' ? $storedFirstName : $formValues['first_name'];
+                    $contactSummaryMiddleName = $storedMiddleName !== '' ? $storedMiddleName : $formValues['middle_name'];
+                    $contactSummaryLastName = $storedLastName !== '' ? $storedLastName : $formValues['last_name'];
+                    $contactSummaryEmail = $storedEmail !== '' ? $storedEmail : $formValues['email'];
+                    $contactSummaryPhone = $storedPhone !== '' ? $storedPhone : $formValues['phone'];
+                    $contactSummaryFullName = combineNameParts($contactSummaryFirstName, $contactSummaryMiddleName, $contactSummaryLastName);
+                    ?>
                     <?php if ($showContactSummary): ?>
-                        <div class="billing-summary contact-summary" data-contact-summary data-contact-email="<?= htmlspecialchars($storedEmail, ENT_QUOTES, 'UTF-8') ?>" data-contact-phone="<?= htmlspecialchars($storedPhone, ENT_QUOTES, 'UTF-8') ?>">
+                        <div class="billing-summary contact-summary"
+                            data-contact-summary
+                            data-contact-first-name="<?= htmlspecialchars($contactSummaryFirstName, ENT_QUOTES, 'UTF-8') ?>"
+                            data-contact-middle-name="<?= htmlspecialchars($contactSummaryMiddleName, ENT_QUOTES, 'UTF-8') ?>"
+                            data-contact-last-name="<?= htmlspecialchars($contactSummaryLastName, ENT_QUOTES, 'UTF-8') ?>"
+                            data-contact-email="<?= htmlspecialchars($contactSummaryEmail, ENT_QUOTES, 'UTF-8') ?>"
+                            data-contact-phone="<?= htmlspecialchars($contactSummaryPhone, ENT_QUOTES, 'UTF-8') ?>">
                             <dl class="billing-summary__details">
                                 <div>
+                                    <dt>Name</dt>
+                                    <dd data-contact-summary-name><?= htmlspecialchars($contactSummaryFullName) ?></dd>
+                                </div>
+                                <div>
                                     <dt>Email</dt>
-                                    <dd><?= htmlspecialchars($storedEmail) ?></dd>
+                                    <dd data-contact-summary-email><?= htmlspecialchars($contactSummaryEmail) ?></dd>
                                 </div>
                                 <div>
                                     <dt>Mobile</dt>
-                                    <dd><?= htmlspecialchars($storedPhone) ?></dd>
+                                    <dd data-contact-summary-phone><?= htmlspecialchars($contactSummaryPhone) ?></dd>
                                 </div>
                             </dl>
                             <button type="button" class="billing-summary__edit" data-contact-edit>
@@ -1133,6 +1226,18 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                     <?php endif; ?>
                     <div class="billing-form contact-form<?= $showContactSummary ? ' is-hidden' : '' ?>" data-contact-form <?= $showContactSummary ? 'hidden' : '' ?>>
                         <div class="form-group">
+                            <label>First name <span class="required-indicator">*</span></label>
+                            <input type="text" name="first_name" placeholder="First name" value="<?= htmlspecialchars($formValues['first_name']) ?>" <?= $showContactSummary ? '' : 'required' ?> data-contact-required>
+                        </div>
+                        <div class="form-group">
+                            <label>Middle name <span class="field-optional">(optional)</span></label>
+                            <input type="text" name="middle_name" placeholder="Middle name" value="<?= htmlspecialchars($formValues['middle_name']) ?>">
+                        </div>
+                        <div class="form-group">
+                            <label>Last name <span class="required-indicator">*</span></label>
+                            <input type="text" name="last_name" placeholder="Last name" value="<?= htmlspecialchars($formValues['last_name']) ?>" <?= $showContactSummary ? '' : 'required' ?> data-contact-required>
+                        </div>
+                        <div class="form-group">
                             <label>Email <span class="required-indicator">*</span></label>
                             <input type="email" name="email" placeholder="you@example.com" value="<?= htmlspecialchars($formValues['email']) ?>" <?= $showContactSummary ? '' : 'required' ?> data-contact-required>
                         </div>
@@ -1141,7 +1246,10 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                             <input type="tel" name="phone" placeholder="Mobile No." inputmode="numeric" maxlength="12" value="<?= htmlspecialchars($formValues['phone']) ?>" <?= $showContactSummary ? '' : 'required' ?> data-contact-required>
                         </div>
                         <?php if ($showContactSummary): ?>
-                            <button type="button" class="billing-form__cancel contact-form__cancel" data-contact-cancel>Cancel</button>
+                            <div class="form-actions contact-form__actions">
+                                <button type="button" class="form-action-button form-action-button--primary" data-contact-save>Save</button>
+                                <button type="button" class="form-action-button form-action-button--secondary contact-form__cancel" data-contact-cancel>Cancel</button>
+                            </div>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -1153,24 +1261,23 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                         Billing Address
                     </h2>
                     <?php if ($showAddressSummary): ?>
-                        <div class="billing-summary" data-billing-summary>
+                        <div class="billing-summary" data-billing-summary
+                            data-billing-address="<?= htmlspecialchars($formValues['address'], ENT_QUOTES, 'UTF-8') ?>"
+                            data-billing-postal="<?= htmlspecialchars($formValues['postal_code'], ENT_QUOTES, 'UTF-8') ?>"
+                            data-billing-city="<?= htmlspecialchars($formValues['city'], ENT_QUOTES, 'UTF-8') ?>">
                             <dl class="billing-summary__details">
                                 <div>
-                                    <dt>Name</dt>
-                                    <dd><?= htmlspecialchars($formValues['customer_name']) ?></dd>
-                                </div>
-                                <div>
                                     <dt>Address</dt>
-                                    <dd><?= nl2br(htmlspecialchars($formValues['address'])) ?></dd>
+                                    <dd data-billing-summary-address><?= nl2br(htmlspecialchars($formValues['address'])) ?></dd>
                                 </div>
                                 <div class="billing-summary__inline">
                                     <div>
                                         <dt>City</dt>
-                                        <dd><?= htmlspecialchars($formValues['city']) ?></dd>
+                                        <dd data-billing-summary-city><?= htmlspecialchars($formValues['city']) ?></dd>
                                     </div>
                                     <div>
                                         <dt>Postal code</dt>
-                                        <dd><?= htmlspecialchars($formValues['postal_code']) ?></dd>
+                                        <dd data-billing-summary-postal><?= htmlspecialchars($formValues['postal_code']) ?></dd>
                                     </div>
                                 </div>
                             </dl>
@@ -1182,10 +1289,6 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                         </div>
                     <?php endif; ?>
                     <div class="billing-form<?= $showAddressSummary ? ' is-hidden' : '' ?>" data-billing-form <?= $showAddressSummary ? 'hidden' : '' ?>>
-                        <div class="form-group">
-                            <label>Full name <span class="required-indicator">*</span></label>
-                            <input type="text" name="customer_name" value="<?= htmlspecialchars($formValues['customer_name']) ?>" <?= $showAddressSummary ? '' : 'required' ?> data-billing-required>
-                        </div>
                         <div class="form-group">
                             <label>Address <span class="required-indicator">*</span></label>
                             <textarea name="address" placeholder="Street address, apartment, suite, etc." <?= $showAddressSummary ? '' : 'required' ?> data-billing-required><?= htmlspecialchars($formValues['address']) ?></textarea>
@@ -1201,7 +1304,10 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                             </div>
                         </div>
                         <?php if ($showAddressSummary): ?>
-                            <button type="button" class="billing-form__cancel" data-billing-cancel>Cancel</button>
+                            <div class="form-actions billing-form__actions">
+                                <button type="button" class="form-action-button form-action-button--primary" data-billing-save>Save</button>
+                                <button type="button" class="form-action-button form-action-button--secondary" data-billing-cancel>Cancel</button>
+                            </div>
                         <?php endif; ?>
                     </div>
                     <div class="form-group billing-notes">

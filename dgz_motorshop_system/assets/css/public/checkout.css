@@ -106,6 +106,17 @@ body {
     margin-bottom: 6px;
 }
 
+.checkout-login-alert a {
+    color: #2563eb;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.checkout-login-alert a:hover,
+.checkout-login-alert a:focus {
+    text-decoration: underline;
+}
+
 .order-summary {
     background: #ffffff;
     border-radius: 22px;
@@ -190,6 +201,15 @@ h2 {
     gap: 8px;
 }
 
+.field-optional {
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 500;
+    margin-left: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
 .form-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -230,6 +250,48 @@ select:focus {
     border-color: #667eea;
     background: white;
     box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.form-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.form-action-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    font-weight: 600;
+    padding: 12px 20px;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+    min-width: 110px;
+}
+
+.form-action-button--primary {
+    background: #2563eb;
+    border: 1px solid #2563eb;
+    color: #ffffff;
+}
+
+.form-action-button--primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.25);
+}
+
+.form-action-button--secondary {
+    background: #ffffff;
+    border: 1px solid #cbd5f5;
+    color: #2563eb;
+}
+
+.form-action-button--secondary:hover {
+    background: #eff4ff;
+    border-color: #94b3ff;
 }
 
 textarea {
