@@ -171,7 +171,7 @@
         });
     }
 
-    if (authRequired === 'checkout' && sessionState !== 'authenticated') {
+    if (authGate && authRequired === 'checkout' && sessionState !== 'authenticated') {
         const checkoutForm = document.querySelector('[data-auth-required="checkout"] .checkout-form form');
         if (checkoutForm) {
             checkoutForm.addEventListener('submit', (event) => {

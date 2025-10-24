@@ -135,14 +135,6 @@ $registerUrl = orderingUrl('register.php');
 $myOrdersUrl = orderingUrl('my_orders.php');
 $logoutUrl = orderingUrl('logout.php');
 $settingsUrl = orderingUrl('settings.php');
-$loginGateLoginUrl = $loginUrl;
-$loginGateRegisterUrl = $registerUrl;
-$loginGateRedirect = orderingUrl('checkout.php');
-$currentQueryString = isset($_SERVER['QUERY_STRING']) ? trim((string) $_SERVER['QUERY_STRING']) : '';
-if ($currentQueryString !== '') {
-    $loginGateRedirect .= (strpos($loginGateRedirect, '?') === false ? '?' : '&') . $currentQueryString;
-}
-
 $customerAddressColumn = tableFindColumn($pdo, 'customers', ['address_line1', 'address', 'address1', 'street']);
 $customerCityColumn = tableFindColumn($pdo, 'customers', ['city', 'town', 'municipality']);
 $customerPostalColumn = tableFindColumn($pdo, 'customers', ['postal_code', 'postal', 'zip_code', 'zipcode', 'zip']);
@@ -1177,7 +1169,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
     <link rel="stylesheet" href="<?= htmlspecialchars($checkoutModalStylesheet) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars($customerStylesheet) ?>">
 </head>
-<body data-customer-session="<?= htmlspecialchars($bodyCustomerState) ?>" data-customer-first-name="<?= htmlspecialchars($bodyCustomerFirstName) ?>" data-auth-required="checkout">
+<body data-customer-session="<?= htmlspecialchars($bodyCustomerState) ?>" data-customer-first-name="<?= htmlspecialchars($bodyCustomerFirstName) ?>">
     <header class="header">
         <div class="header-content">
             <div class="logo">
@@ -1213,8 +1205,6 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             </div>
         </div>
     </header>
-
-    <?php require __DIR__ . '/dgz_motorshop_system/includes/login_required_modal.php'; ?>
 
     <div class="container">
         <!-- Left Column - Checkout Form -->
@@ -1469,13 +1459,9 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             $total = $subtotal;
             ?>
 
-            <div class="summary-row">
+            <div class="summary-row summary-row--emphasis">
                 <span id="summarySubtotalLabel">Subtotal, <?= count($cartItems) ?> item<?= count($cartItems) > 1 ? 's' : '' ?></span>
-                <span id="summarySubtotalValue">₱ <?= number_format($subtotal, 2) ?></span>
-            </div>
-            <div class="summary-row total">
-                <span>Total</span>
-                <span id="summaryTotalValue">₱ <?= number_format($total, 2) ?></span>
+                <span id="summarySubtotalValue" class="summary-row__amount">₱ <?= number_format($subtotal, 2) ?></span>
             </div>
         </div>
     </div>
@@ -1586,7 +1572,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
         const emptyState = document.getElementById('orderEmptyState');
         const subtotalLabel = document.getElementById('summarySubtotalLabel');
         const subtotalValue = document.getElementById('summarySubtotalValue');
-        const totalValue = document.getElementById('summaryTotalValue');
+        const totalValue = document.getElementById('summaryTotalValue') || subtotalValue;
         const submitButton = document.querySelector('.submit-btn');
         const clearCartButton = document.getElementById('clearCartButton');
         const checkoutForm = document.querySelector('.checkout-form form');
