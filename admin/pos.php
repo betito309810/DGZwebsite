@@ -1112,7 +1112,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pos_checkout'])) {
 
         $itemInsertStmt = $pdo->prepare('INSERT INTO order_items (order_id, product_id, qty, price, description) VALUES (?,?,?,?,?)');
         $inventoryUpdateStmt = $pdo->prepare('UPDATE products SET quantity = quantity - ? WHERE id = ?');
-        $variantInventoryUpdateStmt = $pdo->prepare('UPDATE product_variants SET quantity = quantity - ? WHERE id = ?');
+        $variantInventoryUpdateStmt = $pdo->prepare(
+            'UPDATE product_variants '
+            . 'SET quantity = quantity - ?, '
+            . 'low_stock_threshold = CASE '
+            . '    WHEN (quantity - ?) <= 0 THEN 0 '
+            . '    ELSE LEAST(9999, GREATEST(1, CEIL((quantity - ?) * 0.2))) '
+            . 'END '
+            . 'WHERE id = ?'
+        );
 
         foreach ($cartItems as $item) {
             if ($item['type'] === 'service') {
@@ -1123,7 +1131,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pos_checkout'])) {
             $itemInsertStmt->execute([$orderId, $item['id'], $item['qty'], $item['price'], $item['name']]);
             $inventoryUpdateStmt->execute([$item['qty'], $item['id']]);
             if (!empty($item['variant_id'])) {
-                $variantInventoryUpdateStmt->execute([$item['qty'], $item['variant_id']]);
+                $variantInventoryUpdateStmt->execute([
+                    $item['qty'],
+                    $item['qty'],
+                    $item['qty'],
+                    $item['variant_id'],
+                ]);
             }
         }
 

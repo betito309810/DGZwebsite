@@ -338,8 +338,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_order_id'])) {
                         continue;
                     }
                     if (!empty($item['variant_id'])) {
-                        $variantUpdate = $pdo->prepare('UPDATE product_variants SET quantity = quantity + ? WHERE id = ?');
-                        $variantUpdate->execute([$qty, (int) $item['variant_id']]);
+                        $variantUpdate = $pdo->prepare(
+                            'UPDATE product_variants '
+                            . 'SET quantity = quantity + ?, '
+                            . 'low_stock_threshold = CASE '
+                            . '    WHEN (quantity + ?) <= 0 THEN 0 '
+                            . '    ELSE LEAST(9999, GREATEST(1, CEIL((quantity + ?) * 0.2))) '
+                            . 'END '
+                            . 'WHERE id = ?'
+                        );
+                        $variantUpdate->execute([$qty, $qty, $qty, (int) $item['variant_id']]);
                     } elseif (!empty($item['product_id'])) {
                         $productUpdate = $pdo->prepare('UPDATE products SET quantity = quantity + ? WHERE id = ?');
                         $productUpdate->execute([$qty, (int) $item['product_id']]);

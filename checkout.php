@@ -1020,7 +1020,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     insertOrderItemDynamic($pdo, (int) $order_id, $itemPayload, $variantRow);
 
-                    $pdo->prepare('UPDATE product_variants SET quantity = quantity - ? WHERE id = ?')->execute([$item['quantity'], (int) $variantRow['id']]);
+                    $pdo->prepare(
+                        'UPDATE product_variants '
+                        . 'SET quantity = quantity - ?, '
+                        . 'low_stock_threshold = CASE '
+                        . '    WHEN (quantity - ?) <= 0 THEN 0 '
+                        . '    ELSE LEAST(9999, GREATEST(1, CEIL((quantity - ?) * 0.2))) '
+                        . 'END '
+                        . 'WHERE id = ?'
+                    )->execute([
+                        $item['quantity'],
+                        $item['quantity'],
+                        $item['quantity'],
+                        (int) $variantRow['id'],
+                    ]);
                     $pdo->prepare('UPDATE products SET quantity = quantity - ? WHERE id = ?')->execute([$item['quantity'], (int) $variantRow['product_id']]);
                 }
             } else {

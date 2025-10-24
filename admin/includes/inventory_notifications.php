@@ -150,7 +150,7 @@ if (!function_exists('loadInventoryNotifications')) {
             "SELECT pv.id AS variant_id, pv.product_id, pv.label, pv.variant_code, pv.quantity, pv.low_stock_threshold, p.name AS product_name "
             . "FROM product_variants pv "
             . "INNER JOIN products p ON p.id = pv.product_id "
-            . "WHERE pv.low_stock_threshold IS NOT NULL AND pv.low_stock_threshold > 0 "
+            . "WHERE pv.low_stock_threshold IS NOT NULL AND pv.low_stock_threshold >= 0 "
             . "AND pv.quantity <= pv.low_stock_threshold AND $activeCondition"
         )->fetchAll(PDO::FETCH_ASSOC);
 
@@ -212,9 +212,6 @@ if (!function_exists('loadInventoryNotifications')) {
             if ($variantId) {
                 $variantQuantity = isset($record['variant_quantity']) ? (int) $record['variant_quantity'] : null;
                 $variantThreshold = isset($record['variant_low_stock_threshold']) ? (int) $record['variant_low_stock_threshold'] : null;
-                if ($variantThreshold !== null && $variantThreshold <= 0) {
-                    $variantThreshold = null;
-                }
                 $productQuantity = isset($record['product_quantity']) ? (int) $record['product_quantity'] : null;
 
                 if (

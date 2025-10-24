@@ -59,6 +59,210 @@ if (!function_exists('ensureProductVariantSchema')) {
                 }
             }
         }
+
+        backfillVariantMetadata($pdo);
+    }
+}
+
+if (!function_exists('calculateVariantLowStockThreshold')) {
+    /**
+     * Compute the automatic low-stock threshold for a given on-hand quantity.
+     */
+    function calculateVariantLowStockThreshold(int $quantity): int
+    {
+        if ($quantity <= 0) {
+            return 0;
+        }
+
+        $threshold = (int) ceil($quantity * 0.2);
+        if ($threshold < 1) {
+            $threshold = 1;
+        }
+        if ($threshold > 9999) {
+            $threshold = 9999;
+        }
+
+        return $threshold;
+    }
+}
+
+if (!function_exists('normaliseVariantCodePrefix')) {
+    /**
+     * Build a stable, sanitised prefix from the parent product code.
+     */
+    function normaliseVariantCodePrefix(int $productId, ?string $rawCode): string
+    {
+        $code = trim((string) ($rawCode ?? ''));
+        if ($code === '') {
+            $code = 'PROD-' . str_pad((string) $productId, 4, '0', STR_PAD_LEFT);
+        }
+
+        $upper = strtoupper($code);
+        $sanitised = preg_replace('/[^A-Z0-9]+/', '-', $upper);
+        $sanitised = $sanitised !== null ? trim($sanitised, '-') : '';
+
+        if ($sanitised === '') {
+            $sanitised = 'PROD-' . $productId;
+        }
+
+        return $sanitised;
+    }
+}
+
+if (!function_exists('generateAutomaticVariantCode')) {
+    /**
+     * Generate a unique variant code using the product prefix and variant label.
+     */
+    function generateAutomaticVariantCode(string $prefix, string $label, int $fallbackIndex, array &$taken): string
+    {
+        $labelSlug = strtoupper(trim($label));
+        $labelSlug = preg_replace('/[^A-Z0-9]+/', '-', $labelSlug);
+        $labelSlug = $labelSlug !== null ? trim($labelSlug, '-') : '';
+
+        if ($labelSlug === '') {
+            $labelSlug = 'VAR-' . str_pad((string) max(1, $fallbackIndex), 2, '0', STR_PAD_LEFT);
+        }
+
+        $base = $prefix !== '' ? $prefix . '-' . $labelSlug : $labelSlug;
+        $base = preg_replace('/-+/', '-', $base ?? '');
+        $base = $base !== null ? trim($base, '-') : '';
+        if ($base === '') {
+            $base = 'VAR-' . str_pad((string) max(1, $fallbackIndex), 2, '0', STR_PAD_LEFT);
+        }
+
+        $baseCandidate = function_exists('mb_substr') ? mb_substr($base, 0, 100) : substr($base, 0, 100);
+        $baseCandidate = $baseCandidate !== '' ? rtrim($baseCandidate, '-') : $baseCandidate;
+        if ($baseCandidate === '') {
+            $baseCandidate = 'VAR-' . str_pad((string) max(1, $fallbackIndex), 2, '0', STR_PAD_LEFT);
+        }
+
+        $candidate = $baseCandidate;
+        $normalised = strtolower($candidate);
+        $suffix = 2;
+        while (isset($taken[$normalised])) {
+            $suffixPart = '-' . $suffix;
+            $maxLength = 100 - strlen($suffixPart);
+            $truncated = $baseCandidate;
+            if (strlen($truncated) > $maxLength) {
+                $slice = substr($baseCandidate, 0, $maxLength);
+                $truncated = rtrim($slice, '-');
+                if ($truncated === '') {
+                    $truncated = $slice;
+                }
+            }
+            $candidate = $truncated . $suffixPart;
+            $normalised = strtolower($candidate);
+            $suffix++;
+        }
+
+        $taken[$normalised] = true;
+
+        return $candidate;
+    }
+}
+
+if (!function_exists('backfillVariantMetadata')) {
+    /**
+     * Populate missing variant codes and thresholds for legacy rows.
+     */
+    function backfillVariantMetadata(PDO $pdo): void
+    {
+        static $backfilled = [];
+
+        $key = function_exists('spl_object_id')
+            ? (string) spl_object_id($pdo)
+            : spl_object_hash($pdo);
+
+        if (isset($backfilled[$key])) {
+            return;
+        }
+
+        $backfilled[$key] = true;
+
+        try {
+            $stmt = $pdo->query(
+                'SELECT pv.id, pv.product_id, pv.label, pv.variant_code, pv.quantity, pv.low_stock_threshold, p.code AS product_code '
+                . 'FROM product_variants pv '
+                . 'LEFT JOIN products p ON p.id = pv.product_id '
+                . 'ORDER BY pv.product_id ASC, pv.id ASC'
+            );
+        } catch (PDOException $exception) {
+            error_log('Unable to backfill product variant metadata: ' . $exception->getMessage());
+            return;
+        }
+
+        if (!$stmt) {
+            return;
+        }
+
+        $updates = [];
+        $takenCodes = [];
+
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $variantId = isset($row['id']) ? (int) $row['id'] : 0;
+            $productId = isset($row['product_id']) ? (int) $row['product_id'] : 0;
+            if ($variantId <= 0 || $productId <= 0) {
+                continue;
+            }
+
+            if (!isset($takenCodes[$productId])) {
+                $takenCodes[$productId] = [];
+            }
+
+            $currentCode = isset($row['variant_code']) ? trim((string) $row['variant_code']) : '';
+            $lowerCode = strtolower($currentCode);
+            $duplicateDetected = false;
+            if ($currentCode !== '') {
+                if (isset($takenCodes[$productId][$lowerCode])) {
+                    $duplicateDetected = true;
+                } else {
+                    $takenCodes[$productId][$lowerCode] = true;
+                }
+            }
+
+            $quantity = isset($row['quantity']) ? (int) $row['quantity'] : 0;
+            $expectedThreshold = calculateVariantLowStockThreshold($quantity);
+            $currentThresholdRaw = $row['low_stock_threshold'] ?? null;
+            $currentThreshold = $currentThresholdRaw !== null ? (int) $currentThresholdRaw : null;
+
+            $needsCodeUpdate = $currentCode === '' || $duplicateDetected;
+            $needsThresholdUpdate = $currentThreshold !== $expectedThreshold;
+
+            if ($needsCodeUpdate) {
+                $prefix = normaliseVariantCodePrefix($productId, $row['product_code'] ?? null);
+                $currentCode = generateAutomaticVariantCode(
+                    $prefix,
+                    (string) ($row['label'] ?? ''),
+                    count($takenCodes[$productId]) + 1,
+                    $takenCodes[$productId]
+                );
+            }
+
+            if ($needsCodeUpdate || $needsThresholdUpdate) {
+                $updates[] = [
+                    'id' => $variantId,
+                    'variant_code' => $currentCode,
+                    'threshold' => $expectedThreshold,
+                ];
+            }
+        }
+
+        if (empty($updates)) {
+            return;
+        }
+
+        $updateStmt = $pdo->prepare('UPDATE product_variants SET variant_code = ?, low_stock_threshold = ? WHERE id = ?');
+        foreach ($updates as $update) {
+            try {
+                $updateStmt->execute([
+                    $update['variant_code'],
+                    $update['threshold'],
+                    $update['id'],
+                ]);
+            } catch (PDOException $exception) {
+                error_log('Unable to update product variant metadata: ' . $exception->getMessage());
+            }
+        }
     }
 }
 
@@ -87,16 +291,16 @@ if (!function_exists('fetchProductVariants')) {
             $variant['is_default'] = (int) ($variant['is_default'] ?? 0);
             $variant['sort_order'] = (int) ($variant['sort_order'] ?? 0);
             $code = isset($variant['variant_code']) ? trim((string) $variant['variant_code']) : '';
-            $variant['variant_code'] = $code !== '' ? $code : null;
+            $variant['variant_code'] = $code !== '' ? $code : '';
 
-            $threshold = $variant['low_stock_threshold'] ?? null;
-            if ($threshold !== null && $threshold !== '') {
-                $threshold = (int) $threshold;
-                if ($threshold <= 0) {
-                    $threshold = null;
-                }
+            $thresholdRaw = $variant['low_stock_threshold'] ?? null;
+            if ($thresholdRaw === null || $thresholdRaw === '') {
+                $threshold = calculateVariantLowStockThreshold($variant['quantity']);
             } else {
-                $threshold = null;
+                $threshold = (int) $thresholdRaw;
+                if ($threshold < 0) {
+                    $threshold = 0;
+                }
             }
             $variant['low_stock_threshold'] = $threshold;
         }
@@ -137,16 +341,16 @@ if (!function_exists('fetchVariantsForProducts')) {
             $row['is_default'] = (int) ($row['is_default'] ?? 0);
             $row['sort_order'] = (int) ($row['sort_order'] ?? 0);
             $code = isset($row['variant_code']) ? trim((string) $row['variant_code']) : '';
-            $row['variant_code'] = $code !== '' ? $code : null;
+            $row['variant_code'] = $code !== '' ? $code : '';
 
-            $threshold = $row['low_stock_threshold'] ?? null;
-            if ($threshold !== null && $threshold !== '') {
-                $threshold = (int) $threshold;
-                if ($threshold <= 0) {
-                    $threshold = null;
-                }
+            $thresholdRaw = $row['low_stock_threshold'] ?? null;
+            if ($thresholdRaw === null || $thresholdRaw === '') {
+                $threshold = calculateVariantLowStockThreshold($row['quantity']);
             } else {
-                $threshold = null;
+                $threshold = (int) $thresholdRaw;
+                if ($threshold < 0) {
+                    $threshold = 0;
+                }
             }
             $row['low_stock_threshold'] = $threshold;
             $variantsByProduct[$productId][] = $row;
@@ -239,40 +443,12 @@ if (!function_exists('normaliseVariantPayload')) {
                 $quantity = 9999;
             }
 
-            $variantCode = trim((string) ($raw['variant_code'] ?? ''));
-            if ($variantCode !== '') {
-                if (function_exists('mb_substr')) {
-                    $variantCode = mb_substr($variantCode, 0, 100);
-                } else {
-                    $variantCode = substr($variantCode, 0, 100);
-                }
-            } else {
-                $variantCode = null;
-            }
-
-            $thresholdValue = $raw['low_stock_threshold'] ?? null;
-            $threshold = null;
-            if ($thresholdValue !== null && $thresholdValue !== '') {
-                $threshold = (int) $thresholdValue;
-                if ($threshold < 0) {
-                    $threshold = 0;
-                }
-                if ($threshold > 9999) {
-                    $threshold = 9999;
-                }
-                if ($threshold <= 0) {
-                    $threshold = null;
-                }
-            }
-
             $normalised[] = [
                 'id' => isset($raw['id']) ? (int) $raw['id'] : null,
                 'label' => $label,
                 'sku' => trim((string) ($raw['sku'] ?? '')) ?: null,
-                'variant_code' => $variantCode,
                 'price' => isset($raw['price']) ? max(0, (float) $raw['price']) : 0.0,
                 'quantity' => $quantity,
-                'low_stock_threshold' => $threshold,
                 'is_default' => !empty($raw['is_default']) ? 1 : 0,
                 'sort_order' => $sortOrder,
             ];
@@ -341,7 +517,15 @@ if (!function_exists('adjustVariantQuantity')) {
             return;
         }
 
-        $update = $pdo->prepare('UPDATE product_variants SET quantity = quantity + :delta WHERE id = :variant_id');
+        $update = $pdo->prepare(
+            'UPDATE product_variants '
+            . 'SET quantity = quantity + :delta, '
+            . 'low_stock_threshold = CASE '
+            . '    WHEN (quantity + :delta) <= 0 THEN 0 '
+            . '    ELSE LEAST(9999, GREATEST(1, CEIL((quantity + :delta) * 0.2))) '
+            . 'END '
+            . 'WHERE id = :variant_id'
+        );
         $update->execute([
             ':delta' => $quantityChange,
             ':variant_id' => $variantId,

@@ -545,6 +545,26 @@ if (!function_exists('syncProductVariants')) {
             $existingById[$variant['id']] = $variant;
         }
 
+        $productCodeStmt = $pdo->prepare('SELECT code FROM products WHERE id = ? LIMIT 1');
+        $productCodeStmt->execute([$productId]);
+        $rawProductCode = $productCodeStmt->fetchColumn();
+        $codePrefix = normaliseVariantCodePrefix($productId, $rawProductCode !== false ? $rawProductCode : null);
+
+        $takenCodes = [];
+        $duplicateIds = [];
+        foreach ($existing as $variant) {
+            $existingCode = isset($variant['variant_code']) ? trim((string) $variant['variant_code']) : '';
+            if ($existingCode === '') {
+                continue;
+            }
+            $lower = strtolower($existingCode);
+            if (isset($takenCodes[$lower])) {
+                $duplicateIds[(int) $variant['id']] = true;
+            } else {
+                $takenCodes[$lower] = true;
+            }
+        }
+
         $processedIds = [];
         $added = [];
         $updated = [];
@@ -556,24 +576,27 @@ if (!function_exists('syncProductVariants')) {
             $variantId = isset($variant['id']) && $variant['id'] ? (int) $variant['id'] : null;
             $label = $variant['label'];
             $sku = $variant['sku'] ?? null;
-            $variantCode = $variant['variant_code'] ?? null;
-            if ($variantCode !== null) {
-                $variantCode = trim((string) $variantCode);
-                if ($variantCode === '') {
-                    $variantCode = null;
-                }
-            }
             $price = (float) $variant['price'];
             $quantity = (int) $variant['quantity'];
-            $threshold = $variant['low_stock_threshold'] ?? null;
-            if ($threshold !== null) {
-                $threshold = (int) $threshold;
-                if ($threshold <= 0) {
-                    $threshold = null;
-                }
+            if ($quantity < 0) {
+                $quantity = 0;
             }
+            $threshold = calculateVariantLowStockThreshold($quantity);
             $isDefault = !empty($variant['is_default']) ? 1 : 0;
             $sortOrder = (int) $variant['sort_order'];
+
+            $variantCode = null;
+            if ($variantId !== null && isset($existingById[$variantId])) {
+                $existingCode = isset($existingById[$variantId]['variant_code']) ? trim((string) $existingById[$variantId]['variant_code']) : '';
+                if ($existingCode !== '' && empty($duplicateIds[$variantId])) {
+                    $variantCode = $existingCode;
+                }
+            }
+            if ($variantCode === null || $variantCode === '') {
+                $variantCode = generateAutomaticVariantCode($codePrefix, $label, count($takenCodes) + 1, $takenCodes);
+            } else {
+                $takenCodes[strtolower($variantCode)] = true;
+            }
 
             if ($variantId !== null && isset($existingById[$variantId])) {
                 $original = $existingById[$variantId];
@@ -1686,9 +1709,9 @@ $emptyTableMessage = $isArchivedView ? 'No archived products found.' : 'No produ
                                                 <input type="text" data-variant-sku placeholder="Custom SKU">
                                             </label>
                                         </div>
-                                        <div class="variant-row__field">
-                                            <label>Variant Code (optional)
-                                                <input type="text" data-variant-code placeholder="Code shown in inventory">
+                                        <div class="variant-row__field variant-row__field--code" data-variant-code-wrapper>
+                                            <label>Variant Code
+                                                <input type="text" data-variant-code placeholder="Generated after save" readonly>
                                             </label>
                                         </div>
                                         <div class="variant-row__field">
@@ -1701,11 +1724,7 @@ $emptyTableMessage = $isArchivedView ? 'No archived products found.' : 'No produ
                                                 <input type="number" min="0" max="9999" maxlength="4" data-variant-quantity>
                                             </label>
                                         </div>
-                                        <div class="variant-row__field">
-                                            <label>Low Stock Threshold
-                                                <input type="number" min="0" max="9999" maxlength="4" data-variant-threshold placeholder="Leave blank to disable">
-                                            </label>
-                                        </div>
+                                        <div class="variant-row__note">Low-stock alerts trigger automatically at 20% of the variant quantity.</div>
                                         <div class="variant-row__field variant-row__field--default">
                                             <label class="variant-default-toggle">
                                                 <input type="radio" name="create_variant_default" data-variant-default>
@@ -2160,11 +2179,11 @@ $emptyTableMessage = $isArchivedView ? 'No archived products found.' : 'No produ
                                                 <input type="text" data-variant-sku placeholder="Custom SKU">
                                             </label>
                                         </div>
-                                        <div class="variant-row__field">
-                                            <label>Variant Code (optional)
-                                                <input type="text" data-variant-code placeholder="Code shown in inventory">
-                                            </label>
-                                        </div>
+                                            <div class="variant-row__field variant-row__field--code" data-variant-code-wrapper>
+                                                <label>Variant Code
+                                                    <input type="text" data-variant-code placeholder="Generated after save" readonly>
+                                                </label>
+                                            </div>
                                         <div class="variant-row__field">
                                             <label>Price
                                                 <input type="number" min="0" step="0.01" data-variant-price>
@@ -2175,11 +2194,7 @@ $emptyTableMessage = $isArchivedView ? 'No archived products found.' : 'No produ
                                                 <input type="number" min="0" max="9999" maxlength="4" data-variant-quantity>
                                             </label>
                                         </div>
-                                        <div class="variant-row__field">
-                                            <label>Low Stock Threshold
-                                                <input type="number" min="0" max="9999" maxlength="4" data-variant-threshold placeholder="Leave blank to disable">
-                                            </label>
-                                        </div>
+                                            <div class="variant-row__note">Low-stock alerts trigger automatically at 20% of the variant quantity.</div>
                                         <div class="variant-row__field variant-row__field--default">
                                             <label class="variant-default-toggle">
                                                 <input type="radio" name="edit_variant_default" data-variant-default>

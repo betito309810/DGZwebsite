@@ -278,9 +278,17 @@ try {
     }
 
     if (!empty($restockVariants)) {
-        $variantRestockStmt = $pdo->prepare('UPDATE product_variants SET quantity = quantity + ? WHERE id = ?');
+        $variantRestockStmt = $pdo->prepare(
+            'UPDATE product_variants '
+            . 'SET quantity = quantity + ?, '
+            . 'low_stock_threshold = CASE '
+            . '    WHEN (quantity + ?) <= 0 THEN 0 '
+            . '    ELSE LEAST(9999, GREATEST(1, CEIL((quantity + ?) * 0.2))) '
+            . 'END '
+            . 'WHERE id = ?'
+        );
         foreach ($restockVariants as $variantId => $qty) {
-            $variantRestockStmt->execute([$qty, $variantId]);
+            $variantRestockStmt->execute([$qty, $qty, $qty, $variantId]);
         }
     }
 
