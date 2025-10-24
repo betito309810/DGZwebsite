@@ -198,6 +198,198 @@
     background: #f8fafc;
 }
 
+/* Catalog taxonomy manager styles */
+.taxonomy-modal {
+    max-width: 1120px;
+}
+
+.taxonomy-modal__content {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.taxonomy-modal__content h3 {
+    margin-bottom: 4px;
+}
+
+.taxonomy-modal__intro {
+    color: #4b5563;
+    font-size: 0.95rem;
+}
+
+.taxonomy-manager__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 24px;
+}
+
+.taxonomy-manager__section {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 18px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.taxonomy-manager__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+}
+
+.taxonomy-manager__header h4 {
+    font-size: 1.1rem;
+    color: #1f2937;
+}
+
+.taxonomy-manager__count {
+    color: #6b7280;
+    font-size: 0.85rem;
+}
+
+.taxonomy-manager__add-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    padding: 16px;
+}
+
+.taxonomy-manager__add-label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.taxonomy-manager__add-label input {
+    border-radius: 10px;
+    border: 1px solid #d1d5db;
+    padding: 10px 12px;
+    font-size: 0.95rem;
+}
+
+.taxonomy-manager__add-button {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: none;
+    border-radius: 10px;
+    background: #2563eb;
+    color: #fff;
+    font-weight: 600;
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.taxonomy-manager__add-button:hover {
+    background: #1d4ed8;
+}
+
+.taxonomy-manager__list {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    padding: 0;
+    overflow: hidden;
+}
+
+.taxonomy-manager__empty {
+    margin: 0;
+    padding: 18px;
+    color: #6b7280;
+    font-style: italic;
+}
+
+.taxonomy-manager__table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.taxonomy-manager__table th,
+.taxonomy-manager__table td {
+    padding: 14px 16px;
+    text-align: left;
+    border-bottom: 1px solid #e5e7eb;
+    font-size: 0.95rem;
+}
+
+.taxonomy-manager__table tbody tr:last-child th,
+.taxonomy-manager__table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.taxonomy-manager__row--archived {
+    opacity: 0.75;
+}
+
+.taxonomy-manager__status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+}
+
+.taxonomy-manager__status--active {
+    color: #166534;
+}
+
+.taxonomy-manager__status--archived {
+    color: #b91c1c;
+}
+
+.taxonomy-manager__actions {
+    width: 1%;
+    white-space: nowrap;
+}
+
+.taxonomy-manager__actions form {
+    display: inline;
+}
+
+.taxonomy-manager__action-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: none;
+    border-radius: 10px;
+    padding: 6px 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.taxonomy-manager__action-button--archive {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.taxonomy-manager__action-button--archive:hover {
+    background: #fecaca;
+}
+
+.taxonomy-manager__action-button--restore {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.taxonomy-manager__action-button--restore:hover {
+    background: #bbf7d0;
+}
+
+.taxonomy-manager__actions-heading {
+    text-align: right;
+}
+
 /* Added: Utility class to span fields across the full form width. */
 .product-modal__full {
     grid-column: 1 / -1;

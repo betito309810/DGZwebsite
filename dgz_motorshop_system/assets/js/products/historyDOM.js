@@ -644,9 +644,16 @@
                 }
             });
 
+            const taxonomyModal = document.getElementById('taxonomyModal');
+
             document.addEventListener('keydown', (event) => {
-                if (event.key === 'Escape' && detailModal?.style.display === 'flex') {
-                    closeDetailModal();
+                if (event.key === 'Escape') {
+                    if (detailModal?.style.display === 'flex') {
+                        closeDetailModal();
+                    }
+                    if (taxonomyModal?.style.display === 'flex') {
+                        taxonomyModal.style.display = 'none';
+                    }
                 }
             });
 
@@ -675,6 +682,24 @@
             addModal?.addEventListener('click', (event) => {
                 if (event.target === addModal) {
                     addModal.style.display = 'none';
+                }
+            });
+
+            document.getElementById('openTaxonomyModal')?.addEventListener('click', () => {
+                if (taxonomyModal) {
+                    taxonomyModal.style.display = 'flex';
+                }
+            });
+
+            document.getElementById('closeTaxonomyModal')?.addEventListener('click', () => {
+                if (taxonomyModal) {
+                    taxonomyModal.style.display = 'none';
+                }
+            });
+
+            taxonomyModal?.addEventListener('click', (event) => {
+                if (event.target === taxonomyModal) {
+                    taxonomyModal.style.display = 'none';
                 }
             });
         });

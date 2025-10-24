@@ -111,6 +111,8 @@ if (empty($_SESSION['user_id'])) {
 
 $pdo = db();
 $productsActiveClause = productsArchiveActiveCondition($pdo);
+catalogTaxonomyEnsureSchema($pdo);
+catalogTaxonomyBackfillFromProducts($pdo);
 if (!function_exists('ensureOrdersCustomerNoteColumn')) {
     /**
      * Added helper to upgrade the orders table so cashier notes can be saved from checkout.
@@ -1229,8 +1231,10 @@ $productQuery = $pdo->query('SELECT id, name, price, quantity, brand, category F
 $products = $productQuery->fetchAll();
 
 // Fetch unique brands and categories for filter dropdowns
-$brands = $pdo->query('SELECT DISTINCT brand FROM products WHERE ' . $productsActiveClause . ' AND brand IS NOT NULL AND brand != "" ORDER BY brand')->fetchAll(PDO::FETCH_COLUMN);
-$categories = $pdo->query('SELECT DISTINCT category FROM products WHERE ' . $productsActiveClause . ' AND category IS NOT NULL AND category != "" ORDER BY category')->fetchAll(PDO::FETCH_COLUMN);
+$brandTaxonomyRows = catalogTaxonomyFetchOptions($pdo, 'brand');
+$categoryTaxonomyRows = catalogTaxonomyFetchOptions($pdo, 'category');
+$brands = array_values(array_filter(array_map(static fn($row) => (string) ($row['name'] ?? ''), $brandTaxonomyRows), static fn($label) => $label !== ''));
+$categories = array_values(array_filter(array_map(static fn($row) => (string) ($row['name'] ?? ''), $categoryTaxonomyRows), static fn($label) => $label !== ''));
 
 $productIds = array_column($products, 'id');
 $productVariantMap = !empty($productIds) ? fetchVariantsForProducts($pdo, $productIds) : [];

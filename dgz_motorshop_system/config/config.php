@@ -20,6 +20,11 @@ if (is_file($productArchiveHelpers)) {
     require_once $productArchiveHelpers;
 }
 
+$catalogTaxonomyHelpers = __DIR__ . '/../includes/catalog_taxonomies.php';
+if (is_file($catalogTaxonomyHelpers)) {
+    require_once $catalogTaxonomyHelpers;
+}
+
 // Resolve the project's public and system base paths so generated links work
 // regardless of where the project is deployed inside the web root. The
 // storefront PHP files live alongside this directory, so we compute both the

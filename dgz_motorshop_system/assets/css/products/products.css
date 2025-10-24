@@ -141,6 +141,23 @@ h3 {
     margin: 0;
 }
 
+.manage-btn {
+    background: #4c51bf;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+    padding: 10px 20px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    width: fit-content;
+    transition: background 0.2s;
+    margin: 0;
+}
+
 .history-btn {
     background:#3498db;
     color:#fff;
@@ -191,6 +208,10 @@ h3 {
 }
 .add-btn:hover {
     background: #2563eb;
+}
+
+.manage-btn:hover {
+    background: #4338ca;
 }
 
 .products-action-bar {

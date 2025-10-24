@@ -7,6 +7,8 @@ if (empty($_SESSION['user_id'])) {
 
 $pdo = db();
 $productsActiveClause = productsArchiveActiveCondition($pdo);
+catalogTaxonomyEnsureSchema($pdo);
+catalogTaxonomyBackfillFromProducts($pdo);
 $role = $_SESSION['role'] ?? '';
 enforceStaffAccess();
 $notificationManageLink = 'inventory.php';
@@ -1499,7 +1501,20 @@ function fetchSuppliersList(PDO $pdo): array
         // ignore missing column/table
     }
 
-    return array_values(array_unique(array_merge($suppliers, $productSuppliers)));
+    $taxonomySuppliers = catalogTaxonomyFetchOptions($pdo, 'supplier');
+    $taxonomyNames = array_map(static fn($row) => (string) ($row['name'] ?? ''), $taxonomySuppliers);
+
+    $combined = array_merge($suppliers, $productSuppliers, $taxonomyNames);
+    $deduplicated = [];
+    foreach ($combined as $name) {
+        $trimmed = trim((string) $name);
+        if ($trimmed === '') {
+            continue;
+        }
+        $deduplicated[strtolower($trimmed)] = $trimmed;
+    }
+
+    return array_values($deduplicated);
 }
 
 /**

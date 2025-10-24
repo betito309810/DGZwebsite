@@ -17,6 +17,8 @@ $sortableColumns = [
 $allowedSortKeys = array_keys($sortableColumns);
 
 ensureRestockVariantColumns($pdo);
+catalogTaxonomyEnsureSchema($pdo);
+catalogTaxonomyBackfillFromProducts($pdo);
 
 $restockFormDefaults = [
     'product' => '',
@@ -158,6 +160,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_restock_reques
             } catch (Exception $e) {
                 $error_message = 'Unable to load product details: ' . $e->getMessage();
             }
+        }
+
+        if (!isset($error_message)) {
+            catalogTaxonomyMarkUsage($pdo, [
+                'category' => $category,
+                'brand' => $brand,
+                'supplier' => $supplier,
+            ]);
         }
 
         $variantLabel = null;
@@ -531,9 +541,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_stock'])) {
 }
 
 // Lookups for restock request form selects
-$categoryOptions = $pdo->query('SELECT DISTINCT category FROM products WHERE ' . $productsActiveClause . ' AND category IS NOT NULL AND category != "" ORDER BY category ASC')->fetchAll(PDO::FETCH_COLUMN);
-$brandOptions = $pdo->query('SELECT DISTINCT brand FROM products WHERE ' . $productsActiveClause . ' AND brand IS NOT NULL AND brand != "" ORDER BY brand ASC')->fetchAll(PDO::FETCH_COLUMN);
-$supplierOptions = $pdo->query('SELECT DISTINCT supplier FROM products WHERE ' . $productsActiveClause . ' AND supplier IS NOT NULL AND supplier != "" ORDER BY supplier ASC')->fetchAll(PDO::FETCH_COLUMN);
+$brandTaxonomyRows = catalogTaxonomyFetchOptions($pdo, 'brand', true);
+$categoryTaxonomyRows = catalogTaxonomyFetchOptions($pdo, 'category', true);
+$supplierTaxonomyRows = catalogTaxonomyFetchOptions($pdo, 'supplier', true);
+
+$splitTaxonomyOptions = static function (array $rows): array {
+    $buckets = ['active' => [], 'archived' => []];
+    foreach ($rows as $row) {
+        $bucket = ((int) ($row['is_archived'] ?? 0) === 1) ? 'archived' : 'active';
+        $buckets[$bucket][] = $row;
+    }
+    return $buckets;
+};
+
+$brandTaxonomyGroups = $splitTaxonomyOptions($brandTaxonomyRows);
+$categoryTaxonomyGroups = $splitTaxonomyOptions($categoryTaxonomyRows);
+$supplierTaxonomyGroups = $splitTaxonomyOptions($supplierTaxonomyRows);
+
+$brandOptions = array_map(static fn($row) => (string) ($row['name'] ?? ''), $brandTaxonomyGroups['active']);
+$categoryOptions = array_map(static fn($row) => (string) ($row['name'] ?? ''), $categoryTaxonomyGroups['active']);
+$supplierOptions = array_map(static fn($row) => (string) ($row['name'] ?? ''), $supplierTaxonomyGroups['active']);
 
 // Handle search/filter/pagination for the inventory listing
 $search = trim($_GET['search'] ?? '');
@@ -1528,15 +1555,33 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
                 <div class="filter-row filter-row--selects">
                     <select name="brand" aria-label="Filter by brand" class="filter-select">
                         <option value="">All Brands</option>
-                        <?php foreach ($brandOptions as $brandOption): ?>
-                        <option value="<?= htmlspecialchars($brandOption) ?>" <?= ($brandFilter === $brandOption) ? 'selected' : '' ?>><?= htmlspecialchars($brandOption) ?></option>
+                        <?php foreach ($brandTaxonomyGroups['active'] as $brandRow): ?>
+                        <?php $label = (string) ($brandRow['name'] ?? ''); if ($label === '') { continue; } ?>
+                        <option value="<?= htmlspecialchars($label) ?>" <?= ($brandFilter === $label) ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
                         <?php endforeach; ?>
+                        <?php if (!empty($brandTaxonomyGroups['archived'])): ?>
+                        <optgroup label="Archived">
+                            <?php foreach ($brandTaxonomyGroups['archived'] as $brandRow): ?>
+                            <?php $label = (string) ($brandRow['name'] ?? ''); if ($label === '') { continue; } ?>
+                            <option value="<?= htmlspecialchars($label) ?>" <?= ($brandFilter === $label) ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
+                            <?php endforeach; ?>
+                        </optgroup>
+                        <?php endif; ?>
                     </select>
                     <select name="category" aria-label="Filter by category" class="filter-select">
                         <option value="">All Categories</option>
-                        <?php foreach ($categoryOptions as $categoryOption): ?>
-                        <option value="<?= htmlspecialchars($categoryOption) ?>" <?= ($categoryFilter === $categoryOption) ? 'selected' : '' ?>><?= htmlspecialchars($categoryOption) ?></option>
+                        <?php foreach ($categoryTaxonomyGroups['active'] as $categoryRow): ?>
+                        <?php $label = (string) ($categoryRow['name'] ?? ''); if ($label === '') { continue; } ?>
+                        <option value="<?= htmlspecialchars($label) ?>" <?= ($categoryFilter === $label) ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
                         <?php endforeach; ?>
+                        <?php if (!empty($categoryTaxonomyGroups['archived'])): ?>
+                        <optgroup label="Archived">
+                            <?php foreach ($categoryTaxonomyGroups['archived'] as $categoryRow): ?>
+                            <?php $label = (string) ($categoryRow['name'] ?? ''); if ($label === '') { continue; } ?>
+                            <option value="<?= htmlspecialchars($label) ?>" <?= ($categoryFilter === $label) ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
+                            <?php endforeach; ?>
+                        </optgroup>
+                        <?php endif; ?>
                     </select>
                     <button type="submit" class="filter-submit" data-filter-submit>Filter</button>
                 </div>

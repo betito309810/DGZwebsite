@@ -21,6 +21,8 @@ if (isset($_SESSION['products_success'])) {
     unset($_SESSION['products_success']);
 }
 productsArchiveEnsureSchema($pdo);
+catalogTaxonomyEnsureSchema($pdo);
+catalogTaxonomyBackfillFromProducts($pdo);
 // Added: helper utilities that manage product image uploads in a single place.
 if (!function_exists('ensureProductImageDirectory')) {
     /**
@@ -1056,6 +1058,63 @@ if (isset($_GET['restore'])) {
     header('Location: ' . $redirectUrl);
     exit;
 }
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['taxonomy_manage'])) {
+    $redirectParams = $_GET;
+    $redirectUrl = 'products.php' . ($redirectParams ? '?' . http_build_query($redirectParams) : '');
+
+    if ($isStaff) {
+        $_SESSION['products_error'] = 'You do not have permission to manage catalog lists.';
+        header('Location: ' . $redirectUrl);
+        exit;
+    }
+
+    $type = strtolower(trim((string)($_POST['taxonomy_type'] ?? '')));
+    $action = strtolower(trim((string)($_POST['taxonomy_action'] ?? '')));
+    $allowedTypes = ['brand', 'category', 'supplier'];
+
+    if (!in_array($type, $allowedTypes, true)) {
+        $_SESSION['products_error'] = 'Unknown catalog type selected.';
+        header('Location: ' . $redirectUrl);
+        exit;
+    }
+
+    try {
+        if ($action === 'add') {
+            $name = trim((string)($_POST['taxonomy_name'] ?? ''));
+            if ($name === '') {
+                $_SESSION['products_error'] = 'Please enter a value to add.';
+            } else {
+                $termId = catalogTaxonomyEnsureTerm($pdo, $type, $name);
+                if ($termId !== null) {
+                    $_SESSION['products_success'] = ucfirst($type) . ' added to the catalog.';
+                } else {
+                    $_SESSION['products_error'] = 'Unable to add the requested value. Please try again.';
+                }
+            }
+        } elseif ($action === 'archive' || $action === 'restore') {
+            $id = isset($_POST['taxonomy_id']) ? (int) $_POST['taxonomy_id'] : 0;
+            if ($id <= 0) {
+                $_SESSION['products_error'] = 'Unable to update catalog entry. Please try again.';
+            } else {
+                $archive = $action === 'archive';
+                if (catalogTaxonomyArchiveTerm($pdo, $id, $archive)) {
+                    $_SESSION['products_success'] = sprintf('%s %s.', ucfirst($type), $archive ? 'archived' : 'restored');
+                } else {
+                    $_SESSION['products_error'] = 'Unable to update the selected entry. Please try again.';
+                }
+            }
+        } else {
+            $_SESSION['products_error'] = 'Unsupported catalog action requested.';
+        }
+    } catch (Throwable $e) {
+        error_log('Catalog taxonomy update failed: ' . $e->getMessage());
+        $_SESSION['products_error'] = 'Unable to update catalog list. Please try again.';
+    }
+
+    header('Location: ' . $redirectUrl);
+    exit;
+}
+
 if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_product'])){
     // Added: normalise raw form values once so they can be reused across actions.
     $name = trim($_POST['name'] ?? '');
@@ -1159,6 +1218,12 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_product'])){
         $supplier = $supplierNew;
     }
     $supplier = $supplier === '' ? null : $supplier;
+
+    catalogTaxonomyMarkUsage($pdo, [
+        'brand' => $brand,
+        'category' => $category,
+        'supplier' => $supplier,
+    ]);
 
     // Added: build a snapshot of the latest field values to reuse in history payloads.
     $currentSnapshot = [
@@ -1358,10 +1423,37 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['save_product'])){
     }
     header('Location: products.php'); exit;
 }
-// Fetch unique brands and categories (before pagination to avoid unnecessary full fetch)
-$brands = $pdo->query('SELECT DISTINCT brand FROM products WHERE brand IS NOT NULL AND brand != ""')->fetchAll(PDO::FETCH_COLUMN);
-$categories = $pdo->query('SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND category != ""')->fetchAll(PDO::FETCH_COLUMN);
-$suppliers = $pdo->query('SELECT DISTINCT supplier FROM products WHERE supplier IS NOT NULL AND supplier != ""')->fetchAll(PDO::FETCH_COLUMN);
+// Fetch catalog taxonomy entries for form options and filters.
+$brandOptionsActive = catalogTaxonomyFetchOptions($pdo, 'brand');
+$categoryOptionsActive = catalogTaxonomyFetchOptions($pdo, 'category');
+$supplierOptionsActive = catalogTaxonomyFetchOptions($pdo, 'supplier');
+
+$brands = array_map(static fn(array $row) => (string) ($row['name'] ?? ''), $brandOptionsActive);
+$categories = array_map(static fn(array $row) => (string) ($row['name'] ?? ''), $categoryOptionsActive);
+$suppliers = array_map(static fn(array $row) => (string) ($row['name'] ?? ''), $supplierOptionsActive);
+
+$brandFilterOptions = catalogTaxonomyFetchOptions($pdo, 'brand', true);
+$categoryFilterOptions = catalogTaxonomyFetchOptions($pdo, 'category', true);
+$supplierFilterOptions = catalogTaxonomyFetchOptions($pdo, 'supplier', true);
+
+$splitTaxonomyOptions = static function (array $options): array {
+    $buckets = ['active' => [], 'archived' => []];
+    foreach ($options as $row) {
+        $bucket = ((int) ($row['is_archived'] ?? 0) === 1) ? 'archived' : 'active';
+        $buckets[$bucket][] = $row;
+    }
+    return $buckets;
+};
+
+$brandFilterGroups = $splitTaxonomyOptions($brandFilterOptions);
+$categoryFilterGroups = $splitTaxonomyOptions($categoryFilterOptions);
+$supplierFilterGroups = $splitTaxonomyOptions($supplierFilterOptions);
+
+$taxonomyManagementData = [
+    'brand' => catalogTaxonomyFetchWithUsage($pdo, 'brand'),
+    'category' => catalogTaxonomyFetchWithUsage($pdo, 'category'),
+    'supplier' => catalogTaxonomyFetchWithUsage($pdo, 'supplier'),
+];
 $productCodeIndexRows = $pdo->query('SELECT id, code FROM products WHERE code IS NOT NULL AND code != ""')->fetchAll(PDO::FETCH_ASSOC);
 $productCodeIndex = [];
 foreach ($productCodeIndexRows as $row) {
@@ -1573,6 +1665,9 @@ $emptyTableMessage = $isArchivedView ? 'No archived products found.' : 'No produ
             <button id="openAddModal" class="add-btn" type="button">
                 <i class="fas fa-plus"></i> Add Product
             </button>
+            <button id="openTaxonomyModal" class="manage-btn" type="button">
+                <i class="fas fa-tags"></i> Manage Catalog Lists
+            </button>
             <?php endif; ?>
             <a href="<?= htmlspecialchars($archiveToggleUrl) ?>" class="archive-toggle-btn<?= $isArchivedView ? ' archive-toggle-btn--active' : '' ?>">
                 <i class="fas fa-box-archive"></i> <?= htmlspecialchars($archiveToggleLabel) ?>
@@ -1599,6 +1694,94 @@ $emptyTableMessage = $isArchivedView ? 'No archived products found.' : 'No produ
         </div>
         <!-- user menu & sidebar-->
        <script src="../dgz_motorshop_system/assets/js/dashboard/userMenu.js"></script>
+
+        <!-- Catalog taxonomy modal -->
+        <?php $taxonomyLabels = ['brand' => 'Brand', 'category' => 'Category', 'supplier' => 'Supplier']; ?>
+        <div id="taxonomyModal" class="modal-portal">
+            <div class="modal-content-horizontal taxonomy-modal">
+                <div class="modal-close-bar">
+                    <button type="button" id="closeTaxonomyModal" class="modal-close-button">&times;</button>
+                </div>
+                <div class="taxonomy-modal__content">
+                    <h3>Manage Catalog Lists</h3>
+                    <p class="taxonomy-modal__intro">Archive brands, categories, or suppliers to hide them from the product forms without deleting existing records.</p>
+                    <div class="taxonomy-manager__grid">
+                        <?php foreach ($taxonomyLabels as $taxonomyKey => $taxonomyLabel): ?>
+                        <?php $entries = $taxonomyManagementData[$taxonomyKey] ?? []; ?>
+                        <section class="taxonomy-manager__section">
+                            <header class="taxonomy-manager__header">
+                                <h4><?= htmlspecialchars($taxonomyLabel) ?> Options</h4>
+                                <span class="taxonomy-manager__count">Total: <?= count($entries) ?></span>
+                            </header>
+                            <form method="post" class="taxonomy-manager__add-form">
+                                <input type="hidden" name="taxonomy_manage" value="1">
+                                <input type="hidden" name="taxonomy_type" value="<?= htmlspecialchars($taxonomyKey) ?>">
+                                <input type="hidden" name="taxonomy_action" value="add">
+                                <label class="taxonomy-manager__add-label">
+                                    <span>Add new <?= htmlspecialchars(strtolower($taxonomyLabel)) ?></span>
+                                    <input type="text" name="taxonomy_name" placeholder="Enter <?= htmlspecialchars(strtolower($taxonomyLabel)) ?>" required>
+                                </label>
+                                <button type="submit" class="taxonomy-manager__add-button">
+                                    <i class="fas fa-plus"></i>
+                                    <span>Add</span>
+                                </button>
+                            </form>
+                            <div class="taxonomy-manager__list">
+                                <?php if (empty($entries)): ?>
+                                <p class="taxonomy-manager__empty">No <?= htmlspecialchars(strtolower($taxonomyLabel)) ?> entries yet.</p>
+                                <?php else: ?>
+                                <table class="taxonomy-manager__table">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">Name</th>
+                                            <th scope="col">Status</th>
+                                            <th scope="col">Products Using</th>
+                                            <th scope="col" class="taxonomy-manager__actions-heading">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($entries as $entry): ?>
+                                        <?php
+                                            $entryName = trim((string) ($entry['name'] ?? ''));
+                                            if ($entryName === '') {
+                                                continue;
+                                            }
+                                            $isArchived = (int) ($entry['is_archived'] ?? 0) === 1;
+                                            $usageCount = (int) ($entry['usage_count'] ?? 0);
+                                        ?>
+                                        <tr class="<?= $isArchived ? 'taxonomy-manager__row--archived' : '' ?>">
+                                            <td><?= htmlspecialchars($entryName) ?></td>
+                                            <td>
+                                                <span class="taxonomy-manager__status <?= $isArchived ? 'taxonomy-manager__status--archived' : 'taxonomy-manager__status--active' ?>">
+                                                    <i class="fas <?= $isArchived ? 'fa-box-archive' : 'fa-check' ?>"></i>
+                                                    <?= $isArchived ? 'Archived' : 'Active' ?>
+                                                </span>
+                                            </td>
+                                            <td><?= number_format($usageCount) ?></td>
+                                            <td class="taxonomy-manager__actions">
+                                                <form method="post">
+                                                    <input type="hidden" name="taxonomy_manage" value="1">
+                                                    <input type="hidden" name="taxonomy_type" value="<?= htmlspecialchars($taxonomyKey) ?>">
+                                                    <input type="hidden" name="taxonomy_id" value="<?= (int) ($entry['id'] ?? 0) ?>">
+                                                    <input type="hidden" name="taxonomy_action" value="<?= $isArchived ? 'restore' : 'archive' ?>">
+                                                    <button type="submit" class="taxonomy-manager__action-button <?= $isArchived ? 'taxonomy-manager__action-button--restore' : 'taxonomy-manager__action-button--archive' ?>">
+                                                        <i class="fas <?= $isArchived ? 'fa-rotate-left' : 'fa-box-archive' ?>"></i>
+                                                        <span><?= $isArchived ? 'Restore' : 'Archive' ?></span>
+                                                    </button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                                <?php endif; ?>
+                            </div>
+                        </section>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <!-- Add Product Modal -->
         <!-- Added: Modal overlay uses reusable class to inherit horizontal layout styles. -->
@@ -1772,21 +1955,48 @@ $emptyTableMessage = $isArchivedView ? 'No archived products found.' : 'No produ
                     </select>
                     <select name="brand" aria-label="Filter by brand" class="filter-select">
                         <option value="">All Brands</option>
-                        <?php foreach ($brands as $b): ?>
-                        <option value="<?= htmlspecialchars($b) ?>" <?= ($brand_filter ?? '') === $b ? 'selected' : '' ?>><?= htmlspecialchars($b) ?></option>
+                        <?php foreach ($brandFilterGroups['active'] as $option): ?>
+                        <?php $label = (string) ($option['name'] ?? ''); if ($label === '') { continue; } ?>
+                        <option value="<?= htmlspecialchars($label) ?>" <?= ($brand_filter ?? '') === $label ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
                         <?php endforeach; ?>
+                        <?php if (!empty($brandFilterGroups['archived'])): ?>
+                        <optgroup label="Archived">
+                            <?php foreach ($brandFilterGroups['archived'] as $option): ?>
+                            <?php $label = (string) ($option['name'] ?? ''); if ($label === '') { continue; } ?>
+                            <option value="<?= htmlspecialchars($label) ?>" <?= ($brand_filter ?? '') === $label ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
+                            <?php endforeach; ?>
+                        </optgroup>
+                        <?php endif; ?>
                     </select>
                     <select name="category" aria-label="Filter by category" class="filter-select">
                         <option value="">All Categories</option>
-                        <?php foreach ($categories as $c): ?>
-                        <option value="<?= htmlspecialchars($c) ?>" <?= ($category_filter ?? '') === $c ? 'selected' : '' ?>><?= htmlspecialchars($c) ?></option>
+                        <?php foreach ($categoryFilterGroups['active'] as $option): ?>
+                        <?php $label = (string) ($option['name'] ?? ''); if ($label === '') { continue; } ?>
+                        <option value="<?= htmlspecialchars($label) ?>" <?= ($category_filter ?? '') === $label ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
                         <?php endforeach; ?>
+                        <?php if (!empty($categoryFilterGroups['archived'])): ?>
+                        <optgroup label="Archived">
+                            <?php foreach ($categoryFilterGroups['archived'] as $option): ?>
+                            <?php $label = (string) ($option['name'] ?? ''); if ($label === '') { continue; } ?>
+                            <option value="<?= htmlspecialchars($label) ?>" <?= ($category_filter ?? '') === $label ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
+                            <?php endforeach; ?>
+                        </optgroup>
+                        <?php endif; ?>
                     </select>
                     <select name="supplier" aria-label="Filter by supplier" class="filter-select">
                         <option value="">All Suppliers</option>
-                        <?php foreach ($suppliers as $s): ?>
-                        <option value="<?= htmlspecialchars($s) ?>" <?= ($supplier_filter ?? '') === $s ? 'selected' : '' ?>><?= htmlspecialchars($s) ?></option>
+                        <?php foreach ($supplierFilterGroups['active'] as $option): ?>
+                        <?php $label = (string) ($option['name'] ?? ''); if ($label === '') { continue; } ?>
+                        <option value="<?= htmlspecialchars($label) ?>" <?= ($supplier_filter ?? '') === $label ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
                         <?php endforeach; ?>
+                        <?php if (!empty($supplierFilterGroups['archived'])): ?>
+                        <optgroup label="Archived">
+                            <?php foreach ($supplierFilterGroups['archived'] as $option): ?>
+                            <?php $label = (string) ($option['name'] ?? ''); if ($label === '') { continue; } ?>
+                            <option value="<?= htmlspecialchars($label) ?>" <?= ($supplier_filter ?? '') === $label ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
+                            <?php endforeach; ?>
+                        </optgroup>
+                        <?php endif; ?>
                     </select>
                     <button type="submit" class="filter-submit" data-filter-submit>Filter</button>
                 </div>
