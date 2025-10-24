@@ -1225,17 +1225,19 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                         </div>
                     <?php endif; ?>
                     <div class="billing-form contact-form<?= $showContactSummary ? ' is-hidden' : '' ?>" data-contact-form <?= $showContactSummary ? 'hidden' : '' ?>>
-                        <div class="form-group">
-                            <label>First name <span class="required-indicator">*</span></label>
-                            <input type="text" name="first_name" placeholder="First name" value="<?= htmlspecialchars($formValues['first_name']) ?>" <?= $showContactSummary ? '' : 'required' ?> data-contact-required>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>First name <span class="required-indicator">*</span></label>
+                                <input type="text" name="first_name" placeholder="First name" value="<?= htmlspecialchars($formValues['first_name']) ?>" <?= $showContactSummary ? '' : 'required' ?> data-contact-required>
+                            </div>
+                            <div class="form-group">
+                                <label>Last name <span class="required-indicator">*</span></label>
+                                <input type="text" name="last_name" placeholder="Last name" value="<?= htmlspecialchars($formValues['last_name']) ?>" <?= $showContactSummary ? '' : 'required' ?> data-contact-required>
+                            </div>
                         </div>
                         <div class="form-group">
                             <label>Middle name <span class="field-optional">(optional)</span></label>
                             <input type="text" name="middle_name" placeholder="Middle name" value="<?= htmlspecialchars($formValues['middle_name']) ?>">
-                        </div>
-                        <div class="form-group">
-                            <label>Last name <span class="required-indicator">*</span></label>
-                            <input type="text" name="last_name" placeholder="Last name" value="<?= htmlspecialchars($formValues['last_name']) ?>" <?= $showContactSummary ? '' : 'required' ?> data-contact-required>
                         </div>
                         <div class="form-group">
                             <label>Email <span class="required-indicator">*</span></label>
