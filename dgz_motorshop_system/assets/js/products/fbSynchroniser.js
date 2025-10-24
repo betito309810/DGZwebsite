@@ -1,7 +1,56 @@
 (function (global) {
     'use strict';
 
-    function setSelectWithFallback(selectId, inputId, value) {
+    const TAXONOMY_ARCHIVED = (function () {
+        const raw = global.PRODUCT_TAXONOMY_ARCHIVED;
+        if (raw && typeof raw === 'object') {
+            return raw;
+        }
+        return {};
+    }());
+
+    const normaliseLabel = (value) => (value ?? '').toString().trim().toLowerCase();
+
+    function getArchivedValues(taxonomyType) {
+        if (!taxonomyType) {
+            return [];
+        }
+        const list = TAXONOMY_ARCHIVED[taxonomyType];
+        return Array.isArray(list) ? list : [];
+    }
+
+    function ensureArchivedOption(selectEl, value, archivedValues) {
+        if (!selectEl || !value || !Array.isArray(archivedValues) || archivedValues.length === 0) {
+            return false;
+        }
+
+        const target = normaliseLabel(value);
+        if (!archivedValues.some((entry) => normaliseLabel(entry) === target)) {
+            return false;
+        }
+
+        const existing = Array.from(selectEl.options).find((option) => normaliseLabel(option.value) === target);
+        if (existing) {
+            existing.dataset.archivedOption = '1';
+            return true;
+        }
+
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = `${value} (Archived)`;
+        option.dataset.archivedOption = '1';
+
+        const addNewOption = Array.from(selectEl.options).find((opt) => opt.value === '__addnew__');
+        if (addNewOption && addNewOption.parentElement === selectEl) {
+            selectEl.insertBefore(option, addNewOption);
+        } else {
+            selectEl.add(option);
+        }
+
+        return true;
+    }
+
+    function setSelectWithFallback(selectId, inputId, value, taxonomyType) {
         const selectEl = document.getElementById(selectId);
         const inputEl = document.getElementById(inputId);
         if (!selectEl || !inputEl) {
@@ -9,8 +58,13 @@
         }
 
         const normalisedValue = (value ?? '').toString().trim();
-        const hasMatchingOption = Array.from(selectEl.options).some((option) => {
-            return option.value === normalisedValue && normalisedValue !== '';
+        if (normalisedValue !== '') {
+            const archivedValues = getArchivedValues(taxonomyType);
+            ensureArchivedOption(selectEl, normalisedValue, archivedValues);
+        }
+
+        const hasMatchingOption = normalisedValue !== '' && Array.from(selectEl.options).some((option) => {
+            return option.value === normalisedValue;
         });
 
         if (normalisedValue && hasMatchingOption) {

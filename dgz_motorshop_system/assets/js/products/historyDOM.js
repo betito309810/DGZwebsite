@@ -597,9 +597,9 @@
                             detail: { quantity: safeQuantity },
                         }));
                     }
-                    setSelectWithFallback('edit_brand', 'edit_brand_new', btn.dataset.brand || '');
-                    setSelectWithFallback('edit_category', 'edit_category_new', btn.dataset.category || '');
-                    setSelectWithFallback('edit_supplier', 'edit_supplier_new', btn.dataset.supplier || '');
+                    setSelectWithFallback('edit_brand', 'edit_brand_new', btn.dataset.brand || '', 'brand');
+                    setSelectWithFallback('edit_category', 'edit_category_new', btn.dataset.category || '', 'category');
+                    setSelectWithFallback('edit_supplier', 'edit_supplier_new', btn.dataset.supplier || '', 'supplier');
                     if (editImageInput) {
                         editImageInput.value = '';
                     }
@@ -698,9 +698,9 @@
                 if (addModal) {
                     addModal.style.display = 'flex';
                 }
-                setSelectWithFallback('brandSelect', 'brandNewInput', '');
-                setSelectWithFallback('categorySelect', 'categoryNewInput', '');
-                setSelectWithFallback('supplierSelect', 'supplierNewInput', '');
+                setSelectWithFallback('brandSelect', 'brandNewInput', '', 'brand');
+                setSelectWithFallback('categorySelect', 'categoryNewInput', '', 'category');
+                setSelectWithFallback('supplierSelect', 'supplierNewInput', '', 'supplier');
                 const createVariantEditor = addModal?.querySelector('[data-variant-editor][data-context="create"]');
                 if (createVariantEditor) {
                     createVariantEditor.dataset.initialVariants = '[]';

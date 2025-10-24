@@ -1436,6 +1436,25 @@ $brandFilterOptions = catalogTaxonomyFetchOptions($pdo, 'brand', true);
 $categoryFilterOptions = catalogTaxonomyFetchOptions($pdo, 'category', true);
 $supplierFilterOptions = catalogTaxonomyFetchOptions($pdo, 'supplier', true);
 
+$collectArchivedLabels = static function (array $options): array {
+    $labels = [];
+    foreach ($options as $row) {
+        if ((int) ($row['is_archived'] ?? 0) !== 1) {
+            continue;
+        }
+        $label = trim((string) ($row['name'] ?? ''));
+        if ($label === '') {
+            continue;
+        }
+        $labels[] = $label;
+    }
+    return $labels;
+};
+
+$archivedBrandLabels = $collectArchivedLabels($brandFilterOptions);
+$archivedCategoryLabels = $collectArchivedLabels($categoryFilterOptions);
+$archivedSupplierLabels = $collectArchivedLabels($supplierFilterOptions);
+
 $splitTaxonomyOptions = static function (array $options): array {
     $buckets = ['active' => [], 'archived' => []];
     foreach ($options as $row) {
@@ -1947,6 +1966,11 @@ $emptyTableMessage = $isArchivedView ? 'No archived products found.' : 'No produ
        <script src="../dgz_motorshop_system/assets/js/products/tableFilters.js"></script>
         <script>
             window.PRODUCT_CODE_INDEX = <?= json_encode($productCodeIndex, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]' ?>;
+            window.PRODUCT_TAXONOMY_ARCHIVED = <?= json_encode([
+                'brand' => array_values($archivedBrandLabels),
+                'category' => array_values($archivedCategoryLabels),
+                'supplier' => array_values($archivedSupplierLabels),
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}' ?>;
         </script>
 
         <!-- Products table displaying filtered/search results -->
