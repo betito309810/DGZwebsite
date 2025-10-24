@@ -95,7 +95,7 @@ SQL;
 }
 
 if (!function_exists('catalogTaxonomyEnsureTerm')) {
-    function catalogTaxonomyEnsureTerm(PDO $pdo, string $type, ?string $name): ?int
+    function catalogTaxonomyEnsureTerm(PDO $pdo, string $type, ?string $name, bool $reactivate = true): ?int
     {
         catalogTaxonomyEnsureSchema($pdo);
 
@@ -125,7 +125,7 @@ if (!function_exists('catalogTaxonomyEnsureTerm')) {
                     $params[] = $label;
                 }
 
-                if ((int) ($row['is_archived'] ?? 0) === 1) {
+                if ($reactivate && (int) ($row['is_archived'] ?? 0) === 1) {
                     $updates[] = 'is_archived = 0';
                     $updates[] = 'archived_at = NULL';
                 }
@@ -300,7 +300,7 @@ if (!function_exists('catalogTaxonomyMarkUsage')) {
             if ($value === null || $value === '') {
                 continue;
             }
-            catalogTaxonomyEnsureTerm($pdo, $type, (string) $value);
+            catalogTaxonomyEnsureTerm($pdo, $type, (string) $value, false);
         }
     }
 }
