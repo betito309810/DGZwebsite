@@ -300,7 +300,7 @@
     border: 1px solid #e5e7eb;
     border-radius: 14px;
     padding: 0;
-    overflow: hidden;
+    overflow-x: auto; /* Allow horizontal scrolling so action buttons remain reachable on narrow viewports. */
 }
 
 .taxonomy-manager__tip {
@@ -318,6 +318,7 @@
 
 .taxonomy-manager__table {
     width: 100%;
+    min-width: 520px; /* Ensure the actions column has enough space before scrolling kicks in. */
     border-collapse: collapse;
 }
 
