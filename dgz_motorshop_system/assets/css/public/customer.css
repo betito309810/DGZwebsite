@@ -596,6 +596,31 @@
     color: #111827;
 }
 
+.customer-order-card__disapproval {
+    margin: 0 1.5rem 1.5rem;
+    padding: 1rem 1.25rem;
+    background: #fff4f4;
+    border: 1px solid #f5cdcd;
+    border-radius: 1rem;
+    color: #6e1f1d;
+    box-shadow: 0 16px 30px rgba(110, 31, 29, 0.08);
+}
+
+.customer-order-card__disapproval h3 {
+    margin: 0 0 0.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.customer-order-card__disapproval-text {
+    margin: 0 0 0.5rem;
+    line-height: 1.55;
+}
+
+.customer-order-card__disapproval-text:last-child {
+    margin-bottom: 0;
+}
+
 .customer-order-card__details-panel {
     border-top: 1px solid rgba(148, 163, 184, 0.2);
     margin-top: 1.25rem;
@@ -1185,6 +1210,11 @@
     .customer-order-card__toggle {
         width: 100%;
         justify-content: center;
+    }
+    .customer-order-card__disapproval {
+        margin: 0 1rem 1rem;
+        padding: 0.85rem 1rem;
+        border-radius: 0.85rem;
     }
     .customer-order-card__section--payment {
         grid-column: auto;

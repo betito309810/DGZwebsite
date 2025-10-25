@@ -562,6 +562,9 @@ $orderCustomerNoteColumn = ordersFindColumn($pdo, ['customer_note', 'notes', 'no
 $orderReferenceColumn = ordersFindColumn($pdo, ['reference_no', 'reference_number', 'reference', 'ref_no']);
 $orderProofColumn = ordersFindColumn($pdo, ['payment_proof', 'proof_of_payment', 'payment_proof_path', 'proof']);
 $orderDeliveryProofColumn = ordersFindColumn($pdo, ['delivery_proof', 'proof_of_delivery', 'delivery_proof_path', 'delivery_proof_image']);
+$orderDeclineReasonIdColumn = ordersFindColumn($pdo, ['decline_reason_id', 'disapproval_reason_id']);
+$orderDeclineReasonNoteColumn = ordersFindColumn($pdo, ['decline_reason_note', 'disapproval_note']);
+$orderDeclineAttachmentColumn = ordersFindColumn($pdo, ['decline_attachment_path', 'disapproval_attachment_path', 'disapproval_attachment', 'decline_attachment']);
 
 $orderSelectParts = [];
 $appendSelect = static function (?string $column, string $alias) use (&$orderSelectParts): void {
@@ -648,6 +651,24 @@ if ($orderDeliveryProofColumn !== null) {
     $appendSelect($orderDeliveryProofColumn, 'delivery_proof');
 }
 
+if ($orderDeclineReasonIdColumn !== null) {
+    $appendSelect($orderDeclineReasonIdColumn, 'decline_reason_id');
+} else {
+    $orderSelectParts[] = '0 AS `decline_reason_id`';
+}
+
+if ($orderDeclineReasonNoteColumn !== null) {
+    $appendSelect($orderDeclineReasonNoteColumn, 'decline_reason_note');
+} else {
+    $orderSelectParts[] = "'' AS `decline_reason_note`";
+}
+
+if ($orderDeclineAttachmentColumn !== null) {
+    $appendSelect($orderDeclineAttachmentColumn, 'decline_attachment_path');
+} else {
+    $orderSelectParts[] = "'' AS `decline_attachment_path`";
+}
+
 $statusFilter = isset($_GET['status']) ? strtolower(trim((string) $_GET['status'])) : '';
 $completedStatusFilters = ['complete', 'completed'];
 $isCompletedFilter = in_array($statusFilter, $completedStatusFilters, true);
@@ -688,6 +709,56 @@ if ($orderIdColumn !== null && $customerIdColumn !== null) {
     $orderStmt->execute($orderParams);
     $orders = $orderStmt->fetchAll(PDO::FETCH_ASSOC);
 }
+
+$declineReasonLookup = [];
+if ($orderDeclineReasonIdColumn !== null && !empty($orders)) {
+    $reasonIds = [];
+    foreach ($orders as $orderRow) {
+        $reasonId = (int) ($orderRow['decline_reason_id'] ?? 0);
+        if ($reasonId > 0) {
+            $reasonIds[$reasonId] = true;
+        }
+    }
+
+    if (!empty($reasonIds)) {
+        $reasonParams = array_keys($reasonIds);
+        $placeholders = implode(', ', array_fill(0, count($reasonParams), '?'));
+
+        try {
+            $reasonStmt = $pdo->prepare('SELECT id, label FROM order_decline_reasons WHERE id IN (' . $placeholders . ')');
+            if ($reasonStmt !== false && $reasonStmt->execute($reasonParams)) {
+                while ($reasonRow = $reasonStmt->fetch(PDO::FETCH_ASSOC)) {
+                    $declineId = (int) ($reasonRow['id'] ?? 0);
+                    if ($declineId > 0) {
+                        $declineReasonLookup[$declineId] = (string) ($reasonRow['label'] ?? '');
+                    }
+                }
+            }
+        } catch (Throwable $exception) {
+            error_log('Unable to load order disapproval reasons: ' . $exception->getMessage());
+        }
+    }
+}
+
+foreach ($orders as &$orderRow) {
+    $existingLabel = isset($orderRow['decline_reason_label']) ? (string) $orderRow['decline_reason_label'] : '';
+    $declineId = (int) ($orderRow['decline_reason_id'] ?? 0);
+    if ($declineId > 0 && isset($declineReasonLookup[$declineId])) {
+        $orderRow['decline_reason_label'] = $declineReasonLookup[$declineId];
+    } elseif ($existingLabel !== '') {
+        $orderRow['decline_reason_label'] = $existingLabel;
+    } else {
+        $orderRow['decline_reason_label'] = '';
+    }
+
+    if (!isset($orderRow['decline_reason_note'])) {
+        $orderRow['decline_reason_note'] = '';
+    }
+    if (!isset($orderRow['decline_attachment_path'])) {
+        $orderRow['decline_attachment_path'] = '';
+    }
+}
+unset($orderRow);
 
 $orderItemsMap = [];
 if (!empty($orders)) {
@@ -906,6 +977,30 @@ $statusLabels = [
                         'gcash' => '0987654321',
                         'maya' => '0987654321',
                     ];
+                    $declineReasonLabel = trim((string) ($order['decline_reason_label'] ?? ''));
+                    $declineReasonNote = trim((string) ($order['decline_reason_note'] ?? ''));
+                    $declineAttachmentPath = trim((string) ($order['decline_attachment_path'] ?? ''));
+                    $declineAttachmentUrlCandidates = [];
+                    if ($declineAttachmentPath !== '') {
+                        $normalizedAttachmentPath = ltrim($declineAttachmentPath, '/');
+                        $declineAttachmentUrlCandidates[] = resolveOrderDocumentUrl($declineAttachmentPath);
+                        $declineAttachmentUrlCandidates[] = resolveOrderDocumentUrl('uploads/' . $normalizedAttachmentPath);
+                        $declineAttachmentUrlCandidates[] = resolveOrderDocumentUrl('dgz_motorshop_system/uploads/' . $normalizedAttachmentPath);
+                    }
+                    $declineAttachmentUrlCandidates = array_values(array_filter(array_unique($declineAttachmentUrlCandidates), static function ($value) {
+                        return is_string($value) && trim($value) !== '';
+                    }));
+                    $declineAttachmentUrl = '';
+                    foreach ($declineAttachmentUrlCandidates as $candidateUrl) {
+                        if ($candidateUrl !== '') {
+                            $declineAttachmentUrl = $candidateUrl;
+                            break;
+                        }
+                    }
+                    $hasDeclineDetails = ($declineReasonLabel !== '' || $declineReasonNote !== '' || $declineAttachmentUrl !== '');
+                    $disapprovalIntro = $hasDeclineDetails
+                        ? 'Please review the details provided by our team.'
+                        : 'Please contact our team for more information.';
                 ?>
                 <article class="customer-order-card" data-order-card>
                     <header class="customer-order-card__header">
@@ -948,6 +1043,24 @@ $statusLabels = [
                         </div>
                         <?php endif; ?>
                     </dl>
+                    <?php if ($statusKey === 'disapproved'): ?>
+                        <div class="customer-order-card__disapproval" role="status">
+                            <h3>Order disapproved</h3>
+                            <p class="customer-order-card__disapproval-text"><?= htmlspecialchars($disapprovalIntro) ?></p>
+                            <?php if ($declineReasonLabel !== ''): ?>
+                                <p class="customer-order-card__disapproval-text"><strong>Reason:</strong> <?= htmlspecialchars($declineReasonLabel) ?></p>
+                            <?php endif; ?>
+                            <?php if ($declineReasonNote !== ''): ?>
+                                <p class="customer-order-card__disapproval-text"><?= nl2br(htmlspecialchars($declineReasonNote)) ?></p>
+                            <?php endif; ?>
+                            <?php if ($declineAttachmentUrl !== ''): ?>
+                                <p class="customer-order-card__disapproval-text"><a href="<?= htmlspecialchars($declineAttachmentUrl) ?>" target="_blank" rel="noopener">View attachment</a></p>
+                            <?php endif; ?>
+                            <?php if (!$hasDeclineDetails): ?>
+                                <p class="customer-order-card__disapproval-text">This order was disapproved. Please reach out if you have any questions.</p>
+                            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
                     <div class="customer-order-card__details-panel" data-order-details hidden>
                         <div class="customer-order-card__items">
                             <h3>Items</h3>
