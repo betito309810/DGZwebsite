@@ -21,7 +21,7 @@ $settingsUrl = orderingUrl('settings.php');
 $cartUrl = orderingUrl('checkout.php');
 $customerCartEndpoint = orderingUrl('api/customer-cart.php');
 $customerSessionStatusEndpoint = orderingUrl('api/customer-session-status.php');
-$customerSessionHeartbeatInterval = 5000;
+$customerSessionHeartbeatInterval = 200;
 
 $pdo = db();
 $alerts = [

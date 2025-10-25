@@ -21,7 +21,7 @@ $logoutUrl = orderingUrl('logout.php');
 $productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
 $customerCartEndpoint = orderingUrl('api/customer-cart.php');
 $customerSessionStatusEndpoint = orderingUrl('api/customer-session-status.php');
-$customerSessionHeartbeatInterval = 5000;
+$customerSessionHeartbeatInterval = 200;
 
 $customerSessionState = customerSessionExport();
 $isCustomerAuthenticated = !empty($customerSessionState['authenticated']);

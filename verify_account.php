@@ -10,7 +10,7 @@ $shopUrl = orderingUrl('index.php');
 $loginUrl = orderingUrl('login.php');
 $ordersUrl = orderingUrl('my_orders.php');
 $customerSessionStatusEndpoint = orderingUrl('api/customer-session-status.php');
-$customerSessionHeartbeatInterval = 5000;
+$customerSessionHeartbeatInterval = 200;
 
 $status = 'idle';
 $alertClass = 'customer-auth-alert';

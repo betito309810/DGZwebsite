@@ -74,7 +74,7 @@ $indexStylesheet = assetUrl('assets/css/public/index.css');
 $customerScript = assetUrl('assets/js/public/customer.js');
 $logoAsset = assetUrl('assets/logo.png');
 $customerSessionStatusEndpoint = orderingUrl('api/customer-session-status.php');
-$customerSessionHeartbeatInterval = 5000;
+$customerSessionHeartbeatInterval = 200;
 $loginPageUrl = orderingUrl('login.php');
 
 $errors = [];

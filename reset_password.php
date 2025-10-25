@@ -7,7 +7,7 @@ $indexStylesheet = assetUrl('assets/css/public/index.css');
 $customerScript = assetUrl('assets/js/public/customer.js');
 $logoAsset = assetUrl('assets/logo.png');
 $customerSessionStatusEndpoint = orderingUrl('api/customer-session-status.php');
-$customerSessionHeartbeatInterval = 5000;
+$customerSessionHeartbeatInterval = 200;
 $loginUrl = orderingUrl('login.php');
 
 $token = isset($_GET['token']) ? (string) $_GET['token'] : '';

@@ -26,7 +26,7 @@ $checkoutUrl = orderingUrl('checkout.php');
 $productImagesEndpoint = orderingUrl('api/product-images.php');
 $customerCartEndpoint = orderingUrl('api/customer-cart.php');
 $customerSessionStatusEndpoint = orderingUrl('api/customer-session-status.php');
-$customerSessionHeartbeatInterval = 5000;
+$customerSessionHeartbeatInterval = 200;
 
 $customerStylesheet = assetUrl('assets/css/public/customer.css');
 $customerScript = assetUrl('assets/js/public/customer.js');

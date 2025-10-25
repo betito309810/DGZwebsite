@@ -79,7 +79,7 @@ $loginUrl = orderingUrl('login.php');
 $myOrdersUrl = orderingUrl('my_orders.php');
 $logoutUrl = orderingUrl('logout.php');
 $customerSessionStatusEndpoint = orderingUrl('api/customer-session-status.php');
-$customerSessionHeartbeatInterval = 5000;
+$customerSessionHeartbeatInterval = 200;
 
 $values = [
     'first_name' => trim((string)($_POST['first_name'] ?? $currentFirstName)),

@@ -59,7 +59,7 @@
                 return;
             }
 
-            const normalizedDelay = Math.max(250, delay);
+            const normalizedDelay = Math.max(150, delay);
 
             if (running) {
                 pendingDelay = pendingDelay === null
@@ -126,7 +126,7 @@
             }
         };
 
-        scheduleNext(500);
+        scheduleNext(200);
 
         window.addEventListener('focus', () => {
             if (stopped) {
@@ -134,13 +134,13 @@
             }
 
             consecutiveFailures = 0;
-            scheduleNext(500);
+            scheduleNext(200);
         });
 
         window.addEventListener('visibilitychange', () => {
             if (!stopped && document.visibilityState === 'visible') {
                 consecutiveFailures = 0;
-                scheduleNext(400);
+                scheduleNext(200);
             }
         });
     }
