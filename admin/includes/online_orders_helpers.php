@@ -128,7 +128,7 @@ if (!function_exists('getOnlineOrderStatusTransitions')) {
     function getOnlineOrderStatusTransitions(): array
     {
         return [
-            'pending' => ['payment_verification', 'approved', 'disapproved'],
+            'pending' => ['payment_verification', 'disapproved'],
             'payment_verification' => ['approved', 'disapproved'],
             'approved' => ['delivery'],
             'delivery' => ['completed'],

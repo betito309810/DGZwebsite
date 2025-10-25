@@ -597,7 +597,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                 }
 
                 $transitions = [
-                    'pending' => ['payment_verification', 'approved', 'disapproved'],
+                    'pending' => ['payment_verification', 'disapproved'],
                     'payment_verification' => ['approved', 'disapproved'],
                     'approved' => ['delivery'],
                     'delivery' => ['completed'],
@@ -1673,15 +1673,23 @@ if ($receiptDataJson === false) {
             <div class="online-orders-filters">
                 <div class="status-filter-tabs" role="tablist">
                     <?php foreach ($statusTabs as $value => $meta): ?>
-                        <?php $isActive = ($value === '' && $statusFilter === '') || $statusFilter === $value; ?>
-                        <button type="button"
+                        <?php
+                            $isActive = ($value === '' && $statusFilter === '') || $statusFilter === $value;
+                            $queryParams = ['tab' => 'online', 'page' => 1];
+                            if ($value !== '') {
+                                $queryParams['status_filter'] = $value;
+                            }
+                            $statusTabUrl = 'pos.php?' . http_build_query($queryParams);
+                        ?>
+                        <a href="<?= htmlspecialchars($statusTabUrl, ENT_QUOTES, 'UTF-8') ?>"
                             class="status-filter-button<?= $isActive ? ' is-active' : '' ?>"
                             data-status-filter-button
                             data-status-value="<?= htmlspecialchars($value, ENT_QUOTES, 'UTF-8') ?>"
-                            aria-pressed="<?= $isActive ? 'true' : 'false' ?>">
+                            role="tab"
+                            aria-selected="<?= $isActive ? 'true' : 'false' ?>">
                             <i class="fas <?= htmlspecialchars($meta['icon'], ENT_QUOTES, 'UTF-8') ?>"></i>
                             <?= htmlspecialchars($meta['label'], ENT_QUOTES, 'UTF-8') ?>
-                        </button>
+                        </a>
                     <?php endforeach; ?>
                 </div>
 

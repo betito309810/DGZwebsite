@@ -145,7 +145,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     const value = button?.dataset?.statusValue || '';
                     const isActive = value === active || (!value && active === '');
                     button.classList.toggle('is-active', isActive);
-                    button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+                    if (button.hasAttribute('aria-pressed')) {
+                        button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+                    }
+                    if (button.hasAttribute('aria-selected')) {
+                        button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+                    }
                 });
             };
 
@@ -2093,8 +2098,19 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             statusFilterButtons.forEach((button) => {
-                button.addEventListener('click', () => {
+                button.addEventListener('click', (event) => {
+                    event.preventDefault();
+
                     const value = button?.dataset?.statusValue || '';
+                    const href = typeof button.href === 'string' && button.href !== ''
+                        ? button.href
+                        : null;
+
+                    if (href) {
+                        window.location.href = href;
+                        return;
+                    }
+
                     const url = new URL(window.location.href);
                     url.searchParams.set('tab', 'online');
                     url.searchParams.set('page', '1');

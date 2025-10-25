@@ -100,15 +100,20 @@ if (!function_exists('resolveOrderDocumentUrl')) {
             return '';
         }
 
-        $normalizedUrl = normalizePaymentProofPath($path);
-        if ($normalizedUrl !== '' && $normalizedUrl !== '/' && strncmp($normalizedUrl, '../', 3) !== 0) {
-            return $normalizedUrl;
+        $candidates = [];
+
+        $normalizedNoPrefix = normalizePaymentProofPath($path, '');
+        if ($normalizedNoPrefix !== '') {
+            $candidates[] = $normalizedNoPrefix;
         }
 
-        $candidates = [$path];
-        $normalizedRelative = normalizePaymentProofPath($path, '');
-        if ($normalizedRelative !== '' && !in_array($normalizedRelative, $candidates, true)) {
-            $candidates[] = $normalizedRelative;
+        $normalizedDefault = normalizePaymentProofPath($path);
+        if ($normalizedDefault !== '' && !in_array($normalizedDefault, $candidates, true)) {
+            $candidates[] = $normalizedDefault;
+        }
+
+        if (!in_array($path, $candidates, true)) {
+            $candidates[] = $path;
         }
 
         foreach ($candidates as $candidatePath) {
@@ -117,6 +122,10 @@ if (!function_exists('resolveOrderDocumentUrl')) {
             }
 
             if (preg_match('#^(?:[a-z][a-z0-9+.-]*:)?//#i', $candidatePath) === 1 || strncmp($candidatePath, 'data:', 5) === 0) {
+                return $candidatePath;
+            }
+
+            if ($candidatePath[0] === '/' && strncmp($candidatePath, '../', 3) !== 0) {
                 return $candidatePath;
             }
 
@@ -129,6 +138,13 @@ if (!function_exists('resolveOrderDocumentUrl')) {
             $assetUrl = assetUrl($prefixed);
             if ($assetUrl !== '' && $assetUrl !== '/') {
                 return $assetUrl;
+            }
+
+            if (strpos($candidatePath, 'uploads/') !== 0) {
+                $assetUrl = assetUrl('uploads/' . ltrim($candidatePath, '/'));
+                if ($assetUrl !== '' && $assetUrl !== '/') {
+                    return $assetUrl;
+                }
             }
         }
 
