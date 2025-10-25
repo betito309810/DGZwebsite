@@ -139,7 +139,11 @@ $customerFirstName = $customerSessionState['firstName'] ?? null;
 $customerAccount = $isCustomerAuthenticated ? getAuthenticatedCustomer() : null;
 $bodyCustomerState = $isCustomerAuthenticated ? 'authenticated' : 'guest';
 $bodyCustomerFirstName = $customerFirstName ?? '';
-$loginUrl = orderingUrl('login.php');
+$loginBaseUrl = orderingUrl('login.php');
+$checkoutLoginRedirectTarget = 'checkout.php';
+$loginUrl = $loginBaseUrl . (strpos($loginBaseUrl, '?') === false ? '?' : '&') . 'redirect=' . urlencode($checkoutLoginRedirectTarget);
+$loginGateLoginUrl = $loginBaseUrl;
+$loginGateRedirect = $checkoutLoginRedirectTarget;
 $registerUrl = orderingUrl('register.php');
 $myOrdersUrl = orderingUrl('my_orders.php');
 $logoutUrl = orderingUrl('logout.php');
@@ -1405,6 +1409,21 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
         </div>
     </div>
 
+    <div id="removeItemConfirmModal" class="checkout-modal" hidden>
+        <div class="checkout-modal__dialog">
+            <h3>Remove Item</h3>
+            <p data-remove-message>Are you sure you want to remove this item from your cart?</p>
+            <div class="checkout-modal__actions">
+                <button type="button" class="checkout-modal__button checkout-modal__button--danger" data-remove-confirm>
+                    Remove
+                </button>
+                <button type="button" class="checkout-modal__button checkout-modal__button--secondary" data-remove-cancel>
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div id="highValueConfirmModal" class="checkout-modal" hidden>
         <div class="checkout-modal__dialog">
             <h3>Large Transaction</h3>
@@ -1448,6 +1467,10 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
         const highValueProceedButton = document.querySelector('[data-high-value-proceed]');
         const highValueCancelButton = document.querySelector('[data-high-value-cancel]');
         const highValueBlockedOkButton = document.querySelector('[data-high-value-blocked-ok]');
+        const removeConfirmModal = document.getElementById('removeItemConfirmModal');
+        const removeConfirmButton = removeConfirmModal?.querySelector('[data-remove-confirm]') ?? null;
+        const removeCancelButton = removeConfirmModal?.querySelector('[data-remove-cancel]') ?? null;
+        const removeConfirmMessage = removeConfirmModal?.querySelector('[data-remove-message]') ?? null;
         const inventoryNotice = document.getElementById('inventoryAdjustmentNotice');
         const inventoryCheckUrl = <?= json_encode($inventoryAvailabilityApi) ?>;
         const inventoryRefreshIntervalMs = 30000;
@@ -1474,6 +1497,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
         let inventoryFetchPromise = null;
         let serverSyncChain = serverSyncSupported ? Promise.resolve() : null;
         let serverLastPayloadSignature = null;
+        let pendingRemovalIndex = null;
 
         function openModal(modal) {
             if (!modal) {
@@ -1531,6 +1555,42 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                 ? Number(item.variantId)
                 : null;
             return `${productId}:${variantId !== null ? variantId : 'base'}`;
+        }
+
+        function removeItemAtIndex(index) {
+            if (!Number.isInteger(index) || index < 0 || index >= cartState.length) {
+                return;
+            }
+
+            cartState.splice(index, 1);
+            renderOrderItems();
+
+            if (cartState.length === 0) {
+                setTimeout(() => {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }, 150);
+            }
+        }
+
+        function requestItemRemoval(index) {
+            if (!Number.isInteger(index) || index < 0 || index >= cartState.length) {
+                return;
+            }
+
+            if (!removeConfirmModal || !removeConfirmButton || !removeCancelButton) {
+                removeItemAtIndex(index);
+                return;
+            }
+
+            pendingRemovalIndex = index;
+
+            if (removeConfirmMessage) {
+                const item = cartState[index] ?? null;
+                const label = formatItemLabel(item);
+                removeConfirmMessage.textContent = `Are you sure you want to remove ${label} from your cart?`;
+            }
+
+            openModal(removeConfirmModal);
         }
 
         // Guard submission so blank required fields cannot slip through trimming
@@ -2238,14 +2298,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                     return;
                 }
 
-                cartState.splice(index, 1);
-                renderOrderItems();
-
-                if (cartState.length === 0) {
-                    setTimeout(() => {
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                    }, 150);
-                }
+                requestItemRemoval(index);
                 return;
             }
 
@@ -2341,6 +2394,38 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
 
         highValueBlockedOkButton?.addEventListener('click', () => {
             closeModal(highValueBlockedModal);
+        });
+
+        removeConfirmButton?.addEventListener('click', () => {
+            if (typeof pendingRemovalIndex !== 'number') {
+                pendingRemovalIndex = null;
+                closeModal(removeConfirmModal);
+                return;
+            }
+
+            const index = pendingRemovalIndex;
+            pendingRemovalIndex = null;
+            closeModal(removeConfirmModal);
+            removeItemAtIndex(index);
+        });
+
+        removeCancelButton?.addEventListener('click', () => {
+            pendingRemovalIndex = null;
+            closeModal(removeConfirmModal);
+        });
+
+        removeConfirmModal?.addEventListener('click', (event) => {
+            if (event.target === removeConfirmModal) {
+                pendingRemovalIndex = null;
+                closeModal(removeConfirmModal);
+            }
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && removeConfirmModal && !removeConfirmModal.hasAttribute('hidden')) {
+                pendingRemovalIndex = null;
+                closeModal(removeConfirmModal);
+            }
         });
 
         renderOrderItems();

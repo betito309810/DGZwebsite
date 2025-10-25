@@ -57,9 +57,38 @@ function verifyCustomerPassword(PDO $pdo, array $candidate, string $password): b
     return false;
 }
 
+function loginResolveRedirectTarget(?string $candidate, string $fallback = 'index.php'): string
+{
+    $value = trim((string) $candidate);
+    if ($value === '') {
+        return orderingUrl($fallback);
+    }
+
+    if (preg_match('#^(?:[a-z][a-z0-9+.-]*:)?//#i', $value) === 1) {
+        return orderingUrl($fallback);
+    }
+
+    if ($value[0] === '/') {
+        return $value;
+    }
+
+    return orderingUrl($value);
+}
+
+$redirectParam = isset($_GET['redirect']) ? trim((string) $_GET['redirect']) : '';
+$defaultRedirect = orderingUrl('index.php');
+
+if ($redirectParam !== '') {
+    $resolvedRedirect = loginResolveRedirectTarget($redirectParam, 'index.php');
+    $redirectFieldValue = $resolvedRedirect;
+} else {
+    $resolvedRedirect = $defaultRedirect;
+    $redirectFieldValue = '';
+}
+
 $customerSession = getAuthenticatedCustomer();
 if ($customerSession !== null) {
-    header('Location: ' . orderingUrl('index.php'));
+    header('Location: ' . $resolvedRedirect);
     exit;
 }
 
@@ -177,10 +206,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $errors['general'] = 'Please verify your email address before logging in. Check your inbox for the verification link we sent you.';
                 } else {
                     customerLogin((int) $candidate['id']);
-                    $redirect = $_POST['redirect'] ?? ($_GET['redirect'] ?? orderingUrl('index.php'));
-                    if (!is_string($redirect) || $redirect === '') {
-                        $redirect = orderingUrl('index.php');
-                    }
+                    $redirectSource = $_POST['redirect'] ?? ($_GET['redirect'] ?? '');
+                    $redirect = loginResolveRedirectTarget(is_string($redirectSource) ? $redirectSource : '', 'index.php');
                     header('Location: ' . $redirect);
                     exit;
                 }
@@ -191,8 +218,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
-
-$redirectParam = isset($_GET['redirect']) ? (string) $_GET['redirect'] : '';
 ?>
 <!doctype html>
 <html lang="en" data-customer-session="guest">
@@ -219,7 +244,7 @@ $redirectParam = isset($_GET['redirect']) ? (string) $_GET['redirect'] : '';
             <div class="customer-auth-alert" role="alert"><?= htmlspecialchars($errors['general']) ?></div>
         <?php endif; ?>
         <form class="customer-auth-form" method="post" novalidate data-customer-form>
-            <input type="hidden" name="redirect" value="<?= htmlspecialchars($redirectParam) ?>">
+            <input type="hidden" name="redirect" value="<?= htmlspecialchars($redirectFieldValue) ?>">
             <div class="form-field<?= isset($errors['identifier']) ? ' has-error' : '' ?>">
                 <label for="identifier">Email or phone number</label>
                 <input type="text" id="identifier" name="identifier" value="<?= htmlspecialchars($values['identifier']) ?>" required autocomplete="email">

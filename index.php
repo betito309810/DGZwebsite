@@ -303,7 +303,7 @@ natcasesort($categories);
                                     <span class="stock-status-text">Low stock</span>
                                 <?php else: ?>
                                     <span class="stock-indicator" aria-hidden="true"></span>
-                                    <span class="stock-status-text">In stock</span>
+                                    <span class="stock-status-text">Stock: <?= (int) $displayQuantity ?></span>
                                 <?php endif; ?>
                             </div>
                         </div>

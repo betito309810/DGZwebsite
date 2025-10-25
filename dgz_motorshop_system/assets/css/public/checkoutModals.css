@@ -54,9 +54,22 @@
 
 .checkout-modal__button--primary { background: #10b981; color: #fff; }
 
+.checkout-modal__button--primary:hover {
+    background: #0d9467;
+}
+
 .checkout-modal__button--secondary {
     background: #e5e7eb;
     color: #1f2937;
+}
+
+.checkout-modal__button--danger {
+    background: #ef4444;
+    color: #fff;
+}
+
+.checkout-modal__button--danger:hover {
+    background: #dc2626;
 }
 
 .checkout-modal__button:focus {
