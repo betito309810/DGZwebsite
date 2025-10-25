@@ -29,6 +29,31 @@ if (!function_exists('ordersResolveField')) {
     }
 }
 
+if (!function_exists('ordersNormalizeWalkInName')) {
+    function ordersNormalizeWalkInName(array $row): array
+    {
+        $normalized = $row;
+
+        $processedBy = isset($normalized['processed_by_user_id'])
+            ? (int) $normalized['processed_by_user_id']
+            : 0;
+
+        if ($processedBy > 0) {
+            $name = isset($normalized['customer_name'])
+                ? trim((string) $normalized['customer_name'])
+                : '';
+
+            if ($name === '' || strcasecmp($name, 'n/a') === 0) {
+                $normalized['customer_name'] = 'Walk-in';
+            } elseif (strcasecmp($name, 'walk in') === 0) {
+                $normalized['customer_name'] = 'Walk-in';
+            }
+        }
+
+        return $normalized;
+    }
+}
+
 if (!function_exists('normalizeOnlineOrderRow')) {
     function normalizeOnlineOrderRow(array $row): array
     {
@@ -79,7 +104,7 @@ if (!function_exists('normalizeOnlineOrderRow')) {
             $normalized['total'] = 0.0;
         }
 
-        return $normalized;
+        return ordersNormalizeWalkInName($normalized);
     }
 }
 

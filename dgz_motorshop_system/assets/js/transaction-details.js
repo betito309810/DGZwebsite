@@ -64,7 +64,18 @@ async function loadTransactionDetails(orderId) {
         // Format the date
         const orderDate = order.created_at ? new Date(order.created_at).toLocaleString() : 'N/A';
         const cashierName = (order.cashier_display_name || order.cashier_name || order.cashier_username || '').trim() || 'Unassigned';
-        const customerName = (order.customer_name || order.full_name || order.name || '').trim() || 'N/A';
+        const processedById = Number(order.processed_by_user_id || order.processed_by || 0);
+        const orderTypeValue = (order.order_type || '').toString().trim().toLowerCase();
+        const walkInOrderType = orderTypeValue.replace(/[^a-z]/g, '') === 'walkin';
+        const treatAsWalkIn = walkInOrderType || processedById > 0;
+        const rawCustomerName = (order.customer_name || order.full_name || order.name || '').toString().trim();
+        let customerName = rawCustomerName;
+
+        if (!customerName || /^n\/?a$/i.test(customerName)) {
+            customerName = treatAsWalkIn ? 'Walk-in' : 'N/A';
+        } else if (treatAsWalkIn && /^walk\s*-?\s*in$/i.test(customerName)) {
+            customerName = 'Walk-in';
+        }
         const email = (order.email || order.customer_email || order.contact_email || '').toString();
         const phone = (order.phone || order.customer_phone || order.contact_number || order.contact || order.mobile || '').toString();
         const facebook = ((order.facebook_account ?? order.facebook ?? order.fb_account ?? '') + '').trim();

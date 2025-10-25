@@ -1,5 +1,6 @@
 <?php
 require __DIR__ . '/../config/config.php';
+require_once __DIR__ . '/includes/online_orders_helpers.php';
 if(empty($_SESSION['user_id'])){ header('Location: login.php'); exit; }
 
 $pdo = db();
@@ -447,6 +448,12 @@ try {
 }
 
 $orders = $stmt->fetchAll();
+$orders = array_map(
+    static function (array $row): array {
+        return normalizeOnlineOrderRow($row);
+    },
+    $orders ?: []
+);
 
 // Calculate showing info
 if ($total_records === 0) {
@@ -808,7 +815,7 @@ $buildPageUrl = static function (int $page) use ($queryParams): string {
     <div id="transactionModal" class="modal-overlay" style="display:none;">
         <div class="modal-content transaction-modal">
             <div class="modal-header">
-                <h3>Order Details</h3>
+                <h3>Transaction Details</h3>
                 <button type="button" class="modal-close" aria-label="Close transaction details">&times;</button>
             </div>
             <div class="modal-body">
