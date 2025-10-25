@@ -115,6 +115,24 @@ if (!function_exists('loadInventoryNotifications')) {
 
         $activeCondition = productsArchiveActiveCondition($pdo, 'p');
 
+        // Skip generating product-level notifications when variants are present to avoid duplicates.
+        $productsWithVariants = [];
+        try {
+            $variantProductStmt = $pdo->query('SELECT DISTINCT product_id FROM product_variants WHERE product_id IS NOT NULL');
+        } catch (PDOException $exception) {
+            error_log('Unable to inspect product variant list: ' . $exception->getMessage());
+            $variantProductStmt = false;
+        }
+
+        if ($variantProductStmt) {
+            while ($variantRow = $variantProductStmt->fetch(PDO::FETCH_ASSOC)) {
+                $productId = isset($variantRow['product_id']) ? (int) $variantRow['product_id'] : 0;
+                if ($productId > 0) {
+                    $productsWithVariants[$productId] = true;
+                }
+            }
+        }
+
         $lowStockProducts = $pdo->query(
             "SELECT p.id, p.name, p.quantity, p.low_stock_threshold FROM products p "
             . "WHERE $activeCondition AND p.quantity <= p.low_stock_threshold"
@@ -129,21 +147,32 @@ if (!function_exists('loadInventoryNotifications')) {
         );
 
         foreach ($lowStockProducts as $item) {
-            $checkProductStmt->execute([$item['id']]);
-            if (!$checkProductStmt->fetchColumn()) {
-                $quantity = (int) ($item['quantity'] ?? 0);
-                $threshold = (int) ($item['low_stock_threshold'] ?? 0);
-                $title = ($item['name'] ?? 'Unknown item') . ' is low on stock';
-                $message = 'Only ' . $quantity . ' left (minimum ' . $threshold . ').';
-
-                $createStmt->execute([
-                    $item['id'],
-                    null,
-                    $title,
-                    $message,
-                    $quantity,
-                ]);
+            $productId = isset($item['id']) ? (int) $item['id'] : 0;
+            if ($productId <= 0) {
+                continue;
             }
+
+            if (isset($productsWithVariants[$productId])) {
+                continue;
+            }
+
+            $checkProductStmt->execute([$productId]);
+            if ($checkProductStmt->fetchColumn()) {
+                continue;
+            }
+
+            $quantity = (int) ($item['quantity'] ?? 0);
+            $threshold = (int) ($item['low_stock_threshold'] ?? 0);
+            $title = ($item['name'] ?? 'Unknown item') . ' is low on stock';
+            $message = 'Only ' . $quantity . ' left (minimum ' . $threshold . ').';
+
+            $createStmt->execute([
+                $productId,
+                null,
+                $title,
+                $message,
+                $quantity,
+            ]);
         }
 
         $variantLowStock = $pdo->query(
@@ -230,7 +259,15 @@ if (!function_exists('loadInventoryNotifications')) {
             $quantity = isset($record['product_quantity']) ? (int) $record['product_quantity'] : null;
             $threshold = isset($record['product_low_stock_threshold']) ? (int) $record['product_low_stock_threshold'] : null;
 
-            if ($isArchived || $quantity === null || ($threshold !== null && $quantity > $threshold)) {
+            $productId = isset($record['product_id']) ? (int) $record['product_id'] : 0;
+
+            // Resolve legacy product-level alerts once variants exist to prevent duplicate notifications.
+            if (
+                ($productId > 0 && isset($productsWithVariants[$productId]))
+                || $isArchived
+                || $quantity === null
+                || ($threshold !== null && $quantity > $threshold)
+            ) {
                 $resolveStmt->execute([$record['id']]);
             }
         }
