@@ -10,21 +10,54 @@ header('Content-Type: application/json');
 /**
  * Resolve the storage directory for decline attachments, creating it when missing.
  * Added so we can ship supporting documents with the disapproval email.
+ *
+ * Some installations only allow writes inside the bundled system folder, so fall back
+ * to that location when the project root uploads directory is not writable.
  */
-function ensureDeclineUploadDir(): string
+function ensureDeclineUploadDir(): array
 {
-    $baseUploads = dirname(__DIR__) . '/uploads';
-    $targetDir = $baseUploads . '/order-decline';
+    $projectRoot = dirname(__DIR__);
+    $candidates = [
+        [
+            'base' => $projectRoot . '/uploads',
+            'relative' => 'uploads',
+        ],
+        [
+            'base' => $projectRoot . '/dgz_motorshop_system/uploads',
+            'relative' => 'dgz_motorshop_system/uploads',
+        ],
+    ];
 
-    if (!is_dir($baseUploads) && !mkdir($baseUploads, 0775, true) && !is_dir($baseUploads)) {
-        throw new RuntimeException('Unable to prepare the uploads storage.');
+    $lastError = 'Unable to prepare the uploads storage.';
+
+    foreach ($candidates as $candidate) {
+        $baseDir = $candidate['base'];
+        $relativeBase = rtrim($candidate['relative'], '/');
+
+        if (file_exists($baseDir) && !is_dir($baseDir)) {
+            $lastError = 'Uploads path conflicts with an existing file.';
+            continue;
+        }
+
+        if (!is_dir($baseDir) && !mkdir($baseDir, 0775, true) && !is_dir($baseDir)) {
+            $lastError = 'Unable to prepare the uploads storage.';
+            continue;
+        }
+
+        $targetDir = rtrim($baseDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'order-decline';
+
+        if (!is_dir($targetDir) && !mkdir($targetDir, 0775, true) && !is_dir($targetDir)) {
+            $lastError = 'Unable to prepare the decline attachment folder.';
+            continue;
+        }
+
+        return [
+            'absolute' => $targetDir,
+            'relative' => $relativeBase . '/order-decline',
+        ];
     }
 
-    if (!is_dir($targetDir) && !mkdir($targetDir, 0775, true) && !is_dir($targetDir)) {
-        throw new RuntimeException('Unable to prepare the decline attachment folder.');
-    }
-
-    return $targetDir;
+    throw new RuntimeException($lastError);
 }
 
 /**
@@ -76,7 +109,9 @@ function storeDeclineAttachment(array $file, int $orderId): array
         throw new RuntimeException('Only PDF or image files are allowed for attachments.');
     }
 
-    $targetBase = ensureDeclineUploadDir();
+    $storage = ensureDeclineUploadDir();
+    $targetBase = $storage['absolute'];
+    $relativeBase = $storage['relative'];
     $orderDir = $targetBase . '/' . $orderId;
     if (!is_dir($orderDir) && !mkdir($orderDir, 0775, true) && !is_dir($orderDir)) {
         throw new RuntimeException('Unable to prepare the attachment folder.');
@@ -95,7 +130,7 @@ function storeDeclineAttachment(array $file, int $orderId): array
         throw new RuntimeException('Failed to store the attachment.');
     }
 
-    $relativePath = 'uploads/order-decline/' . $orderId . '/' . $filename;
+    $relativePath = $relativeBase . '/' . $orderId . '/' . $filename;
 
     return [
         'relativePath' => $relativePath,
