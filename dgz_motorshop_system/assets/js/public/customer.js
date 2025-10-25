@@ -11,7 +11,7 @@
     const heartbeatIntervalAttr = parseInt(body.dataset.customerSessionHeartbeatInterval || '', 10);
     const heartbeatBaseInterval = Number.isFinite(heartbeatIntervalAttr) && heartbeatIntervalAttr > 0
         ? heartbeatIntervalAttr
-        : 15000;
+        : 5000;
 
     window.customerSession = Object.freeze({
         isAuthenticated: sessionState === 'authenticated',
@@ -25,6 +25,8 @@
         let consecutiveFailures = 0;
         let stopped = false;
         let timeoutId = null;
+        let running = false;
+        let pendingDelay = null;
 
         const normaliseDestination = (target) => {
             if (typeof target === 'string' && target.trim() !== '') {
@@ -57,7 +59,23 @@
                 return;
             }
 
-            timeoutId = window.setTimeout(runCheck, Math.max(1000, delay));
+            const normalizedDelay = Math.max(250, delay);
+
+            if (running) {
+                pendingDelay = pendingDelay === null
+                    ? normalizedDelay
+                    : Math.min(pendingDelay, normalizedDelay);
+                return;
+            }
+
+            if (timeoutId !== null) {
+                clearTimeout(timeoutId);
+            }
+
+            timeoutId = window.setTimeout(() => {
+                timeoutId = null;
+                runCheck();
+            }, normalizedDelay);
         };
 
         const nextDelay = () => {
@@ -70,9 +88,11 @@
         };
 
         const runCheck = async () => {
-            if (stopped) {
+            if (stopped || running) {
                 return;
             }
+
+            running = true;
 
             try {
                 const response = await fetch(heartbeatUrl, {
@@ -98,20 +118,29 @@
                 }
             } catch (error) {
                 consecutiveFailures += 1;
+            } finally {
+                running = false;
+                const delay = pendingDelay !== null ? pendingDelay : nextDelay();
+                pendingDelay = null;
+                scheduleNext(delay);
             }
-
-            scheduleNext(nextDelay());
         };
 
-        scheduleNext(5000);
+        scheduleNext(500);
+
+        window.addEventListener('focus', () => {
+            if (stopped) {
+                return;
+            }
+
+            consecutiveFailures = 0;
+            scheduleNext(500);
+        });
 
         window.addEventListener('visibilitychange', () => {
             if (!stopped && document.visibilityState === 'visible') {
                 consecutiveFailures = 0;
-                if (timeoutId !== null) {
-                    clearTimeout(timeoutId);
-                }
-                scheduleNext(1000);
+                scheduleNext(400);
             }
         });
     }

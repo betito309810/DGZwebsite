@@ -79,6 +79,7 @@ $loginUrl = orderingUrl('login.php');
 $myOrdersUrl = orderingUrl('my_orders.php');
 $logoutUrl = orderingUrl('logout.php');
 $customerSessionStatusEndpoint = orderingUrl('api/customer-session-status.php');
+$customerSessionHeartbeatInterval = 5000;
 
 $values = [
     'first_name' => trim((string)($_POST['first_name'] ?? $currentFirstName)),
@@ -301,6 +302,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </head>
 <body class="customer-orders-page" data-customer-session="authenticated"
     data-customer-session-heartbeat="<?= htmlspecialchars($customerSessionStatusEndpoint) ?>"
+    data-customer-session-heartbeat-interval="<?= (int) $customerSessionHeartbeatInterval ?>"
     data-customer-login-url="<?= htmlspecialchars($loginUrl) ?>">
 <header class="customer-orders-header">
     <div class="customer-orders-brand">

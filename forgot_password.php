@@ -7,6 +7,7 @@ $indexStylesheet = assetUrl('assets/css/public/index.css');
 $customerScript = assetUrl('assets/js/public/customer.js');
 $logoAsset = assetUrl('assets/logo.png');
 $customerSessionStatusEndpoint = orderingUrl('api/customer-session-status.php');
+$customerSessionHeartbeatInterval = 5000;
 $loginUrl = orderingUrl('login.php');
 
 $message = null;
@@ -75,6 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </head>
 <body class="customer-auth-page" data-customer-auth="forgot"
     data-customer-session-heartbeat="<?= htmlspecialchars($customerSessionStatusEndpoint) ?>"
+    data-customer-session-heartbeat-interval="<?= (int) $customerSessionHeartbeatInterval ?>"
     data-customer-login-url="<?= htmlspecialchars($loginUrl) ?>">
     <main class="customer-auth-card" aria-labelledby="forgotHeading">
         <a href="<?= htmlspecialchars(orderingUrl('index.php')) ?>" class="customer-auth-logo">

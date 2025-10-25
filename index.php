@@ -26,6 +26,7 @@ $checkoutUrl = orderingUrl('checkout.php');
 $productImagesEndpoint = orderingUrl('api/product-images.php');
 $customerCartEndpoint = orderingUrl('api/customer-cart.php');
 $customerSessionStatusEndpoint = orderingUrl('api/customer-session-status.php');
+$customerSessionHeartbeatInterval = 5000;
 
 $customerStylesheet = assetUrl('assets/css/public/customer.css');
 $customerScript = assetUrl('assets/js/public/customer.js');
@@ -72,6 +73,7 @@ natcasesort($categories);
 <body data-customer-session="<?= htmlspecialchars($bodyCustomerState) ?>"
     data-customer-first-name="<?= htmlspecialchars($bodyCustomerFirstName) ?>"
     data-customer-session-heartbeat="<?= htmlspecialchars($customerSessionStatusEndpoint) ?>"
+    data-customer-session-heartbeat-interval="<?= (int) $customerSessionHeartbeatInterval ?>"
     data-customer-login-url="<?= htmlspecialchars($loginUrl) ?>">
     <!-- Header -->
     <header class="header">

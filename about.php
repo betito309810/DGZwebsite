@@ -21,6 +21,7 @@ $logoutUrl = orderingUrl('logout.php');
 $productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
 $customerCartEndpoint = orderingUrl('api/customer-cart.php');
 $customerSessionStatusEndpoint = orderingUrl('api/customer-session-status.php');
+$customerSessionHeartbeatInterval = 5000;
 
 $customerSessionState = customerSessionExport();
 $isCustomerAuthenticated = !empty($customerSessionState['authenticated']);
@@ -44,6 +45,7 @@ $bodyCustomerFirstName = $customerFirstName !== null ? $customerFirstName : '';
 <body data-customer-session="<?= htmlspecialchars($bodyCustomerState) ?>"
     data-customer-first-name="<?= htmlspecialchars($bodyCustomerFirstName) ?>"
     data-customer-session-heartbeat="<?= htmlspecialchars($customerSessionStatusEndpoint) ?>"
+    data-customer-session-heartbeat-interval="<?= (int) $customerSessionHeartbeatInterval ?>"
     data-customer-login-url="<?= htmlspecialchars($loginUrl) ?>">
     <!-- Header -->
     <header class="header">

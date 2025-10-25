@@ -74,6 +74,7 @@ $indexStylesheet = assetUrl('assets/css/public/index.css');
 $customerScript = assetUrl('assets/js/public/customer.js');
 $logoAsset = assetUrl('assets/logo.png');
 $customerSessionStatusEndpoint = orderingUrl('api/customer-session-status.php');
+$customerSessionHeartbeatInterval = 5000;
 $loginPageUrl = orderingUrl('login.php');
 
 $errors = [];
@@ -206,6 +207,7 @@ $redirectParam = isset($_GET['redirect']) ? (string) $_GET['redirect'] : '';
 </head>
 <body class="customer-auth-page" data-customer-auth="login"
     data-customer-session-heartbeat="<?= htmlspecialchars($customerSessionStatusEndpoint) ?>"
+    data-customer-session-heartbeat-interval="<?= (int) $customerSessionHeartbeatInterval ?>"
     data-customer-login-url="<?= htmlspecialchars($loginPageUrl) ?>">
     <main class="customer-auth-card" aria-labelledby="loginHeading">
         <a href="<?= htmlspecialchars(orderingUrl('index.php')) ?>" class="customer-auth-logo">

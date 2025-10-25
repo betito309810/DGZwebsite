@@ -129,6 +129,7 @@ $shopUrl = orderingUrl('index.php');
 $inventoryAvailabilityApi = orderingUrl('api/inventory-availability.php');
 $customerCartApi = orderingUrl('api/customer-cart.php');
 $customerSessionStatusEndpoint = orderingUrl('api/customer-session-status.php');
+$customerSessionHeartbeatInterval = 5000;
 
 $customerStylesheet = assetUrl('assets/css/public/customer.css');
 $customerScript = assetUrl('assets/js/public/customer.js');
@@ -1130,6 +1131,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
 <body data-customer-session="<?= htmlspecialchars($bodyCustomerState) ?>"
     data-customer-first-name="<?= htmlspecialchars($bodyCustomerFirstName) ?>"
     data-customer-session-heartbeat="<?= htmlspecialchars($customerSessionStatusEndpoint) ?>"
+    data-customer-session-heartbeat-interval="<?= (int) $customerSessionHeartbeatInterval ?>"
     data-customer-login-url="<?= htmlspecialchars($loginUrl) ?>"
     data-auth-required="checkout">
     <header class="header">

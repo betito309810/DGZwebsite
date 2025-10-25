@@ -21,6 +21,7 @@ $settingsUrl = orderingUrl('settings.php');
 $cartUrl = orderingUrl('checkout.php');
 $customerCartEndpoint = orderingUrl('api/customer-cart.php');
 $customerSessionStatusEndpoint = orderingUrl('api/customer-session-status.php');
+$customerSessionHeartbeatInterval = 5000;
 
 $pdo = db();
 $alerts = [
@@ -668,6 +669,7 @@ $statusLabels = [
 <body class="customer-orders-page" data-customer-session="authenticated"
     data-customer-first-name="<?= htmlspecialchars($customerFirstName) ?>"
     data-customer-session-heartbeat="<?= htmlspecialchars($customerSessionStatusEndpoint) ?>"
+    data-customer-session-heartbeat-interval="<?= (int) $customerSessionHeartbeatInterval ?>"
     data-customer-login-url="<?= htmlspecialchars($loginUrl) ?>">
 <header class="customer-orders-header">
     <div class="customer-orders-brand">
