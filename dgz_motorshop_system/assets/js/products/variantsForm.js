@@ -140,7 +140,10 @@
                     ? normaliseQuantityField(quantityInput)
                     : aggregatedQty;
                 hostForm.dispatchEvent(new CustomEvent(EVENT_QUANTITY_CHANGED, {
-                    detail: { quantity: clampQuantityNumber(manualQty) },
+                    detail: {
+                        quantity: clampQuantityNumber(manualQty),
+                        hasVariants,
+                    },
                 }));
             }
         }
@@ -302,7 +305,10 @@
             const handleManualQuantity = () => {
                 const qty = normaliseQuantityField(quantityInput);
                 hostForm.dispatchEvent(new CustomEvent(EVENT_QUANTITY_CHANGED, {
-                    detail: { quantity: qty },
+                    detail: {
+                        quantity: qty,
+                        hasVariants: false,
+                    },
                 }));
             };
             quantityInput.addEventListener('input', handleManualQuantity);

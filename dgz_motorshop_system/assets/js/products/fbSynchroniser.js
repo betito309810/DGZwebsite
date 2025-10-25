@@ -135,6 +135,7 @@
     const MAX_QUANTITY = 9999;
     const CODE_SUFFIX_WIDTH = 3;
     const EVENT_QUANTITY_CHANGED = 'product:quantityChanged';
+    const VARIANT_LOW_STOCK_PLACEHOLDER = 'Managed per variant';
     const CATEGORY_CODE_PREFIXES = new Map([
         ['LUBRICANT', 'LRT'],
         ['LUBRICANTS', 'LRT'],
@@ -346,7 +347,55 @@
         }
         lowInput.readOnly = true;
 
+        const originallyRequired = lowInput.required;
+        const hadPlaceholder = lowInput.hasAttribute('placeholder');
+        const originalPlaceholder = hadPlaceholder ? lowInput.getAttribute('placeholder') : '';
+
+        let variantManaged = false;
+
+        const applyVariantPlaceholder = () => {
+            if (hadPlaceholder) {
+                lowInput.setAttribute('placeholder', VARIANT_LOW_STOCK_PLACEHOLDER);
+            } else {
+                lowInput.setAttribute('placeholder', VARIANT_LOW_STOCK_PLACEHOLDER);
+            }
+        };
+
+        const restoreOriginalPlaceholder = () => {
+            if (hadPlaceholder) {
+                lowInput.setAttribute('placeholder', originalPlaceholder ?? '');
+            } else {
+                lowInput.removeAttribute('placeholder');
+            }
+        };
+
+        const enableVariantMode = () => {
+            if (variantManaged) {
+                return;
+            }
+            variantManaged = true;
+            lowInput.value = '';
+            lowInput.disabled = true;
+            lowInput.required = false;
+            applyVariantPlaceholder();
+            lowInput.dataset.variantManaged = '1';
+        };
+
+        const disableVariantMode = () => {
+            if (!variantManaged) {
+                return;
+            }
+            variantManaged = false;
+            lowInput.disabled = false;
+            lowInput.required = originallyRequired;
+            restoreOriginalPlaceholder();
+            delete lowInput.dataset.variantManaged;
+        };
+
         const syncFromField = () => {
+            if (variantManaged) {
+                return;
+            }
             const qty = normaliseQuantityInput(quantityInput);
             updateLowStockField(lowInput, qty);
         };
@@ -358,6 +407,14 @@
 
         if (form) {
             form.addEventListener(EVENT_QUANTITY_CHANGED, (event) => {
+                const hasVariants = Boolean(event?.detail?.hasVariants);
+                if (hasVariants) {
+                    enableVariantMode();
+                    return;
+                }
+
+                disableVariantMode();
+
                 const detailQuantity = Number(event?.detail?.quantity);
                 if (Number.isFinite(detailQuantity)) {
                     updateLowStockField(lowInput, clampQuantityNumber(detailQuantity));
@@ -455,6 +512,12 @@
                 delete addCodeInput.dataset.codeSuggestion;
             }
             updateLowStockField(addLowInput, 0);
+            addForm?.dispatchEvent(new CustomEvent(EVENT_QUANTITY_CHANGED, {
+                detail: {
+                    quantity: 0,
+                    hasVariants: false,
+                },
+            }));
         });
 
         attachLowStockSync(addForm, addQuantityInput, addLowInput);

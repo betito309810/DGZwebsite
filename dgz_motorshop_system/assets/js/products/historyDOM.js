@@ -401,9 +401,15 @@
                 setDetailText('supplier', product.supplier ?? '', { fallback: '—' });
                 setDetailText('quantity', formatNumber(product.quantity), { fallback: '—' });
                 setDetailText('price', formatCurrency(product.price), { fallback: '—' });
-                setDetailText('low_stock_threshold', formatNumber(product.low_stock_threshold), {
-                    fallback: '—',
-                });
+
+                const productHasVariants = Array.isArray(product.variants) && product.variants.length > 0;
+                if (productHasVariants) {
+                    setDetailText('low_stock_threshold', '', { fallback: '—' });
+                } else {
+                    setDetailText('low_stock_threshold', formatNumber(product.low_stock_threshold), {
+                        fallback: '—',
+                    });
+                }
                 setDetailText('description', product.description ?? '', {
                     fallback: 'No description provided.',
                 });
