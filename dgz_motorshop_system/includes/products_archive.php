@@ -212,6 +212,65 @@ if (!function_exists('productsArchiveTaxonomyActiveCondition')) {
     }
 }
 
+if (!function_exists('productsArchiveTaxonomyArchivedFilter')) {
+    function productsArchiveTaxonomyArchivedFilter(PDO $pdo, string $alias = ''): string
+    {
+        if (!function_exists('catalogTaxonomyFetchOptions')) {
+            return '';
+        }
+
+        $archivedBrands = productsArchiveTaxonomyArchivedNames($pdo, 'brand');
+        $archivedCategories = productsArchiveTaxonomyArchivedNames($pdo, 'category');
+
+        if (empty($archivedBrands) && empty($archivedCategories)) {
+            return '';
+        }
+
+        $alias = trim($alias);
+        $prefix = $alias === '' ? '' : rtrim($alias, '.') . '.';
+
+        $clauses = [];
+        $buildClause = static function (array $values, string $column) use ($pdo, &$clauses): void {
+            if (empty($values)) {
+                return;
+            }
+
+            $normalizedColumn = sprintf('LOWER(TRIM(%s))', $column);
+            $coalescedColumn = sprintf("COALESCE(%s, '')", $normalizedColumn);
+
+            $quoted = [];
+            foreach ($values as $value) {
+                if (method_exists($pdo, 'quote')) {
+                    $quotedValue = $pdo->quote($value);
+                } else {
+                    $quotedValue = "'" . str_replace("'", "''", $value) . "'";
+                }
+
+                if ($quotedValue === false) {
+                    continue;
+                }
+
+                $quoted[] = $quotedValue;
+            }
+
+            if (empty($quoted)) {
+                return;
+            }
+
+            $clauses[] = sprintf("(%s != '' AND %s IN (%s))", $coalescedColumn, $normalizedColumn, implode(', ', $quoted));
+        };
+
+        $buildClause($archivedBrands, $prefix . 'brand');
+        $buildClause($archivedCategories, $prefix . 'category');
+
+        if (empty($clauses)) {
+            return '';
+        }
+
+        return implode(' OR ', $clauses);
+    }
+}
+
 if (!function_exists('productsArchiveTaxonomyArchivedNames')) {
     function productsArchiveTaxonomyArchivedNames(PDO $pdo, string $type): array
     {

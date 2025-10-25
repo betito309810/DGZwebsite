@@ -1539,9 +1539,16 @@ if ($supplier_filter !== '') {
     $filter_params[':supplier_filter'] = $supplier_filter;
 }
 if ($status_filter === 'active') {
-    $where_sql .= ' AND ' . productsArchiveActiveCondition($pdo);
+    $where_sql .= ' AND ' . productsArchiveActiveCondition($pdo, '', true);
 } elseif ($status_filter === 'archived') {
-    $where_sql .= ' AND ' . productsArchiveOnlyCondition($pdo);
+    $productArchiveClause = productsArchiveOnlyCondition($pdo);
+    $taxonomyArchiveClause = productsArchiveTaxonomyArchivedFilter($pdo);
+
+    if ($taxonomyArchiveClause !== '') {
+        $where_sql .= ' AND (' . $productArchiveClause . ' OR ' . $taxonomyArchiveClause . ')';
+    } else {
+        $where_sql .= ' AND ' . $productArchiveClause;
+    }
 }
 
 // First, get total count for pagination (using filter params)
