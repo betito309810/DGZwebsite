@@ -178,7 +178,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const updateStatusFilterButtons = (activeStatus) => {
                 const active = typeof activeStatus === 'string' ? activeStatus : '';
                 statusFilterButtons.forEach((button) => {
-                    const value = button?.dataset?.statusValue || '';
+                    const value = button && button.dataset && button.dataset.statusValue
+                        ? button.dataset.statusValue
+                        : '';
                     const isActive = value === active || (!value && active === '');
                     button.classList.toggle('is-active', isActive);
                     if (button.hasAttribute('aria-pressed')) {
@@ -202,9 +204,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const help = proofField ? proofField.querySelector('.delivery-proof-help') : null;
                 const selectedValue = select ? String(select.value || '') : '';
                 const shouldShow = supportsProof && selectedValue === 'completed';
-                const defaultHelp = help?.dataset?.deliveryProofDefault
-                    || onlineOrdersState.deliveryProofHelp
-                    || DELIVERY_PROOF_HELP_FALLBACK;
+                let defaultHelp = onlineOrdersState.deliveryProofHelp || DELIVERY_PROOF_HELP_FALLBACK;
+                if (help && help.dataset && help.dataset.deliveryProofDefault) {
+                    defaultHelp = help.dataset.deliveryProofDefault;
+                }
 
                 if (proofField) {
                     if (supportsProof) {
@@ -384,7 +387,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 if (onlineOrderNoteContainer && onlineOrderNote) {
-                    const noteText = ((order.customer_note ?? order.notes ?? order.note) || '').toString().trim();
+                    const noteCandidates = [order.customer_note, order.notes, order.note];
+                    let noteText = '';
+                    for (let i = 0; i < noteCandidates.length; i += 1) {
+                        const value = noteCandidates[i];
+                        if (value !== undefined && value !== null) {
+                            const trimmed = String(value).trim();
+                            if (trimmed !== '') {
+                                noteText = trimmed;
+                                break;
+                            }
+                        }
+                    }
+
                     if (noteText !== '') {
                         onlineOrderNote.textContent = noteText; // Added cashier note so staff can review special instructions
                         onlineOrderNoteContainer.style.display = 'flex';
@@ -444,7 +459,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 }
 
-                const totalAmount = Number(order.total ?? order.grand_total ?? order.amount ?? order.total_amount ?? 0) || 0;
+                const totalCandidates = [order.total, order.grand_total, order.amount, order.total_amount];
+                let totalAmount = 0;
+                for (let i = 0; i < totalCandidates.length; i += 1) {
+                    const candidate = Number(totalCandidates[i]);
+                    if (Number.isFinite(candidate) && candidate > 0) {
+                        totalAmount = candidate;
+                        break;
+                    }
+                }
+                if (!Number.isFinite(totalAmount)) {
+                    totalAmount = 0;
+                }
                 onlineOrderTotal.textContent = formatPeso(totalAmount);
             };
             // End POS online order modal populator
@@ -556,8 +582,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
                 const totalOrders = Number(total) || 0;
-                const page = Number(meta?.page) || 1;
-                const perPage = Number(meta?.perPage) || Number(onlineOrdersState.perPage) || 15;
+                const page = Number(meta && meta.page) || 1;
+                const perPage = Number(meta && meta.perPage) || Number(onlineOrdersState.perPage) || 15;
                 const start = totalOrders > 0 ? ((page - 1) * perPage + 1) : 0;
                 const end = totalOrders > 0 ? Math.min(page * perPage, totalOrders) : 0;
                 onlineOrdersSummary.textContent = `Showing ${start} to ${end} of ${totalOrders} entries`;
@@ -644,17 +670,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 const hasDeliveryProof = Boolean(order && order.has_delivery_proof);
                 const proofFallbackUrl = proofImageUrl;
                 const showCompletedProofs = ['completed', 'complete'].includes(statusValue);
-                const availableStatusChanges = Array.isArray(order?.available_status_changes)
+                const availableStatusChanges = Array.isArray(order && order.available_status_changes)
                     ? order.available_status_changes
                     : [];
-                const statusFormHidden = Boolean(order?.status_form_hidden);
+                const statusFormHidden = Boolean(order && order.status_form_hidden);
                 const statusFormDisabled = statusFormHidden
                     ? true
-                    : Boolean(order?.status_form_disabled) || availableStatusChanges.length === 0;
+                    : (order && order.status_form_disabled ? Boolean(order.status_form_disabled) : false)
+                        || availableStatusChanges.length === 0;
                 const defaultNextStatus = (!statusFormDisabled && availableStatusChanges.length > 0)
                     ? String(availableStatusChanges[0].value || '')
                     : '';
-                const proofSupported = Boolean(order?.delivery_proof_supported ?? onlineOrdersState.deliveryProofSupported);
+                let proofSupported = onlineOrdersState.deliveryProofSupported;
+                if (order && order.delivery_proof_supported !== undefined && order.delivery_proof_supported !== null) {
+                    proofSupported = order.delivery_proof_supported;
+                }
+                proofSupported = Boolean(proofSupported);
                 const proofNotice = typeof onlineOrdersState.deliveryProofNotice === 'string'
                     ? onlineOrdersState.deliveryProofNotice
                     : '';
@@ -673,7 +704,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 row.classList.add('online-order-row');
                 row.dataset.orderId = String(orderId);
-                row.dataset.declineReasonId = String(order?.decline_reason_id ?? 0);
+                const declineReasonId = order && order.decline_reason_id !== undefined && order.decline_reason_id !== null
+                    ? order.decline_reason_id
+                    : 0;
+                row.dataset.declineReasonId = String(declineReasonId);
                 row.dataset.declineReasonLabel = declineReasonLabel;
                 row.dataset.declineReasonNote = declineReasonNote;
 
@@ -722,7 +756,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             data-image="${escapeHtml(primary)}"
                             data-fallback-image="${escapeHtml(fallback)}"
                             data-reference="${escapeHtml(referenceNumber)}"
-                            data-customer="${escapeHtml(order?.customer_name || 'Customer')}"
+                            data-customer="${escapeHtml((order && order.customer_name) || 'Customer')}"
                             data-proof-type="${escapeHtml(type)}"${disabledAttr}>
                             <i class="fas ${escapeHtml(icon)}"></i> ${escapeHtml(label)}
                         </button>
@@ -747,9 +781,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 row.innerHTML = `
                     <td>#${escapeHtml(orderId)}</td>
-                    <td>${escapeHtml(order?.customer_name || 'Customer')}</td>
+                    <td>${escapeHtml((order && order.customer_name) || 'Customer')}</td>
                     <td>${escapeHtml(contactDisplay)}</td>
-                    <td>${escapeHtml(order?.total_formatted || '₱0.00')}</td>
+                    <td>${escapeHtml((order && order.total_formatted) || '₱0.00')}</td>
                     <td>${referenceNumber !== ''
                         ? `<span class="reference-badge">${escapeHtml(referenceNumber)}</span>`
                         : '<span class="muted">Not provided</span>'}
@@ -760,7 +794,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         ${statusFormHtml}
                         ${declineHtml}
                     </td>
-                    <td>${escapeHtml(order?.created_at_formatted || 'N/A')}</td>
+                    <td>${escapeHtml((order && order.created_at_formatted) || 'N/A')}</td>
                 `;
 
                 if (!statusFormHidden) {
@@ -914,7 +948,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 const hasRows = posTableBody.querySelector('tr') !== null;
-                const amountReceived = parseFloat(amountReceivedInput?.value || '0');
+                const amountReceivedRaw = amountReceivedInput ? amountReceivedInput.value || '0' : '0';
+                const amountReceived = parseFloat(amountReceivedRaw);
                 const salesTotal = getSalesTotal();
                 
                 // Only enable if there are items and payment is sufficient
@@ -990,7 +1025,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         const nameText = row.querySelector('.pos-name-text');
                         nameValue = nameText ? nameText.textContent.trim() : '';
                         priceValue = priceCell ? parseFloat(priceCell.dataset.rawPrice || '0') : 0;
-                        availableValue = parseInt(row.querySelector('.pos-available')?.textContent || '0', 10) || 0;
+                        const availableCell = row.querySelector('.pos-available');
+                        const availableText = availableCell ? availableCell.textContent || '0' : '0';
+                        availableValue = parseInt(availableText, 10) || 0;
                         productId = row.dataset.productId || null;
                     }
 
@@ -1375,7 +1412,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 resetServiceForm();
                 serviceModal.style.display = 'flex';
-                serviceNameInput?.focus();
+                if (serviceNameInput) {
+                    serviceNameInput.focus();
+                }
             }
 
             function closeServiceModal() {
@@ -1556,8 +1595,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 // Get selected category and brand filter values
-                const selectedCategory = document.getElementById('categoryFilter')?.value || '';
-                const selectedBrand = document.getElementById('brandFilter')?.value || '';
+                const categoryFilterEl = document.getElementById('categoryFilter');
+                const brandFilterEl = document.getElementById('brandFilter');
+                const selectedCategory = categoryFilterEl ? categoryFilterEl.value || '' : '';
+                const selectedBrand = brandFilterEl ? brandFilterEl.value || '' : '';
 
                 const normalisedFilter = filter.toLowerCase();
 
@@ -1919,21 +1960,31 @@ document.addEventListener('DOMContentLoaded', () => {
             // End POS proof modal closer
 
             // Event bindings
-            mobileToggle?.addEventListener('click', () => {
-                sidebar?.classList.toggle('mobile-open');
-            });
+            if (mobileToggle) {
+                mobileToggle.addEventListener('click', () => {
+                    if (sidebar) {
+                        sidebar.classList.toggle('mobile-open');
+                    }
+                });
+            }
 
             // Add event listeners for category and brand filters to re-render product table on change
             const categoryFilterSelect = document.getElementById('categoryFilter');
             const brandFilterSelect = document.getElementById('brandFilter');
 
-            categoryFilterSelect?.addEventListener('change', () => {
-                renderProductTable(productSearchInput.value.trim());
-            });
+            if (categoryFilterSelect) {
+                categoryFilterSelect.addEventListener('change', () => {
+                    const value = productSearchInput ? productSearchInput.value.trim() : '';
+                    renderProductTable(value);
+                });
+            }
 
-            brandFilterSelect?.addEventListener('change', () => {
-                renderProductTable(productSearchInput.value.trim());
-            });
+            if (brandFilterSelect) {
+                brandFilterSelect.addEventListener('change', () => {
+                    const value = productSearchInput ? productSearchInput.value.trim() : '';
+                    renderProductTable(value);
+                });
+            }
 
             document.addEventListener('click', (event) => {
                 if (window.innerWidth <= 768 && sidebar && mobileToggle) {
@@ -1943,11 +1994,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
-            userAvatar?.addEventListener('click', () => {
-                if (userDropdown) {
-                    userDropdown.classList.toggle('show');
-                }
-            });
+            if (userAvatar) {
+                userAvatar.addEventListener('click', () => {
+                    if (userDropdown) {
+                        userDropdown.classList.toggle('show');
+                    }
+                });
+            }
 
             document.addEventListener('click', (event) => {
                 if (userMenu && userDropdown && !userMenu.contains(event.target)) {
@@ -1955,25 +2008,33 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
-            profileButton?.addEventListener('click', (event) => {
-                event.preventDefault();
-                userDropdown?.classList.remove('show');
-                openProfileModal();
-            });
+            if (profileButton) {
+                profileButton.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    if (userDropdown) {
+                        userDropdown.classList.remove('show');
+                    }
+                    openProfileModal();
+                });
+            }
 
-            profileModalClose?.addEventListener('click', () => {
-                closeProfileModal();
-            });
-
-            profileModal?.addEventListener('click', (event) => {
-                if (event.target === profileModal) {
+            if (profileModalClose) {
+                profileModalClose.addEventListener('click', () => {
                     closeProfileModal();
-                }
-            });
+                });
+            }
+
+            if (profileModal) {
+                profileModal.addEventListener('click', (event) => {
+                    if (event.target === profileModal) {
+                        closeProfileModal();
+                    }
+                });
+            }
 
             document.addEventListener('keydown', (event) => {
                 if (event.key === 'Escape') {
-                    if (profileModal?.classList.contains('show')) {
+                    if (profileModal && profileModal.classList.contains('show')) {
                         closeProfileModal();
                     }
 
@@ -1987,95 +2048,124 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
-            openProductModalButton?.addEventListener('click', openProductModal);
-            closeProductModalButton?.addEventListener('click', closeProductModal);
-            productModal?.addEventListener('click', (event) => {
-                if (event.target === productModal) {
-                    closeProductModal();
-                }
-            });
-
-            addServiceButton?.addEventListener('click', () => {
-                openServiceModal();
-            });
-
-            closeServiceModalButton?.addEventListener('click', () => {
-                closeServiceModal();
-            });
-
-            serviceModal?.addEventListener('click', (event) => {
-                if (event.target === serviceModal) {
-                    closeServiceModal();
-                }
-            });
-
-            closeVariantModalButton?.addEventListener('click', () => {
-                closeVariantModal();
-            });
-
-            variantModal?.addEventListener('click', (event) => {
-                if (event.target === variantModal) {
-                    closeVariantModal();
-                }
-            });
-
-            serviceForm?.addEventListener('submit', (event) => {
-                event.preventDefault();
-
-                const name = serviceNameInput?.value.trim() || '';
-                let price = parseFloat(servicePriceInput?.value || '0');
-                let qty = parseInt(serviceQtyInput?.value || '1', 10);
-
-                if (name === '') {
-                    alert('Please enter a service description.');
-                    serviceNameInput?.focus();
-                    return;
-                }
-
-                if (!Number.isFinite(price) || price <= 0) {
-                    alert('Please enter a valid service price.');
-                    servicePriceInput?.focus();
-                    return;
-                }
-
-                if (!Number.isFinite(qty) || qty <= 0) {
-                    qty = 1;
-                }
-
-                price = parseFloat(price.toFixed(2));
-                qty = Math.max(1, qty);
-
-                createRow({
-                    type: 'service',
-                    lineId: generateLineId('service'),
-                    name,
-                    price,
-                    qty,
+            if (openProductModalButton) {
+                openProductModalButton.addEventListener('click', openProductModal);
+            }
+            if (closeProductModalButton) {
+                closeProductModalButton.addEventListener('click', closeProductModal);
+            }
+            if (productModal) {
+                productModal.addEventListener('click', (event) => {
+                    if (event.target === productModal) {
+                        closeProductModal();
+                    }
                 });
+            }
 
-                updateEmptyState();
-                recalcTotals();
-                persistTableState();
-                updateSettleButtonState();
-                closeServiceModal();
-            });
+            if (addServiceButton) {
+                addServiceButton.addEventListener('click', () => {
+                    openServiceModal();
+                });
+            }
 
-            productSearchInput?.addEventListener('input', (event) => {
-                renderProductTable(event.target.value.trim());
-            });
+            if (closeServiceModalButton) {
+                closeServiceModalButton.addEventListener('click', () => {
+                    closeServiceModal();
+                });
+            }
 
-            addSelectedProductsButton?.addEventListener('click', () => {
-                const selected = productModal.querySelectorAll('.product-select-checkbox:checked');
-                if (selected.length === 0) {
-                    alert('Please select at least one product to add.');
-                    return;
-                }
+            if (serviceModal) {
+                serviceModal.addEventListener('click', (event) => {
+                    if (event.target === serviceModal) {
+                        closeServiceModal();
+                    }
+                });
+            }
+
+            if (closeVariantModalButton) {
+                closeVariantModalButton.addEventListener('click', () => {
+                    closeVariantModal();
+                });
+            }
+
+            if (variantModal) {
+                variantModal.addEventListener('click', (event) => {
+                    if (event.target === variantModal) {
+                        closeVariantModal();
+                    }
+                });
+            }
+
+            if (serviceForm) {
+                serviceForm.addEventListener('submit', (event) => {
+                    event.preventDefault();
+
+                    const name = serviceNameInput ? serviceNameInput.value.trim() : '';
+                    const priceValue = servicePriceInput ? servicePriceInput.value || '0' : '0';
+                    const qtyValue = serviceQtyInput ? serviceQtyInput.value || '1' : '1';
+                    let price = parseFloat(priceValue);
+                    let qty = parseInt(qtyValue, 10);
+
+                    if (name === '') {
+                        alert('Please enter a service description.');
+                        if (serviceNameInput) {
+                            serviceNameInput.focus();
+                        }
+                        return;
+                    }
+
+                    if (!Number.isFinite(price) || price <= 0) {
+                        alert('Please enter a valid service price.');
+                        if (servicePriceInput) {
+                            servicePriceInput.focus();
+                        }
+                        return;
+                    }
+
+                    if (!Number.isFinite(qty) || qty <= 0) {
+                        qty = 1;
+                    }
+
+                    price = parseFloat(price.toFixed(2));
+                    qty = Math.max(1, qty);
+
+                    createRow({
+                        type: 'service',
+                        lineId: generateLineId('service'),
+                        name,
+                        price,
+                        qty,
+                    });
+
+                    updateEmptyState();
+                    recalcTotals();
+                    persistTableState();
+                    updateSettleButtonState();
+                    closeServiceModal();
+                });
+            }
+
+            if (productSearchInput) {
+                productSearchInput.addEventListener('input', (event) => {
+                    const target = event.target || {};
+                    const value = target.value ? target.value.trim() : '';
+                    renderProductTable(value);
+                });
+            }
+
+            if (addSelectedProductsButton) {
+                addSelectedProductsButton.addEventListener('click', () => {
+                    const selected = productModal.querySelectorAll('.product-select-checkbox:checked');
+                    if (selected.length === 0) {
+                        alert('Please select at least one product to add.');
+                        return;
+                    }
 
                 let queuedVariantSelection = false;
                 selected.forEach((checkbox) => {
                     const result = addProductById(checkbox.dataset.id);
 
-                    if (result?.status === 'requires_variant' && result.product) {
+                    if (result && result.status === 'requires_variant' && result.product) {
                         pendingVariantProducts.push(result.product);
                         queuedVariantSelection = true;
                     }
@@ -2088,7 +2178,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     closeProductModal();
                 }
-            });
+                });
+            }
 
             posTableBody.addEventListener('click', (event) => {
                 const removeButton = event.target.closest('.remove-btn');
@@ -2223,41 +2314,52 @@ document.addEventListener('DOMContentLoaded', () => {
                 persistTableState();
             });
 
-            amountReceivedInput?.addEventListener('input', () => {
-                recalcTotals();
-                updateSettleButtonState();
-            });
+            if (amountReceivedInput) {
+                amountReceivedInput.addEventListener('input', () => {
+                    recalcTotals();
+                    updateSettleButtonState();
+                });
+            }
 
-            clearPosTableButton?.addEventListener('click', () => {
-                clearTable();
-            });
+            if (clearPosTableButton) {
+                clearPosTableButton.addEventListener('click', () => {
+                    clearTable();
+                });
+            }
 
-            posForm?.addEventListener('submit', (event) => {
-                const rows = posTableBody.querySelectorAll('tr');
-                if (rows.length === 0) {
-                    event.preventDefault();
-                    closeProductModal();
-                    alert('No item selected in POS!');
-                    return;
-                }
+            if (posForm) {
+                posForm.addEventListener('submit', (event) => {
+                    const rows = posTableBody.querySelectorAll('tr');
+                    if (rows.length === 0) {
+                        event.preventDefault();
+                        closeProductModal();
+                        alert('No item selected in POS!');
+                        return;
+                    }
 
-                const salesTotal = getSalesTotal();
-                const amountReceived = parseFloat(amountReceivedInput.value || '0');
+                    const salesTotal = getSalesTotal();
+                    const amountReceivedValue = amountReceivedInput ? amountReceivedInput.value || '0' : '0';
+                    const amountReceived = parseFloat(amountReceivedValue);
 
-                if (amountReceived <= 0) {
-                    event.preventDefault();
-                    alert('Please enter the amount received from the customer!');
-                    amountReceivedInput.focus();
-                    return;
-                }
+                    if (amountReceived <= 0) {
+                        event.preventDefault();
+                        alert('Please enter the amount received from the customer!');
+                        if (amountReceivedInput) {
+                            amountReceivedInput.focus();
+                        }
+                        return;
+                    }
 
                 if (amountReceived < salesTotal) {
                     event.preventDefault();
                     const shortage = salesTotal - amountReceived;
                     alert(`Insufficient payment! Need ${formatPeso(shortage)} more.`);
-                    amountReceivedInput.focus();
+                    if (amountReceivedInput) {
+                        amountReceivedInput.focus();
+                    }
                 }
-            });
+                });
+            }
 
             tabButtons.forEach((button) => {
                 button.addEventListener('click', () => {
@@ -2269,7 +2371,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 button.addEventListener('click', (event) => {
                     event.preventDefault();
 
-                    const value = button?.dataset?.statusValue || '';
+                    const value = button && button.dataset && button.dataset.statusValue
+                        ? button.dataset.statusValue
+                        : '';
                     const href = typeof button.href === 'string' && button.href !== ''
                         ? button.href
                         : null;
@@ -2302,69 +2406,85 @@ document.addEventListener('DOMContentLoaded', () => {
 
             initializeStatusForms();
 
-            onlineOrdersContainer?.addEventListener('click', (event) => {
-                const proofButton = event.target.closest('.view-proof-btn');
-                if (proofButton) {
+            if (onlineOrdersContainer) {
+                onlineOrdersContainer.addEventListener('click', (event) => {
+                    const proofButton = event.target.closest('.view-proof-btn');
+                    if (proofButton) {
+                        event.preventDefault();
+                        openProofModalFromButton(proofButton);
+                        return;
+                    }
+
+                    const row = event.target.closest('.online-order-row');
+                    if (!row) {
+                        return;
+                    }
+
+                    if (
+                        event.target.closest('.status-form') ||
+                        event.target.closest('.status-save') ||
+                        event.target.closest('select')
+                    ) {
+                        return;
+                    }
+
+                    const orderId = row.dataset.orderId;
+                    if (!orderId) {
+                        return;
+                    }
+
                     event.preventDefault();
-                    openProofModalFromButton(proofButton);
-                    return;
-                }
+                    fetchOnlineOrderDetails(orderId);
+                });
 
-                const row = event.target.closest('.online-order-row');
-                if (!row) {
-                    return;
-                }
+                onlineOrdersContainer.addEventListener('change', (event) => {
+                    const select = event.target.closest('[data-status-select]');
+                    if (!select) {
+                        return;
+                    }
 
-                if (
-                    event.target.closest('.status-form') ||
-                    event.target.closest('.status-save') ||
-                    event.target.closest('select')
-                ) {
-                    return;
-                }
+                    const form = select.closest('.status-form');
+                    updateDeliveryProofField(form);
+                });
+            }
 
-                const orderId = row.dataset.orderId;
-                if (!orderId) {
-                    return;
-                }
-
-                event.preventDefault();
-                fetchOnlineOrderDetails(orderId);
-            });
-
-            onlineOrdersContainer?.addEventListener('change', (event) => {
-                const select = event.target.closest('[data-status-select]');
-                if (!select) {
-                    return;
-                }
-
-                const form = select.closest('.status-form');
-                updateDeliveryProofField(form);
-            });
-
-            closeProofModalButton?.addEventListener('click', closeProofModal);
-            proofModal?.addEventListener('click', (event) => {
-                if (event.target === proofModal) {
-                    closeProofModal();
-                }
-            });
+            if (closeProofModalButton) {
+                closeProofModalButton.addEventListener('click', closeProofModal);
+            }
+            if (proofModal) {
+                proofModal.addEventListener('click', (event) => {
+                    if (event.target === proofModal) {
+                        closeProofModal();
+                    }
+                });
+            }
 
             // Status filter functionality
-            closeOnlineOrderModalButton?.addEventListener('click', closeOnlineOrderModalOverlay);
-            onlineOrderModal?.addEventListener('click', (event) => {
-                if (event.target === onlineOrderModal) {
-                    closeOnlineOrderModalOverlay();
-                }
-            });
+            if (closeOnlineOrderModalButton) {
+                closeOnlineOrderModalButton.addEventListener('click', closeOnlineOrderModalOverlay);
+            }
+            if (onlineOrderModal) {
+                onlineOrderModal.addEventListener('click', (event) => {
+                    if (event.target === onlineOrderModal) {
+                        closeOnlineOrderModalOverlay();
+                    }
+                });
+            }
 
-            closeReceiptModalButton?.addEventListener('click', closeReceiptModal);
-            receiptModal?.addEventListener('click', (event) => {
-                if (event.target === receiptModal) {
-                    closeReceiptModal();
-                }
-            });
+            if (closeReceiptModalButton) {
+                closeReceiptModalButton.addEventListener('click', closeReceiptModal);
+            }
+            if (receiptModal) {
+                receiptModal.addEventListener('click', (event) => {
+                    if (event.target === receiptModal) {
+                        closeReceiptModal();
+                    }
+                });
+            }
 
-            printReceiptButton?.addEventListener('click', printReceipt);
+            if (printReceiptButton) {
+                printReceiptButton.addEventListener('click', printReceipt);
+            }
 
             // Initialisation
             renderOnlineOrdersTable(onlineOrdersState.orders);
