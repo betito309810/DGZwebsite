@@ -1062,8 +1062,20 @@ if (!function_exists('normalizePaymentProofPath')) {
 
         // Historic records sometimes omitted the uploads directory; patch it back in so
         // links resolve next to the admin uploads folder.
-        if (strpos($relative, 'uploads/') !== 0 && strpos($relative, 'payment-proofs/') === 0) {
-            $relative = 'uploads/' . $relative;
+        if (strpos($relative, 'uploads/') !== 0) {
+            $knownProofDirectories = [
+                'payment-proofs/',
+                'payment_proofs/',
+                'delivery-proofs/',
+                'delivery_proofs/',
+            ];
+
+            foreach ($knownProofDirectories as $directoryPrefix) {
+                if (strpos($relative, $directoryPrefix) === 0) {
+                    $relative = 'uploads/' . $relative;
+                    break;
+                }
+            }
         }
 
         if ($defaultPrefix === '../') {

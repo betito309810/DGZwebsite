@@ -832,7 +832,28 @@ $statusLabels = [
                     $billingDisplay = implode("\n", $billingLines);
                     $customerNote = trim((string) ($order['customer_note'] ?? $order['notes'] ?? ''));
                     $paymentProofUrl = resolveOrderDocumentUrl($paymentProofPath);
-                    $deliveryProofUrl = resolveOrderDocumentUrl($deliveryProofPath);
+
+                    $deliveryProofUrlCandidates = [];
+                    if ($deliveryProofPath !== '') {
+                        $deliveryProofUrlCandidates[] = resolveOrderDocumentUrl($deliveryProofPath);
+                        $deliveryProofUrlCandidates[] = resolveOrderDocumentUrl('uploads/' . ltrim($deliveryProofPath, '/'));
+                        $deliveryProofUrlCandidates[] = resolveOrderDocumentUrl('dgz_motorshop_system/uploads/' . ltrim($deliveryProofPath, '/'));
+                    }
+
+                    $deliveryProofUrlCandidates = array_values(array_filter(array_unique($deliveryProofUrlCandidates), static function ($value) {
+                        return is_string($value) && trim($value) !== '';
+                    }));
+
+                    $deliveryProofPreviewUrl = '';
+                    foreach ($deliveryProofUrlCandidates as $candidateUrl) {
+                        if ($candidateUrl !== '') {
+                            $deliveryProofPreviewUrl = $candidateUrl;
+                            break;
+                        }
+                    }
+
+                    $deliveryProofLinkUrl = $deliveryProofPreviewUrl !== '' ? $deliveryProofPreviewUrl : $deliveryProofPath;
+                    $hasDeliveryProofRecord = $deliveryProofPath !== '';
                     $canUpdatePayment = $canCancel;
                 ?>
                 <article class="customer-order-card" data-order-card>
@@ -975,13 +996,22 @@ $statusLabels = [
                                 </div>
                             </div>
                         <?php endif; ?>
-                        <?php if (in_array($statusKey, ['completed', 'complete'], true) && $deliveryProofUrl !== ''): ?>
+                        <?php if (in_array($statusKey, ['completed', 'complete'], true) && $hasDeliveryProofRecord): ?>
                             <div class="customer-order-card__section customer-order-card__section--delivery-proof">
                                 <h3>Proof of delivery</h3>
-                                <a class="customer-delivery-proof__link" href="<?= htmlspecialchars($deliveryProofUrl) ?>" target="_blank" rel="noopener">View proof</a>
-                                <div class="customer-delivery-proof__preview">
-                                    <img src="<?= htmlspecialchars($deliveryProofUrl) ?>" alt="Proof of delivery for order #<?= (int) $order['id'] ?>">
-                                </div>
+                                <?php if ($deliveryProofPreviewUrl !== ''): ?>
+                                    <?php if ($deliveryProofLinkUrl !== ''): ?>
+                                        <a class="customer-delivery-proof__link" href="<?= htmlspecialchars($deliveryProofLinkUrl) ?>" target="_blank" rel="noopener">View proof</a>
+                                    <?php endif; ?>
+                                    <div class="customer-delivery-proof__preview">
+                                        <img src="<?= htmlspecialchars($deliveryProofPreviewUrl) ?>" alt="Proof of delivery for order #<?= (int) $order['id'] ?>">
+                                    </div>
+                                <?php elseif ($deliveryProofLinkUrl !== ''): ?>
+                                    <a class="customer-delivery-proof__link" href="<?= htmlspecialchars($deliveryProofLinkUrl) ?>" target="_blank" rel="noopener">Download proof</a>
+                                    <p class="customer-delivery-proof__note">Proof of delivery has been uploaded. Use the button above to download the photo.</p>
+                                <?php else: ?>
+                                    <p class="customer-delivery-proof__note">Proof of delivery has been uploaded but is not available for viewing right now. Please contact support if you need a copy.</p>
+                                <?php endif; ?>
                             </div>
                         <?php endif; ?>
                         <?php if ($canCancel || $canMarkReceived): ?>

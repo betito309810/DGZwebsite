@@ -828,6 +828,18 @@
     transform: scale(1.02);
 }
 
+.customer-delivery-proof__note {
+    margin-top: 0.85rem;
+    font-size: 0.95rem;
+    color: #1f2937;
+}
+
+.customer-delivery-proof__note a {
+    color: #1d4ed8;
+    font-weight: 600;
+    text-decoration: underline;
+}
+
 .customer-payment-card__stored {
     display: grid;
     gap: 1rem;
