@@ -1234,50 +1234,129 @@ HTML;
     $vat = $salesTotal - $vatable;
     $change = $amountPaid - $salesTotal;
 
+    $orderTotalColumnCandidates = ['total', 'grand_total', 'amount', 'total_amount'];
+    $orderStatusColumnCandidates = ['status', 'order_status'];
+
+    $orderTotalColumn = ordersFindColumn($pdo, $orderTotalColumnCandidates);
+    $orderStatusColumn = ordersFindColumn($pdo, $orderStatusColumnCandidates);
+
+    $missingColumnMessages = [];
+
+    if ($orderTotalColumn === null) {
+        $missingColumnMessages[] = 'total column (expected one of: ' . implode(', ', $orderTotalColumnCandidates) . ')';
+    }
+
+    if ($orderStatusColumn === null) {
+        $missingColumnMessages[] = 'status column (expected one of: ' . implode(', ', $orderStatusColumnCandidates) . ')';
+    }
+
+    if (!empty($missingColumnMessages)) {
+        $_SESSION['pos_active_tab'] = 'walkin';
+        $missingReadable = $missingColumnMessages;
+        if (count($missingReadable) === 1) {
+            $missingText = $missingReadable[0];
+        } else {
+            $last = array_pop($missingReadable);
+            $missingText = implode(', ', $missingReadable) . ' and ' . $last;
+        }
+
+        $messageText = 'The POS checkout could not save the order because the orders table is missing the '
+            . $missingText . '. Please update the database schema and try again.';
+        $message = json_encode($messageText);
+        $destination = json_encode('pos.php');
+        echo <<<HTML
+<script>
+(function () {
+    var message = {$message};
+    var destination = {$destination};
+    var redirect = function () { window.location = destination; };
+    if (window.dgzAlert && typeof window.dgzAlert === 'function') {
+        window.dgzAlert(message).then(redirect);
+    } else {
+        alert(message);
+        redirect();
+    }
+})();
+</script>
+HTML;
+        exit;
+    }
+
+    $orderCustomerNameColumn = ordersFindColumn($pdo, ['customer_name', 'name']);
+    $orderAddressColumn = ordersFindColumn($pdo, ['address', 'address_line1', 'address1', 'street']);
+    $orderEmailColumn = ordersFindColumn($pdo, ['email', 'email_address']);
+    $orderPhoneColumn = ordersFindColumn($pdo, ['phone', 'mobile', 'contact_number']);
+    $orderLegacyContactColumn = ordersFindColumn($pdo, ['contact']);
+    $orderPaymentMethodColumn = ordersFindColumn($pdo, ['payment_method', 'payment_type', 'payment']);
+    $orderProcessedByColumn = ordersFindColumn($pdo, ['processed_by_user_id', 'processed_by']);
+    $orderVatableColumn = ordersFindColumn($pdo, ['vatable']);
+    $orderVatColumn = ordersFindColumn($pdo, ['vat', 'tax']);
+    $orderAmountPaidColumn = ordersFindColumn($pdo, ['amount_paid', 'amountpaid', 'amount_paid_total', 'paid_amount', 'payment_amount']);
+    $orderChangeColumn = ordersFindColumn($pdo, ['change_amount', 'change']);
+    $orderCreatedAtColumn = ordersFindColumn($pdo, ['created_at', 'order_date', 'ordered_at', 'date_created']);
+
+    $supportsInvoiceNumbers = ordersSupportsInvoiceNumbers($pdo);
+    $orderInvoiceNumberColumn = $supportsInvoiceNumbers ? 'invoice_number' : null;
+
+    $quoteIdentifier = static function (string $identifier): string {
+        return '`' . str_replace('`', '``', $identifier) . '`';
+    };
+
     try {
         $pdo->beginTransaction();
 
-        $supportsInvoiceNumbers = ordersSupportsInvoiceNumbers($pdo);
         $invoiceNumber = $supportsInvoiceNumbers ? generateInvoiceNumber($pdo) : '';
 
-        $orderColumns = [
-            'customer_name',
-            'address',
-            'email',
-            'phone',
-            'total',
-            'payment_method',
-            'status',
-            'processed_by_user_id',
-            'vatable',
-            'vat',
-            'amount_paid',
-            'change_amount',
-        ];
+        $orderColumns = [];
+        $orderValues = [];
 
-        $orderValues = [
-            'Walk in',
-            'N/A',
-            'N/A',
-            'N/A',
-            $salesTotal,
-            'Cash',
-            'completed',
-            isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null,
-            $vatable,
-            $vat,
-            $amountPaid,
-            $change,
-        ];
+        $appendColumn = static function (?string $column, $value) use (&$orderColumns, &$orderValues): void {
+            if ($column === null) {
+                return;
+            }
 
-        if ($supportsInvoiceNumbers) {
-            $orderColumns[] = 'invoice_number';
-            $orderValues[] = $invoiceNumber;
+            if (in_array($column, $orderColumns, true)) {
+                return;
+            }
+
+            $orderColumns[] = $column;
+            $orderValues[] = $value;
+        };
+
+        $appendColumn($orderCustomerNameColumn, 'Walk in');
+        $appendColumn($orderAddressColumn, 'N/A');
+        $appendColumn($orderEmailColumn, 'N/A');
+        $appendColumn($orderPhoneColumn, 'N/A');
+
+        if ($orderLegacyContactColumn !== null && $orderLegacyContactColumn !== $orderPhoneColumn) {
+            $appendColumn($orderLegacyContactColumn, 'N/A');
         }
 
-        $placeholders = str_repeat('?, ', count($orderColumns) - 1) . '?';
+        $appendColumn($orderTotalColumn, $salesTotal);
+        $appendColumn($orderPaymentMethodColumn, 'Cash');
+        $appendColumn($orderStatusColumn, 'completed');
+
+        $processedByValue = isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null;
+        $appendColumn($orderProcessedByColumn, $processedByValue);
+
+        $appendColumn($orderVatableColumn, $vatable);
+        $appendColumn($orderVatColumn, $vat);
+        $appendColumn($orderAmountPaidColumn, $amountPaid);
+        $appendColumn($orderChangeColumn, $change);
+
+        if ($orderInvoiceNumberColumn !== null && $supportsInvoiceNumbers) {
+            $appendColumn($orderInvoiceNumberColumn, $invoiceNumber);
+        }
+
+        if (empty($orderColumns)) {
+            throw new \RuntimeException('No writable columns detected for orders table.');
+        }
+
+        $orderColumnsSql = implode(', ', array_map($quoteIdentifier, $orderColumns));
+        $placeholders = implode(', ', array_fill(0, count($orderColumns), '?'));
+
         $orderStmt = $pdo->prepare(
-            'INSERT INTO orders (' . implode(', ', $orderColumns) . ') VALUES (' . $placeholders . ')'
+            'INSERT INTO orders (' . $orderColumnsSql . ') VALUES (' . $placeholders . ')'
         );
         $orderStmt->execute($orderValues);
 
@@ -1534,10 +1613,36 @@ if (isset($_GET['ok'], $_GET['order_id']) && $_GET['ok'] === '1') {
     $requestedOrderId = (int) $_GET['order_id'];
 
     if ($requestedOrderId > 0) {
+        $orderSelectColumns = ['`id`'];
+        $orderSelectColumns[] = $orderCustomerNameColumn !== null
+            ? $quoteIdentifier($orderCustomerNameColumn) . ' AS customer_name'
+            : "'Customer' AS customer_name";
+        $orderSelectColumns[] = $orderTotalColumn !== null
+            ? $quoteIdentifier($orderTotalColumn) . ' AS total'
+            : '0 AS total';
+        $orderSelectColumns[] = $orderVatableColumn !== null
+            ? $quoteIdentifier($orderVatableColumn) . ' AS vatable'
+            : '0 AS vatable';
+        $orderSelectColumns[] = $orderVatColumn !== null
+            ? $quoteIdentifier($orderVatColumn) . ' AS vat'
+            : '0 AS vat';
+        $orderSelectColumns[] = $orderAmountPaidColumn !== null
+            ? $quoteIdentifier($orderAmountPaidColumn) . ' AS amount_paid'
+            : '0 AS amount_paid';
+        $orderSelectColumns[] = $orderChangeColumn !== null
+            ? $quoteIdentifier($orderChangeColumn) . ' AS change_amount'
+            : '0 AS change_amount';
+        $orderSelectColumns[] = $orderCreatedAtColumn !== null
+            ? $quoteIdentifier($orderCreatedAtColumn) . ' AS created_at'
+            : 'CURRENT_TIMESTAMP AS created_at';
+        if ($orderInvoiceNumberColumn !== null) {
+            $orderSelectColumns[] = $quoteIdentifier($orderInvoiceNumberColumn) . ' AS invoice_number';
+        } else {
+            $orderSelectColumns[] = "'' AS invoice_number";
+        }
+
         $orderStmt = $pdo->prepare(
-            'SELECT id, customer_name, total, vatable, vat, amount_paid, change_amount, created_at, invoice_number
-             FROM orders
-             WHERE id = ? LIMIT 1'
+            'SELECT ' . implode(', ', $orderSelectColumns) . ' FROM orders WHERE id = ? LIMIT 1'
         );
         $orderStmt->execute([$requestedOrderId]);
         $orderRow = $orderStmt->fetch();
