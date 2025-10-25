@@ -1256,7 +1256,7 @@ HTML;
         ];
 
         $orderValues = [
-            'Walk-in',
+            'Walk in',
             'N/A',
             'N/A',
             'N/A',
@@ -1324,7 +1324,7 @@ HTML;
         $receiptData = [
             'order_id' => $orderId,
             'invoice_number' => $invoiceNumber,
-            'customer_name' => 'Walk-in',
+            'customer_name' => 'Walk in',
             'created_at' => date('Y-m-d H:i:s'),
             'sales_total' => $salesTotal,
             'vatable' => $vatable,
