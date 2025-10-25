@@ -670,8 +670,8 @@
                     }
 
                     const sessionStateIndicatesAuth = (
-                        cartLastSavedSessionState === 'authenticated'
-                        || (!cartLastSavedSessionState && customerSessionState === 'authenticated')
+                        customerSessionState === 'authenticated'
+                        || cartLastSavedSessionState === 'authenticated'
                     );
                     const serverSignatureChanged = (
                         serverSignature !== null
