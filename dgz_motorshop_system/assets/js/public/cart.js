@@ -134,8 +134,12 @@
                     }
                 };
 
-                proceedButton?.addEventListener('click', () => runDecision('proceed'));
-                cancelButton?.addEventListener('click', () => runDecision('cancel'));
+                if (proceedButton) {
+                    proceedButton.addEventListener('click', () => runDecision('proceed'));
+                }
+                if (cancelButton) {
+                    cancelButton.addEventListener('click', () => runDecision('cancel'));
+                }
 
                 confirmModal.dataset.highValueBound = 'true';
             }
@@ -145,7 +149,9 @@
                 const closeBlocked = () => {
                     blockedModal.setAttribute('hidden', 'hidden');
                 };
-                blockedOkButton?.addEventListener('click', closeBlocked);
+                if (blockedOkButton) {
+                    blockedOkButton.addEventListener('click', closeBlocked);
+                }
                 blockedModal.dataset.highValueBound = 'true';
             }
 

@@ -1,5 +1,41 @@
 // file 2 start – POS page behavior bundle (safe to extract)
 // Begin POS main interaction script
+// Provide minimal polyfills for legacy browsers that do not support
+// Element.matches/closest or Array.from so the POS scripts keep working.
+(function ensurePosDomPolyfills() {
+    if (typeof Element !== 'undefined') {
+        if (!Element.prototype.matches) {
+            Element.prototype.matches = Element.prototype.msMatchesSelector
+                || Element.prototype.webkitMatchesSelector
+                || function matches(selector) {
+                    const nodeList = (this.document || this.ownerDocument).querySelectorAll(selector);
+                    let i = nodeList.length;
+                    while (--i >= 0 && nodeList.item(i) !== this) {
+                        // continue
+                    }
+                    return i > -1;
+                };
+        }
+        if (!Element.prototype.closest) {
+            Element.prototype.closest = function closest(selector) {
+                let element = this;
+                while (element && element.nodeType === 1) {
+                    if (element.matches(selector)) {
+                        return element;
+                    }
+                    element = element.parentElement || element.parentNode;
+                }
+                return null;
+            };
+        }
+    }
+    if (typeof Array.from !== 'function') {
+        Array.from = function from(iterable) {
+            return Array.prototype.slice.call(iterable);
+        };
+    }
+})();
+
 const {
     productCatalog = [],
     initialActiveTab = 'walkin',
@@ -106,7 +142,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const onlineOrdersPaginationContainer = document.querySelector('[data-online-orders-pagination]');
             const onlineOrdersPaginationBody = document.querySelector('[data-online-orders-pagination-body]');
             const onlineOrdersContainer = document.querySelector('.online-orders-container');
-            const statusFilterButtons = Array.from(document.querySelectorAll('[data-status-filter-button]'));
+            const statusFilterButtons = Array.prototype.slice.call(
+                document.querySelectorAll('[data-status-filter-button]')
+            );
             const deliveryProofNoticeBanner = document.querySelector('[data-delivery-proof-notice]');
             const deliveryProofNoticeText = document.querySelector('[data-delivery-proof-text]');
 
@@ -2428,7 +2466,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         return;
                     }
 
-                    const orderId = row.dataset.orderId;
+                    const orderId = row.getAttribute('data-order-id')
+                        || (row.dataset && row.dataset.orderId)
+                        || '';
                     if (!orderId) {
                         return;
                     }

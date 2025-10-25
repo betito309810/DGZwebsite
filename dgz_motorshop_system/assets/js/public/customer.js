@@ -399,7 +399,9 @@
             }
 
             if (nextMode === 'edit') {
-                summary?.setAttribute('hidden', '');
+                if (summary) {
+                    summary.setAttribute('hidden', '');
+                }
                 if (form) {
                     form.classList.remove('is-hidden');
                     form.removeAttribute('hidden');
@@ -410,7 +412,9 @@
                     window.requestAnimationFrame(() => firstEditable.focus());
                 }
             } else {
-                summary?.removeAttribute('hidden');
+                if (summary) {
+                    summary.removeAttribute('hidden');
+                }
                 if (form) {
                     form.classList.add('is-hidden');
                     form.setAttribute('hidden', '');
@@ -427,21 +431,27 @@
             syncFromSummary();
         }
 
-        editButton?.addEventListener('click', (event) => {
-            event.preventDefault();
-            setMode('edit');
-        });
+        if (editButton) {
+            editButton.addEventListener('click', (event) => {
+                event.preventDefault();
+                setMode('edit');
+            });
+        }
 
-        cancelButton?.addEventListener('click', (event) => {
-            event.preventDefault();
-            setMode('summary');
-        });
+        if (cancelButton) {
+            cancelButton.addEventListener('click', (event) => {
+                event.preventDefault();
+                setMode('summary');
+            });
+        }
 
-        saveButton?.addEventListener('click', (event) => {
-            event.preventDefault();
-            syncSummaryFromForm();
-            setMode('summary');
-        });
+        if (saveButton) {
+            saveButton.addEventListener('click', (event) => {
+                event.preventDefault();
+                syncSummaryFromForm();
+                setMode('summary');
+            });
+        }
     }
 
     const billingSection = document.querySelector('[data-billing-section]');
@@ -552,21 +562,27 @@
             syncFromSummary();
         }
 
-        editButton?.addEventListener('click', (event) => {
-            event.preventDefault();
-            setMode('edit');
-        });
+        if (editButton) {
+            editButton.addEventListener('click', (event) => {
+                event.preventDefault();
+                setMode('edit');
+            });
+        }
 
-        cancelButton?.addEventListener('click', (event) => {
-            event.preventDefault();
-            setMode('summary');
-        });
+        if (cancelButton) {
+            cancelButton.addEventListener('click', (event) => {
+                event.preventDefault();
+                setMode('summary');
+            });
+        }
 
-        saveButton?.addEventListener('click', (event) => {
-            event.preventDefault();
-            syncSummaryFromForm();
-            setMode('summary');
-        });
+        if (saveButton) {
+            saveButton.addEventListener('click', (event) => {
+                event.preventDefault();
+                syncSummaryFromForm();
+                setMode('summary');
+            });
+        }
     }
 
     document.querySelectorAll('[data-delivery-proof-toggle]').forEach((button) => {
@@ -638,13 +654,15 @@
             setExpanded(!expanded);
         });
 
-        header?.addEventListener('click', (event) => {
-            if (event.target.closest('[data-order-toggle]')) {
-                return;
-            }
-            const expanded = toggle.getAttribute('aria-expanded') === 'true';
-            setExpanded(!expanded);
-        });
+        if (header) {
+            header.addEventListener('click', (event) => {
+                if (event.target.closest('[data-order-toggle]')) {
+                    return;
+                }
+                const expanded = toggle.getAttribute('aria-expanded') === 'true';
+                setExpanded(!expanded);
+            });
+        }
     });
 
     // Utility to expose acceptance state

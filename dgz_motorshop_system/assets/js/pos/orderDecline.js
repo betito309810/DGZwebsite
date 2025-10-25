@@ -13,8 +13,13 @@
         reasons: 'declineReasonsApi.php',
     };
 
+    const initialDeclineReasons = window.dgzPosData
+        && Array.isArray(window.dgzPosData.declineReasons)
+            ? window.dgzPosData.declineReasons
+            : [];
+
     const state = {
-        reasons: normalizeReasonsList(window.dgzPosData?.declineReasons),
+        reasons: normalizeReasonsList(initialDeclineReasons),
         currentForm: null,
         currentRow: null,
     };
@@ -180,13 +185,35 @@
     }
 
     function wireModalButtons() {
-        elements.cancelButton?.addEventListener('click', closeDeclineModal);
-        elements.closeButton?.addEventListener('click', closeDeclineModal);
-        elements.confirmButton?.addEventListener('click', submitDisapproval);
-        elements.manageButton?.addEventListener('click', openManageModal);
-        elements.manageClose?.addEventListener('click', closeManageModal);
-        elements.manageForm?.addEventListener('submit', handleAddReason);
-        elements.manageList?.addEventListener('click', handleManageListClick);
+        if (elements.cancelButton) {
+            elements.cancelButton.addEventListener('click', closeDeclineModal);
+        }
+        if (elements.closeButton) {
+            elements.closeButton.addEventListener('click', closeDeclineModal);
+        }
+        if (elements.confirmButton) {
+            elements.confirmButton.addEventListener('click', submitDisapproval);
+        }
+        if (elements.manageButton) {
+            elements.manageButton.addEventListener('click', openManageModal);
+        }
+        if (elements.manageClose) {
+            elements.manageClose.addEventListener('click', closeManageModal);
+        }
+        if (elements.manageForm) {
+            elements.manageForm.addEventListener('submit', handleAddReason);
+        }
+        if (elements.manageList) {
+            elements.manageList.addEventListener('click', handleManageListClick);
+        }
+    }
+
+    function getDataAttribute(element, attribute) {
+        if (!element) {
+            return '';
+        }
+        const value = element.getAttribute('data-' + attribute);
+        return value !== null ? value : '';
     }
 
     function openDeclineModal(form) {
@@ -197,10 +224,11 @@
             elements.errorBox.textContent = '';
         }
         if (elements.noteField) {
-            elements.noteField.value = state.currentRow?.dataset.declineReasonNote || '';
+            const noteValue = getDataAttribute(state.currentRow, 'decline-reason-note');
+            elements.noteField.value = noteValue;
         }
 
-        const currentReasonId = state.currentRow?.dataset.declineReasonId || '';
+        const currentReasonId = getDataAttribute(state.currentRow, 'decline-reason-id');
         if (elements.reasonSelect) {
             renderReasonSelect();
             elements.reasonSelect.value = currentReasonId && currentReasonId !== '0'
@@ -273,12 +301,19 @@
         const selectedLabel = selectedOption ? selectedOption.textContent.trim() : '';
         const note = elements.noteField ? elements.noteField.value.trim() : '';
         const attachmentInput = elements.attachmentField;
-        const attachmentFile = attachmentInput?.files?.[0] || null;
+        let attachmentFile = null;
+        if (
+            attachmentInput
+            && attachmentInput.files
+            && attachmentInput.files.length > 0
+        ) {
+            attachmentFile = attachmentInput.files[0];
+        }
 
         if (attachmentFile) {
             const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp'];
             const maxSize = 5 * 1024 * 1024; // 5MB limit for uploads.
-            if (!allowedTypes.includes(attachmentFile.type)) {
+            if (allowedTypes.indexOf(attachmentFile.type) === -1) {
                 if (elements.errorBox) {
                     elements.errorBox.textContent = 'Only PDF or image files are allowed for attachments.';
                 }
@@ -338,8 +373,8 @@
             });
 
             const result = await response.json().catch(() => null);
-            if (!response.ok || !result?.success) {
-                throw new Error(result?.message || 'Unable to disapprove order.');
+            if (!response.ok || !result || result.success !== true) {
+                throw new Error(result && result.message ? result.message : 'Unable to disapprove order.');
             }
 
             closeDeclineModal();
@@ -391,8 +426,8 @@
                 body: JSON.stringify({ action: 'create', label }),
             });
             const result = await response.json();
-            if (!response.ok || !result?.success) {
-                throw new Error(result?.message || 'Failed to add reason.');
+            if (!response.ok || !result || result.success !== true) {
+                throw new Error(result && result.message ? result.message : 'Failed to add reason.');
             }
             setReasons(result.reasons || []);
             elements.manageInput.value = '';
@@ -443,8 +478,8 @@
                     body: JSON.stringify({ action: 'update', id: reasonId, label: newLabel }),
                 });
                 const result = await response.json();
-                if (!response.ok || !result?.success) {
-                    throw new Error(result?.message || 'Failed to update reason.');
+                if (!response.ok || !result || result.success !== true) {
+                    throw new Error(result && result.message ? result.message : 'Failed to update reason.');
                 }
                 setReasons(result.reasons || []);
             } catch (error) {
@@ -474,8 +509,8 @@
                     body: JSON.stringify({ action: 'delete', id: reasonId }),
                 });
                 const result = await response.json();
-                if (!response.ok || !result?.success) {
-                    throw new Error(result?.message || 'Failed to delete reason.');
+                if (!response.ok || !result || result.success !== true) {
+                    throw new Error(result && result.message ? result.message : 'Failed to delete reason.');
                 }
                 setReasons(result.reasons || []);
             } catch (error) {
