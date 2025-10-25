@@ -23,11 +23,27 @@ try {
         $declineLookup[(int) ($reason['id'] ?? 0)] = (string) ($reason['label'] ?? '');
     }
 
+    $deliveryProofCandidates = [
+        'delivery_proof',
+        'proof_of_delivery',
+        'delivery_proof_path',
+        'delivery_proof_image',
+        'delivery_photo',
+        'delivery_photo_path',
+    ];
+    $deliveryProofColumn = ordersFindColumn($pdo, $deliveryProofCandidates);
+    $deliveryProofNotice = is_string($deliveryProofColumn) && $deliveryProofColumn !== ''
+        ? ''
+        : 'Proof-of-delivery uploads need a delivery_proof column (TEXT) on the existing orders table—no new table required.';
+
     $data = fetchOnlineOrdersData($pdo, [
         'page' => $page,
         'per_page' => $perPage,
         'status' => $statusFilter,
         'decline_reason_lookup' => $declineLookup,
+        'delivery_proof_column' => $deliveryProofColumn,
+        'delivery_proof_candidates' => $deliveryProofCandidates,
+        'delivery_proof_notice' => $deliveryProofNotice,
     ]);
 
     header('Content-Type: application/json');

@@ -8,6 +8,11 @@ const {
     onlineOrders: onlineOrdersBootstrap = {},
 } = window.dgzPosData || {};
 
+const DELIVERY_PROOF_HELP_FALLBACK =
+    typeof onlineOrdersBootstrap.deliveryProofHelp === 'string'
+        ? onlineOrdersBootstrap.deliveryProofHelp
+        : 'Upload a photo confirming the delivery.';
+
 document.addEventListener('DOMContentLoaded', () => {
             const posStateKey = 'posTable';
             const tabStateKey = 'posActiveTab';
@@ -102,6 +107,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const onlineOrdersPaginationBody = document.querySelector('[data-online-orders-pagination-body]');
             const onlineOrdersContainer = document.querySelector('.online-orders-container');
             const statusFilterButtons = Array.from(document.querySelectorAll('[data-status-filter-button]'));
+            const deliveryProofNoticeBanner = document.querySelector('[data-delivery-proof-notice]');
+            const deliveryProofNoticeText = document.querySelector('[data-delivery-proof-text]');
 
             const tabButtons = document.querySelectorAll('.pos-tab-button');
             const tabPanels = {
@@ -121,9 +128,38 @@ document.addEventListener('DOMContentLoaded', () => {
                 totalPages: Number(onlineOrdersBootstrap.totalPages) || 1,
                 attentionCount: Number(onlineOrdersBootstrap.attentionCount) || 0,
                 orders: Array.isArray(onlineOrdersBootstrap.orders) ? onlineOrdersBootstrap.orders : [],
+                deliveryProofSupported: Boolean(onlineOrdersBootstrap.deliveryProofSupported),
+                deliveryProofNotice: typeof onlineOrdersBootstrap.deliveryProofNotice === 'string'
+                    ? onlineOrdersBootstrap.deliveryProofNotice
+                    : '',
+                deliveryProofHelp: typeof onlineOrdersBootstrap.deliveryProofHelp === 'string'
+                    ? onlineOrdersBootstrap.deliveryProofHelp
+                    : DELIVERY_PROOF_HELP_FALLBACK,
             };
 
             updateStatusFilterButtons(onlineOrdersState.statusFilter);
+            const updateDeliveryProofNotice = () => {
+                if (!deliveryProofNoticeBanner) {
+                    return;
+                }
+
+                const supported = Boolean(onlineOrdersState.deliveryProofSupported);
+                const noticeText = typeof onlineOrdersState.deliveryProofNotice === 'string'
+                    ? onlineOrdersState.deliveryProofNotice.trim()
+                    : '';
+
+                if (supported || noticeText === '') {
+                    deliveryProofNoticeBanner.setAttribute('hidden', 'hidden');
+                } else {
+                    deliveryProofNoticeBanner.removeAttribute('hidden');
+                    if (deliveryProofNoticeText) {
+                        deliveryProofNoticeText.textContent = noticeText;
+                    } else {
+                        deliveryProofNoticeBanner.textContent = noticeText;
+                    }
+                }
+            };
+            updateDeliveryProofNotice();
 
             const escapeHtml = (value) => {
                 if (value === null || value === undefined) {
@@ -159,24 +195,55 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
 
+                const supportsProof = Boolean(onlineOrdersState.deliveryProofSupported);
                 const select = form.querySelector('[data-status-select]');
                 const proofField = form.querySelector('[data-delivery-proof-field]');
                 const fileInput = proofField ? proofField.querySelector('input[type="file"]') : null;
+                const help = proofField ? proofField.querySelector('.delivery-proof-help') : null;
                 const selectedValue = select ? String(select.value || '') : '';
-                const shouldShow = selectedValue === 'completed';
+                const shouldShow = supportsProof && selectedValue === 'completed';
+                const defaultHelp = help?.dataset?.deliveryProofDefault
+                    || onlineOrdersState.deliveryProofHelp
+                    || DELIVERY_PROOF_HELP_FALLBACK;
 
                 if (proofField) {
-                    if (shouldShow) {
-                        proofField.removeAttribute('hidden');
+                    if (supportsProof) {
+                        proofField.classList.remove('is-disabled');
+                        if (shouldShow) {
+                            proofField.removeAttribute('hidden');
+                        } else {
+                            proofField.setAttribute('hidden', 'hidden');
+                        }
                     } else {
-                        proofField.setAttribute('hidden', 'hidden');
+                        proofField.classList.add('is-disabled');
+                        proofField.removeAttribute('hidden');
                     }
                 }
 
                 if (fileInput) {
-                    fileInput.required = shouldShow;
-                    if (!shouldShow) {
+                    if (!supportsProof) {
                         fileInput.value = '';
+                        fileInput.required = false;
+                        fileInput.disabled = true;
+                    } else {
+                        fileInput.disabled = select ? select.disabled : false;
+                        fileInput.required = shouldShow;
+                        if (!shouldShow) {
+                            fileInput.value = '';
+                        }
+                    }
+                }
+
+                if (help) {
+                    if (supportsProof) {
+                        help.textContent = defaultHelp;
+                        help.classList.remove('delivery-proof-help--warning');
+                    } else {
+                        const notice = onlineOrdersState.deliveryProofNotice
+                            || help.textContent
+                            || DELIVERY_PROOF_HELP_FALLBACK;
+                        help.textContent = notice;
+                        help.classList.add('delivery-proof-help--warning');
                     }
                 }
             };
@@ -556,7 +623,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 const defaultNextStatus = (!statusFormDisabled && availableStatusChanges.length > 0)
                     ? String(availableStatusChanges[0].value || '')
                     : '';
-                const proofFieldHidden = defaultNextStatus !== 'completed';
+                const proofSupported = Boolean(order?.delivery_proof_supported ?? onlineOrdersState.deliveryProofSupported);
+                const proofNotice = typeof onlineOrdersState.deliveryProofNotice === 'string'
+                    ? onlineOrdersState.deliveryProofNotice
+                    : '';
+                const proofHelpDefault = onlineOrdersState.deliveryProofHelp || DELIVERY_PROOF_HELP_FALLBACK;
+                const proofFieldHidden = proofSupported ? defaultNextStatus !== 'completed' : false;
+                const proofFieldClasses = `delivery-proof-field${proofSupported ? '' : ' is-disabled'}`;
+                const proofHelpClass = proofSupported
+                    ? 'delivery-proof-help'
+                    : 'delivery-proof-help delivery-proof-help--warning';
+                const proofHelpText = proofSupported ? proofHelpDefault : (proofNotice || proofHelpDefault);
+                const proofInputDisabled = statusFormDisabled || !proofSupported;
+                const proofInputRequired = proofSupported && defaultNextStatus === 'completed';
                 const proofInputId = `delivery-proof-${orderId}`;
                 const declineReasonLabel = order && order.decline_reason_label ? String(order.decline_reason_label) : '';
                 const declineReasonNote = order && order.decline_reason_note ? String(order.decline_reason_note) : '';
@@ -608,10 +687,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             <select name="new_status" ${statusFormDisabled ? 'disabled' : ''} data-status-select>
                                 ${statusOptionsHtml}
                             </select>
-                            <div class="delivery-proof-field" data-delivery-proof-field ${proofFieldHidden ? 'hidden' : ''}>
+                            <div class="${escapeHtml(proofFieldClasses)}" data-delivery-proof-field ${proofFieldHidden ? 'hidden' : ''}>
                                 <label for="${escapeHtml(proofInputId)}">Proof of delivery</label>
-                                <input type="file" name="delivery_proof" id="${escapeHtml(proofInputId)}" accept="image/*" ${statusFormDisabled ? 'disabled' : ''} ${defaultNextStatus === 'completed' ? 'required' : ''}>
-                                <p class="delivery-proof-help">Upload a photo confirming the delivery.</p>
+                                <input type="file" name="delivery_proof" id="${escapeHtml(proofInputId)}" accept="image/*" ${proofInputDisabled ? 'disabled' : ''} ${proofInputRequired ? 'required' : ''}>
+                                <p class="${escapeHtml(proofHelpClass)}" data-delivery-proof-default="${escapeHtml(proofHelpDefault)}">${escapeHtml(proofHelpText)}</p>
                             </div>
                             <button type="submit" class="status-save" ${statusFormDisabled ? 'disabled' : ''}>Update</button>
                         </form>
@@ -661,6 +740,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     totalPages: Number(data.total_pages) || 1,
                     attentionCount: Number(data.attention_count) || 0,
                     orders: Array.isArray(data.orders) ? data.orders : [],
+                    deliveryProofSupported: Boolean(
+                        Object.prototype.hasOwnProperty.call(data, 'delivery_proof_supported')
+                            ? data.delivery_proof_supported
+                            : onlineOrdersState.deliveryProofSupported,
+                    ),
+                    deliveryProofNotice: typeof data.delivery_proof_notice === 'string'
+                        ? data.delivery_proof_notice
+                        : onlineOrdersState.deliveryProofNotice,
+                    deliveryProofHelp: onlineOrdersState.deliveryProofHelp,
                 };
 
                 renderOnlineOrdersTable(onlineOrdersState.orders);
@@ -668,6 +756,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderOnlineOrdersPagination(onlineOrdersState);
                 updateStatusFilterButtons(onlineOrdersState.statusFilter);
                 updateOnlineOrderBadges(onlineOrdersState.attentionCount);
+                updateDeliveryProofNotice();
+                initializeStatusForms();
             };
 
             const fetchOnlineOrders = async () => {

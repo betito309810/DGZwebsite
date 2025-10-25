@@ -364,6 +364,10 @@ body {
     display: none;
 }
 
+.status-form .delivery-proof-field.is-disabled {
+    opacity: 0.75;
+}
+
 .status-form .delivery-proof-field label {
     font-size: 13px;
     color: #374151;
@@ -378,6 +382,11 @@ body {
 .status-form .delivery-proof-help {
     font-size: 12px;
     color: #6b7280;
+}
+
+.status-form .delivery-proof-help--warning {
+    color: #b45309;
+    font-weight: 600;
 }
 
 .status-save {

@@ -187,33 +187,6 @@ if (!function_exists('ensureOrdersProcessedByColumn')) {
     }
 }
 ensureOrdersProcessedByColumn($pdo);
-if (!function_exists('ensureOrdersDeliveryProofColumn')) {
-    /**
-     * Make sure the orders table can store proof of delivery attachments.
-     */
-    function ensureOrdersDeliveryProofColumn(PDO $pdo): void
-    {
-        static $ensured = false;
-        if ($ensured) {
-            return;
-        }
-
-        $ensured = true;
-
-        try {
-            $stmt = $pdo->query("SHOW COLUMNS FROM orders LIKE 'delivery_proof'");
-            $hasColumn = $stmt !== false && $stmt->fetch() !== false;
-            if ($hasColumn) {
-                return;
-            }
-
-            $pdo->exec("ALTER TABLE orders ADD COLUMN delivery_proof TEXT NULL AFTER payment_proof");
-        } catch (Throwable $e) {
-            error_log('Unable to ensure delivery_proof column: ' . $e->getMessage());
-        }
-    }
-}
-ensureOrdersDeliveryProofColumn($pdo);
 if (!function_exists('ensureOrderItemsDescriptionColumn')) {
     /**
      * Ensure order_items table can store custom item labels (e.g. POS services).
@@ -247,6 +220,20 @@ $declineReasonLookup = []; // Map reason id to label for quick lookups
 foreach ($declineReasons as $declineReason) {
     $declineReasonLookup[(int) ($declineReason['id'] ?? 0)] = (string) ($declineReason['label'] ?? '');
 }
+$deliveryProofColumnCandidates = [
+    'delivery_proof',
+    'proof_of_delivery',
+    'delivery_proof_path',
+    'delivery_proof_image',
+    'delivery_photo',
+    'delivery_photo_path',
+];
+$deliveryProofColumn = ordersFindColumn($pdo, $deliveryProofColumnCandidates);
+$supportsDeliveryProof = is_string($deliveryProofColumn) && $deliveryProofColumn !== '';
+$deliveryProofNotice = $supportsDeliveryProof
+    ? ''
+    : 'Proof-of-delivery uploads need a delivery_proof column (TEXT) on the existing orders table—no new table required.';
+$deliveryProofDefaultHelp = 'Upload a photo confirming the delivery.';
 $role = $_SESSION['role'] ?? '';
 enforceStaffAccess();
 $notificationManageLink = 'inventory.php';
@@ -619,68 +606,72 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                     $requiresDeliveryProof = ($newStatus === 'completed');
 
                     if ($requiresDeliveryProof) {
-                        $fileInfo = $_FILES['delivery_proof'] ?? null;
-                        $fileError = is_array($fileInfo) ? (int) ($fileInfo['error'] ?? UPLOAD_ERR_NO_FILE) : UPLOAD_ERR_NO_FILE;
-
-                        if ($fileError === UPLOAD_ERR_NO_FILE) {
-                            $statusError = 'delivery_proof_required';
-                        } elseif ($fileError !== UPLOAD_ERR_OK) {
-                            $statusError = 'delivery_proof_upload_error';
+                        if (!$supportsDeliveryProof || $deliveryProofColumn === null) {
+                            $statusError = 'delivery_proof_column_missing';
                         } else {
-                            $allowedMimeTypes = [
-                                'image/jpeg' => 'jpg',
-                                'image/png' => 'png',
-                                'image/gif' => 'gif',
-                                'image/webp' => 'webp',
-                            ];
+                            $fileInfo = $_FILES['delivery_proof'] ?? null;
+                            $fileError = is_array($fileInfo) ? (int) ($fileInfo['error'] ?? UPLOAD_ERR_NO_FILE) : UPLOAD_ERR_NO_FILE;
 
-                            $tmpName = (string) ($fileInfo['tmp_name'] ?? '');
-                            $finfo = $tmpName !== '' ? finfo_open(FILEINFO_MIME_TYPE) : false;
-                            $mimeType = $finfo ? finfo_file($finfo, $tmpName) : null;
-                            if ($finfo) {
-                                finfo_close($finfo);
-                            }
-
-                            if (!$mimeType || !isset($allowedMimeTypes[$mimeType])) {
-                                $statusError = 'delivery_proof_invalid_type';
+                            if ($fileError === UPLOAD_ERR_NO_FILE) {
+                                $statusError = 'delivery_proof_required';
+                            } elseif ($fileError !== UPLOAD_ERR_OK) {
+                                $statusError = 'delivery_proof_upload_error';
                             } else {
-                                $uploadsRoot = __DIR__ . '/../dgz_motorshop_system/uploads';
-                                $uploadDir = $uploadsRoot . '/delivery-proofs';
-                                $publicDir = 'dgz_motorshop_system/uploads/delivery-proofs';
+                                $allowedMimeTypes = [
+                                    'image/jpeg' => 'jpg',
+                                    'image/png' => 'png',
+                                    'image/gif' => 'gif',
+                                    'image/webp' => 'webp',
+                                ];
 
-                                $ensureDir = static function (string $path): bool {
-                                    if (is_dir($path)) {
-                                        return is_writable($path) || @chmod($path, 0777);
-                                    }
+                                $tmpName = (string) ($fileInfo['tmp_name'] ?? '');
+                                $finfo = $tmpName !== '' ? finfo_open(FILEINFO_MIME_TYPE) : false;
+                                $mimeType = $finfo ? finfo_file($finfo, $tmpName) : null;
+                                if ($finfo) {
+                                    finfo_close($finfo);
+                                }
 
-                                    if (!@mkdir($path, 0777, true) && !is_dir($path)) {
-                                        return false;
-                                    }
-
-                                    return is_writable($path) || @chmod($path, 0777);
-                                };
-
-                                if (!$ensureDir($uploadsRoot) || !$ensureDir($uploadDir)) {
-                                    $statusError = 'delivery_proof_storage_error';
+                                if (!$mimeType || !isset($allowedMimeTypes[$mimeType])) {
+                                    $statusError = 'delivery_proof_invalid_type';
                                 } else {
-                                    try {
-                                        $random = bin2hex(random_bytes(16));
-                                    } catch (Throwable $e) {
-                                        $random = (string) time();
-                                    }
+                                    $uploadsRoot = __DIR__ . '/../dgz_motorshop_system/uploads';
+                                    $uploadDir = $uploadsRoot . '/delivery-proofs';
+                                    $publicDir = 'dgz_motorshop_system/uploads/delivery-proofs';
 
-                                    $fileName = sprintf('%s.%s', $random, $allowedMimeTypes[$mimeType]);
-                                    $targetPath = $uploadDir . '/' . $fileName;
-
-                                    if (!move_uploaded_file($tmpName, $targetPath)) {
-                                        $fileContents = @file_get_contents($tmpName);
-                                        if ($fileContents === false || @file_put_contents($targetPath, $fileContents) === false) {
-                                            $statusError = 'delivery_proof_storage_error';
+                                    $ensureDir = static function (string $path): bool {
+                                        if (is_dir($path)) {
+                                            return is_writable($path) || @chmod($path, 0777);
                                         }
-                                    }
 
-                                    if ($statusError === '') {
-                                        $deliveryProofPath = $publicDir . '/' . $fileName;
+                                        if (!@mkdir($path, 0777, true) && !is_dir($path)) {
+                                            return false;
+                                        }
+
+                                        return is_writable($path) || @chmod($path, 0777);
+                                    };
+
+                                    if (!$ensureDir($uploadsRoot) || !$ensureDir($uploadDir)) {
+                                        $statusError = 'delivery_proof_storage_error';
+                                    } else {
+                                        try {
+                                            $random = bin2hex(random_bytes(16));
+                                        } catch (Throwable $e) {
+                                            $random = (string) time();
+                                        }
+
+                                        $fileName = sprintf('%s.%s', $random, $allowedMimeTypes[$mimeType]);
+                                        $targetPath = $uploadDir . '/' . $fileName;
+
+                                        if (!move_uploaded_file($tmpName, $targetPath)) {
+                                            $fileContents = @file_get_contents($tmpName);
+                                            if ($fileContents === false || @file_put_contents($targetPath, $fileContents) === false) {
+                                                $statusError = 'delivery_proof_storage_error';
+                                            }
+                                        }
+
+                                        if ($statusError === '') {
+                                            $deliveryProofPath = $publicDir . '/' . $fileName;
+                                        }
                                     }
                                 }
                             }
@@ -721,8 +712,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                         $fields[] = 'processed_by_user_id = ?';
                         $params[] = isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null;
 
-                        if ($deliveryProofPath !== null) {
-                            $fields[] = 'delivery_proof = ?';
+                        if ($deliveryProofPath !== null && $supportsDeliveryProof && $deliveryProofColumn !== null) {
+                            $fields[] = $deliveryProofColumn . ' = ?';
                             $params[] = $deliveryProofPath;
                         }
 
@@ -1405,6 +1396,8 @@ $onlineOrdersData = fetchOnlineOrdersData($pdo, [
     'per_page' => $perPage,
     'status' => $statusFilter,
     'decline_reason_lookup' => $declineReasonLookup,
+    'delivery_proof_column' => $deliveryProofColumn,
+    'delivery_proof_notice' => $deliveryProofNotice,
 ]);
 
 $onlineOrders = $onlineOrdersData['orders'];
@@ -1415,6 +1408,9 @@ $statusFilter = $onlineOrdersData['status_filter'];
 $pendingOnlineOrdersCount = $onlineOrdersData['attention_count'];
 $onlineOrdersOnPage = count($onlineOrders);
 $onlineOrderBadgeCount = $pendingOnlineOrdersCount;
+$supportsDeliveryProof = !empty($onlineOrdersData['delivery_proof_supported']);
+$deliveryProofColumn = $onlineOrdersData['delivery_proof_column'] ?? $deliveryProofColumn;
+$deliveryProofNotice = (string) ($onlineOrdersData['delivery_proof_notice'] ?? $deliveryProofNotice);
 
 $onlineOrdersJson = json_encode($onlineOrders, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
 if ($onlineOrdersJson === false) {
@@ -1650,6 +1646,8 @@ if ($receiptDataJson === false) {
                             $statusMessage = 'Delivery proof must be an image (JPG, PNG, GIF, or WEBP).';
                         } elseif ($statusErrorCode === 'delivery_proof_storage_error') {
                             $statusMessage = 'We could not save the delivery proof. Please check the uploads folder permissions.';
+                        } elseif ($statusErrorCode === 'delivery_proof_column_missing') {
+                            $statusMessage = 'Add a delivery_proof column (TEXT) to the orders table to enable proof uploads.';
                         }
                     }
                 ?>
@@ -1658,6 +1656,11 @@ if ($receiptDataJson === false) {
                     <?= htmlspecialchars($statusMessage, ENT_QUOTES, 'UTF-8') ?>
                 </div>
             <?php endif; ?>
+
+            <div class="status-alert warning" data-delivery-proof-notice <?= $supportsDeliveryProof ? 'hidden' : '' ?>>
+                <i class="fas fa-info-circle"></i>
+                <span data-delivery-proof-text><?= htmlspecialchars($deliveryProofNotice, ENT_QUOTES, 'UTF-8') ?></span>
+            </div>
 
             <?php
                 $statusTabs = [
@@ -1734,10 +1737,11 @@ if ($receiptDataJson === false) {
                                     $defaultNextStatus = (!$statusFormDisabled && !empty($availableStatusChanges))
                                         ? (string) ($availableStatusChanges[0]['value'] ?? '')
                                         : '';
-                                    $proofFieldHidden = $defaultNextStatus !== 'completed';
+                                    $proofFieldHidden = $supportsDeliveryProof ? $defaultNextStatus !== 'completed' : false;
                                     $proofType = (string) ($order['proof_type'] ?? 'payment');
                                     $proofButtonLabel = (string) ($order['proof_button_label'] ?? ($proofType === 'delivery' ? 'Delivery Proof' : 'Payment Proof'));
                                     $proofIcon = $proofType === 'delivery' ? 'fa-truck' : 'fa-receipt';
+                                    $proofFieldClasses = 'delivery-proof-field' . ($supportsDeliveryProof ? '' : ' is-disabled');
                                 ?>
                                 <tr class="online-order-row" data-order-id="<?= (int) $order['id'] ?>"
                                     data-decline-reason-id="<?= (int) ($order['decline_reason_id'] ?? 0) ?>"
@@ -1783,10 +1787,12 @@ if ($receiptDataJson === false) {
                                                     <?php endforeach; ?>
                                                 <?php endif; ?>
                                             </select>
-                                            <div class="delivery-proof-field" data-delivery-proof-field <?= $proofFieldHidden ? 'hidden' : '' ?>>
+                                            <div class="<?= $proofFieldClasses ?>" data-delivery-proof-field <?= $proofFieldHidden ? 'hidden' : '' ?>>
                                                 <label for="delivery-proof-<?= (int) $order['id'] ?>">Proof of delivery</label>
-                                                <input type="file" name="delivery_proof" id="delivery-proof-<?= (int) $order['id'] ?>" accept="image/*" <?= $statusFormDisabled ? 'disabled' : '' ?> <?= $defaultNextStatus === 'completed' ? 'required' : '' ?>>
-                                                <p class="delivery-proof-help">Upload a photo confirming the delivery.</p>
+                                                <input type="file" name="delivery_proof" id="delivery-proof-<?= (int) $order['id'] ?>" accept="image/*" <?= ($statusFormDisabled || !$supportsDeliveryProof) ? 'disabled' : '' ?> <?= ($supportsDeliveryProof && $defaultNextStatus === 'completed') ? 'required' : '' ?>>
+                                                <p class="delivery-proof-help<?= $supportsDeliveryProof ? '' : ' delivery-proof-help--warning' ?>" data-delivery-proof-default="<?= htmlspecialchars($deliveryProofDefaultHelp, ENT_QUOTES, 'UTF-8') ?>">
+                                                    <?= htmlspecialchars($supportsDeliveryProof ? $deliveryProofDefaultHelp : $deliveryProofNotice, ENT_QUOTES, 'UTF-8') ?>
+                                                </p>
                                             </div>
                                             <button type="submit" class="status-save" <?= $statusFormDisabled ? 'disabled' : '' ?>>Update</button>
                                         </form>
@@ -2179,7 +2185,10 @@ if ($receiptDataJson === false) {
                 statusFilter: <?= json_encode($statusFilter) ?>,
                 attentionCount: <?= (int) ($pendingOnlineOrdersCount ?? 0) ?>,
                 onPage: <?= (int) $onlineOrdersOnPage ?>,
-                orders: <?= $onlineOrdersJson ?>
+                orders: <?= $onlineOrdersJson ?>,
+                deliveryProofSupported: <?= json_encode($supportsDeliveryProof) ?>,
+                deliveryProofNotice: <?= json_encode($deliveryProofNotice) ?>,
+                deliveryProofHelp: <?= json_encode($deliveryProofDefaultHelp) ?>
             }
         };
     </script>
