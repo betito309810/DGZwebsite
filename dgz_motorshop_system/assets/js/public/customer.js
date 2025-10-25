@@ -6,11 +6,115 @@
 
     const sessionState = (body.dataset.customerSession || 'guest').toLowerCase();
     const firstName = body.dataset.customerFirstName || null;
+    const heartbeatUrl = (body.dataset.customerSessionHeartbeat || '').trim();
+    const loginRedirectUrl = (body.dataset.customerLoginUrl || '').trim();
+    const heartbeatIntervalAttr = parseInt(body.dataset.customerSessionHeartbeatInterval || '', 10);
+    const heartbeatBaseInterval = Number.isFinite(heartbeatIntervalAttr) && heartbeatIntervalAttr > 0
+        ? heartbeatIntervalAttr
+        : 15000;
 
     window.customerSession = Object.freeze({
         isAuthenticated: sessionState === 'authenticated',
         firstName: firstName && firstName.trim() !== '' ? firstName.trim() : null,
     });
+
+    if (sessionState === 'authenticated' && heartbeatUrl !== '' && !window.__customerSessionWatchdogActive) {
+        window.__customerSessionWatchdogActive = true;
+
+        const maxInterval = 60000;
+        let consecutiveFailures = 0;
+        let stopped = false;
+        let timeoutId = null;
+
+        const normaliseDestination = (target) => {
+            if (typeof target === 'string' && target.trim() !== '') {
+                return target.trim();
+            }
+
+            if (loginRedirectUrl !== '') {
+                return loginRedirectUrl;
+            }
+
+            return 'login.php';
+        };
+
+        const stopWatcher = () => {
+            stopped = true;
+            if (timeoutId !== null) {
+                clearTimeout(timeoutId);
+                timeoutId = null;
+            }
+        };
+
+        const redirectToLogin = (target) => {
+            stopWatcher();
+            const destination = normaliseDestination(target);
+            window.location.href = destination;
+        };
+
+        const scheduleNext = (delay) => {
+            if (stopped) {
+                return;
+            }
+
+            timeoutId = window.setTimeout(runCheck, Math.max(1000, delay));
+        };
+
+        const nextDelay = () => {
+            if (consecutiveFailures <= 0) {
+                return heartbeatBaseInterval;
+            }
+
+            const factor = Math.pow(1.5, Math.min(consecutiveFailures, 5));
+            return Math.min(Math.round(heartbeatBaseInterval * factor), maxInterval);
+        };
+
+        const runCheck = async () => {
+            if (stopped) {
+                return;
+            }
+
+            try {
+                const response = await fetch(heartbeatUrl, {
+                    method: 'GET',
+                    credentials: 'same-origin',
+                    cache: 'no-store',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Heartbeat request failed with status ${response.status}`);
+                }
+
+                const payload = await response.json();
+                consecutiveFailures = 0;
+
+                if (payload && (payload.shouldLogout || payload.active === false || payload.authenticated === false)) {
+                    redirectToLogin(payload && typeof payload.loginUrl === 'string' ? payload.loginUrl : loginRedirectUrl);
+                    return;
+                }
+            } catch (error) {
+                consecutiveFailures += 1;
+            }
+
+            scheduleNext(nextDelay());
+        };
+
+        scheduleNext(5000);
+
+        window.addEventListener('visibilitychange', () => {
+            if (!stopped && document.visibilityState === 'visible') {
+                consecutiveFailures = 0;
+                if (timeoutId !== null) {
+                    clearTimeout(timeoutId);
+                }
+                scheduleNext(1000);
+            }
+        });
+    }
 
     // Account menu dropdown
     const accountMenu = document.querySelector('[data-account-menu]');

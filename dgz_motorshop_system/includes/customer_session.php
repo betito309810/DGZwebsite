@@ -430,35 +430,65 @@ if (!function_exists('customerSessionRefresh')) {
     }
 }
 
-if (!function_exists('customerEnforceSingleActiveSession')) {
-    function customerEnforceSingleActiveSession(): void
+if (!function_exists('customerHandleForcedLogout')) {
+    function customerHandleForcedLogout(string $message, bool $redirect = true): void
     {
-        static $enforced = false;
-
-        if ($enforced) {
-            return;
+        if ($message === '') {
+            $message = "You’ve been logged out because your account was used to sign in on another device.";
         }
 
-        $enforced = true;
+        $_SESSION = [
+            'customer_forced_logout' => true,
+            'customer_forced_logout_message' => $message,
+        ];
 
-        if (empty($_SESSION['customer_id'])) {
-            return;
+        customerSessionRefresh();
+
+        session_regenerate_id(true);
+
+        if ($redirect) {
+            $loginUrl = orderingUrl('login.php');
+            if ($loginUrl === '') {
+                $loginUrl = 'login.php';
+            }
+
+            header('Location: ' . $loginUrl);
+            exit;
+        }
+    }
+}
+
+if (!function_exists('customerSessionCheckActive')) {
+    function customerSessionCheckActive(): array
+    {
+        $result = [
+            'authenticated' => !empty($_SESSION['customer_id']),
+            'active' => true,
+            'shouldLogout' => false,
+            'message' => null,
+        ];
+
+        if (!$result['authenticated']) {
+            $result['active'] = false;
+
+            return $result;
         }
 
         try {
             $pdo = customerRepository();
         } catch (Throwable $exception) {
             error_log('Unable to acquire repository for session enforcement: ' . $exception->getMessage());
-            return;
+
+            return $result;
         }
 
         if (!$pdo instanceof PDO || !customerSessionTokenColumnAvailable($pdo)) {
-            return;
+            return $result;
         }
 
         $column = customerFindColumn($pdo, ['current_session_token']);
         if ($column === null) {
-            return;
+            return $result;
         }
 
         $customerId = (int) $_SESSION['customer_id'];
@@ -470,29 +500,50 @@ if (!function_exists('customerEnforceSingleActiveSession')) {
             $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
         } catch (Throwable $exception) {
             error_log('Unable to verify customer session token: ' . $exception->getMessage());
-            return;
+
+            return $result;
         }
 
         $storedToken = is_array($row) ? ($row['current_session_token'] ?? null) : null;
         $currentToken = $_SESSION['customer_session_token'] ?? '';
 
         if (!is_string($storedToken) || $storedToken === '' || !is_string($currentToken) || $currentToken === '' || !hash_equals($storedToken, $currentToken)) {
-            $message = "You’ve been logged out because your account was used to sign in on another device.";
+            $result['active'] = false;
+            $result['shouldLogout'] = true;
+            $result['authenticated'] = false;
+            $result['message'] = "You’ve been logged out because your account was used to sign in on another device.";
+        }
 
-            $_SESSION = [
-                'customer_forced_logout' => true,
-                'customer_forced_logout_message' => $message,
-            ];
+        return $result;
+    }
+}
 
-            session_regenerate_id(true);
+if (!function_exists('customerEnforceSingleActiveSession')) {
+    function customerEnforceSingleActiveSession(): void
+    {
+        static $enforced = false;
 
-            header('Location: ' . orderingUrl('login.php'));
-            exit;
+        if ($enforced) {
+            return;
+        }
+
+        $enforced = true;
+
+        $state = customerSessionCheckActive();
+
+        if (!empty($state['shouldLogout'])) {
+            $message = is_string($state['message']) && $state['message'] !== ''
+                ? $state['message']
+                : "You’ve been logged out because your account was used to sign in on another device.";
+
+            customerHandleForcedLogout($message, true);
         }
     }
 }
 
-customerEnforceSingleActiveSession();
+if (!defined('DGZ_CUSTOMER_SESSION_PASSIVE')) {
+    customerEnforceSingleActiveSession();
+}
 
 if (!function_exists('customerLegacyPasswordColumnAvailable')) {
     function customerLegacyPasswordColumnAvailable(?PDO $pdo = null): bool

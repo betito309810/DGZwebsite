@@ -13,6 +13,8 @@ $customerStylesheet = assetUrl('assets/css/public/customer.css');
 $indexStylesheet = assetUrl('assets/css/public/index.css');
 $customerScript = assetUrl('assets/js/public/customer.js');
 $logoAsset = assetUrl('assets/logo.png');
+$customerSessionStatusEndpoint = orderingUrl('api/customer-session-status.php');
+$loginUrl = orderingUrl('login.php');
 
 $errors = [];
 $successMessage = '';
@@ -232,7 +234,9 @@ $redirectParam = isset($_GET['redirect']) ? (string) $_GET['redirect'] : '';
     <link rel="stylesheet" href="<?= htmlspecialchars($indexStylesheet) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars($customerStylesheet) ?>">
 </head>
-<body class="customer-auth-page" data-customer-auth="register">
+<body class="customer-auth-page" data-customer-auth="register"
+    data-customer-session-heartbeat="<?= htmlspecialchars($customerSessionStatusEndpoint) ?>"
+    data-customer-login-url="<?= htmlspecialchars($loginUrl) ?>">
     <main class="customer-auth-card" aria-labelledby="registerHeading">
         <a href="<?= htmlspecialchars(orderingUrl('index.php')) ?>" class="customer-auth-logo">
             <img src="<?= htmlspecialchars($logoAsset) ?>" alt="DGZ Motorshop logo">

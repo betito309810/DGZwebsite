@@ -128,6 +128,7 @@ $productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
 $shopUrl = orderingUrl('index.php');
 $inventoryAvailabilityApi = orderingUrl('api/inventory-availability.php');
 $customerCartApi = orderingUrl('api/customer-cart.php');
+$customerSessionStatusEndpoint = orderingUrl('api/customer-session-status.php');
 
 $customerStylesheet = assetUrl('assets/css/public/customer.css');
 $customerScript = assetUrl('assets/js/public/customer.js');
@@ -1126,7 +1127,11 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
     <link rel="stylesheet" href="<?= htmlspecialchars($checkoutModalStylesheet) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars($customerStylesheet) ?>">
 </head>
-<body data-customer-session="<?= htmlspecialchars($bodyCustomerState) ?>" data-customer-first-name="<?= htmlspecialchars($bodyCustomerFirstName) ?>" data-auth-required="checkout">
+<body data-customer-session="<?= htmlspecialchars($bodyCustomerState) ?>"
+    data-customer-first-name="<?= htmlspecialchars($bodyCustomerFirstName) ?>"
+    data-customer-session-heartbeat="<?= htmlspecialchars($customerSessionStatusEndpoint) ?>"
+    data-customer-login-url="<?= htmlspecialchars($loginUrl) ?>"
+    data-auth-required="checkout">
     <header class="header">
         <div class="header-content">
             <div class="logo">

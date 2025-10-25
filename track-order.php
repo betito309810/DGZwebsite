@@ -18,6 +18,7 @@ $checkoutModalStylesheet = assetUrl('assets/css/public/checkoutModals.css');
 $customerStylesheet = assetUrl('assets/css/public/customer.css');
 $customerScript = assetUrl('assets/js/public/customer.js');
 $customerCartEndpoint = orderingUrl('api/customer-cart.php');
+$customerSessionStatusEndpoint = orderingUrl('api/customer-session-status.php');
 $customerSessionState = customerSessionExport();
 $isCustomerAuthenticated = !empty($customerSessionState['authenticated']);
 $customerFirstName = $customerSessionState['firstName'] ?? null;
@@ -45,7 +46,10 @@ $bodyCustomerFirstName = $customerFirstName ?? '';
     <link rel="stylesheet" href="<?= htmlspecialchars($checkoutModalStylesheet) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars($customerStylesheet) ?>">
 </head>
-<body data-customer-session="<?= htmlspecialchars($bodyCustomerState) ?>" data-customer-first-name="<?= htmlspecialchars($bodyCustomerFirstName) ?>">
+<body data-customer-session="<?= htmlspecialchars($bodyCustomerState) ?>"
+    data-customer-first-name="<?= htmlspecialchars($bodyCustomerFirstName) ?>"
+    data-customer-session-heartbeat="<?= htmlspecialchars($customerSessionStatusEndpoint) ?>"
+    data-customer-login-url="<?= htmlspecialchars($loginUrl) ?>">
     <!-- Header: mirrors the home page layout so the experience feels seamless -->
     <header class="header">
         <div class="header-content">

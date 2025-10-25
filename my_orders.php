@@ -14,11 +14,13 @@ $customerScript = assetUrl('assets/js/public/customer.js');
 $cartScript = assetUrl('assets/js/public/cart.js');
 $logoAsset = assetUrl('assets/logo.png');
 $homeUrl = orderingUrl('index.php');
+$loginUrl = orderingUrl('login.php');
 $logoutUrl = orderingUrl('logout.php');
 $myOrdersUrl = orderingUrl('my_orders.php');
 $settingsUrl = orderingUrl('settings.php');
 $cartUrl = orderingUrl('checkout.php');
 $customerCartEndpoint = orderingUrl('api/customer-cart.php');
+$customerSessionStatusEndpoint = orderingUrl('api/customer-session-status.php');
 
 $pdo = db();
 $alerts = [
@@ -663,7 +665,10 @@ $statusLabels = [
     <link rel="stylesheet" href="<?= htmlspecialchars($indexStylesheet) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars($customerStylesheet) ?>">
 </head>
-<body class="customer-orders-page" data-customer-session="authenticated" data-customer-first-name="<?= htmlspecialchars($customerFirstName) ?>">
+<body class="customer-orders-page" data-customer-session="authenticated"
+    data-customer-first-name="<?= htmlspecialchars($customerFirstName) ?>"
+    data-customer-session-heartbeat="<?= htmlspecialchars($customerSessionStatusEndpoint) ?>"
+    data-customer-login-url="<?= htmlspecialchars($loginUrl) ?>">
 <header class="customer-orders-header">
     <div class="customer-orders-brand">
         <a href="<?= htmlspecialchars($homeUrl) ?>" class="customer-orders-logo">

@@ -20,6 +20,7 @@ $settingsUrl = orderingUrl('settings.php');
 $logoutUrl = orderingUrl('logout.php');
 $productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
 $customerCartEndpoint = orderingUrl('api/customer-cart.php');
+$customerSessionStatusEndpoint = orderingUrl('api/customer-session-status.php');
 
 $customerSessionState = customerSessionExport();
 $isCustomerAuthenticated = !empty($customerSessionState['authenticated']);
@@ -40,7 +41,10 @@ $bodyCustomerFirstName = $customerFirstName !== null ? $customerFirstName : '';
     <link rel="stylesheet" href="<?= htmlspecialchars($checkoutModalStylesheet) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars($customerStylesheet) ?>">
 </head>
-<body data-customer-session="<?= htmlspecialchars($bodyCustomerState) ?>" data-customer-first-name="<?= htmlspecialchars($bodyCustomerFirstName) ?>">
+<body data-customer-session="<?= htmlspecialchars($bodyCustomerState) ?>"
+    data-customer-first-name="<?= htmlspecialchars($bodyCustomerFirstName) ?>"
+    data-customer-session-heartbeat="<?= htmlspecialchars($customerSessionStatusEndpoint) ?>"
+    data-customer-login-url="<?= htmlspecialchars($loginUrl) ?>">
     <!-- Header -->
     <header class="header">
         <div class="header-content">

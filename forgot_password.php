@@ -6,6 +6,8 @@ $customerStylesheet = assetUrl('assets/css/public/customer.css');
 $indexStylesheet = assetUrl('assets/css/public/index.css');
 $customerScript = assetUrl('assets/js/public/customer.js');
 $logoAsset = assetUrl('assets/logo.png');
+$customerSessionStatusEndpoint = orderingUrl('api/customer-session-status.php');
+$loginUrl = orderingUrl('login.php');
 
 $message = null;
 $error = null;
@@ -71,7 +73,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="stylesheet" href="<?= htmlspecialchars($indexStylesheet) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars($customerStylesheet) ?>">
 </head>
-<body class="customer-auth-page" data-customer-auth="forgot">
+<body class="customer-auth-page" data-customer-auth="forgot"
+    data-customer-session-heartbeat="<?= htmlspecialchars($customerSessionStatusEndpoint) ?>"
+    data-customer-login-url="<?= htmlspecialchars($loginUrl) ?>">
     <main class="customer-auth-card" aria-labelledby="forgotHeading">
         <a href="<?= htmlspecialchars(orderingUrl('index.php')) ?>" class="customer-auth-logo">
             <img src="<?= htmlspecialchars($logoAsset) ?>" alt="DGZ Motorshop logo">
@@ -90,7 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
             <button type="submit" class="customer-auth-submit">Send reset link</button>
         </form>
-        <p class="customer-auth-footer"><a href="<?= htmlspecialchars(orderingUrl('login.php')) ?>">Back to login</a></p>
+        <p class="customer-auth-footer"><a href="<?= htmlspecialchars($loginUrl) ?>">Back to login</a></p>
     </main>
     <script src="<?= htmlspecialchars($customerScript) ?>" defer></script>
 </body>

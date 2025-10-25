@@ -9,6 +9,7 @@ $logoAsset = assetUrl('assets/logo.png');
 $shopUrl = orderingUrl('index.php');
 $loginUrl = orderingUrl('login.php');
 $ordersUrl = orderingUrl('my_orders.php');
+$customerSessionStatusEndpoint = orderingUrl('api/customer-session-status.php');
 
 $status = 'idle';
 $alertClass = 'customer-auth-alert';
@@ -142,7 +143,9 @@ if (!$alertMessage) {
     <link rel="stylesheet" href="<?= htmlspecialchars($indexStylesheet) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars($customerStylesheet) ?>">
 </head>
-<body class="customer-auth-page" data-customer-auth="verify" data-customer-first-name="<?= htmlspecialchars($bodyFirstName) ?>">
+<body class="customer-auth-page" data-customer-auth="verify" data-customer-first-name="<?= htmlspecialchars($bodyFirstName) ?>"
+    data-customer-session-heartbeat="<?= htmlspecialchars($customerSessionStatusEndpoint) ?>"
+    data-customer-login-url="<?= htmlspecialchars($loginUrl) ?>">
     <main class="customer-auth-card" aria-labelledby="verifyHeading">
         <a href="<?= htmlspecialchars($shopUrl) ?>" class="customer-auth-logo">
             <img src="<?= htmlspecialchars($logoAsset) ?>" alt="DGZ Motorshop logo">

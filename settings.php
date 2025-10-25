@@ -75,8 +75,10 @@ $customerStylesheet = assetUrl('assets/css/public/customer.css');
 $customerScript = assetUrl('assets/js/public/customer.js');
 $logoAsset = assetUrl('assets/logo.png');
 $homeUrl = orderingUrl('index.php');
+$loginUrl = orderingUrl('login.php');
 $myOrdersUrl = orderingUrl('my_orders.php');
 $logoutUrl = orderingUrl('logout.php');
+$customerSessionStatusEndpoint = orderingUrl('api/customer-session-status.php');
 
 $values = [
     'first_name' => trim((string)($_POST['first_name'] ?? $currentFirstName)),
@@ -297,7 +299,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="stylesheet" href="<?= htmlspecialchars($indexStylesheet) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars($customerStylesheet) ?>">
     </head>
-<body class="customer-orders-page" data-customer-session="authenticated">
+<body class="customer-orders-page" data-customer-session="authenticated"
+    data-customer-session-heartbeat="<?= htmlspecialchars($customerSessionStatusEndpoint) ?>"
+    data-customer-login-url="<?= htmlspecialchars($loginUrl) ?>">
 <header class="customer-orders-header">
     <div class="customer-orders-brand">
         <a href="<?= htmlspecialchars($homeUrl) ?>" class="customer-orders-logo">

@@ -25,6 +25,7 @@ $trackOrderUrl = orderingUrl('track-order.php');
 $checkoutUrl = orderingUrl('checkout.php');
 $productImagesEndpoint = orderingUrl('api/product-images.php');
 $customerCartEndpoint = orderingUrl('api/customer-cart.php');
+$customerSessionStatusEndpoint = orderingUrl('api/customer-session-status.php');
 
 $customerStylesheet = assetUrl('assets/css/public/customer.css');
 $customerScript = assetUrl('assets/js/public/customer.js');
@@ -68,7 +69,10 @@ natcasesort($categories);
     <link rel="stylesheet" href="<?= htmlspecialchars($customerStylesheet) ?>">
 </head>
 
-<body data-customer-session="<?= htmlspecialchars($bodyCustomerState) ?>" data-customer-first-name="<?= htmlspecialchars($bodyCustomerFirstName) ?>">
+<body data-customer-session="<?= htmlspecialchars($bodyCustomerState) ?>"
+    data-customer-first-name="<?= htmlspecialchars($bodyCustomerFirstName) ?>"
+    data-customer-session-heartbeat="<?= htmlspecialchars($customerSessionStatusEndpoint) ?>"
+    data-customer-login-url="<?= htmlspecialchars($loginUrl) ?>">
     <!-- Header -->
     <header class="header">
         <div class="header-content">

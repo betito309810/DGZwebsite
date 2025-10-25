@@ -6,6 +6,8 @@ $customerStylesheet = assetUrl('assets/css/public/customer.css');
 $indexStylesheet = assetUrl('assets/css/public/index.css');
 $customerScript = assetUrl('assets/js/public/customer.js');
 $logoAsset = assetUrl('assets/logo.png');
+$customerSessionStatusEndpoint = orderingUrl('api/customer-session-status.php');
+$loginUrl = orderingUrl('login.php');
 
 $token = isset($_GET['token']) ? (string) $_GET['token'] : '';
 $errors = [];
@@ -65,14 +67,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="stylesheet" href="<?= htmlspecialchars($indexStylesheet) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars($customerStylesheet) ?>">
 </head>
-<body class="customer-auth-page" data-customer-auth="reset">
+<body class="customer-auth-page" data-customer-auth="reset"
+    data-customer-session-heartbeat="<?= htmlspecialchars($customerSessionStatusEndpoint) ?>"
+    data-customer-login-url="<?= htmlspecialchars($loginUrl) ?>">
     <main class="customer-auth-card" aria-labelledby="resetHeading">
         <a href="<?= htmlspecialchars(orderingUrl('index.php')) ?>" class="customer-auth-logo">
             <img src="<?= htmlspecialchars($logoAsset) ?>" alt="DGZ Motorshop logo">
         </a>
         <h1 id="resetHeading">Set a new password</h1>
         <?php if ($success): ?>
-            <p class="customer-auth-subtitle">Your password has been updated. You can now <a href="<?= htmlspecialchars(orderingUrl('login.php')) ?>">log in</a>.</p>
+            <p class="customer-auth-subtitle">Your password has been updated. You can now <a href="<?= htmlspecialchars($loginUrl) ?>">log in</a>.</p>
         <?php else: ?>
             <p class="customer-auth-subtitle">Create a strong password to protect your account.</p>
             <?php if (!empty($errors['general'])): ?>
