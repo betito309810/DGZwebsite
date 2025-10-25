@@ -669,9 +669,36 @@ if ($orderDeclineAttachmentColumn !== null) {
     $orderSelectParts[] = "'' AS `decline_attachment_path`";
 }
 
-$statusFilter = isset($_GET['status']) ? strtolower(trim((string) $_GET['status'])) : '';
-$completedStatusFilters = ['complete', 'completed'];
-$isCompletedFilter = in_array($statusFilter, $completedStatusFilters, true);
+$statusFilterParam = strtolower(trim((string) ($_GET['status'] ?? '')));
+$statusFilterConfig = [
+    'pending' => [
+        'label' => 'Pending',
+        'statuses' => ['pending'],
+        'empty_message' => 'No pending orders right now.',
+    ],
+    'delivery' => [
+        'label' => 'Out for delivery',
+        'statuses' => ['delivery'],
+        'empty_message' => 'No orders are currently out for delivery.',
+    ],
+    'completed' => [
+        'label' => 'Completed',
+        'statuses' => ['complete', 'completed'],
+        'empty_message' => 'No completed orders yet.',
+    ],
+    'cancelled' => [
+        'label' => 'Cancelled',
+        'statuses' => ['cancelled', 'canceled', 'cancelled_by_customer', 'cancelled_by_staff'],
+        'empty_message' => 'No cancelled orders to show.',
+    ],
+    'disapproved' => [
+        'label' => 'Disapproved',
+        'statuses' => ['disapproved'],
+        'empty_message' => 'No disapproved orders yet.',
+    ],
+];
+$activeStatusFilterKey = array_key_exists($statusFilterParam, $statusFilterConfig) ? $statusFilterParam : '';
+$activeStatusFilter = $activeStatusFilterKey !== '' ? $statusFilterConfig[$activeStatusFilterKey] : null;
 $orderWhereParts = [];
 $orderParams = [];
 
@@ -682,14 +709,14 @@ if ($customerIdColumn === null) {
     $orderParams[] = (int) $customer['id'];
 }
 
-if ($isCompletedFilter) {
+if ($activeStatusFilter !== null) {
     if ($orderStatusColumn !== null) {
-        $completedStatusValues = array_values(array_unique($completedStatusFilters));
-        if (!empty($completedStatusValues)) {
-            $placeholders = implode(', ', array_fill(0, count($completedStatusValues), '?'));
+        $statusValues = array_values(array_unique($activeStatusFilter['statuses']));
+        if (!empty($statusValues)) {
+            $placeholders = implode(', ', array_fill(0, count($statusValues), '?'));
             $orderWhereParts[] = 'LOWER(TRIM(`' . $orderStatusColumn . '`)) IN (' . $placeholders . ')';
-            foreach ($completedStatusValues as $completedStatus) {
-                $orderParams[] = strtolower(trim($completedStatus));
+            foreach ($statusValues as $statusValue) {
+                $orderParams[] = strtolower(trim($statusValue));
             }
         }
     } else {
@@ -819,10 +846,11 @@ if (!empty($orders)) {
     }
 }
 
-if ($isCompletedFilter && !empty($orders)) {
-    $orders = array_values(array_filter($orders, static function (array $order) use ($completedStatusFilters): bool {
+if ($activeStatusFilter !== null && !empty($orders)) {
+    $allowedStatuses = $activeStatusFilter['statuses'];
+    $orders = array_values(array_filter($orders, static function (array $order) use ($allowedStatuses): bool {
         $statusKey = normalizeOrderStatusKey($order['status'] ?? '');
-        return in_array($statusKey, $completedStatusFilters, true);
+        return in_array($statusKey, $allowedStatuses, true);
     }));
 }
 
@@ -835,6 +863,8 @@ $statusLabels = [
     'completed' => 'Completed',
     'cancelled_by_staff' => 'Cancelled by staff',
     'cancelled_by_customer' => 'Cancelled',
+    'cancelled' => 'Cancelled',
+    'canceled' => 'Cancelled',
     'disapproved' => 'Disapproved',
 ];
 ?>
@@ -887,8 +917,11 @@ $statusLabels = [
 <main class="customer-orders-wrapper">
     <h1>My Orders</h1>
     <nav class="customer-orders-tabs" aria-label="Order filters">
-        <a class="customer-orders-tab<?= $isCompletedFilter ? '' : ' is-active' ?>" href="<?= htmlspecialchars($myOrdersUrl) ?>">All</a>
-        <a class="customer-orders-tab<?= $isCompletedFilter ? ' is-active' : '' ?>" href="<?= htmlspecialchars($myOrdersUrl) ?>?status=complete">Completed</a>
+        <a class="customer-orders-tab<?= $activeStatusFilterKey === '' ? ' is-active' : '' ?>" href="<?= htmlspecialchars($myOrdersUrl) ?>">All</a>
+        <?php foreach ($statusFilterConfig as $filterKey => $filterOptions): ?>
+            <?php $filterUrl = $myOrdersUrl . '?status=' . urlencode($filterKey); ?>
+            <a class="customer-orders-tab<?= $activeStatusFilterKey === $filterKey ? ' is-active' : '' ?>" href="<?= htmlspecialchars($filterUrl) ?>"><?= htmlspecialchars($filterOptions['label']) ?></a>
+        <?php endforeach; ?>
     </nav>
     <?php foreach ($alerts as $type => $messages): ?>
         <?php foreach ($messages as $message): ?>
@@ -897,8 +930,9 @@ $statusLabels = [
     <?php endforeach; ?>
 
     <?php if (empty($orders)): ?>
-        <?php if ($isCompletedFilter): ?>
-            <p class="customer-orders-empty">No completed orders yet. <a href="<?= htmlspecialchars($homeUrl) ?>">Start shopping</a></p>
+        <?php if ($activeStatusFilter !== null): ?>
+            <?php $emptyMessage = $activeStatusFilter['empty_message'] ?? ('No ' . strtolower($activeStatusFilter['label']) . ' orders yet.'); ?>
+            <p class="customer-orders-empty"><?= htmlspecialchars($emptyMessage) ?> <a href="<?= htmlspecialchars($homeUrl) ?>">Start shopping</a></p>
         <?php else: ?>
             <p class="customer-orders-empty">You have not placed any orders yet. <a href="<?= htmlspecialchars($homeUrl) ?>">Start shopping</a>.</p>
         <?php endif; ?>
@@ -921,7 +955,7 @@ $statusLabels = [
                     $orderItems = $orderItemsMap[$orderId] ?? [];
                     $statusKey = normalizeOrderStatusKey($order['status'] ?? '');
                     $statusLabel = $statusLabels[$statusKey] ?? ucwords(str_replace('_', ' ', $statusKey));
-                    $nonCancellableStatuses = ['delivery', 'approved', 'complete', 'completed', 'cancelled_by_staff', 'cancelled_by_customer', 'disapproved'];
+                    $nonCancellableStatuses = ['delivery', 'approved', 'complete', 'completed', 'cancelled', 'canceled', 'cancelled_by_staff', 'cancelled_by_customer', 'disapproved'];
                     $canCancel = !in_array($statusKey, $nonCancellableStatuses, true);
 
                     $contactEmail = trim((string) ($order['email'] ?? $order['customer_email'] ?? ''));
