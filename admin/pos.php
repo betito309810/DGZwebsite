@@ -1961,10 +1961,6 @@ if ($receiptDataJson === false) {
                             <span id="onlineOrderPhone"></span>
                         </div>
                         <div class="info-item">
-                            <label>Facebook:</label>
-                            <span id="onlineOrderFacebook"></span>
-                        </div>
-                        <div class="info-item">
                             <label>Address:</label>
                             <span id="onlineOrderAddress"></span>
                         </div>

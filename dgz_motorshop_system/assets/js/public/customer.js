@@ -585,6 +585,148 @@
         }
     }
 
+    const walletGroups = document.querySelectorAll('[data-wallet-group]');
+    if (walletGroups.length > 0) {
+        const paymentLabels = {
+            gcash: 'GCash',
+            maya: 'Maya',
+        };
+
+        const copyWalletNumber = (value) => {
+            const text = String(value || '').trim();
+            if (text === '') {
+                return Promise.reject(new Error('Missing wallet number'));
+            }
+
+            if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                return navigator.clipboard.writeText(text);
+            }
+
+            return new Promise((resolve, reject) => {
+                try {
+                    const helper = document.createElement('textarea');
+                    helper.value = text;
+                    helper.setAttribute('readonly', '');
+                    helper.style.position = 'fixed';
+                    helper.style.opacity = '0';
+                    document.body.appendChild(helper);
+                    helper.select();
+                    const successful = document.execCommand('copy');
+                    document.body.removeChild(helper);
+                    if (successful) {
+                        resolve();
+                    } else {
+                        reject(new Error('Copy failed'));
+                    }
+                } catch (error) {
+                    reject(error);
+                }
+            });
+        };
+
+        const labelForKey = (key) => paymentLabels[key] || key.toUpperCase();
+
+        walletGroups.forEach((group) => {
+            const selector = group.querySelector('[data-wallet-selector]');
+            if (!selector) {
+                return;
+            }
+
+            const hiddenInput = selector.querySelector('[data-wallet-input]');
+            const feedback = group.querySelector('[data-wallet-feedback]');
+            const buttons = selector.querySelectorAll('.wallet-button[data-wallet]');
+            if (buttons.length === 0) {
+                return;
+            }
+
+            const setSelected = (key, announce) => {
+                const normalizedKey = (key || '').toLowerCase();
+                buttons.forEach((button) => {
+                    const buttonKey = (button.dataset.wallet || '').toLowerCase();
+                    const isSelected = normalizedKey !== '' && buttonKey === normalizedKey;
+                    button.classList.toggle('is-selected', isSelected);
+                    if (!isSelected) {
+                        const statusSpan = button.querySelector('.wallet-button__status');
+                        if (statusSpan) {
+                            statusSpan.textContent = '';
+                        }
+                    }
+                });
+                if (hiddenInput) {
+                    hiddenInput.value = normalizedKey;
+                }
+                selector.setAttribute('data-selected', normalizedKey);
+                if (feedback && announce) {
+                    if (normalizedKey !== '') {
+                        feedback.textContent = `${labelForKey(normalizedKey)} selected.`;
+                    } else {
+                        feedback.textContent = '';
+                    }
+                }
+            };
+
+            const initialValue = (selector.getAttribute('data-selected')
+                || (hiddenInput ? hiddenInput.value : '')
+                || '').toLowerCase();
+            if (initialValue !== '') {
+                setSelected(initialValue, false);
+            }
+
+            buttons.forEach((button) => {
+                const walletKey = (button.dataset.wallet || '').toLowerCase();
+                if (walletKey === '') {
+                    return;
+                }
+
+                const walletNumber = button.dataset.walletNumber || '';
+                const walletLabel = button.dataset.walletLabel || labelForKey(walletKey);
+                const statusSpan = button.querySelector('.wallet-button__status');
+
+                button.addEventListener('click', async () => {
+                    setSelected(walletKey, true);
+
+                    if (feedback) {
+                        feedback.textContent = walletNumber !== ''
+                            ? `${walletLabel} selected. Copying number…`
+                            : `${walletLabel} selected.`;
+                    }
+
+                    if (walletNumber === '') {
+                        return;
+                    }
+
+                    button.disabled = true;
+                    try {
+                        await copyWalletNumber(walletNumber);
+                        button.classList.add('wallet-button--copied');
+                        if (statusSpan) {
+                            statusSpan.textContent = 'Copied!';
+                        }
+                        if (feedback) {
+                            feedback.textContent = `${walletLabel} selected. Wallet number copied.`;
+                        }
+                    } catch (error) {
+                        button.classList.add('wallet-button--copied');
+                        if (statusSpan) {
+                            statusSpan.textContent = 'Copy failed';
+                        }
+                        if (feedback) {
+                            feedback.textContent = `${walletLabel} selected. Copy failed, please copy manually.`;
+                        }
+                    } finally {
+                        window.setTimeout(() => {
+                            button.classList.remove('wallet-button--copied');
+                            if (statusSpan) {
+                                statusSpan.textContent = '';
+                            }
+                            button.disabled = false;
+                        }, 1500);
+                    }
+                });
+            });
+        });
+    }
+
     document.querySelectorAll('[data-delivery-proof-toggle]').forEach((button) => {
         const targetId = button.getAttribute('data-proof-target') || '';
         const proofUrl = button.getAttribute('data-proof-url') || '';

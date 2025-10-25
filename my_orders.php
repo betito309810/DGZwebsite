@@ -92,6 +92,30 @@ if (!function_exists('ordersFindColumn')) {
     }
 }
 
+if (!function_exists('normalizeOrderStatusKey')) {
+    function normalizeOrderStatusKey($value): string
+    {
+        $status = (string) $value;
+        if ($status === '') {
+            return 'pending';
+        }
+
+        // Remove exotic whitespace (including NBSP) so comparisons remain stable.
+        $status = preg_replace('/[\s\x{00A0}]+/u', ' ', $status);
+        $status = strtolower(trim($status));
+
+        return $status !== '' ? $status : 'pending';
+    }
+}
+
+if (!function_exists('normalizePaymentMethodKey')) {
+    function normalizePaymentMethodKey($value): string
+    {
+        $method = strtolower(trim((string) $value));
+        return in_array($method, ['gcash', 'maya'], true) ? $method : '';
+    }
+}
+
 if (!function_exists('resolveOrderDocumentUrl')) {
     function resolveOrderDocumentUrl($path): string
     {
@@ -163,6 +187,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_update_order_
     $orderStatusColumn = ordersFindColumn($pdo, ['status', 'order_status']);
     $orderReferenceColumn = ordersFindColumn($pdo, ['reference_no', 'reference_number', 'reference', 'ref_no']);
     $orderProofColumn = ordersFindColumn($pdo, ['payment_proof', 'proof_of_payment', 'payment_proof_path', 'proof']);
+    $orderPaymentMethodColumn = ordersFindColumn($pdo, ['payment_method', 'paymentmethod', 'payment_type']);
+    $rawPaymentMethod = trim((string) ($_POST['payment_method'] ?? ''));
+    $normalizedPaymentMethod = $orderPaymentMethodColumn !== null ? normalizePaymentMethodKey($rawPaymentMethod) : '';
+    if ($orderPaymentMethodColumn !== null && $rawPaymentMethod !== '' && $normalizedPaymentMethod === '') {
+        $errors[] = 'Please choose a valid payment method (GCash or Maya).';
+    }
 
     if ($orderIdColumn === null || $customerIdColumn === null) {
         $alerts['error'][] = 'We could not update that order because the orders table is missing required columns.';
@@ -273,6 +303,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_update_order_
                 if ($orderProofColumn !== null) {
                     $selectParts[] = '`' . $orderProofColumn . '` AS `current_proof`';
                 }
+                if ($orderPaymentMethodColumn !== null) {
+                    $selectParts[] = '`' . $orderPaymentMethodColumn . '` AS `current_payment_method`';
+                }
 
                 $sql = 'SELECT ' . implode(', ', $selectParts)
                     . ' FROM orders WHERE `' . $orderIdColumn . '` = ? AND `' . $customerIdColumn . '` = ? FOR UPDATE';
@@ -286,10 +319,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_update_order_
                         $pdo->rollBack();
                     }
                 } else {
-                    $status = strtolower((string) ($order['status'] ?? ''));
-                    if ($status === '') {
-                        $status = 'pending';
-                    }
+                    $status = normalizeOrderStatusKey($order['status'] ?? '');
+                    $currentPaymentMethod = $orderPaymentMethodColumn !== null
+                        ? normalizePaymentMethodKey($order['current_payment_method'] ?? '')
+                        : '';
 
                     $lockedStatuses = ['delivery', 'approved'];
                     $terminalStatuses = ['complete', 'completed', 'cancelled_by_staff', 'cancelled_by_customer', 'disapproved'];
@@ -311,6 +344,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_update_order_
                         if ($orderProofColumn !== null && $newProofPath !== null) {
                             $updates[] = '`' . $orderProofColumn . '` = ?';
                             $params[] = $newProofPath;
+                        }
+
+                        if ($orderPaymentMethodColumn !== null && $normalizedPaymentMethod !== $currentPaymentMethod) {
+                            $updates[] = '`' . $orderPaymentMethodColumn . '` = ?';
+                            $params[] = $normalizedPaymentMethod !== '' ? $normalizedPaymentMethod : null;
                         }
 
                         if (empty($updates)) {
@@ -373,10 +411,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_order_id'])) {
                 $pdo->rollBack();
             }
         } else {
-            $status = strtolower((string) ($order['status'] ?? ''));
-            if ($status === '') {
-                $status = 'pending';
-            }
+            $status = normalizeOrderStatusKey($order['status'] ?? '');
 
             $lockedStatuses = ['delivery', 'approved'];
             $terminalStatuses = ['complete', 'completed', 'cancelled_by_staff', 'cancelled_by_customer', 'disapproved'];
@@ -522,6 +557,7 @@ $orderCityColumn = ordersFindColumn($pdo, ['city', 'town', 'municipality']);
 $orderEmailColumn = ordersFindColumn($pdo, ['email', 'email_address']);
 $orderPhoneColumn = ordersFindColumn($pdo, ['phone', 'mobile', 'contact_number', 'contact']);
 $orderFacebookColumn = ordersFindColumn($pdo, ['facebook_account', 'facebook', 'fb_account']);
+$orderPaymentMethodColumn = ordersFindColumn($pdo, ['payment_method', 'paymentmethod', 'payment_type']);
 $orderCustomerNoteColumn = ordersFindColumn($pdo, ['customer_note', 'notes', 'note']);
 $orderReferenceColumn = ordersFindColumn($pdo, ['reference_no', 'reference_number', 'reference', 'ref_no']);
 $orderProofColumn = ordersFindColumn($pdo, ['payment_proof', 'proof_of_payment', 'payment_proof_path', 'proof']);
@@ -592,6 +628,10 @@ if ($orderFacebookColumn !== null) {
     $appendSelect($orderFacebookColumn, 'facebook_account');
 }
 
+if ($orderPaymentMethodColumn !== null) {
+    $appendSelect($orderPaymentMethodColumn, 'payment_method');
+}
+
 if ($orderCustomerNoteColumn !== null) {
     $appendSelect($orderCustomerNoteColumn, 'customer_note');
 }
@@ -626,9 +666,9 @@ if ($isCompletedFilter) {
         $completedStatusValues = array_values(array_unique($completedStatusFilters));
         if (!empty($completedStatusValues)) {
             $placeholders = implode(', ', array_fill(0, count($completedStatusValues), '?'));
-            $orderWhereParts[] = '`' . $orderStatusColumn . '` IN (' . $placeholders . ')';
+            $orderWhereParts[] = 'LOWER(TRIM(`' . $orderStatusColumn . '`)) IN (' . $placeholders . ')';
             foreach ($completedStatusValues as $completedStatus) {
-                $orderParams[] = $completedStatus;
+                $orderParams[] = strtolower(trim($completedStatus));
             }
         }
     } else {
@@ -706,6 +746,13 @@ if (!empty($orders)) {
             'price' => $price,
         ];
     }
+}
+
+if ($isCompletedFilter && !empty($orders)) {
+    $orders = array_values(array_filter($orders, static function (array $order) use ($completedStatusFilters): bool {
+        $statusKey = normalizeOrderStatusKey($order['status'] ?? '');
+        return in_array($statusKey, $completedStatusFilters, true);
+    }));
 }
 
 $statusLabels = [
@@ -801,17 +848,13 @@ $statusLabels = [
                 <?php
                     $orderId = (int) $order['id'];
                     $orderItems = $orderItemsMap[$orderId] ?? [];
-                    $statusKey = strtolower((string) ($order['status'] ?? ''));
-                    if ($statusKey === '') {
-                        $statusKey = 'pending';
-                    }
+                    $statusKey = normalizeOrderStatusKey($order['status'] ?? '');
                     $statusLabel = $statusLabels[$statusKey] ?? ucwords(str_replace('_', ' ', $statusKey));
                     $nonCancellableStatuses = ['delivery', 'approved', 'complete', 'completed', 'cancelled_by_staff', 'cancelled_by_customer', 'disapproved'];
                     $canCancel = !in_array($statusKey, $nonCancellableStatuses, true);
 
                     $contactEmail = trim((string) ($order['email'] ?? $order['customer_email'] ?? ''));
                     $contactPhone = trim((string) ($order['phone'] ?? $order['customer_phone'] ?? $order['contact'] ?? ''));
-                    $facebookAccount = trim((string) ($order['facebook_account'] ?? $order['facebook'] ?? ''));
                     $referenceNumber = trim((string) ($order['reference_no'] ?? $order['reference_number'] ?? ''));
                     $paymentProofPath = trim((string) ($order['payment_proof'] ?? $order['proof_of_payment'] ?? ''));
                     $deliveryProofPath = trim((string) ($order['delivery_proof'] ?? ''));
@@ -855,6 +898,14 @@ $statusLabels = [
                     $deliveryProofLinkUrl = $deliveryProofPreviewUrl !== '' ? $deliveryProofPreviewUrl : $deliveryProofPath;
                     $hasDeliveryProofRecord = $deliveryProofPath !== '';
                     $canUpdatePayment = $canCancel;
+                    $paymentMethodRaw = trim((string) ($order['payment_method'] ?? ''));
+                    $paymentMethodKey = normalizePaymentMethodKey($paymentMethodRaw);
+                    $paymentMethodLabels = ['gcash' => 'GCash', 'maya' => 'Maya'];
+                    $paymentMethodLabel = $paymentMethodLabels[$paymentMethodKey] ?? ($paymentMethodRaw !== '' ? $paymentMethodRaw : '');
+                    $walletNumbers = [
+                        'gcash' => '0987654321',
+                        'maya' => '0987654321',
+                    ];
                 ?>
                 <article class="customer-order-card" data-order-card>
                     <header class="customer-order-card__header">
@@ -884,6 +935,18 @@ $statusLabels = [
                             <dt>Total</dt>
                             <dd>₱<?= number_format((float) $order['total'], 2) ?></dd>
                         </div>
+                        <?php if ($paymentMethodLabel !== ''): ?>
+                        <div>
+                            <dt>Payment method</dt>
+                            <dd><?= htmlspecialchars($paymentMethodLabel) ?></dd>
+                        </div>
+                        <?php endif; ?>
+                        <?php if ($paymentMethodLabel !== ''): ?>
+                        <div>
+                            <dt>Payment method</dt>
+                            <dd><?= htmlspecialchars($paymentMethodLabel) ?></dd>
+                        </div>
+                        <?php endif; ?>
                     </dl>
                     <div class="customer-order-card__details-panel" data-order-details hidden>
                         <div class="customer-order-card__items">
@@ -909,7 +972,7 @@ $statusLabels = [
                             <?php endif; ?>
                         </div>
                         <div class="customer-order-card__info-grid">
-                            <?php if ($contactEmail !== '' || $contactPhone !== '' || $facebookAccount !== ''): ?>
+                            <?php if ($contactEmail !== '' || $contactPhone !== ''): ?>
                                 <div class="customer-order-card__section">
                                     <h3>Contact details</h3>
                                     <dl>
@@ -918,9 +981,6 @@ $statusLabels = [
                                         <?php endif; ?>
                                         <?php if ($contactPhone !== ''): ?>
                                             <div><dt>Mobile</dt><dd><?= htmlspecialchars($contactPhone) ?></dd></div>
-                                        <?php endif; ?>
-                                        <?php if ($facebookAccount !== ''): ?>
-                                            <div><dt>Facebook</dt><dd><?= htmlspecialchars($facebookAccount) ?></dd></div>
                                         <?php endif; ?>
                                     </dl>
                                 </div>
@@ -982,13 +1042,26 @@ $statusLabels = [
                                                 </div>
                                             </div>
                                             <div class="customer-payment-card__actions">
-                                                <p class="customer-payment-card__instructions">
-                                                    <span class="customer-payment-card__instructions-label">GCash:</span>
-                                                    <span class="customer-payment-card__instructions-value">0987654321</span>
-                                                    <span class="customer-payment-card__instructions-separator">&nbsp;•&nbsp;</span>
-                                                    <span class="customer-payment-card__instructions-label">Maya:</span>
-                                                    <span class="customer-payment-card__instructions-value">0987654321</span>
-                                                </p>
+                                                <div class="customer-payment-card__wallet-group" data-wallet-group>
+                                                    <div class="customer-payment-card__wallets" data-wallet-selector data-selected="<?= htmlspecialchars($paymentMethodKey) ?>">
+                                                        <input type="hidden" name="payment_method" value="<?= htmlspecialchars($paymentMethodKey) ?>" data-wallet-input>
+                                                        <?php foreach (['gcash', 'maya'] as $walletKey): ?>
+                                                            <?php $walletLabel = $paymentMethodLabels[$walletKey]; ?>
+                                                            <?php $walletNumber = $walletNumbers[$walletKey] ?? ''; ?>
+                                                            <button type="button"
+                                                                class="wallet-button<?= $paymentMethodKey === $walletKey ? ' is-selected' : '' ?>"
+                                                                data-wallet="<?= htmlspecialchars($walletKey) ?>"
+                                                                data-wallet-label="<?= htmlspecialchars($walletLabel) ?>"
+                                                                data-wallet-number="<?= htmlspecialchars($walletNumber) ?>">
+                                                                <span class="wallet-button__label"><?= htmlspecialchars($walletLabel) ?></span>
+                                                                <span class="wallet-button__number"><?= htmlspecialchars($walletNumber) ?></span>
+                                                                <span class="wallet-button__status" aria-hidden="true"></span>
+                                                            </button>
+                                                        <?php endforeach; ?>
+                                                    </div>
+                                                    <p class="customer-payment-card__wallet-hint">Select where you paid so we can match your reference faster. Clicking a wallet also copies the number.</p>
+                                                    <p class="customer-payment-card__wallet-feedback" data-wallet-feedback aria-live="polite"></p>
+                                                </div>
                                                 <button type="submit" class="customer-order-card__button customer-payment-card__submit">Save payment details</button>
                                             </div>
                                         </form>

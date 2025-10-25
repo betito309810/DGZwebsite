@@ -125,7 +125,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const onlineOrderPayment = document.getElementById('onlineOrderPayment');
             const onlineOrderEmail = document.getElementById('onlineOrderEmail');
             const onlineOrderPhone = document.getElementById('onlineOrderPhone');
-            const onlineOrderFacebook = document.getElementById('onlineOrderFacebook');
             const onlineOrderAddress = document.getElementById('onlineOrderAddress');
             const onlineOrderPostal = document.getElementById('onlineOrderPostal');
             const onlineOrderCity = document.getElementById('onlineOrderCity');
@@ -174,8 +173,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     ? onlineOrdersBootstrap.deliveryProofHelp
                     : DELIVERY_PROOF_HELP_FALLBACK,
             };
-
-            updateStatusFilterButtons(onlineOrdersState.statusFilter);
             const updateDeliveryProofNotice = () => {
                 if (!deliveryProofNoticeBanner) {
                     return;
@@ -229,6 +226,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
             };
+
+            updateStatusFilterButtons(onlineOrdersState.statusFilter);
 
             const updateDeliveryProofField = (form) => {
                 if (!form) {
@@ -360,7 +359,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const safeCustomer = (order.customer_name || order.full_name || order.name || 'Customer').toString();
                 const safeInvoice = (order.invoice_number || order.invoice || order.invoice_no || 'N/A').toString();
                 const safeStatus = (order.status || 'pending').toString().toLowerCase();
-                const safePayment = (order.payment_method || order.paymentType || 'N/A').toString();
+                const rawPayment = (order.payment_method || order.paymentType || '').toString();
+                const safePayment = rawPayment.trim() !== '' ? rawPayment.trim().toUpperCase() : 'N/A';
                 const referenceNumber = (order.reference_number || order.reference_no || order.reference || '').toString();
 
                 onlineOrderCustomer.textContent = safeCustomer;
@@ -377,7 +377,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const statusLabel = statusLabels[safeStatus] || safeStatus.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase());
                 onlineOrderStatus.textContent = statusLabel;
-                onlineOrderPayment.textContent = safePayment !== '' ? safePayment : 'N/A';
+                onlineOrderPayment.textContent = safePayment;
 
                 const emailValue = (order.email
                     || order.customer_email
@@ -393,13 +393,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     || '').toString();
                 onlineOrderPhone.textContent = phoneValue !== '' ? phoneValue : 'N/A';
 
-                if (onlineOrderFacebook) {
-                    const fb = (order.facebook_account
-                        || order.facebook
-                        || order.fb_account
-                        || '').toString().trim();
-                    onlineOrderFacebook.textContent = fb !== '' ? fb : 'N/A';
-                }
                 if (onlineOrderAddress) {
                     const addr = (order.address
                         || order.customer_address

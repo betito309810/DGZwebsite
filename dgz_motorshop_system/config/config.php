@@ -1109,7 +1109,7 @@ if (!function_exists('getOnlineOrdersBaseCondition')) {
         $parts = [
             "(payment_method IS NOT NULL AND payment_method <> '' AND LOWER(payment_method) = 'gcash')",
             "(payment_proof IS NOT NULL AND payment_proof <> '')",
-            "status IN ('pending','payment_verification','approved','delivery','disapproved')",
+            "LOWER(TRIM(status)) IN ('pending','payment_verification','approved','delivery','complete','completed','disapproved')",
         ];
 
         $clause = '(' . implode(' OR ', $parts) . ')';

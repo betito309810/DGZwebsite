@@ -989,6 +989,100 @@
     color: rgba(31, 41, 55, 0.6);
 }
 
+.customer-payment-card__wallet-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    flex: 1 1 100%;
+}
+
+.customer-payment-card__wallets {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 0.75rem;
+}
+
+.wallet-button {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.2rem;
+    border: 1px dashed rgba(99, 102, 241, 0.45);
+    background: rgba(99, 102, 241, 0.08);
+    color: #1f2937;
+    font-weight: 600;
+    padding: 0.3rem 0.65rem;
+    border-radius: 0.6rem;
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease, transform 0.15s ease;
+    font-variant-numeric: tabular-nums;
+    min-width: 140px;
+}
+
+.wallet-button:hover,
+.wallet-button:focus-visible {
+    background: rgba(99, 102, 241, 0.18);
+    color: #1d4ed8;
+    outline: none;
+}
+
+.wallet-button:disabled {
+    cursor: default;
+    opacity: 0.85;
+}
+
+.wallet-button.is-selected {
+    background: rgba(37, 99, 235, 0.16);
+    border-color: rgba(37, 99, 235, 0.5);
+    color: #1d4ed8;
+    box-shadow: 0 12px 24px rgba(37, 99, 235, 0.18);
+}
+
+.wallet-button__label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #4c51bf;
+}
+
+.wallet-button__number {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #111827;
+}
+
+.wallet-button.is-selected .wallet-button__label,
+.wallet-button.is-selected .wallet-button__number {
+    color: #1d4ed8;
+}
+
+.wallet-button__status {
+    font-size: 0.7rem;
+    color: #047857;
+    min-height: 1rem;
+}
+
+.wallet-button.wallet-button--copied {
+    background: rgba(16, 185, 129, 0.16);
+    border-color: rgba(16, 185, 129, 0.6);
+    color: #047857;
+    transform: translateY(-1px);
+}
+
+.customer-payment-card__wallet-hint {
+    margin: 0;
+    font-size: 0.75rem;
+    color: #6b7280;
+}
+
+.customer-payment-card__wallet-feedback {
+    margin: 0;
+    font-size: 0.75rem;
+    color: #1d4ed8;
+    min-height: 1rem;
+}
+
 .customer-payment-card__submit {
     background: linear-gradient(135deg, #2563eb, #4f46e5);
     color: #ffffff;
