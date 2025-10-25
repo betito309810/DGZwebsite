@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS customers (
   email VARCHAR(190) NULL,
   phone VARCHAR(40) NULL,
   password_hash VARCHAR(255) NOT NULL,
+  current_session_token VARCHAR(128) NULL,
   address_line1 TEXT NULL,
   city VARCHAR(120) NULL,
   postal_code VARCHAR(20) NULL,

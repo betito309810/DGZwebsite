@@ -63,6 +63,12 @@ if ($customerSession !== null) {
     exit;
 }
 
+$forcedLogoutMessage = null;
+if (!empty($_SESSION['customer_forced_logout'])) {
+    $forcedLogoutMessage = (string) ($_SESSION['customer_forced_logout_message'] ?? 'You’ve been logged out. Please sign in again.');
+    unset($_SESSION['customer_forced_logout'], $_SESSION['customer_forced_logout_message']);
+}
+
 $customerStylesheet = assetUrl('assets/css/public/customer.css');
 $indexStylesheet = assetUrl('assets/css/public/index.css');
 $customerScript = assetUrl('assets/js/public/customer.js');
@@ -72,6 +78,10 @@ $errors = [];
 $values = [
     'identifier' => trim($_POST['identifier'] ?? ''),
 ];
+
+if ($forcedLogoutMessage !== null) {
+    $errors['general'] = $forcedLogoutMessage;
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $password = (string)($_POST['password'] ?? '');

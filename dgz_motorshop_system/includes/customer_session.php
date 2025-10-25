@@ -293,6 +293,67 @@ if (!function_exists('normalizeCustomerPhone')) {
     }
 }
 
+if (!function_exists('customerSessionTokenColumnAvailable')) {
+    function customerSessionTokenColumnAvailable(?PDO $pdo = null): bool
+    {
+        static $available;
+
+        if ($available !== null) {
+            return $available;
+        }
+
+        try {
+            $pdo = $pdo ?? customerRepository();
+        } catch (Throwable $exception) {
+            error_log('Unable to inspect customers table for session token support: ' . $exception->getMessage());
+
+            return false;
+        }
+
+        $column = customerFindColumn($pdo, ['current_session_token']);
+        $available = $column !== null;
+
+        return $available;
+    }
+}
+
+if (!function_exists('customerGenerateSessionToken')) {
+    function customerGenerateSessionToken(): string
+    {
+        try {
+            return bin2hex(random_bytes(32));
+        } catch (Throwable $exception) {
+            error_log('Unable to generate primary customer session token: ' . $exception->getMessage());
+        }
+
+        try {
+            return bin2hex(random_bytes(16));
+        } catch (Throwable $exception) {
+            error_log('Unable to generate fallback customer session token: ' . $exception->getMessage());
+        }
+
+        return hash('sha256', microtime(true) . '-' . mt_rand());
+    }
+}
+
+if (!function_exists('customerPersistSessionToken')) {
+    function customerPersistSessionToken(PDO $pdo, int $customerId, ?string $token): void
+    {
+        $column = customerFindColumn($pdo, ['current_session_token']);
+        if ($column === null) {
+            return;
+        }
+
+        try {
+            $sql = 'UPDATE customers SET `' . $column . '` = ? WHERE id = ?';
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([$token, $customerId]);
+        } catch (Throwable $exception) {
+            error_log('Unable to persist customer session token: ' . $exception->getMessage());
+        }
+    }
+}
+
 if (!function_exists('customerLogin')) {
     function customerLogin(int $customerId): void
     {
@@ -301,7 +362,24 @@ if (!function_exists('customerLogin')) {
         }
 
         session_regenerate_id(true);
+
         $_SESSION['customer_id'] = $customerId;
+        unset($_SESSION['customer_session_token']);
+
+        try {
+            $pdo = customerRepository();
+        } catch (Throwable $exception) {
+            error_log('Unable to acquire repository for customer login: ' . $exception->getMessage());
+            $pdo = null;
+        }
+
+        if ($pdo instanceof PDO && customerSessionTokenColumnAvailable($pdo)) {
+            $token = customerGenerateSessionToken();
+            customerPersistSessionToken($pdo, $customerId, $token);
+            $_SESSION['customer_session_token'] = $token;
+        }
+
+        customerSessionRefresh();
     }
 }
 
@@ -312,11 +390,34 @@ if (!function_exists('customerLogout')) {
             session_start();
         }
 
-        unset($_SESSION['customer_id']);
+        $customerId = isset($_SESSION['customer_id']) ? (int) $_SESSION['customer_id'] : 0;
+
+        try {
+            $pdo = customerRepository();
+        } catch (Throwable $exception) {
+            $pdo = null;
+        }
+
+        if ($customerId > 0 && $pdo instanceof PDO && customerSessionTokenColumnAvailable($pdo)) {
+            customerPersistSessionToken($pdo, $customerId, null);
+        }
+
+        unset($_SESSION['customer_id'], $_SESSION['customer_session_token']);
+
         if (ini_get('session.use_cookies')) {
             $params = session_get_cookie_params();
-            setcookie(session_name(), '', time() - 42000, $params['path'], $params['domain'], $params['secure'], $params['httponly']);
+            setcookie(
+                session_name(),
+                '',
+                time() - 42000,
+                $params['path'],
+                $params['domain'],
+                $params['secure'],
+                $params['httponly']
+            );
         }
+
+        customerSessionRefresh();
         session_regenerate_id(true);
     }
 }
@@ -328,6 +429,70 @@ if (!function_exists('customerSessionRefresh')) {
         $cache = false;
     }
 }
+
+if (!function_exists('customerEnforceSingleActiveSession')) {
+    function customerEnforceSingleActiveSession(): void
+    {
+        static $enforced = false;
+
+        if ($enforced) {
+            return;
+        }
+
+        $enforced = true;
+
+        if (empty($_SESSION['customer_id'])) {
+            return;
+        }
+
+        try {
+            $pdo = customerRepository();
+        } catch (Throwable $exception) {
+            error_log('Unable to acquire repository for session enforcement: ' . $exception->getMessage());
+            return;
+        }
+
+        if (!$pdo instanceof PDO || !customerSessionTokenColumnAvailable($pdo)) {
+            return;
+        }
+
+        $column = customerFindColumn($pdo, ['current_session_token']);
+        if ($column === null) {
+            return;
+        }
+
+        $customerId = (int) $_SESSION['customer_id'];
+
+        try {
+            $sql = 'SELECT `' . $column . '` AS current_session_token FROM customers WHERE id = ? LIMIT 1';
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([$customerId]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        } catch (Throwable $exception) {
+            error_log('Unable to verify customer session token: ' . $exception->getMessage());
+            return;
+        }
+
+        $storedToken = is_array($row) ? ($row['current_session_token'] ?? null) : null;
+        $currentToken = $_SESSION['customer_session_token'] ?? '';
+
+        if (!is_string($storedToken) || $storedToken === '' || !is_string($currentToken) || $currentToken === '' || !hash_equals($storedToken, $currentToken)) {
+            $message = "You’ve been logged out because your account was used to sign in on another device.";
+
+            $_SESSION = [
+                'customer_forced_logout' => true,
+                'customer_forced_logout_message' => $message,
+            ];
+
+            session_regenerate_id(true);
+
+            header('Location: ' . orderingUrl('login.php'));
+            exit;
+        }
+    }
+}
+
+customerEnforceSingleActiveSession();
 
 if (!function_exists('customerLegacyPasswordColumnAvailable')) {
     function customerLegacyPasswordColumnAvailable(?PDO $pdo = null): bool
