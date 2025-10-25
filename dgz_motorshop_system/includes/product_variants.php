@@ -223,10 +223,19 @@ if (!function_exists('backfillVariantMetadata')) {
             $quantity = isset($row['quantity']) ? (int) $row['quantity'] : 0;
             $expectedThreshold = calculateVariantLowStockThreshold($quantity);
             $currentThresholdRaw = $row['low_stock_threshold'] ?? null;
-            $currentThreshold = $currentThresholdRaw !== null ? (int) $currentThresholdRaw : null;
+            $currentThreshold = $currentThresholdRaw !== null && $currentThresholdRaw !== ''
+                ? (int) $currentThresholdRaw
+                : null;
 
             $needsCodeUpdate = $currentCode === '' || $duplicateDetected;
-            $needsThresholdUpdate = $currentThreshold !== $expectedThreshold;
+            $needsThresholdUpdate = false;
+            if ($currentThreshold === null) {
+                $currentThreshold = $expectedThreshold;
+                $needsThresholdUpdate = true;
+            } elseif ($currentThreshold < 0) {
+                $currentThreshold = 0;
+                $needsThresholdUpdate = true;
+            }
 
             if ($needsCodeUpdate) {
                 $prefix = normaliseVariantCodePrefix($productId, $row['product_code'] ?? null);
@@ -242,7 +251,7 @@ if (!function_exists('backfillVariantMetadata')) {
                 $updates[] = [
                     'id' => $variantId,
                     'variant_code' => $currentCode,
-                    'threshold' => $expectedThreshold,
+                    'threshold' => $currentThreshold,
                 ];
             }
         }
