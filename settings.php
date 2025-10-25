@@ -6,14 +6,32 @@ requireCustomerAuthentication();
 $customer = getAuthenticatedCustomer();
 $pdo = db();
 
-$facebookColumn = customerFindColumn($pdo, ['facebook_account', 'facebook', 'fb_account']);
+$fullNameColumn = customerFindColumn($pdo, ['full_name', 'name']);
+$firstNameColumn = customerFindColumn($pdo, ['first_name', 'firstname', 'given_name']);
+$middleNameColumn = customerFindColumn($pdo, ['middle_name', 'middlename', 'middle']);
+$lastNameColumn = customerFindColumn($pdo, ['last_name', 'lastname', 'surname', 'family_name']);
 $addressColumn = customerFindColumn($pdo, ['address_line1', 'address', 'address1', 'street']);
 $cityColumn = customerFindColumn($pdo, ['city', 'town', 'municipality']);
 $postalColumn = customerFindColumn($pdo, ['postal_code', 'postal', 'zip_code', 'zipcode', 'zip']);
 
-$currentFacebook = trim((string)($customer['facebook_account'] ?? ''));
-if ($currentFacebook === '' && $facebookColumn !== null) {
-    $currentFacebook = trim((string)($customer[$facebookColumn] ?? ''));
+$currentFirstName = trim((string)($customer['first_name'] ?? ''));
+if ($currentFirstName === '' && $firstNameColumn !== null) {
+    $currentFirstName = trim((string)($customer[$firstNameColumn] ?? ''));
+}
+
+$currentMiddleName = trim((string)($customer['middle_name'] ?? ''));
+if ($currentMiddleName === '' && $middleNameColumn !== null) {
+    $currentMiddleName = trim((string)($customer[$middleNameColumn] ?? ''));
+}
+
+$currentLastName = trim((string)($customer['last_name'] ?? ''));
+if ($currentLastName === '' && $lastNameColumn !== null) {
+    $currentLastName = trim((string)($customer[$lastNameColumn] ?? ''));
+}
+
+$currentFullName = trim((string)($customer['full_name'] ?? ''));
+if ($currentFullName === '' && $fullNameColumn !== null) {
+    $currentFullName = trim((string)($customer[$fullNameColumn] ?? ''));
 }
 
 $addressSources = array_values(array_unique(array_filter([$addressColumn, 'address_line1', 'address', 'address1', 'street'])));
@@ -61,9 +79,11 @@ $myOrdersUrl = orderingUrl('my_orders.php');
 $logoutUrl = orderingUrl('logout.php');
 
 $values = [
+    'first_name' => trim((string)($_POST['first_name'] ?? $currentFirstName)),
+    'middle_name' => trim((string)($_POST['middle_name'] ?? $currentMiddleName)),
+    'last_name' => trim((string)($_POST['last_name'] ?? $currentLastName)),
     'email' => trim((string)($_POST['email'] ?? ($customer['email'] ?? ''))),
     'phone' => trim((string)($_POST['phone'] ?? ($customer['phone'] ?? ''))),
-    'facebook_account' => trim((string)($_POST['facebook_account'] ?? $currentFacebook)),
     'address' => trim((string)($_POST['address'] ?? $currentAddress)),
     'postal_code' => trim((string)($_POST['postal_code'] ?? $currentPostal)),
     'city' => trim((string)($_POST['city'] ?? $currentCity)),
@@ -96,6 +116,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     if ($action === 'profile') {
+        if ($values['first_name'] === '') {
+            $errors['first_name'] = 'Please enter your first name.';
+        }
+
+        if ($values['last_name'] === '') {
+            $errors['last_name'] = 'Please enter your last name.';
+        }
+
         if ($values['email'] === '') {
             $errors['email'] = 'Please enter your email.';
         } elseif (!filter_var($values['email'], FILTER_VALIDATE_EMAIL)) {
@@ -109,10 +137,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $errors['phone'] = 'Please enter a valid phone number.';
         } else {
             $values['phone'] = $normalizedPhone;
-        }
-
-        if ($values['facebook_account'] === '') {
-            $errors['facebook_account'] = 'Please enter your Facebook account.';
         }
 
         if ($values['address'] === '') {
@@ -131,9 +155,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $updates = [];
                 $params = [];
+                $fullNameParts = [$values['first_name']];
+                if ($values['middle_name'] !== '') {
+                    $fullNameParts[] = $values['middle_name'];
+                }
+                $fullNameParts[] = $values['last_name'];
+                $resolvedFullName = trim(implode(' ', array_filter($fullNameParts, static function (string $part): bool {
+                    return trim($part) !== '';
+                })));
+
+                if ($firstNameColumn !== null && $values['first_name'] !== $currentFirstName) {
+                    $updates[] = "`$firstNameColumn` = ?";
+                    $params[] = $values['first_name'];
+                }
+                if ($middleNameColumn !== null && $values['middle_name'] !== $currentMiddleName) {
+                    $updates[] = "`$middleNameColumn` = ?";
+                    $params[] = $values['middle_name'] !== '' ? $values['middle_name'] : null;
+                }
+                if ($lastNameColumn !== null && $values['last_name'] !== $currentLastName) {
+                    $updates[] = "`$lastNameColumn` = ?";
+                    $params[] = $values['last_name'];
+                }
+                if ($fullNameColumn !== null && $resolvedFullName !== '' && $resolvedFullName !== $currentFullName) {
+                    $updates[] = "`$fullNameColumn` = ?";
+                    $params[] = $resolvedFullName;
+                }
                 if ($values['email'] !== (string)($customer['email'] ?? '')) { $updates[] = 'email = ?'; $params[] = $values['email']; }
                 if ($values['phone'] !== (string)($customer['phone'] ?? '')) { $updates[] = 'phone = ?'; $params[] = $values['phone']; }
-                if ($facebookColumn !== null && $values['facebook_account'] !== $currentFacebook) { $updates[] = "`$facebookColumn` = ?"; $params[] = $values['facebook_account']; }
                 if ($addressColumn !== null && $values['address'] !== $currentAddress) { $updates[] = "`$addressColumn` = ?"; $params[] = $values['address']; }
                 if ($postalColumn !== null && $values['postal_code'] !== $currentPostal) { $updates[] = "`$postalColumn` = ?"; $params[] = $values['postal_code']; }
                 if ($cityColumn !== null && $values['city'] !== $currentCity) { $updates[] = "`$cityColumn` = ?"; $params[] = $values['city']; }
@@ -144,9 +192,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $stmt->execute($params);
                     customerSessionRefresh();
                     $customer = getAuthenticatedCustomer();
-                    $currentFacebook = trim((string)($customer['facebook_account'] ?? $currentFacebook));
-                    if ($currentFacebook === '' && $facebookColumn !== null) {
-                        $currentFacebook = trim((string)($customer[$facebookColumn] ?? $currentFacebook));
+                    $currentFirstName = trim((string)($customer['first_name'] ?? ''));
+                    if ($currentFirstName === '' && $firstNameColumn !== null) {
+                        $currentFirstName = trim((string)($customer[$firstNameColumn] ?? ''));
+                    }
+                    $currentMiddleName = trim((string)($customer['middle_name'] ?? ''));
+                    if ($currentMiddleName === '' && $middleNameColumn !== null) {
+                        $currentMiddleName = trim((string)($customer[$middleNameColumn] ?? ''));
+                    }
+                    $currentLastName = trim((string)($customer['last_name'] ?? ''));
+                    if ($currentLastName === '' && $lastNameColumn !== null) {
+                        $currentLastName = trim((string)($customer[$lastNameColumn] ?? ''));
+                    }
+                    $currentFullName = trim((string)($customer['full_name'] ?? ''));
+                    if ($currentFullName === '' && $fullNameColumn !== null) {
+                        $currentFullName = trim((string)($customer[$fullNameColumn] ?? ''));
                     }
                     $addressSources = array_values(array_unique(array_filter([$addressColumn, 'address_line1', 'address', 'address1', 'street'])));
                     foreach ($addressSources as $alias) {
@@ -180,7 +240,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                     $values['email'] = trim((string)($customer['email'] ?? $values['email']));
                     $values['phone'] = trim((string)($customer['phone'] ?? $values['phone']));
-                    $values['facebook_account'] = $currentFacebook;
+                    $values['first_name'] = $currentFirstName;
+                    $values['middle_name'] = $currentMiddleName;
+                    $values['last_name'] = $currentLastName;
                     $values['address'] = $currentAddress;
                     $values['postal_code'] = $currentPostal;
                     $values['city'] = $currentCity;
@@ -234,14 +296,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="<?= htmlspecialchars($indexStylesheet) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars($customerStylesheet) ?>">
-    <style>
-        .settings-wrapper { max-width: 880px; margin: 2rem auto; padding: 0 1.5rem 3rem; }
-        .settings-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
-        .settings-card { background: #fff; border-radius: 1rem; padding: 1.25rem 1.5rem; box-shadow: 0 20px 45px rgba(15,23,42,.08); }
-        .settings-card h2 { margin: 0 0 1rem; font-size: 1.2rem; }
-        .settings-actions { margin-top: .75rem; display: flex; gap: .5rem; }
-        .settings-submit { background: #2563eb; color: #fff; border: 0; border-radius: .7rem; padding: .6rem 1rem; font-weight: 600; cursor: pointer; }
-    </style>
     </head>
 <body class="customer-orders-page" data-customer-session="authenticated">
 <header class="customer-orders-header">
@@ -268,71 +322,105 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </div>
     </header>
-<main class="settings-wrapper">
+<main class="account-settings">
     <?php foreach ($success as $msg): ?>
         <div class="customer-orders-alert customer-orders-alert--success" role="alert"><?= htmlspecialchars($msg) ?></div>
     <?php endforeach; ?>
     <?php if (!empty($errors['general'])): ?>
         <div class="customer-orders-alert customer-orders-alert--error" role="alert"><?= htmlspecialchars($errors['general']) ?></div>
     <?php endif; ?>
-    <div class="settings-grid">
-        <section class="settings-card">
-            <h2>Contact details</h2>
-            <form method="post">
-                <input type="hidden" name="action" value="profile">
-                <div class="form-field">
-                    <label for="email">Email</label>
-                    <input type="email" id="email" name="email" value="<?= htmlspecialchars($values['email']) ?>" required>
-                    <?php if (!empty($errors['email'])): ?><p class="field-error"><?= htmlspecialchars($errors['email']) ?></p><?php endif; ?>
+    <div class="account-settings__stack">
+        <form method="post" class="account-settings__profile">
+            <input type="hidden" name="action" value="profile">
+            <section class="account-settings__card account-settings__card--contact">
+                <h2 class="account-settings__title">
+                    <i class="fas fa-user" aria-hidden="true"></i>
+                    Contact
+                </h2>
+                <div class="form-split">
+                    <div class="form-field<?= !empty($errors['first_name']) ? ' has-error' : '' ?>">
+                        <label for="first_name">First name <span class="required-indicator">*</span></label>
+                        <input type="text" id="first_name" name="first_name" value="<?= htmlspecialchars($values['first_name']) ?>" required autocomplete="given-name">
+                        <?php if (!empty($errors['first_name'])): ?><p class="field-error" role="alert"><?= htmlspecialchars($errors['first_name']) ?></p><?php endif; ?>
+                    </div>
+                    <div class="form-field<?= !empty($errors['last_name']) ? ' has-error' : '' ?>">
+                        <label for="last_name">Last name <span class="required-indicator">*</span></label>
+                        <input type="text" id="last_name" name="last_name" value="<?= htmlspecialchars($values['last_name']) ?>" required autocomplete="family-name">
+                        <?php if (!empty($errors['last_name'])): ?><p class="field-error" role="alert"><?= htmlspecialchars($errors['last_name']) ?></p><?php endif; ?>
+                    </div>
                 </div>
                 <div class="form-field">
-                    <label for="phone">Mobile number</label>
-                    <input type="text" id="phone" name="phone" value="<?= htmlspecialchars($values['phone']) ?>" required>
-                    <?php if (!empty($errors['phone'])): ?><p class="field-error"><?= htmlspecialchars($errors['phone']) ?></p><?php endif; ?>
+                    <label for="middle_name">Middle name <span class="optional">(optional)</span></label>
+                    <input type="text" id="middle_name" name="middle_name" value="<?= htmlspecialchars($values['middle_name']) ?>" autocomplete="additional-name">
                 </div>
-                <div class="form-field">
-                    <label for="facebook_account">Facebook account</label>
-                    <input type="text" id="facebook_account" name="facebook_account" value="<?= htmlspecialchars($values['facebook_account']) ?>" required>
-                    <?php if (!empty($errors['facebook_account'])): ?><p class="field-error"><?= htmlspecialchars($errors['facebook_account']) ?></p><?php endif; ?>
+                <div class="form-field<?= !empty($errors['email']) ? ' has-error' : '' ?>">
+                    <label for="email">Email <span class="required-indicator">*</span></label>
+                    <input type="email" id="email" name="email" value="<?= htmlspecialchars($values['email']) ?>" required autocomplete="email">
+                    <?php if (!empty($errors['email'])): ?><p class="field-error" role="alert"><?= htmlspecialchars($errors['email']) ?></p><?php endif; ?>
                 </div>
-                <div class="form-field">
-                    <label for="address">Address</label>
-                    <textarea id="address" name="address" rows="3" required><?= htmlspecialchars($values['address']) ?></textarea>
-                    <?php if (!empty($errors['address'])): ?><p class="field-error"><?= htmlspecialchars($errors['address']) ?></p><?php endif; ?>
+                <div class="form-field<?= !empty($errors['phone']) ? ' has-error' : '' ?>">
+                    <label for="phone">Mobile number <span class="required-indicator">*</span></label>
+                    <input type="tel" id="phone" name="phone" value="<?= htmlspecialchars($values['phone']) ?>" required autocomplete="tel" inputmode="tel">
+                    <?php if (!empty($errors['phone'])): ?><p class="field-error" role="alert"><?= htmlspecialchars($errors['phone']) ?></p><?php endif; ?>
                 </div>
-                <div class="form-field">
-                    <label for="postal_code">Postal code</label>
-                    <input type="text" id="postal_code" name="postal_code" value="<?= htmlspecialchars($values['postal_code']) ?>" required>
-                    <?php if (!empty($errors['postal_code'])): ?><p class="field-error"><?= htmlspecialchars($errors['postal_code']) ?></p><?php endif; ?>
+                <div class="form-actions account-settings__actions account-settings__actions--contact">
+                    <button class="form-action-button form-action-button--primary" type="submit">Save</button>
+                    <button class="form-action-button form-action-button--secondary" type="reset">Cancel</button>
                 </div>
-                <div class="form-field">
-                    <label for="city">City</label>
-                    <input type="text" id="city" name="city" value="<?= htmlspecialchars($values['city']) ?>" required>
-                    <?php if (!empty($errors['city'])): ?><p class="field-error"><?= htmlspecialchars($errors['city']) ?></p><?php endif; ?>
+            </section>
+            <section class="account-settings__card account-settings__card--billing">
+                <h2 class="account-settings__title">
+                    <i class="fas fa-map-marker-alt" aria-hidden="true"></i>
+                    Billing Address
+                </h2>
+                <div class="form-field<?= !empty($errors['address']) ? ' has-error' : '' ?>">
+                    <label for="address">Address <span class="required-indicator">*</span></label>
+                    <textarea id="address" name="address" rows="3" required autocomplete="street-address"><?= htmlspecialchars($values['address']) ?></textarea>
+                    <?php if (!empty($errors['address'])): ?><p class="field-error" role="alert"><?= htmlspecialchars($errors['address']) ?></p><?php endif; ?>
                 </div>
-                <div class="settings-actions"><button class="settings-submit" type="submit">Save</button></div>
-            </form>
-        </section>
-        <section class="settings-card">
-            <h2>Change password</h2>
-            <form method="post">
+                <div class="form-split">
+                    <div class="form-field<?= !empty($errors['postal_code']) ? ' has-error' : '' ?>">
+                        <label for="postal_code">Postal code <span class="required-indicator">*</span></label>
+                        <input type="text" id="postal_code" name="postal_code" value="<?= htmlspecialchars($values['postal_code']) ?>" required autocomplete="postal-code">
+                        <?php if (!empty($errors['postal_code'])): ?><p class="field-error" role="alert"><?= htmlspecialchars($errors['postal_code']) ?></p><?php endif; ?>
+                    </div>
+                    <div class="form-field<?= !empty($errors['city']) ? ' has-error' : '' ?>">
+                        <label for="city">City <span class="required-indicator">*</span></label>
+                        <input type="text" id="city" name="city" value="<?= htmlspecialchars($values['city']) ?>" required autocomplete="address-level2">
+                        <?php if (!empty($errors['city'])): ?><p class="field-error" role="alert"><?= htmlspecialchars($errors['city']) ?></p><?php endif; ?>
+                    </div>
+                </div>
+                <div class="form-actions account-settings__actions account-settings__actions--billing">
+                    <button class="form-action-button form-action-button--primary" type="submit">Save</button>
+                    <button class="form-action-button form-action-button--secondary" type="reset">Cancel</button>
+                </div>
+            </section>
+        </form>
+        <section class="account-settings__card account-settings__card--password">
+            <h2 class="account-settings__title">
+                <i class="fas fa-lock" aria-hidden="true"></i>
+                Change Password
+            </h2>
+            <form method="post" class="account-settings__password-form">
                 <input type="hidden" name="action" value="password">
-                <div class="form-field">
+                <div class="form-field<?= !empty($errors['current_password']) ? ' has-error' : '' ?>">
                     <label for="current_password">Current password</label>
-                    <input type="password" id="current_password" name="current_password">
-                    <?php if (!empty($errors['current_password'])): ?><p class="field-error"><?= htmlspecialchars($errors['current_password']) ?></p><?php endif; ?>
+                    <input type="password" id="current_password" name="current_password" autocomplete="current-password">
+                    <?php if (!empty($errors['current_password'])): ?><p class="field-error" role="alert"><?= htmlspecialchars($errors['current_password']) ?></p><?php endif; ?>
                 </div>
-                <div class="form-field">
+                <div class="form-field<?= !empty($errors['new_password']) ? ' has-error' : '' ?>">
                     <label for="new_password">New password</label>
-                    <input type="password" id="new_password" name="new_password">
-                    <?php if (!empty($errors['new_password'])): ?><p class="field-error"><?= htmlspecialchars($errors['new_password']) ?></p><?php endif; ?>
+                    <input type="password" id="new_password" name="new_password" autocomplete="new-password">
+                    <?php if (!empty($errors['new_password'])): ?><p class="field-error" role="alert"><?= htmlspecialchars($errors['new_password']) ?></p><?php endif; ?>
                 </div>
-                <div class="form-field">
+                <div class="form-field<?= !empty($errors['confirm_password']) ? ' has-error' : '' ?>">
                     <label for="confirm_password">Confirm new password</label>
-                    <input type="password" id="confirm_password" name="confirm_password">
-                    <?php if (!empty($errors['confirm_password'])): ?><p class="field-error"><?= htmlspecialchars($errors['confirm_password']) ?></p><?php endif; ?>
+                    <input type="password" id="confirm_password" name="confirm_password" autocomplete="new-password">
+                    <?php if (!empty($errors['confirm_password'])): ?><p class="field-error" role="alert"><?= htmlspecialchars($errors['confirm_password']) ?></p><?php endif; ?>
                 </div>
-                <div class="settings-actions"><button class="settings-submit" type="submit">Update Password</button></div>
+                <div class="form-actions account-settings__actions">
+                    <button class="form-action-button form-action-button--primary" type="submit">Update Password</button>
+                </div>
             </form>
         </section>
     </div>
