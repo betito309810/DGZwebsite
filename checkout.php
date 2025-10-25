@@ -1440,6 +1440,14 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
         const inventoryNotice = document.getElementById('inventoryAdjustmentNotice');
         const inventoryCheckUrl = <?= json_encode($inventoryAvailabilityApi) ?>;
         const inventoryRefreshIntervalMs = 30000;
+        const customerSessionState = String(document.body?.dataset?.customerSession || '').toLowerCase();
+        const isCustomerAuthenticated = customerSessionState === 'authenticated';
+        const customerCartUrl = <?= json_encode($isCustomerAuthenticated ? $customerCartApi : null) ?>;
+        const serverSyncSupported = Boolean(
+            customerCartUrl
+            && typeof fetch === 'function'
+            && typeof Promise !== 'undefined'
+        );
 
         let cartState = [];
         try {
@@ -1453,6 +1461,8 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
         let pendingHighValueSubmission = null;
         let inventoryRefreshTimer = null;
         let inventoryFetchPromise = null;
+        let serverSyncChain = serverSyncSupported ? Promise.resolve() : null;
+        let serverLastPayloadSignature = null;
 
         function openModal(modal) {
             if (!modal) {
@@ -1608,6 +1618,144 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             };
         }
 
+        function normaliseCartStateItemForServer(item) {
+            if (!item) {
+                return null;
+            }
+
+            const normalised = normaliseItem(item);
+            const productId = Number(normalised.id ?? normalised.product_id ?? 0);
+            if (!Number.isFinite(productId) || productId <= 0) {
+                return null;
+            }
+
+            const quantity = Math.max(0, Math.min(999, Math.floor(Number(normalised.quantity) || 0)));
+            if (quantity <= 0) {
+                return null;
+            }
+
+            const variantRaw = normalised.variantId ?? null;
+            const variantId = variantRaw !== null && variantRaw !== undefined
+                ? Number(variantRaw)
+                : null;
+
+            return {
+                product_id: productId,
+                variant_id: Number.isFinite(variantId) && variantId > 0 ? variantId : null,
+                quantity,
+            };
+        }
+
+        function serialiseCartForServer(items = cartState) {
+            const map = new Map();
+
+            items.forEach((item) => {
+                const normalised = normaliseCartStateItemForServer(item);
+                if (!normalised) {
+                    return;
+                }
+
+                const key = `${normalised.product_id}:${normalised.variant_id === null ? 'null' : normalised.variant_id}`;
+                if (!map.has(key)) {
+                    map.set(key, {
+                        product_id: normalised.product_id,
+                        variant_id: normalised.variant_id,
+                        quantity: normalised.quantity,
+                    });
+                    return;
+                }
+
+                const entry = map.get(key);
+                entry.quantity = Math.min(999, entry.quantity + normalised.quantity);
+            });
+
+            return Array.from(map.values());
+        }
+
+        function computeCartSignature(payload) {
+            if (!Array.isArray(payload)) {
+                return null;
+            }
+
+            const sorted = payload
+                .map((item) => ({
+                    product_id: Number(item.product_id) || 0,
+                    variant_id: item.variant_id === null || item.variant_id === undefined
+                        ? null
+                        : Number(item.variant_id),
+                    quantity: Number(item.quantity) || 0,
+                }))
+                .sort((a, b) => {
+                    if (a.product_id !== b.product_id) {
+                        return a.product_id - b.product_id;
+                    }
+                    const aVariant = a.variant_id ?? 0;
+                    const bVariant = b.variant_id ?? 0;
+                    if (aVariant !== bVariant) {
+                        return aVariant - bVariant;
+                    }
+                    return a.quantity - b.quantity;
+                });
+
+            return JSON.stringify(sorted);
+        }
+
+        function pushCartToServer(payload, signature) {
+            if (!serverSyncSupported) {
+                return Promise.resolve();
+            }
+
+            return fetch(customerCartUrl, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                },
+                body: JSON.stringify({ items: payload }),
+            })
+                .then((response) => {
+                    if (response.status === 401) {
+                        serverLastPayloadSignature = signature ?? computeCartSignature(payload);
+                        return;
+                    }
+
+                    if (!response.ok) {
+                        throw new Error(`Request failed with status ${response.status}`);
+                    }
+
+                    serverLastPayloadSignature = signature ?? computeCartSignature(payload);
+                })
+                .catch((error) => {
+                    console.error('Unable to update your saved cart.', error);
+                    serverLastPayloadSignature = null;
+                    throw error;
+                });
+        }
+
+        function queueServerCartSync() {
+            if (!serverSyncSupported) {
+                return;
+            }
+
+            const payload = serialiseCartForServer(cartState);
+            const signature = computeCartSignature(payload);
+
+            if (signature !== null && signature === serverLastPayloadSignature) {
+                return;
+            }
+
+            const chain = serverSyncChain ?? Promise.resolve();
+            serverSyncChain = chain
+                .catch(() => undefined)
+                .then(() => pushCartToServer(payload, signature))
+                .catch(() => undefined);
+        }
+
+        if (serverSyncSupported) {
+            serverLastPayloadSignature = computeCartSignature(serialiseCartForServer(cartState));
+        }
+
         function formatPeso(value) {
             const amount = Number(value) || 0;
             return '₱ ' + amount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -1632,6 +1780,8 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             } catch (error) {
                 console.error('Unable to persist cart to localStorage.', error);
             }
+
+            queueServerCartSync();
         }
 
         function commitQuantityChange(input, options = {}) {
