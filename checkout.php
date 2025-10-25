@@ -125,6 +125,7 @@ $checkoutStylesheet = assetUrl('assets/css/public/checkout.css');
 $checkoutModalStylesheet = assetUrl('assets/css/public/checkoutModals.css');
 $logoAsset = assetUrl('assets/logo.png');
 $productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
+$dialogsScript = assetUrl('assets/js/shared/dialogs.js');
 $shopUrl = orderingUrl('index.php');
 $inventoryAvailabilityApi = orderingUrl('api/inventory-availability.php');
 $customerCartApi = orderingUrl('api/customer-cart.php');
@@ -1618,9 +1619,17 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
         </div>
     </div>
 
+    <script src="<?= htmlspecialchars($dialogsScript) ?>"></script>
     <script src="<?= htmlspecialchars($customerScript) ?>" defer></script>
     <script>
         const cartInput = document.querySelector('input[name="cart"]');
+        const showCheckoutAlert = (message, options) => {
+            if (window.dgzAlert && typeof window.dgzAlert === 'function') {
+                return window.dgzAlert(message, options);
+            }
+            window.alert(String(message != null ? message : ''));
+            return Promise.resolve();
+        };
         const orderItemsContainer = document.getElementById('orderItemsContainer');
         const emptyState = document.getElementById('orderEmptyState');
         const subtotalLabel = document.getElementById('summarySubtotalLabel');
@@ -2173,7 +2182,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                 }
 
                 if (showAlert) {
-                    alert(`Only ${stockQuantity} stock available.`);
+                    showCheckoutAlert(`Only ${stockQuantity} stock available.`);
                 }
 
                 const previous = Number.parseInt(input.dataset.previousValidValue || '', 10);

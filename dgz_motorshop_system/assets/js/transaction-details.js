@@ -7,6 +7,14 @@ function escapeHtml(value = '') {
         .replace(/'/g, '&#39;');
 }
 
+const showTransactionAlert = (message, options) => {
+    if (window.dgzAlert && typeof window.dgzAlert === 'function') {
+        return window.dgzAlert(message, options);
+    }
+    window.alert(String(message != null ? message : ''));
+    return Promise.resolve();
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     // Transaction details modal logic
     const transactionModal = document.getElementById('transactionModal');
@@ -206,6 +214,6 @@ async function loadTransactionDetails(orderId) {
 
     } catch (error) {
         console.error('Error loading transaction details:', error);
-        alert('Failed to load transaction details. Please try again.');
+        showTransactionAlert('Failed to load transaction details. Please try again.');
     }
 }

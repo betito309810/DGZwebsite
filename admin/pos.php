@@ -1166,19 +1166,67 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pos_checkout'])) {
 
     if (empty($cartItems)) {
         $_SESSION['pos_active_tab'] = 'walkin';
-        echo "<script>alert('No item selected in POS!'); window.location='pos.php';</script>";
+        $message = json_encode('No item selected in POS!');
+        $destination = json_encode('pos.php');
+        echo <<<HTML
+<script>
+(function () {
+    var message = {$message};
+    var destination = {$destination};
+    var redirect = function () { window.location = destination; };
+    if (window.dgzAlert && typeof window.dgzAlert === 'function') {
+        window.dgzAlert(message).then(redirect);
+    } else {
+        alert(message);
+        redirect();
+    }
+})();
+</script>
+HTML;
         exit;
     }
 
     if ($salesTotal <= 0) {
         $_SESSION['pos_active_tab'] = 'walkin';
-        echo "<script>alert('Please provide valid item prices.'); window.location='pos.php';</script>";
+        $message = json_encode('Please provide valid item prices.');
+        $destination = json_encode('pos.php');
+        echo <<<HTML
+<script>
+(function () {
+    var message = {$message};
+    var destination = {$destination};
+    var redirect = function () { window.location = destination; };
+    if (window.dgzAlert && typeof window.dgzAlert === 'function') {
+        window.dgzAlert(message).then(redirect);
+    } else {
+        alert(message);
+        redirect();
+    }
+})();
+</script>
+HTML;
         exit;
     }
 
     if ($amountPaid < $salesTotal) {
         $_SESSION['pos_active_tab'] = 'walkin';
-        echo "<script>alert('Insufficient payment amount!'); window.location='pos.php';</script>";
+        $message = json_encode('Insufficient payment amount!');
+        $destination = json_encode('pos.php');
+        echo <<<HTML
+<script>
+(function () {
+    var message = {$message};
+    var destination = {$destination};
+    var redirect = function () { window.location = destination; };
+    if (window.dgzAlert && typeof window.dgzAlert === 'function') {
+        window.dgzAlert(message).then(redirect);
+    } else {
+        alert(message);
+        redirect();
+    }
+})();
+</script>
+HTML;
         exit;
     }
 
@@ -1348,8 +1396,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pos_checkout'])) {
     } catch (Throwable $exception) {
         $pdo->rollBack();
         $_SESSION['pos_active_tab'] = 'walkin';
-        $message = addslashes($exception->getMessage());
-        echo "<script>alert('Error processing transaction: {$message}'); window.location='pos.php';</script>";
+        $messageText = 'Error processing transaction: ' . $exception->getMessage();
+        $message = json_encode($messageText);
+        $destination = json_encode('pos.php');
+        echo <<<HTML
+<script>
+(function () {
+    var message = {$message};
+    var destination = {$destination};
+    var redirect = function () { window.location = destination; };
+    if (window.dgzAlert && typeof window.dgzAlert === 'function') {
+        window.dgzAlert(message).then(redirect);
+    } else {
+        alert(message);
+        redirect();
+    }
+})();
+</script>
+HTML;
         exit;
     }
 }
@@ -2062,7 +2126,8 @@ if ($receiptDataJson === false) {
         </div>
     </div>
 <!-- user menu -->
-     <script src="../dgz_motorshop_system/assets/js/dashboard/userMenu.js"></script>
+    <script src="../dgz_motorshop_system/assets/js/dashboard/userMenu.js"></script>
+    <script src="../dgz_motorshop_system/assets/js/shared/dialogs.js"></script>
     
 
      

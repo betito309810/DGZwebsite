@@ -56,6 +56,13 @@ document.addEventListener('DOMContentLoaded', () => {
             let customLineCounter = 0;
 
             const sidebar = document.getElementById('sidebar');
+            const showPosAlert = (message, options) => {
+                if (window.dgzAlert && typeof window.dgzAlert === 'function') {
+                    return window.dgzAlert(message, options);
+                }
+                window.alert(String(message != null ? message : ''));
+                return Promise.resolve();
+            };
             const mobileToggle = document.querySelector('.mobile-toggle');
             const userMenu = document.querySelector('.user-menu');
             const userAvatar = document.querySelector('.user-avatar');
@@ -522,7 +529,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (resolvedImage) {
                         window.open(resolvedImage, '_blank');
                     } else {
-                        window.alert('No proof has been uploaded yet.');
+                        showPosAlert('No proof has been uploaded yet.');
                     }
                     return;
                 }
@@ -575,7 +582,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     openOnlineOrderModalOverlay();
                 } catch (error) {
                     console.error('Unable to load online order details.', error);
-                    alert('Failed to load order details. Please try again.');
+                    showPosAlert('Failed to load order details. Please try again.');
                 }
             };
 
@@ -1283,7 +1290,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }, 0);
 
                     if (totalVariantQty <= 0) {
-                        alert(`${product.name} is out of stock and cannot be added.`);
+                        showPosAlert(`${product.name} is out of stock and cannot be added.`);
                         return { status: 'out_of_stock' };
                     }
 
@@ -1292,7 +1299,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const availableQty = Number(product.quantity) || 0;
                 if (availableQty <= 0) {
-                    alert(`${product.name} is out of stock and cannot be added.`);
+                    showPosAlert(`${product.name} is out of stock and cannot be added.`);
                     return { status: 'out_of_stock' };
                 }
 
@@ -1569,7 +1576,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const availableQty = Number(variant.quantity) || 0;
                 if (availableQty <= 0) {
-                    alert('Selected variant is out of stock.');
+                    showPosAlert('Selected variant is out of stock.');
                     return;
                 }
 
@@ -1889,7 +1896,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 receiptModal.style.display = 'flex';
 
                 if (!hasShownCheckoutAlert) {
-                    alert('Payment settled successfully.');
+                    showPosAlert('Payment settled successfully.');
                     hasShownCheckoutAlert = true;
                 }
 
@@ -1913,7 +1920,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const w = window.open('', '_blank');
                 if (!w) {
-                    alert('Unable to open the receipt print preview. Please allow pop-ups for this site.');
+                    showPosAlert('Unable to open the receipt print preview. Please allow pop-ups for this site.');
                     return;
                 }
 
@@ -2138,7 +2145,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     let qty = parseInt(qtyValue, 10);
 
                     if (name === '') {
-                        alert('Please enter a service description.');
+                        showPosAlert('Please enter a service description.');
                         if (serviceNameInput) {
                             serviceNameInput.focus();
                         }
@@ -2146,7 +2153,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
 
                     if (!Number.isFinite(price) || price <= 0) {
-                        alert('Please enter a valid service price.');
+                        showPosAlert('Please enter a valid service price.');
                         if (servicePriceInput) {
                             servicePriceInput.focus();
                         }
@@ -2188,7 +2195,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 addSelectedProductsButton.addEventListener('click', () => {
                     const selected = productModal.querySelectorAll('.product-select-checkbox:checked');
                     if (selected.length === 0) {
-                        alert('Please select at least one product to add.');
+                        showPosAlert('Please select at least one product to add.');
                         return;
                     }
 
@@ -2265,7 +2272,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
 
                     if (Number.isFinite(max) && max > 0 && value > max) {
-                        alert(`Only ${max} stock available.`);
+                        showPosAlert(`Only ${max} stock available.`);
                         const previous = parseInt(target.dataset.previousValidValue || '', 10);
                         const fallback = Number.isFinite(previous) && previous >= min ? previous : min;
                         target.value = fallback;
@@ -2335,7 +2342,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 if (Number.isFinite(max) && max > 0 && value > max) {
-                    alert(`Only ${max} stock available.`);
+                    showPosAlert(`Only ${max} stock available.`);
                     value = max;
                 }
 
@@ -2364,7 +2371,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (rows.length === 0) {
                         event.preventDefault();
                         closeProductModal();
-                        alert('No item selected in POS!');
+                        showPosAlert('No item selected in POS!');
                         return;
                     }
 
@@ -2374,7 +2381,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     if (amountReceived <= 0) {
                         event.preventDefault();
-                        alert('Please enter the amount received from the customer!');
+                        showPosAlert('Please enter the amount received from the customer!');
                         if (amountReceivedInput) {
                             amountReceivedInput.focus();
                         }
@@ -2384,7 +2391,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (amountReceived < salesTotal) {
                     event.preventDefault();
                     const shortage = salesTotal - amountReceived;
-                    alert(`Insufficient payment! Need ${formatPeso(shortage)} more.`);
+                    showPosAlert(`Insufficient payment! Need ${formatPeso(shortage)} more.`);
                     if (amountReceivedInput) {
                         amountReceivedInput.focus();
                     }

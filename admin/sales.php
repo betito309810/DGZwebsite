@@ -891,6 +891,7 @@ $buildPageUrl = static function (int $page) use ($queryParams): string {
     <!--Transaction modal-->
     <script src="../dgz_motorshop_system/assets/js/sales/transactionModal.js"></script>
     <script src="../dgz_motorshop_system/assets/js/notifications.js"></script>
+    <script src="../dgz_motorshop_system/assets/js/shared/dialogs.js"></script>
     <script src="../dgz_motorshop_system/assets/js/transaction-details.js"></script>
     <script src="../dgz_motorshop_system/assets/js/dashboard/userMenu.js"></script>
 </body>

@@ -39,6 +39,7 @@ $logoAsset = assetUrl('assets/logo.png');
 $indexStylesheet = assetUrl('assets/css/public/index.css');
 $productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
 $checkoutModalStylesheet = assetUrl('assets/css/public/checkoutModals.css');
+$dialogsScript = assetUrl('assets/js/shared/dialogs.js');
 $cartScript = assetUrl('assets/js/public/cart.js');
 $searchScript = assetUrl('assets/js/public/search.js');
 $mobileNavScript = assetUrl('assets/js/public/mobileNav.js');
@@ -385,7 +386,11 @@ natcasesort($categories);
                                                 presetQuantity: qty
                                             });
                                         } else {
-                                            alert('Please select a variant for this product before adding it to your cart.');
+                                            if (window.dgzAlert && typeof window.dgzAlert === 'function') {
+                                                window.dgzAlert('Please select a variant for this product before adding it to your cart.');
+                                            } else {
+                                                window.alert('Please select a variant for this product before adding it to your cart.');
+                                            }
                                         }
                                         return false;
                                     }
@@ -493,6 +498,7 @@ natcasesort($categories);
         </div>
     </div>
     <!-- Cart functionality -->
+    <script src="<?= htmlspecialchars($dialogsScript) ?>"></script>
     <script>
         window.dgzPaths = Object.assign({}, window.dgzPaths || {}, {
             checkout: <?= json_encode($checkoutUrl) ?>,

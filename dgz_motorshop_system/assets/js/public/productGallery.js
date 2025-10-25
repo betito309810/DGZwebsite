@@ -33,6 +33,14 @@
         ? pathConfig.productPlaceholder
         : '../assets/img/product-placeholder.svg';
 
+    const showGalleryAlert = (message, options) => {
+        if (window.dgzAlert && typeof window.dgzAlert === 'function') {
+            return window.dgzAlert(message, options);
+        }
+        window.alert(String(message != null ? message : ''));
+        return Promise.resolve();
+    };
+
     if (!modal || !mainImage || !imageCaption || !thumbs || !closeButton) {
         return;
     }
@@ -129,7 +137,7 @@
 
         if (hasKnownStock && desired > maxQuantity) {
             if (!suppressAlert) {
-                alert(`Only ${maxQuantity} stock available.`);
+                showGalleryAlert(`Only ${maxQuantity} stock available.`);
             }
 
             const previous = Number.parseInt(quantityInput.dataset.previousValidValue || '', 10);
