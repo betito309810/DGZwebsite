@@ -1560,15 +1560,19 @@ if (!empty($_SESSION['pos_active_tab']) && in_array($_SESSION['pos_active_tab'],
 $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
 $perPage = 15;
 
-$statusFilter = isset($_GET['status_filter']) ? $_GET['status_filter'] : '';
+$requestedStatusFilter = isset($_GET['status_filter']) ? $_GET['status_filter'] : null;
+if ($requestedStatusFilter === null || trim((string) $requestedStatusFilter) === '') {
+    $requestedStatusFilter = 'pending';
+}
 
 $onlineOrdersData = fetchOnlineOrdersData($pdo, [
     'page' => $page,
     'per_page' => $perPage,
-    'status' => $statusFilter,
+    'status' => $requestedStatusFilter,
     'decline_reason_lookup' => $declineReasonLookup,
     'delivery_proof_column' => $deliveryProofColumn,
     'delivery_proof_notice' => $deliveryProofNotice,
+    'tracked_status_counts' => ['pending', 'payment_verification', 'approved', 'delivery', 'completed', 'disapproved'],
 ]);
 
 $onlineOrders = $onlineOrdersData['orders'];
@@ -1576,9 +1580,13 @@ $totalOrders = $onlineOrdersData['total_orders'];
 $totalPages = $onlineOrdersData['total_pages'];
 $page = $onlineOrdersData['page'];
 $statusFilter = $onlineOrdersData['status_filter'];
+$statusFilterForDisplay = $statusFilter !== '' ? $statusFilter : 'pending';
 $pendingOnlineOrdersCount = $onlineOrdersData['attention_count'];
 $onlineOrdersOnPage = count($onlineOrders);
 $onlineOrderBadgeCount = $pendingOnlineOrdersCount;
+$onlineOrderStatusCounts = is_array($onlineOrdersData['status_counts'] ?? null)
+    ? $onlineOrdersData['status_counts']
+    : [];
 $supportsDeliveryProof = !empty($onlineOrdersData['delivery_proof_supported']);
 $deliveryProofColumn = $onlineOrdersData['delivery_proof_column'] ?? $deliveryProofColumn;
 $deliveryProofNotice = (string) ($onlineOrdersData['delivery_proof_notice'] ?? $deliveryProofNotice);
@@ -1586,6 +1594,11 @@ $deliveryProofNotice = (string) ($onlineOrdersData['delivery_proof_notice'] ?? $
 $onlineOrdersJson = json_encode($onlineOrders, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
 if ($onlineOrdersJson === false) {
     $onlineOrdersJson = '[]';
+}
+
+$onlineOrderStatusCountsJson = json_encode($onlineOrderStatusCounts, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
+if ($onlineOrderStatusCountsJson === false) {
+    $onlineOrderStatusCountsJson = '{}';
 }
 
 $productCatalogJson = json_encode($productCatalog, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
@@ -1863,7 +1876,7 @@ if ($receiptDataJson === false) {
 
             <?php
                 $statusTabs = [
-                    '' => ['label' => 'All Orders', 'icon' => 'fa-list'],
+                    // '' => ['label' => 'All Orders', 'icon' => 'fa-list'],
                     'pending' => ['label' => 'Pending', 'icon' => 'fa-hourglass-half'],
                     'payment_verification' => ['label' => 'Payment Verification', 'icon' => 'fa-money-check'],
                     'approved' => ['label' => 'Approved', 'icon' => 'fa-circle-check'],
@@ -1871,26 +1884,40 @@ if ($receiptDataJson === false) {
                     'completed' => ['label' => 'Completed', 'icon' => 'fa-clipboard-check'],
                     'disapproved' => ['label' => 'Disapproved', 'icon' => 'fa-circle-xmark'],
                 ];
+
+                foreach ($statusTabs as $statusValue => &$tabMeta) {
+                    $tabMeta['count'] = (int) ($onlineOrderStatusCounts[$statusValue] ?? 0);
+                }
+                unset($tabMeta);
             ?>
             <div class="online-orders-filters">
                 <div class="status-filter-tabs" role="tablist">
                     <?php foreach ($statusTabs as $value => $meta): ?>
                         <?php
-                            $isActive = ($value === '' && $statusFilter === '') || $statusFilter === $value;
+                            $isActive = $statusFilterForDisplay === $value;
                             $queryParams = ['tab' => 'online', 'page' => 1];
-                            if ($value !== '') {
-                                $queryParams['status_filter'] = $value;
-                            }
+                            $queryParams['status_filter'] = $value;
                             $statusTabUrl = 'pos.php?' . http_build_query($queryParams);
+                            $statusCount = (int) ($meta['count'] ?? 0);
+                            $statusLabel = (string) ($meta['label'] ?? '');
+                            $statusCountLabel = $statusLabel !== ''
+                                ? $statusLabel . ' (' . number_format($statusCount) . ' orders)'
+                                : number_format($statusCount) . ' orders';
                         ?>
                         <a href="<?= htmlspecialchars($statusTabUrl, ENT_QUOTES, 'UTF-8') ?>"
                             class="status-filter-button<?= $isActive ? ' is-active' : '' ?>"
                             data-status-filter-button
                             data-status-value="<?= htmlspecialchars($value, ENT_QUOTES, 'UTF-8') ?>"
+                            data-status-label="<?= htmlspecialchars($statusLabel, ENT_QUOTES, 'UTF-8') ?>"
                             role="tab"
-                            aria-selected="<?= $isActive ? 'true' : 'false' ?>">
+                            aria-selected="<?= $isActive ? 'true' : 'false' ?>"
+                            aria-label="<?= htmlspecialchars($statusCountLabel, ENT_QUOTES, 'UTF-8') ?>"
+                            title="<?= htmlspecialchars($statusCountLabel, ENT_QUOTES, 'UTF-8') ?>">
                             <i class="fas <?= htmlspecialchars($meta['icon'], ENT_QUOTES, 'UTF-8') ?>"></i>
                             <?= htmlspecialchars($meta['label'], ENT_QUOTES, 'UTF-8') ?>
+                            <span class="status-count-badge" data-status-count-badge="<?= htmlspecialchars($value, ENT_QUOTES, 'UTF-8') ?>" <?= $statusCount === 0 ? 'data-status-count-empty="true"' : '' ?>>
+                                <?= number_format($statusCount) ?>
+                            </span>
                         </a>
                     <?php endforeach; ?>
                 </div>
@@ -2414,10 +2441,11 @@ if ($receiptDataJson === false) {
                 perPage: <?= (int) $perPage ?>,
                 totalOrders: <?= (int) $totalOrders ?>,
                 totalPages: <?= (int) $totalPages ?>,
-                statusFilter: <?= json_encode($statusFilter) ?>,
+                statusFilter: <?= json_encode($statusFilterForDisplay) ?>,
                 attentionCount: <?= (int) ($pendingOnlineOrdersCount ?? 0) ?>,
                 onPage: <?= (int) $onlineOrdersOnPage ?>,
                 orders: <?= $onlineOrdersJson ?>,
+                statusCounts: <?= $onlineOrderStatusCountsJson ?>,
                 deliveryProofSupported: <?= json_encode($supportsDeliveryProof) ?>,
                 deliveryProofNotice: <?= json_encode($deliveryProofNotice) ?>,
                 deliveryProofHelp: <?= json_encode($deliveryProofDefaultHelp) ?>

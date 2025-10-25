@@ -1157,6 +1157,54 @@ if (!function_exists('countOnlineOrdersByStatus')) {
     }
 }
 
+if (!function_exists('getOnlineOrdersStatusCounts')) {
+    /**
+     * Summarise online orders for the provided statuses, returning a map of
+     * normalised status values to their respective totals.
+     */
+    function getOnlineOrdersStatusCounts(PDO $pdo, array $statuses): array
+    {
+        $normalized = [];
+        foreach ($statuses as $status) {
+            $statusKey = strtolower(trim((string) $status));
+            if ($statusKey !== '') {
+                $normalized[$statusKey] = true;
+            }
+        }
+
+        if (empty($normalized)) {
+            return [];
+        }
+
+        $statusList = array_keys($normalized);
+        $placeholders = implode(',', array_fill(0, count($statusList), '?'));
+
+        $sql = 'SELECT LOWER(TRIM(status)) AS status_key, COUNT(*) AS total '
+            . 'FROM orders WHERE ' . getOnlineOrdersBaseCondition()
+            . ' AND LOWER(TRIM(status)) IN (' . $placeholders . ') '
+            . 'GROUP BY LOWER(TRIM(status))';
+
+        $counts = array_fill_keys($statusList, 0);
+
+        try {
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($statusList);
+            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $statusKey = strtolower(trim((string) ($row['status_key'] ?? '')));
+                if ($statusKey === '' || !array_key_exists($statusKey, $counts)) {
+                    continue;
+                }
+
+                $counts[$statusKey] = (int) ($row['total'] ?? 0);
+            }
+        } catch (Throwable $e) {
+            error_log('Unable to summarise online order statuses: ' . $e->getMessage());
+        }
+
+        return $counts;
+    }
+}
+
 if (!function_exists('countPendingRestockRequests')) {
     /**
      * Count restock requests that still need attention from the admin team.

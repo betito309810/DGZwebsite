@@ -205,6 +205,11 @@ if (!function_exists('fetchOnlineOrdersData')) {
             $deliveryProofNotice = '';
         }
 
+        $trackedStatusCounts = $options['tracked_status_counts'] ?? array_keys($statusOptions);
+        if (!is_array($trackedStatusCounts)) {
+            $trackedStatusCounts = array_keys($statusOptions);
+        }
+
         $whereClause = getOnlineOrdersBaseCondition();
         $params = [];
         if ($statusFilter !== '') {
@@ -371,6 +376,7 @@ if (!function_exists('fetchOnlineOrdersData')) {
 
         $attentionStatuses = $options['attention_statuses'] ?? ['pending', 'payment_verification'];
         $attentionCount = countOnlineOrdersByStatus($pdo, $attentionStatuses);
+        $statusCounts = getOnlineOrdersStatusCounts($pdo, $trackedStatusCounts);
 
         return [
             'orders' => $orders,
@@ -380,6 +386,7 @@ if (!function_exists('fetchOnlineOrdersData')) {
             'total_pages' => $totalPages,
             'status_filter' => $statusFilter,
             'attention_count' => $attentionCount,
+            'status_counts' => $statusCounts,
             'delivery_proof_supported' => $supportsDeliveryProof,
             'delivery_proof_column' => $supportsDeliveryProof ? $deliveryProofColumn : null,
             'delivery_proof_notice' => $deliveryProofNotice,

@@ -533,6 +533,36 @@ body {
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
 }
 
+.status-count-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 26px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #ef4444;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.2;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.status-filter-button .status-count-badge[data-status-count-empty] {
+    background: #9ca3af;
+    color: #fff;
+}
+
+.status-filter-button.is-active .status-count-badge {
+    background: #fff;
+    color: #2563eb;
+}
+
+.status-filter-button.is-active .status-count-badge[data-status-count-empty] {
+    background: rgba(255, 255, 255, 0.75);
+    color: #1d4ed8;
+}
+
 /* Unified pagination info styling (align with products/sales) */
 .pagination-info {
     color: #6b7280;

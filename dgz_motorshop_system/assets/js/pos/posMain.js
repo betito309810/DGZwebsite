@@ -172,6 +172,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 totalPages: Number(onlineOrdersBootstrap.totalPages) || 1,
                 attentionCount: Number(onlineOrdersBootstrap.attentionCount) || 0,
                 orders: Array.isArray(onlineOrdersBootstrap.orders) ? onlineOrdersBootstrap.orders : [],
+                statusCounts: typeof onlineOrdersBootstrap.statusCounts === 'object'
+                    && onlineOrdersBootstrap.statusCounts !== null
+                    ? onlineOrdersBootstrap.statusCounts
+                    : {},
                 deliveryProofSupported: Boolean(onlineOrdersBootstrap.deliveryProofSupported),
                 deliveryProofNotice: typeof onlineOrdersBootstrap.deliveryProofNotice === 'string'
                     ? onlineOrdersBootstrap.deliveryProofNotice
@@ -235,6 +239,54 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             updateStatusFilterButtons(onlineOrdersState.statusFilter);
+
+            const updateStatusCountBadges = (counts) => {
+                const hasCounts = counts && typeof counts === 'object';
+
+                statusFilterButtons.forEach((button) => {
+                    if (!button) {
+                        return;
+                    }
+
+                    const value = button.dataset && button.dataset.statusValue
+                        ? button.dataset.statusValue
+                        : '';
+                    if (!value) {
+                        return;
+                    }
+
+                    const badge = button.querySelector('[data-status-count-badge]');
+                    if (!badge) {
+                        return;
+                    }
+
+                    const raw = hasCounts ? counts[value] : undefined;
+                    let count = typeof raw === 'number' ? raw : parseInt(raw, 10);
+                    if (!Number.isFinite(count)) {
+                        count = 0;
+                    }
+
+                    const formattedCount = Number(count).toLocaleString('en-PH');
+                    badge.textContent = formattedCount;
+
+                    if (count > 0) {
+                        badge.removeAttribute('data-status-count-empty');
+                    } else {
+                        badge.setAttribute('data-status-count-empty', 'true');
+                    }
+
+                    const label = button.dataset && button.dataset.statusLabel
+                        ? button.dataset.statusLabel
+                        : '';
+                    if (label) {
+                        const ariaLabel = `${label} (${formattedCount} orders)`;
+                        button.setAttribute('aria-label', ariaLabel);
+                        button.setAttribute('title', ariaLabel);
+                    }
+                });
+            };
+
+            updateStatusCountBadges(onlineOrdersState.statusCounts);
 
             const updateDeliveryProofField = (form) => {
                 if (!form) {
@@ -878,6 +930,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     totalPages: Number(data.total_pages) || 1,
                     attentionCount: Number(data.attention_count) || 0,
                     orders: Array.isArray(data.orders) ? data.orders : [],
+                    statusCounts: data.status_counts && typeof data.status_counts === 'object'
+                        ? data.status_counts
+                        : onlineOrdersState.statusCounts,
                     deliveryProofSupported: Boolean(
                         Object.prototype.hasOwnProperty.call(data, 'delivery_proof_supported')
                             ? data.delivery_proof_supported
@@ -893,6 +948,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderOnlineOrdersSummary(onlineOrdersState.orders.length, onlineOrdersState.totalOrders, onlineOrdersState);
                 renderOnlineOrdersPagination(onlineOrdersState);
                 updateStatusFilterButtons(onlineOrdersState.statusFilter);
+                updateStatusCountBadges(onlineOrdersState.statusCounts);
                 updateOnlineOrderBadges(onlineOrdersState.attentionCount);
                 updateDeliveryProofNotice();
                 initializeStatusForms();

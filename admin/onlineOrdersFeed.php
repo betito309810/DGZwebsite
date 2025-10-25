@@ -45,6 +45,7 @@ try {
         'delivery_proof_column' => $deliveryProofColumn,
         'delivery_proof_candidates' => $deliveryProofCandidates,
         'delivery_proof_notice' => $deliveryProofNotice,
+        'tracked_status_counts' => ['pending', 'payment_verification', 'approved', 'delivery', 'completed', 'disapproved'],
     ]);
 
     header('Content-Type: application/json');
