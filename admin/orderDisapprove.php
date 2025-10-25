@@ -277,64 +277,68 @@ try {
 
     $restockProducts = [];
     $restockVariants = [];
+    $existingReservations = inventoryReservationsGetForOrder($pdo, $orderId);
+    $hasReservations = $existingReservations !== [];
 
-    $itemsStmt = $pdo->prepare(
-        'SELECT oi.product_id,
-                oi.variant_id,
-                oi.qty,
-                COALESCE(oi.product_id, pv.product_id) AS resolved_product_id
-           FROM order_items oi
-      LEFT JOIN product_variants pv ON pv.id = oi.variant_id
-          WHERE oi.order_id = ?'
-    );
-    $itemsStmt->execute([$orderId]);
-    foreach ($itemsStmt->fetchAll(PDO::FETCH_ASSOC) as $itemRow) {
-        $qty = (int) ($itemRow['qty'] ?? 0);
-        if ($qty <= 0) {
-            continue;
-        }
-
-        $variantId = isset($itemRow['variant_id']) ? (int) $itemRow['variant_id'] : 0;
-        $productId = isset($itemRow['resolved_product_id']) ? (int) $itemRow['resolved_product_id'] : 0;
-
-        if ($variantId > 0) {
-            if (!isset($restockVariants[$variantId])) {
-                $restockVariants[$variantId] = 0;
-            }
-            $restockVariants[$variantId] += $qty;
-        }
-
-        if ($productId > 0) {
-            if (!isset($restockProducts[$productId])) {
-                $restockProducts[$productId] = 0;
-            }
-            $restockProducts[$productId] += $qty;
-        }
-    }
-
-    if (!empty($restockVariants)) {
-        $variantRestockStmt = $pdo->prepare(
-            'UPDATE product_variants '
-            . 'SET quantity = quantity + ?, '
-            . 'low_stock_threshold = CASE '
-            . '    WHEN low_stock_threshold IS NULL THEN '
-            . '        CASE '
-            . '            WHEN (quantity + ?) <= 0 THEN 0 '
-            . '            ELSE LEAST(9999, GREATEST(1, CEIL((quantity + ?) * 0.2))) '
-            . '        END '
-            . '    ELSE GREATEST(0, low_stock_threshold) '
-            . 'END '
-            . 'WHERE id = ?'
+    if (!$hasReservations) {
+        $itemsStmt = $pdo->prepare(
+            'SELECT oi.product_id,
+                    oi.variant_id,
+                    oi.qty,
+                    COALESCE(oi.product_id, pv.product_id) AS resolved_product_id
+               FROM order_items oi
+          LEFT JOIN product_variants pv ON pv.id = oi.variant_id
+              WHERE oi.order_id = ?'
         );
-        foreach ($restockVariants as $variantId => $qty) {
-            $variantRestockStmt->execute([$qty, $qty, $qty, $variantId]);
-        }
-    }
+        $itemsStmt->execute([$orderId]);
+        foreach ($itemsStmt->fetchAll(PDO::FETCH_ASSOC) as $itemRow) {
+            $qty = (int) ($itemRow['qty'] ?? 0);
+            if ($qty <= 0) {
+                continue;
+            }
 
-    if (!empty($restockProducts)) {
-        $productRestockStmt = $pdo->prepare('UPDATE products SET quantity = quantity + ? WHERE id = ?');
-        foreach ($restockProducts as $productId => $qty) {
-            $productRestockStmt->execute([$qty, $productId]);
+            $variantId = isset($itemRow['variant_id']) ? (int) $itemRow['variant_id'] : 0;
+            $productId = isset($itemRow['resolved_product_id']) ? (int) $itemRow['resolved_product_id'] : 0;
+
+            if ($variantId > 0) {
+                if (!isset($restockVariants[$variantId])) {
+                    $restockVariants[$variantId] = 0;
+                }
+                $restockVariants[$variantId] += $qty;
+            }
+
+            if ($productId > 0) {
+                if (!isset($restockProducts[$productId])) {
+                    $restockProducts[$productId] = 0;
+                }
+                $restockProducts[$productId] += $qty;
+            }
+        }
+
+        if (!empty($restockVariants)) {
+            $variantRestockStmt = $pdo->prepare(
+                'UPDATE product_variants '
+                . 'SET quantity = quantity + ?, '
+                . 'low_stock_threshold = CASE '
+                . '    WHEN low_stock_threshold IS NULL THEN '
+                . '        CASE '
+                . '            WHEN (quantity + ?) <= 0 THEN 0 '
+                . '            ELSE LEAST(9999, GREATEST(1, CEIL((quantity + ?) * 0.2))) '
+                . '        END '
+                . '    ELSE GREATEST(0, low_stock_threshold) '
+                . 'END '
+                . 'WHERE id = ?'
+            );
+            foreach ($restockVariants as $variantId => $qty) {
+                $variantRestockStmt->execute([$qty, $qty, $qty, $variantId]);
+            }
+        }
+
+        if (!empty($restockProducts)) {
+            $productRestockStmt = $pdo->prepare('UPDATE products SET quantity = quantity + ? WHERE id = ?');
+            foreach ($restockProducts as $productId => $qty) {
+                $productRestockStmt->execute([$qty, $productId]);
+            }
         }
     }
 
@@ -357,6 +361,10 @@ try {
     if ($supportsProcessedBy) {
         $updateFields[] = 'processed_by_user_id = ?';
         $updateParams[] = $processedByUserId;
+    }
+
+    if ($hasReservations) {
+        inventoryReservationsReleaseForOrder($pdo, $orderId);
     }
 
     $updateParams[] = $orderId;

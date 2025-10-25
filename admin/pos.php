@@ -720,7 +720,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                         $params[] = $orderId;
                         $updateSql = 'UPDATE orders SET ' . implode(', ', $fields) . ' WHERE id = ?';
                         $stmt = $pdo->prepare($updateSql);
-                        $success = $stmt->execute($params);
+
+                        try {
+                            $pdo->beginTransaction();
+                            $success = $stmt->execute($params);
+
+                            if ($success && $newStatus === 'approved') {
+                                $inventoryAdjusted = inventoryReservationsDeductForApproval($pdo, $orderId);
+                                if (!$inventoryAdjusted) {
+                                    $success = false;
+                                    $statusError = 'inventory_adjustment_failed';
+                                }
+                            }
+
+                            if ($success) {
+                                $pdo->commit();
+                            } else {
+                                $pdo->rollBack();
+                            }
+                        } catch (Throwable $e) {
+                            if ($pdo->inTransaction()) {
+                                $pdo->rollBack();
+                            }
+                            $success = false;
+                        }
+
                         $statusParam = $success ? '1' : '0';
                     }
 
@@ -1652,6 +1676,8 @@ if ($receiptDataJson === false) {
                             $statusMessage = 'We could not save the delivery proof. Please check the uploads folder permissions.';
                         } elseif ($statusErrorCode === 'delivery_proof_column_missing') {
                             $statusMessage = 'Add a delivery_proof column (TEXT) to the orders table to enable proof uploads.';
+                        } elseif ($statusErrorCode === 'inventory_adjustment_failed') {
+                            $statusMessage = 'We could not finalise the inventory update for this order. Please try again.';
                         }
                     }
                 ?>

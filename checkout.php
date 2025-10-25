@@ -549,6 +549,128 @@ if (!function_exists('normaliseCartItems')) {
     }
 }
 
+if (!function_exists('loadCartInventorySnapshot')) {
+    /**
+     * Fetch product and variant stock information for the provided cart items.
+     *
+     * @param array<int, array{id:int, variant_id:?int, quantity:int}> $cartItems
+     * @return array{products: array<int, array{id:int, quantity:int, available_quantity:int, image:?string}>, variants: array<int, array{id:int, product_id:int, quantity:int, available_quantity:int}>, reservations: array{products: array<int,int>, variants: array<int,int>}}
+     */
+    function loadCartInventorySnapshot(PDO $pdo, array $cartItems, string $productsActiveClause): array
+    {
+        if ($cartItems === []) {
+            return [
+                'products' => [],
+                'variants' => [],
+                'reservations' => ['products' => [], 'variants' => []],
+            ];
+        }
+
+        $productIds = [];
+        $variantIds = [];
+        foreach ($cartItems as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $productId = isset($item['id']) ? (int) $item['id'] : 0;
+            if ($productId > 0) {
+                $productIds[$productId] = $productId;
+            }
+
+            if (isset($item['variant_id']) && $item['variant_id'] !== null) {
+                $variantId = (int) $item['variant_id'];
+                if ($variantId > 0) {
+                    $variantIds[$variantId] = $variantId;
+                }
+            }
+        }
+
+        $products = [];
+        if ($productIds !== []) {
+            $placeholders = implode(',', array_fill(0, count($productIds), '?'));
+            $sql = 'SELECT id, quantity, image FROM products WHERE id IN (' . $placeholders . ') AND ' . $productsActiveClause;
+
+            try {
+                $stmt = $pdo->prepare($sql);
+                $stmt->execute(array_values($productIds));
+                while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                    $id = isset($row['id']) ? (int) $row['id'] : 0;
+                    if ($id <= 0) {
+                        continue;
+                    }
+
+                    $quantity = isset($row['quantity']) ? (int) $row['quantity'] : 0;
+                    $products[$id] = [
+                        'id' => $id,
+                        'quantity' => $quantity,
+                        'available_quantity' => $quantity,
+                        'image' => isset($row['image']) ? trim((string) $row['image']) : null,
+                    ];
+                }
+            } catch (Throwable $exception) {
+                error_log('Unable to load product stock for checkout: ' . $exception->getMessage());
+            }
+        }
+
+        $variants = [];
+        if ($variantIds !== []) {
+            $placeholders = implode(',', array_fill(0, count($variantIds), '?'));
+            $sql = 'SELECT id, product_id, quantity FROM product_variants WHERE id IN (' . $placeholders . ')';
+
+            try {
+                $stmt = $pdo->prepare($sql);
+                $stmt->execute(array_values($variantIds));
+                while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                    $id = isset($row['id']) ? (int) $row['id'] : 0;
+                    $productId = isset($row['product_id']) ? (int) $row['product_id'] : 0;
+                    if ($id <= 0 || $productId <= 0) {
+                        continue;
+                    }
+
+                    $quantity = isset($row['quantity']) ? (int) $row['quantity'] : 0;
+                    $variants[$id] = [
+                        'id' => $id,
+                        'product_id' => $productId,
+                        'quantity' => $quantity,
+                        'available_quantity' => $quantity,
+                    ];
+                }
+            } catch (Throwable $exception) {
+                error_log('Unable to load variant stock for checkout: ' . $exception->getMessage());
+            }
+        }
+
+        $reservations = inventoryReservationsFetchMap($pdo, array_values($productIds), array_values($variantIds));
+
+        foreach ($products as $id => &$product) {
+            $reserved = $reservations['products'][$id] ?? 0;
+            $available = $product['quantity'] - $reserved;
+            if ($available < 0) {
+                $available = 0;
+            }
+            $product['available_quantity'] = $available;
+        }
+        unset($product);
+
+        foreach ($variants as $id => &$variant) {
+            $reserved = $reservations['variants'][$id] ?? 0;
+            $available = $variant['quantity'] - $reserved;
+            if ($available < 0) {
+                $available = 0;
+            }
+            $variant['available_quantity'] = $available;
+        }
+        unset($variant);
+
+        return [
+            'products' => $products,
+            'variants' => $variants,
+            'reservations' => $reservations,
+        ];
+    }
+}
+
 
 // Handle both single product and cart scenarios
 $product_id = intval($_GET['product_id'] ?? 0);
@@ -605,6 +727,27 @@ if ($product_id > 0 && empty($cartItems)) {
 
     if ($p) {
         $variants = fetchProductVariants($pdo, (int) $p['id']);
+        $variantIds = [];
+        foreach ($variants as $variantRow) {
+            if (isset($variantRow['id'])) {
+                $variantIds[] = (int) $variantRow['id'];
+            }
+        }
+
+        $reservationSnapshot = inventoryReservationsFetchMap($pdo, [(int) $p['id']], $variantIds);
+        foreach ($variants as &$variantRow) {
+            $variantId = isset($variantRow['id']) ? (int) $variantRow['id'] : 0;
+            if ($variantId <= 0) {
+                continue;
+            }
+
+            $reserved = $reservationSnapshot['variants'][$variantId] ?? 0;
+            $available = max(0, (int) ($variantRow['quantity'] ?? 0) - $reserved);
+            $variantRow['quantity'] = $available;
+            $variantRow['available_quantity'] = $available;
+        }
+        unset($variantRow);
+
         $defaultVariant = null;
         foreach ($variants as $variantRow) {
             if (!empty($variantRow['is_default'])) {
@@ -616,11 +759,19 @@ if ($product_id > 0 && empty($cartItems)) {
             $defaultVariant = $variants[0];
         }
         $unitPrice = $defaultVariant ? (float) $defaultVariant['price'] : (float) $p['price'];
+        $productReserved = $reservationSnapshot['products'][(int) $p['id']] ?? 0;
+        $availableProductQuantity = max(0, (int) ($p['quantity'] ?? 0) - $productReserved);
         $unitStock = null;
         if ($defaultVariant) {
-            $unitStock = $defaultVariant['quantity'] !== null ? (int) $defaultVariant['quantity'] : null;
+            $defaultAvailable = isset($defaultVariant['available_quantity'])
+                ? (int) $defaultVariant['available_quantity']
+                : (isset($defaultVariant['quantity']) ? (int) $defaultVariant['quantity'] : null);
+            if ($defaultAvailable !== null && $defaultAvailable < 0) {
+                $defaultAvailable = 0;
+            }
+            $unitStock = $defaultAvailable;
         } else {
-            $unitStock = isset($p['quantity']) ? (int) $p['quantity'] : null;
+            $unitStock = $availableProductQuantity;
         }
         $imageUrl = '';
         if (!empty($p['image'])) {
@@ -643,44 +794,36 @@ if ($product_id > 0 && empty($cartItems)) {
 // Check for cart data in POST (for form submissions)
 if (isset($_POST['cart'])) {
     $cartItems = json_decode($_POST['cart'], true);
-    
+
     if (json_last_error() !== JSON_ERROR_NONE) {
         $cartItems = [];
     }
-
-    // Fetch stock quantity and image for each cart item from database and add to cartItems
-    foreach ($cartItems as &$item) {
-        $variantId = $item['variant_id'] ?? $item['variantId'] ?? null;
-        if ($variantId) {
-            $stmt = $pdo->prepare('SELECT quantity FROM product_variants WHERE id = ?');
-            $stmt->execute([(int) $variantId]);
-            $variantRow = $stmt->fetch();
-            $item['stock'] = $variantRow ? (int) $variantRow['quantity'] : null;
-        } else {
-            $stmt = $pdo->prepare('SELECT quantity FROM products WHERE id = ? AND ' . $productsActiveClause);
-            $stmt->execute([$item['id']]);
-            $product = $stmt->fetch();
-            $item['stock'] = $product ? (int)$product['quantity'] : null;
-        }
-
-        // Attach product image if available
-        try {
-            $imgStmt = $pdo->prepare('SELECT image FROM products WHERE id = ? AND ' . $productsActiveClause);
-            $imgStmt->execute([(int) $item['id']]);
-            $imgRow = $imgStmt->fetch();
-            if ($imgRow && !empty($imgRow['image'])) {
-                $item['image'] = publicAsset($imgRow['image']);
-            }
-        } catch (Throwable $e) {
-            // ignore
-        }
-    }
-    unset($item);
-
     $cartItems = normaliseCartItems($cartItems);
 }
 
 $cartItems = normaliseCartItems($cartItems);
+
+$cartInventorySnapshot = loadCartInventorySnapshot($pdo, $cartItems, $productsActiveClause);
+foreach ($cartItems as &$item) {
+    $productId = isset($item['id']) ? (int) $item['id'] : 0;
+    $variantId = isset($item['variant_id']) && $item['variant_id'] !== null ? (int) $item['variant_id'] : null;
+
+    $productRow = $productId > 0 ? ($cartInventorySnapshot['products'][$productId] ?? null) : null;
+    $variantRow = $variantId !== null ? ($cartInventorySnapshot['variants'][$variantId] ?? null) : null;
+
+    if ($variantRow !== null) {
+        $item['stock'] = $variantRow['available_quantity'];
+    } elseif ($productRow !== null) {
+        $item['stock'] = $productRow['available_quantity'];
+    } else {
+        $item['stock'] = 0;
+    }
+
+    if ((!isset($item['image']) || $item['image'] === null) && $productRow !== null && !empty($productRow['image'])) {
+        $item['image'] = publicAsset($productRow['image']);
+    }
+}
+unset($item);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$isCustomerAuthenticated || !$customerAccount) {
@@ -786,20 +929,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Validate stock quantity for each cart item
     foreach ($cartItems as $item) {
+        $productId = isset($item['id']) ? (int) $item['id'] : 0;
+        $variantId = isset($item['variant_id']) && $item['variant_id'] !== null ? (int) $item['variant_id'] : null;
+
         $available = null;
-        if (!empty($item['variant_id'])) {
-            $variantStmt = $pdo->prepare('SELECT quantity FROM product_variants WHERE id = ?');
-            $variantStmt->execute([(int) $item['variant_id']]);
-            $variantRow = $variantStmt->fetch();
-            $available = $variantRow ? (int) $variantRow['quantity'] : 0;
-        } else {
-            $stmt = $pdo->prepare('SELECT quantity FROM products WHERE id = ? AND ' . $productsActiveClause);
-            $stmt->execute([$item['id']]);
-            $product = $stmt->fetch();
-            $available = $product ? (int)$product['quantity'] : 0;
+        if ($variantId !== null) {
+            $variantRow = $cartInventorySnapshot['variants'][$variantId] ?? null;
+            if ($variantRow !== null) {
+                $available = $variantRow['available_quantity'];
+            }
+        } elseif ($productId > 0) {
+            $productRow = $cartInventorySnapshot['products'][$productId] ?? null;
+            if ($productRow !== null) {
+                $available = $productRow['available_quantity'];
+            }
         }
 
-        if ($available !== null && $item['quantity'] > $available) {
+        if ($available === null) {
+            $available = 0;
+        }
+
+        if ($item['quantity'] > $available) {
             $label = $item['variant_label'] ?? '';
             $displayName = $label !== '' ? $item['name'] . ' (' . $label . ')' : $item['name'];
             $errors[] = "The quantity for product '{$displayName}' exceeds available stock. Stock: {$available} left.";
@@ -952,15 +1102,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        // Insert order items and update stock
+        // Insert order items and reserve stock until approval
+        $reservationItems = [];
         foreach ($cartItems as $item) {
-            $variantId = $item['variant_id'] ?? null;
-            if ($variantId) {
+            $variantId = isset($item['variant_id']) && $item['variant_id'] !== null ? (int) $item['variant_id'] : null;
+            if ($variantId !== null) {
                 $variantStmt = $pdo->prepare('SELECT id, product_id, quantity, label, price FROM product_variants WHERE id = ?');
-                $variantStmt->execute([(int) $variantId]);
+                $variantStmt->execute([$variantId]);
                 $variantRow = $variantStmt->fetch(PDO::FETCH_ASSOC);
 
-                if ($variantRow && $item['quantity'] <= (int) $variantRow['quantity']) {
+                $available = $cartInventorySnapshot['variants'][$variantId]['available_quantity'] ?? null;
+
+                if ($variantRow && $available !== null && $item['quantity'] <= (int) $available) {
                     $productRow = null;
                     try {
                         $productQuery = $pdo->prepare('SELECT id, name FROM products WHERE id = ? AND ' . $productsActiveClause);
@@ -981,42 +1134,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     insertOrderItemDynamic($pdo, (int) $order_id, $itemPayload, $variantRow);
 
-                    $pdo->prepare(
-                        'UPDATE product_variants '
-                        . 'SET quantity = quantity - ?, '
-                        . 'low_stock_threshold = CASE '
-                        . '    WHEN low_stock_threshold IS NULL THEN '
-                        . '        CASE '
-                        . '            WHEN (quantity - ?) <= 0 THEN 0 '
-                        . '            ELSE LEAST(9999, GREATEST(1, CEIL((quantity - ?) * 0.2))) '
-                        . '        END '
-                        . '    ELSE GREATEST(0, low_stock_threshold) '
-                        . 'END '
-                        . 'WHERE id = ?'
-                    )->execute([
-                        $item['quantity'],
-                        $item['quantity'],
-                        $item['quantity'],
-                        (int) $variantRow['id'],
-                    ]);
-                    $pdo->prepare('UPDATE products SET quantity = quantity - ? WHERE id = ?')->execute([$item['quantity'], (int) $variantRow['product_id']]);
+                    $reservationItems[] = [
+                        'product_id' => (int) $variantRow['product_id'],
+                        'variant_id' => (int) $variantRow['id'],
+                        'quantity' => (int) $item['quantity'],
+                    ];
                 }
             } else {
-                $product = $pdo->prepare('SELECT id, name, quantity FROM products WHERE id = ? AND ' . $productsActiveClause);
-                $product->execute([$item['id']]);
-                $p = $product->fetch(PDO::FETCH_ASSOC);
+                $productId = isset($item['id']) ? (int) $item['id'] : 0;
+                $product = null;
+                if ($productId > 0) {
+                    $productStmt = $pdo->prepare('SELECT id, name, quantity FROM products WHERE id = ? AND ' . $productsActiveClause);
+                    $productStmt->execute([$productId]);
+                    $product = $productStmt->fetch(PDO::FETCH_ASSOC);
+                }
 
-                if ($p && $item['quantity'] <= (int) $p['quantity']) {
+                $available = $productId > 0 ? ($cartInventorySnapshot['products'][$productId]['available_quantity'] ?? null) : null;
+
+                if ($product && $available !== null && $item['quantity'] <= (int) $available) {
                     $itemPayload = [
-                        'id' => (int) $p['id'],
+                        'id' => (int) $product['id'],
                         'quantity' => $item['quantity'],
                         'price' => $item['price'],
-                        'name' => $item['name'] ?? ($p['name'] ?? ''),
+                        'name' => $item['name'] ?? ($product['name'] ?? ''),
                     ];
 
                     insertOrderItemDynamic($pdo, (int) $order_id, $itemPayload, null);
 
-                    $pdo->prepare('UPDATE products SET quantity = quantity - ? WHERE id = ?')->execute([$item['quantity'], (int) $p['id']]);
+                    $reservationItems[] = [
+                        'product_id' => (int) $product['id'],
+                        'variant_id' => null,
+                        'quantity' => (int) $item['quantity'],
+                    ];
                 }
             }
         }
@@ -1032,11 +1181,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             foreach ($cartItems as $item) {
                 try {
                     insertOrderItemDynamic($pdo, (int) $order_id, $item, null);
+                    $fallbackProductId = isset($item['id']) ? (int) $item['id'] : 0;
+                    $fallbackVariantId = isset($item['variant_id']) && $item['variant_id'] !== null
+                        ? (int) $item['variant_id']
+                        : null;
+                    $fallbackQuantity = isset($item['quantity']) ? (int) $item['quantity'] : 0;
+                    if ($fallbackProductId > 0 && $fallbackQuantity > 0) {
+                        $reservationItems[] = [
+                            'product_id' => $fallbackProductId,
+                            'variant_id' => $fallbackVariantId,
+                            'quantity' => $fallbackQuantity,
+                        ];
+                    }
                 } catch (Throwable $ignored) {
                     // best effort; continue
                 }
             }
         }
+
+        inventoryReservationsReplaceForOrder($pdo, (int) $order_id, $reservationItems);
 
         if ($supportsTrackingCodes && $trackingCodeForRedirect !== null && filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $nameParts = array_filter([

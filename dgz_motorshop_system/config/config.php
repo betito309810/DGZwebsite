@@ -25,6 +25,11 @@ if (is_file($catalogTaxonomyHelpers)) {
     require_once $catalogTaxonomyHelpers;
 }
 
+$inventoryReservationHelpers = __DIR__ . '/../includes/inventory_reservations.php';
+if (is_file($inventoryReservationHelpers)) {
+    require_once $inventoryReservationHelpers;
+}
+
 // Resolve the project's public and system base paths so generated links work
 // regardless of where the project is deployed inside the web root. The
 // storefront PHP files live alongside this directory, so we compute both the

@@ -109,19 +109,32 @@ try {
         }
     }
 
+    $reservationProductIds = array_keys($productQuantities);
+    foreach ($variantQuantities as $variantRow) {
+        if (!empty($variantRow['product_id'])) {
+            $reservationProductIds[$variantRow['product_id']] = $variantRow['product_id'];
+        }
+    }
+
+    $reservationSummary = inventoryReservationsFetchMap($pdo, array_values($reservationProductIds), array_keys($variantQuantities));
+
     $responseItems = [];
     foreach ($normalizedItems as $item) {
         $variantId = $item['variant_id'];
         if ($variantId !== null && isset($variantQuantities[$variantId])) {
+            $reservedVariant = $reservationSummary['variants'][$variantId] ?? 0;
+            $availableVariant = max(0, $variantQuantities[$variantId]['quantity'] - $reservedVariant);
             $responseItems[] = [
                 'product_id' => $item['product_id'],
                 'variant_id' => $variantId,
-                'stock' => $variantQuantities[$variantId]['quantity'],
+                'stock' => $availableVariant,
             ];
             continue;
         }
 
+        $reservedProduct = $reservationSummary['products'][$item['product_id']] ?? 0;
         $stock = $productQuantities[$item['product_id']] ?? 0;
+        $stock = max(0, $stock - $reservedProduct);
         $responseItems[] = [
             'product_id' => $item['product_id'],
             'variant_id' => $variantId,

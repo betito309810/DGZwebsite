@@ -5,7 +5,35 @@ require_once __DIR__ . '/dgz_motorshop_system/includes/customer_session.php';
 $pdo = db();
 $productsActiveClause = productsArchiveActiveCondition($pdo, '', true);
 $products = $pdo->query('SELECT * FROM products WHERE ' . $productsActiveClause . ' ORDER BY name')->fetchAll();
-$productVariantMap = fetchVariantsForProducts($pdo, array_column($products, 'id')); // Added: preload variant rows for customer UI.
+$productIds = array_column($products, 'id');
+$productVariantMap = fetchVariantsForProducts($pdo, $productIds); // Added: preload variant rows for customer UI.
+
+$variantIds = [];
+foreach ($productVariantMap as $variants) {
+    foreach ($variants as $variantRow) {
+        $variantId = isset($variantRow['id']) ? (int) $variantRow['id'] : 0;
+        if ($variantId > 0) {
+            $variantIds[$variantId] = $variantId;
+        }
+    }
+}
+
+$reservationSummary = inventoryReservationsFetchMap($pdo, $productIds, array_values($variantIds));
+
+foreach ($productVariantMap as $productId => &$variants) {
+    foreach ($variants as &$variantRow) {
+        $variantId = isset($variantRow['id']) ? (int) $variantRow['id'] : 0;
+        if ($variantId <= 0) {
+            continue;
+        }
+
+        $reserved = $reservationSummary['variants'][$variantId] ?? 0;
+        $available = max(0, (int) ($variantRow['quantity'] ?? 0) - $reserved);
+        $variantRow['available_quantity'] = $available;
+        $variantRow['quantity'] = $available;
+    }
+}
+unset($variants, $variantRow);
 
 $logoAsset = assetUrl('assets/logo.png');
 $indexStylesheet = assetUrl('assets/css/public/index.css');
@@ -215,8 +243,10 @@ natcasesort($categories);
                         $variantsForProduct = $productVariantMap[$p['id']] ?? [];
                         $variantSummary = summariseVariantStock($variantsForProduct);
                         $displayPrice = isset($variantSummary['price']) ? $variantSummary['price'] : $p['price'];
-                        $rawDisplayQuantity = isset($variantSummary['quantity']) ? $variantSummary['quantity'] : $p['quantity'];
-                        $displayQuantity = max(0, (int) $rawDisplayQuantity);
+                        $productReserved = $reservationSummary['products'][$p['id']] ?? 0;
+                        $availableProductQuantity = max(0, (int) ($p['quantity'] ?? 0) - $productReserved);
+                        $rawDisplayQuantity = isset($variantSummary['quantity']) ? (int) $variantSummary['quantity'] : $availableProductQuantity;
+                        $displayQuantity = max(0, $rawDisplayQuantity);
                         $defaultVariant = null;
                         foreach ($variantsForProduct as $variantRow) {
                             if (!empty($variantRow['is_default'])) {
@@ -227,19 +257,34 @@ natcasesort($categories);
                         if ($defaultVariant === null && !empty($variantsForProduct)) {
                             $defaultVariant = $variantsForProduct[0];
                         }
+                        $defaultVariantAvailable = null;
                         if ($defaultVariant !== null) {
-                            $defaultQty = isset($defaultVariant['quantity']) ? max(0, (int) $defaultVariant['quantity']) : null;
+                            $defaultQty = isset($defaultVariant['available_quantity'])
+                                ? (int) $defaultVariant['available_quantity']
+                                : (isset($defaultVariant['quantity']) ? (int) $defaultVariant['quantity'] : null);
+                            if ($defaultQty !== null && $defaultQty < 0) {
+                                $defaultQty = 0;
+                            }
+                            $defaultVariantAvailable = $defaultQty;
                             if ($defaultQty !== null && $defaultQty <= 0) {
                                 foreach ($variantsForProduct as $variantRow) {
-                                    $candidateQty = isset($variantRow['quantity']) ? max(0, (int) $variantRow['quantity']) : null;
+                                    $candidateQty = isset($variantRow['available_quantity'])
+                                        ? (int) $variantRow['available_quantity']
+                                        : (isset($variantRow['quantity']) ? (int) $variantRow['quantity'] : null);
+                                    if ($candidateQty !== null && $candidateQty < 0) {
+                                        $candidateQty = 0;
+                                    }
                                     if ($candidateQty === null || $candidateQty > 0) {
                                         $defaultVariant = $variantRow;
+                                        $defaultVariantAvailable = $candidateQty !== null ? $candidateQty : $defaultVariantAvailable;
                                         break;
                                     }
                                 }
                             }
                         }
-                        $defaultVariantQuantity = isset($defaultVariant['quantity']) ? max(0, (int) $defaultVariant['quantity']) : '';
+                        $defaultVariantQuantity = $defaultVariantAvailable !== null
+                            ? max(0, (int) $defaultVariantAvailable)
+                            : '';
                         $variantsJson = htmlspecialchars(json_encode($variantsForProduct, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
                     ?>
                     <?php
