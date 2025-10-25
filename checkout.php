@@ -682,17 +682,6 @@ if (isset($_POST['cart'])) {
 
 $cartItems = normaliseCartItems($cartItems);
 
-// If no cart items, show error (unless success page)
-if (empty($cartItems) && !(isset($_GET['success']) && $_GET['success'] === '1')) {
-    echo '<div style="max-width: 400px; margin: 50px auto; background: white; padding: 40px; border-radius: 20px; text-align: center;">';
-    echo '<i class="fas fa-shopping-cart" style="font-size: 48px; color: #636e72; margin-bottom: 20px;"></i>';
-    echo '<h2 style="color: #2d3436; margin-bottom: 15px;">Your Cart is Empty</h2>';
-    echo '<p style="color: #636e72; margin-bottom: 25px;">Add some products to your cart before proceeding to checkout.</p>';
-    echo '<a href="' . htmlspecialchars($shopUrl, ENT_QUOTES, 'UTF-8') . '" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; padding: 15px 30px; border-radius: 8px; font-weight: 600; margin-right: 10px;">Continue Shopping</a>';
-    echo '</div>';
-    exit;
-}
-
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$isCustomerAuthenticated || !$customerAccount) {
         $errors[] = 'Please log in or create an account before checking out.';
@@ -1483,12 +1472,90 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             && typeof Promise !== 'undefined'
         );
 
-        let cartState = [];
-        try {
-            cartState = JSON.parse(cartInput.value || '[]') || [];
-        } catch (error) {
-            cartState = [];
+        function safeParseCartValue(source) {
+            if (!source) {
+                return [];
+            }
+
+            let data = source;
+            if (typeof source === 'string') {
+                try {
+                    data = JSON.parse(source);
+                } catch (error) {
+                    return [];
+                }
+            }
+
+            if (!Array.isArray(data)) {
+                return [];
+            }
+
+            return data
+                .map((item) => {
+                    if (!item || typeof item !== 'object') {
+                        return null;
+                    }
+                    return { ...item };
+                })
+                .filter((value) => value !== null);
         }
+
+        function makeCartItemKey(item) {
+            if (!item || typeof item !== 'object') {
+                return null;
+            }
+
+            const productId = Number(item.id ?? item.productId ?? item.product_id ?? 0);
+            if (!Number.isFinite(productId) || productId <= 0) {
+                return null;
+            }
+
+            const variantRaw = item.variantId ?? item.variant_id ?? null;
+            const variantId = variantRaw === null || variantRaw === undefined
+                ? null
+                : Number(variantRaw);
+
+            return `${productId}:${Number.isFinite(variantId) && variantId > 0 ? variantId : 'base'}`;
+        }
+
+        function mergeCartStates(primary = [], secondary = []) {
+            const map = new Map();
+
+            secondary.forEach((item) => {
+                const key = makeCartItemKey(item);
+                if (!key) {
+                    return;
+                }
+                map.set(key, { ...item });
+            });
+
+            primary.forEach((item) => {
+                const key = makeCartItemKey(item);
+                if (!key) {
+                    return;
+                }
+                const existing = map.get(key);
+                map.set(key, existing ? { ...existing, ...item } : { ...item });
+            });
+
+            return Array.from(map.values());
+        }
+
+        function loadCartFromLocalStorage() {
+            if (typeof localStorage === 'undefined') {
+                return [];
+            }
+
+            try {
+                const stored = localStorage.getItem('cartItems');
+                return safeParseCartValue(stored);
+            } catch (error) {
+                console.error('Unable to read cart from localStorage.', error);
+                return [];
+            }
+        }
+
+        let cartState = safeParseCartValue(cartInput?.value || '[]');
 
         let currentTotals = { items: 0, subtotal: 0 };
         let highValueOverride = false;
@@ -1821,10 +1888,6 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
                 .catch(() => undefined)
                 .then(() => pushCartToServer(payload, signature))
                 .catch(() => undefined);
-        }
-
-        if (serverSyncSupported) {
-            serverLastPayloadSignature = computeCartSignature(serialiseCartForServer(cartState));
         }
 
         function formatPeso(value) {
@@ -2290,6 +2353,60 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             }, inventoryRefreshIntervalMs);
         }
 
+        function hydrateInitialCartState() {
+            const localItems = loadCartFromLocalStorage();
+            let state = mergeCartStates(localItems, cartState);
+
+            const applyState = (nextState) => {
+                cartState = Array.isArray(nextState)
+                    ? nextState.map((item) => ({ ...item }))
+                    : [];
+
+                if (serverSyncSupported) {
+                    serverLastPayloadSignature = computeCartSignature(serialiseCartForServer(cartState));
+                }
+
+                renderOrderItems();
+                scheduleInventoryRefresh();
+                refreshInventoryAvailability({ force: true });
+            };
+
+            if (!serverSyncSupported) {
+                applyState(state);
+                return;
+            }
+
+            fetch(customerCartUrl, {
+                method: 'GET',
+                credentials: 'same-origin',
+                headers: { Accept: 'application/json' },
+            })
+                .then((response) => {
+                    if (response.status === 401) {
+                        return null;
+                    }
+
+                    if (!response.ok) {
+                        throw new Error(`Unexpected status ${response.status}`);
+                    }
+
+                    return response.json();
+                })
+                .then((data) => {
+                    if (!data || !Array.isArray(data.items) || data.items.length === 0) {
+                        return;
+                    }
+
+                    state = mergeCartStates(state, data.items);
+                })
+                .catch((error) => {
+                    console.error('Unable to load your saved cart.', error);
+                })
+                .finally(() => {
+                    applyState(state);
+                });
+        }
+
         orderItemsContainer?.addEventListener('click', (event) => {
             const removeTarget = event.target.closest('.item-remove');
             if (removeTarget) {
@@ -2428,9 +2545,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
             }
         });
 
-        renderOrderItems();
-        scheduleInventoryRefresh();
-        refreshInventoryAvailability({ force: true });
+        hydrateInitialCartState();
     </script>
 </body>
 </html>
