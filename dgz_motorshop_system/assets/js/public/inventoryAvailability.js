@@ -205,9 +205,12 @@
             return '<span class="stock-status-text">Out of stock</span>';
         }
 
-        const status = quantity <= 5 ? 'Low stock' : 'In stock';
+        const numericQuantity = Number(quantity);
+        const parsedQuantity = Number.isFinite(numericQuantity)
+            ? Math.max(0, Math.round(numericQuantity))
+            : 0;
         return '<span class="stock-indicator" aria-hidden="true"></span>'
-            + `<span class="stock-status-text">${status}</span>`;
+            + `<span class="stock-status-text">Stock: ${parsedQuantity}</span>`;
     }
 
     function updateCardStockUi(card, quantity) {

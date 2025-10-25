@@ -300,7 +300,7 @@ natcasesort($categories);
                                     <span class="stock-status-text">Out of stock</span>
                                 <?php elseif ($displayQuantity <= 5): ?>
                                     <span class="stock-indicator" aria-hidden="true"></span>
-                                    <span class="stock-status-text">Low stock</span>
+                                    <span class="stock-status-text">Stock: <?= (int) $displayQuantity ?></span>
                                 <?php else: ?>
                                     <span class="stock-indicator" aria-hidden="true"></span>
                                     <span class="stock-status-text">Stock: <?= (int) $displayQuantity ?></span>
