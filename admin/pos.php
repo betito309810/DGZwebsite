@@ -1733,6 +1733,7 @@ if ($receiptDataJson === false) {
                                     }
                                     $statusBadgeClass = (string) ($order['status_badge_class'] ?? ('status-' . $statusValue));
                                     $statusFormDisabled = !empty($order['status_form_disabled']);
+                                    $statusFormHidden = !empty($order['status_form_hidden']);
                                     $availableStatusChanges = $order['available_status_changes'] ?? [];
                                     $defaultNextStatus = (!$statusFormDisabled && !empty($availableStatusChanges))
                                         ? (string) ($availableStatusChanges[0]['value'] ?? '')
@@ -1771,31 +1772,33 @@ if ($receiptDataJson === false) {
                                         <span class="status-badge <?= htmlspecialchars($statusBadgeClass, ENT_QUOTES, 'UTF-8') ?>">
                                             <?= htmlspecialchars($order['status_label'] ?? ucfirst($statusValue), ENT_QUOTES, 'UTF-8') ?>
                                         </span>
-                                        <form method="post" class="status-form" enctype="multipart/form-data">
-                                            <input type="hidden" name="order_id" value="<?= (int) $order['id'] ?>">
-                                            <input type="hidden" name="update_order_status" value="1">
-                                            <input type="hidden" name="decline_reason_id" value="">
-                                            <input type="hidden" name="decline_reason_note" value="">
-                                            <select name="new_status" <?= $statusFormDisabled ? 'disabled' : '' ?> data-status-select>
-                                                <?php if ($statusFormDisabled): ?>
-                                                    <option value=""><?= htmlspecialchars($order['status_label'] ?? ucfirst($statusValue), ENT_QUOTES, 'UTF-8') ?></option>
-                                                <?php else: ?>
-                                                    <?php foreach ($availableStatusChanges as $option): ?>
-                                                        <option value="<?= htmlspecialchars($option['value'], ENT_QUOTES, 'UTF-8') ?>">
-                                                            <?= htmlspecialchars($option['label'], ENT_QUOTES, 'UTF-8') ?>
-                                                        </option>
-                                                    <?php endforeach; ?>
-                                                <?php endif; ?>
-                                            </select>
-                                            <div class="<?= $proofFieldClasses ?>" data-delivery-proof-field <?= $proofFieldHidden ? 'hidden' : '' ?>>
-                                                <label for="delivery-proof-<?= (int) $order['id'] ?>">Proof of delivery</label>
-                                                <input type="file" name="delivery_proof" id="delivery-proof-<?= (int) $order['id'] ?>" accept="image/*" <?= ($statusFormDisabled || !$supportsDeliveryProof) ? 'disabled' : '' ?> <?= ($supportsDeliveryProof && $defaultNextStatus === 'completed') ? 'required' : '' ?>>
-                                                <p class="delivery-proof-help<?= $supportsDeliveryProof ? '' : ' delivery-proof-help--warning' ?>" data-delivery-proof-default="<?= htmlspecialchars($deliveryProofDefaultHelp, ENT_QUOTES, 'UTF-8') ?>">
-                                                    <?= htmlspecialchars($supportsDeliveryProof ? $deliveryProofDefaultHelp : $deliveryProofNotice, ENT_QUOTES, 'UTF-8') ?>
-                                                </p>
-                                            </div>
-                                            <button type="submit" class="status-save" <?= $statusFormDisabled ? 'disabled' : '' ?>>Update</button>
-                                        </form>
+                                        <?php if (!$statusFormHidden): ?>
+                                            <form method="post" class="status-form" enctype="multipart/form-data">
+                                                <input type="hidden" name="order_id" value="<?= (int) $order['id'] ?>">
+                                                <input type="hidden" name="update_order_status" value="1">
+                                                <input type="hidden" name="decline_reason_id" value="">
+                                                <input type="hidden" name="decline_reason_note" value="">
+                                                <select name="new_status" <?= $statusFormDisabled ? 'disabled' : '' ?> data-status-select>
+                                                    <?php if ($statusFormDisabled): ?>
+                                                        <option value=""><?= htmlspecialchars($order['status_label'] ?? ucfirst($statusValue), ENT_QUOTES, 'UTF-8') ?></option>
+                                                    <?php else: ?>
+                                                        <?php foreach ($availableStatusChanges as $option): ?>
+                                                            <option value="<?= htmlspecialchars($option['value'], ENT_QUOTES, 'UTF-8') ?>">
+                                                                <?= htmlspecialchars($option['label'], ENT_QUOTES, 'UTF-8') ?>
+                                                            </option>
+                                                        <?php endforeach; ?>
+                                                    <?php endif; ?>
+                                                </select>
+                                                <div class="<?= $proofFieldClasses ?>" data-delivery-proof-field <?= $proofFieldHidden ? 'hidden' : '' ?>>
+                                                    <label for="delivery-proof-<?= (int) $order['id'] ?>">Proof of delivery</label>
+                                                    <input type="file" name="delivery_proof" id="delivery-proof-<?= (int) $order['id'] ?>" accept="image/*" <?= ($statusFormDisabled || !$supportsDeliveryProof) ? 'disabled' : '' ?> <?= ($supportsDeliveryProof && $defaultNextStatus === 'completed') ? 'required' : '' ?>>
+                                                    <p class="delivery-proof-help<?= $supportsDeliveryProof ? '' : ' delivery-proof-help--warning' ?>" data-delivery-proof-default="<?= htmlspecialchars($deliveryProofDefaultHelp, ENT_QUOTES, 'UTF-8') ?>">
+                                                        <?= htmlspecialchars($supportsDeliveryProof ? $deliveryProofDefaultHelp : $deliveryProofNotice, ENT_QUOTES, 'UTF-8') ?>
+                                                    </p>
+                                                </div>
+                                                <button type="submit" class="status-save" <?= $statusFormDisabled ? 'disabled' : '' ?>>Update</button>
+                                            </form>
+                                        <?php endif; ?>
                                         <?php if ($statusValue === 'disapproved' && !empty($order['decline_reason_label'])): ?>
                                             <div class="decline-reason-display">
                                                 Reason: <?= htmlspecialchars($order['decline_reason_label'], ENT_QUOTES, 'UTF-8') ?>

@@ -619,7 +619,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const availableStatusChanges = Array.isArray(order?.available_status_changes)
                     ? order.available_status_changes
                     : [];
-                const statusFormDisabled = Boolean(order?.status_form_disabled) || availableStatusChanges.length === 0;
+                const statusFormHidden = Boolean(order?.status_form_hidden);
+                const statusFormDisabled = statusFormHidden
+                    ? true
+                    : Boolean(order?.status_form_disabled) || availableStatusChanges.length === 0;
                 const defaultNextStatus = (!statusFormDisabled && availableStatusChanges.length > 0)
                     ? String(availableStatusChanges[0].value || '')
                     : '';
@@ -659,6 +662,26 @@ document.addEventListener('DOMContentLoaded', () => {
                     }</div>`
                     : '';
 
+                const statusFormHtml = statusFormHidden
+                    ? ''
+                    : `
+                        <form method="post" class="status-form" enctype="multipart/form-data">
+                            <input type="hidden" name="order_id" value="${escapeHtml(orderId)}">
+                            <input type="hidden" name="update_order_status" value="1">
+                            <input type="hidden" name="decline_reason_id" value="">
+                            <input type="hidden" name="decline_reason_note" value="">
+                            <select name="new_status" ${statusFormDisabled ? 'disabled' : ''} data-status-select>
+                                ${statusOptionsHtml}
+                            </select>
+                            <div class="${escapeHtml(proofFieldClasses)}" data-delivery-proof-field ${proofFieldHidden ? 'hidden' : ''}>
+                                <label for="${escapeHtml(proofInputId)}">Proof of delivery</label>
+                                <input type="file" name="delivery_proof" id="${escapeHtml(proofInputId)}" accept="image/*" ${proofInputDisabled ? 'disabled' : ''} ${proofInputRequired ? 'required' : ''}>
+                                <p class="${escapeHtml(proofHelpClass)}" data-delivery-proof-default="${escapeHtml(proofHelpDefault)}">${escapeHtml(proofHelpText)}</p>
+                            </div>
+                            <button type="submit" class="status-save" ${statusFormDisabled ? 'disabled' : ''}>Update</button>
+                        </form>
+                    `;
+
                 row.innerHTML = `
                     <td>#${escapeHtml(orderId)}</td>
                     <td>${escapeHtml(order?.customer_name || 'Customer')}</td>
@@ -679,27 +702,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     </td>
                     <td>
                         <span class="status-badge ${escapeHtml(badgeClass)}">${escapeHtml(statusLabel)}</span>
-                        <form method="post" class="status-form" enctype="multipart/form-data">
-                            <input type="hidden" name="order_id" value="${escapeHtml(orderId)}">
-                            <input type="hidden" name="update_order_status" value="1">
-                            <input type="hidden" name="decline_reason_id" value="">
-                            <input type="hidden" name="decline_reason_note" value="">
-                            <select name="new_status" ${statusFormDisabled ? 'disabled' : ''} data-status-select>
-                                ${statusOptionsHtml}
-                            </select>
-                            <div class="${escapeHtml(proofFieldClasses)}" data-delivery-proof-field ${proofFieldHidden ? 'hidden' : ''}>
-                                <label for="${escapeHtml(proofInputId)}">Proof of delivery</label>
-                                <input type="file" name="delivery_proof" id="${escapeHtml(proofInputId)}" accept="image/*" ${proofInputDisabled ? 'disabled' : ''} ${proofInputRequired ? 'required' : ''}>
-                                <p class="${escapeHtml(proofHelpClass)}" data-delivery-proof-default="${escapeHtml(proofHelpDefault)}">${escapeHtml(proofHelpText)}</p>
-                            </div>
-                            <button type="submit" class="status-save" ${statusFormDisabled ? 'disabled' : ''}>Update</button>
-                        </form>
+                        ${statusFormHtml}
                         ${declineHtml}
                     </td>
                     <td>${escapeHtml(order?.created_at_formatted || 'N/A')}</td>
                 `;
 
-                updateDeliveryProofField(row.querySelector('.status-form'));
+                if (!statusFormHidden) {
+                    updateDeliveryProofField(row.querySelector('.status-form'));
+                }
 
                 return row;
             };
@@ -2240,7 +2251,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (
                     event.target.closest('.status-form') ||
                     event.target.closest('.status-save') ||
-                    event.target.closest('button') ||
                     event.target.closest('select')
                 ) {
                     return;

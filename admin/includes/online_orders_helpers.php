@@ -128,7 +128,7 @@ if (!function_exists('getOnlineOrderStatusTransitions')) {
     function getOnlineOrderStatusTransitions(): array
     {
         return [
-            'pending' => ['payment_verification', 'disapproved'],
+            'pending' => ['payment_verification', 'approved', 'disapproved'],
             'payment_verification' => ['approved', 'disapproved'],
             'approved' => ['delivery'],
             'delivery' => ['completed'],
@@ -293,6 +293,7 @@ if (!function_exists('fetchOnlineOrdersData')) {
             $declineReasonNote = (string) ($row['decline_reason_note'] ?? '');
 
             $availableTransitions = $statusTransitions[$statusValue] ?? [];
+            $statusFormHidden = in_array($statusValue, ['completed', 'complete', 'disapproved'], true);
             $transitionOptions = [];
             foreach ($availableTransitions as $value) {
                 $transitionOptions[] = [
@@ -321,7 +322,8 @@ if (!function_exists('fetchOnlineOrdersData')) {
                 'status_label' => $statusLabel,
                 'status_badge_class' => 'status-' . $statusValue,
                 'available_status_changes' => $transitionOptions,
-                'status_form_disabled' => empty($transitionOptions),
+                'status_form_hidden' => $statusFormHidden,
+                'status_form_disabled' => $statusFormHidden || empty($transitionOptions),
                 'decline_reason_id' => $declineReasonId,
                 'decline_reason_label' => $declineReasonLabel,
                 'decline_reason_note' => $declineReasonNote,
