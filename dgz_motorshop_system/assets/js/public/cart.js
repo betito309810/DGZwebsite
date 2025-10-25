@@ -38,6 +38,38 @@
         const serverSyncSupported = Boolean(isCustomerAuthenticated && customerCartUrl && fetchSupported && promiseSupported);
         let serverSyncChain = promiseSupported ? Promise.resolve() : null;
         let serverLastPayloadSignature = null;
+        const SERVER_SIGNATURE_STORAGE_KEY = 'cartServerSignature';
+        const CART_SESSION_STATE_KEY = 'cartSessionState';
+        let lastKnownServerSignature = null;
+        let cartLastSavedSessionState = null;
+
+        function setServerSignature(signature) {
+            serverLastPayloadSignature = signature;
+            lastKnownServerSignature = signature;
+
+            if (signature === null || signature === undefined) {
+                localStorage.removeItem(SERVER_SIGNATURE_STORAGE_KEY);
+                return;
+            }
+
+            localStorage.setItem(SERVER_SIGNATURE_STORAGE_KEY, String(signature));
+        }
+
+        function loadPersistedCartMetadata() {
+            const storedSignature = localStorage.getItem(SERVER_SIGNATURE_STORAGE_KEY);
+            lastKnownServerSignature = storedSignature !== null ? storedSignature : null;
+
+            if (lastKnownServerSignature !== null) {
+                serverLastPayloadSignature = lastKnownServerSignature;
+            }
+
+            const storedSessionState = localStorage.getItem(CART_SESSION_STATE_KEY);
+            if (storedSessionState === 'authenticated' || storedSessionState === 'guest') {
+                cartLastSavedSessionState = storedSessionState;
+            } else {
+                cartLastSavedSessionState = null;
+            }
+        }
 
         function clearHighValueDecision() {
             highValueDecision.onProceed = null;
@@ -257,6 +289,10 @@
             localStorage.setItem('cartItems', JSON.stringify(cartItems));
             localStorage.setItem('cartCount', cartCount.toString());
 
+            const sessionStateForStorage = customerSessionState === 'authenticated' ? 'authenticated' : 'guest';
+            cartLastSavedSessionState = sessionStateForStorage;
+            localStorage.setItem(CART_SESSION_STATE_KEY, sessionStateForStorage);
+
             if (!options || options.skipServer) {
                 return;
             }
@@ -269,6 +305,8 @@
 
         // Start loadCart: recover cart state from localStorage and update the cart badge
         function loadCart() {
+            loadPersistedCartMetadata();
+
             const savedCart = localStorage.getItem('cartItems');
             const savedCount = localStorage.getItem('cartCount');
 
@@ -302,6 +340,11 @@
             if (savedCount) {
                 const parsedCount = parseInt(savedCount, 10);
                 cartCount = Number.isNaN(parsedCount) ? 0 : parsedCount;
+            }
+
+            if (!cartLastSavedSessionState && customerSessionState === 'authenticated' && cartItems.length > 0) {
+                cartLastSavedSessionState = 'authenticated';
+                localStorage.setItem(CART_SESSION_STATE_KEY, 'authenticated');
             }
 
             updateCartBadge();
@@ -503,7 +546,7 @@
 
             if (!options || !options.skipSignatureUpdate) {
                 const payload = serialiseCartItemsForServer(cartItems);
-                serverLastPayloadSignature = computeCartSignature(payload);
+                setServerSignature(computeCartSignature(payload));
             }
         }
 
@@ -523,7 +566,7 @@
 
                 if (!response.ok) {
                     if (response.status === 401) {
-                        serverLastPayloadSignature = null;
+                        setServerSignature(null);
                         return [];
                     }
 
@@ -563,10 +606,10 @@
                     applyServerCartItems(data.items, { skipSignatureUpdate: true });
                 }
 
-                serverLastPayloadSignature = signature ?? computeCartSignature(serialiseCartItemsForServer(cartItems));
+                setServerSignature(signature ?? computeCartSignature(serialiseCartItemsForServer(cartItems)));
             } catch (error) {
                 console.error('Unable to save your cart.', error);
-                serverLastPayloadSignature = null;
+                setServerSignature(null);
                 throw error;
             }
         }
@@ -603,7 +646,7 @@
                 .then(async () => {
                     const serverRawItems = await fetchServerCart();
                     if (serverRawItems === null) {
-                        serverLastPayloadSignature = null;
+                        setServerSignature(null);
                         return;
                     }
 
@@ -612,7 +655,7 @@
                     const serverSignature = computeCartSignature(serverPayload);
 
                     if (normalisedServer.length === 0 && localSnapshot.length === 0) {
-                        serverLastPayloadSignature = '[]';
+                        setServerSignature('[]');
                         return;
                     }
 
@@ -622,13 +665,26 @@
                         && serverSignature === localSignature
                     ) {
                         applyServerCartItems(normalisedServer);
-                        serverLastPayloadSignature = serverSignature;
+                        setServerSignature(serverSignature);
                         return;
                     }
 
+                    const sessionStateIndicatesAuth = (
+                        cartLastSavedSessionState === 'authenticated'
+                        || (!cartLastSavedSessionState && customerSessionState === 'authenticated')
+                    );
+                    const serverSignatureChanged = (
+                        serverSignature !== null
+                        && lastKnownServerSignature !== null
+                        && serverSignature !== lastKnownServerSignature
+                    );
+
                     let finalItems;
                     if (normalisedServer.length === 0) {
-                        finalItems = localSnapshot;
+                        const preferServer = localSnapshot.length === 0
+                            ? true
+                            : sessionStateIndicatesAuth || serverSignatureChanged;
+                        finalItems = preferServer ? normalisedServer : localSnapshot;
                     } else if (localSnapshot.length === 0) {
                         finalItems = normalisedServer;
                     } else {
@@ -639,7 +695,7 @@
 
                     const mergedPayload = serialiseCartItemsForServer(finalItems);
                     const mergedSignature = computeCartSignature(mergedPayload);
-                    serverLastPayloadSignature = mergedSignature;
+                    setServerSignature(mergedSignature);
 
                     if (mergedSignature !== serverSignature) {
                         try {
