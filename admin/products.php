@@ -6,6 +6,24 @@ $pdo = db();
 $role = $_SESSION['role'] ?? '';
 $isStaff = ($role === 'staff');
 enforceStaffAccess();
+$normaliseTaxonomyValue = static function (?string $value): string {
+    if ($value === null) {
+        return '';
+    }
+
+    $trimmed = trim((string) $value);
+    if ($trimmed === '') {
+        return '';
+    }
+
+    if (function_exists('catalogTaxonomyNormaliseName')) {
+        return catalogTaxonomyNormaliseName($trimmed);
+    }
+
+    return function_exists('mb_strtolower')
+        ? mb_strtolower($trimmed, 'UTF-8')
+        : strtolower($trimmed);
+};
 // Potential blocker: if the staff ACL list in enforceStaffAccess() omits products.php,
 // staff users will be redirected before the delete handler runs, making it appear as if
 // the delete link is broken. Verify the allow-list whenever permissions are changed.
@@ -1008,6 +1026,40 @@ if (isset($_GET['restore'])) {
             exit;
         }
 
+        $blockedByArchivedTaxonomy = false;
+        if (function_exists('productsArchiveTaxonomyArchivedNames')) {
+            $archivedBrandNames = productsArchiveTaxonomyArchivedNames($pdo, 'brand');
+            $archivedCategoryNames = productsArchiveTaxonomyArchivedNames($pdo, 'category');
+
+            $archivedBrandLookup = [];
+            foreach ($archivedBrandNames as $name) {
+                $archivedBrandLookup[$name] = true;
+            }
+
+            $archivedCategoryLookup = [];
+            foreach ($archivedCategoryNames as $name) {
+                $archivedCategoryLookup[$name] = true;
+            }
+
+            $productBrandNormalised = $normaliseTaxonomyValue($product['brand'] ?? '');
+            $productCategoryNormalised = $normaliseTaxonomyValue($product['category'] ?? '');
+
+            if (($productBrandNormalised !== '' && isset($archivedBrandLookup[$productBrandNormalised])) ||
+                ($productCategoryNormalised !== '' && isset($archivedCategoryLookup[$productCategoryNormalised]))) {
+                $blockedByArchivedTaxonomy = true;
+            }
+        }
+
+        if ($blockedByArchivedTaxonomy) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+
+            $_SESSION['products_error'] = 'Restore unavailable while the assigned brand or category is archived.';
+            header('Location: ' . $redirectUrl);
+            exit;
+        }
+
         $isArchived = (int) ($product['is_archived'] ?? 0) === 1;
 
         if (!$isArchived) {
@@ -1455,6 +1507,22 @@ $archivedBrandLabels = $collectArchivedLabels($brandFilterOptions);
 $archivedCategoryLabels = $collectArchivedLabels($categoryFilterOptions);
 $archivedSupplierLabels = $collectArchivedLabels($supplierFilterOptions);
 
+$archivedBrandLookup = [];
+foreach ($archivedBrandLabels as $label) {
+    $normalised = $normaliseTaxonomyValue($label);
+    if ($normalised !== '') {
+        $archivedBrandLookup[$normalised] = true;
+    }
+}
+
+$archivedCategoryLookup = [];
+foreach ($archivedCategoryLabels as $label) {
+    $normalised = $normaliseTaxonomyValue($label);
+    if ($normalised !== '') {
+        $archivedCategoryLookup[$normalised] = true;
+    }
+}
+
 $splitTaxonomyOptions = static function (array $options): array {
     $buckets = ['active' => [], 'archived' => []];
     foreach ($options as $row) {
@@ -1502,31 +1570,12 @@ $sort = $_GET['sort'] ?? '';
 $direction = strtolower($_GET['direction'] ?? 'asc');
 $direction = $direction === 'desc' ? 'desc' : 'asc';
 $status_filter = $_GET['status'] ?? 'active';
-$validStatusFilters = ['active', 'archived', 'all'];
+$validStatusFilters = ['active', 'archived'];
 if (!in_array($status_filter, $validStatusFilters, true)) {
     $status_filter = 'active';
 }
 $selectedArchivedFilter = false;
 if ($status_filter === 'active') {
-    $normaliseTaxonomyValue = static function (?string $value): string {
-        if ($value === null) {
-            return '';
-        }
-
-        $trimmed = trim((string) $value);
-        if ($trimmed === '') {
-            return '';
-        }
-
-        if (function_exists('catalogTaxonomyNormaliseName')) {
-            return catalogTaxonomyNormaliseName($trimmed);
-        }
-
-        return function_exists('mb_strtolower')
-            ? mb_strtolower($trimmed, 'UTF-8')
-            : strtolower($trimmed);
-    };
-
     if ($brand_filter !== '') {
         $normalisedBrandFilter = $normaliseTaxonomyValue($brand_filter);
         foreach ($archivedBrandLabels as $archivedLabel) {
@@ -2045,10 +2094,10 @@ $emptyTableMessage = $isArchivedView ? 'No archived products found.' : 'No produ
                     </div>
                 </div>
                 <div class="filter-row filter-row--selects">
-                    <select name="status" aria-label="Filter by status" class="filter-select">
+                    <input type="hidden" name="status" value="<?= htmlspecialchars($status_filter) ?>">
+                    <select name="status" aria-label="Filter by status" class="filter-select" disabled aria-disabled="true" title="Status is controlled by the View Archive toggle">
                         <option value="active" <?= $status_filter === 'active' ? 'selected' : '' ?>>Active</option>
                         <option value="archived" <?= $status_filter === 'archived' ? 'selected' : '' ?>>Archived</option>
-                        <option value="all" <?= $status_filter === 'all' ? 'selected' : '' ?>>All</option>
                     </select>
                     <select name="brand" aria-label="Filter by brand" class="filter-select">
                         <option value="">All Brands</option>
@@ -2056,14 +2105,6 @@ $emptyTableMessage = $isArchivedView ? 'No archived products found.' : 'No produ
                         <?php $label = (string) ($option['name'] ?? ''); if ($label === '') { continue; } ?>
                         <option value="<?= htmlspecialchars($label) ?>" <?= ($brand_filter ?? '') === $label ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
                         <?php endforeach; ?>
-                        <?php if (!empty($brandFilterGroups['archived'])): ?>
-                        <optgroup label="Archived">
-                            <?php foreach ($brandFilterGroups['archived'] as $option): ?>
-                            <?php $label = (string) ($option['name'] ?? ''); if ($label === '') { continue; } ?>
-                            <option value="<?= htmlspecialchars($label) ?>" <?= ($brand_filter ?? '') === $label ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
-                            <?php endforeach; ?>
-                        </optgroup>
-                        <?php endif; ?>
                     </select>
                     <select name="category" aria-label="Filter by category" class="filter-select">
                         <option value="">All Categories</option>
@@ -2071,14 +2112,6 @@ $emptyTableMessage = $isArchivedView ? 'No archived products found.' : 'No produ
                         <?php $label = (string) ($option['name'] ?? ''); if ($label === '') { continue; } ?>
                         <option value="<?= htmlspecialchars($label) ?>" <?= ($category_filter ?? '') === $label ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
                         <?php endforeach; ?>
-                        <?php if (!empty($categoryFilterGroups['archived'])): ?>
-                        <optgroup label="Archived">
-                            <?php foreach ($categoryFilterGroups['archived'] as $option): ?>
-                            <?php $label = (string) ($option['name'] ?? ''); if ($label === '') { continue; } ?>
-                            <option value="<?= htmlspecialchars($label) ?>" <?= ($category_filter ?? '') === $label ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
-                            <?php endforeach; ?>
-                        </optgroup>
-                        <?php endif; ?>
                     </select>
                     <select name="supplier" aria-label="Filter by supplier" class="filter-select">
                         <option value="">All Suppliers</option>
@@ -2168,7 +2201,13 @@ $emptyTableMessage = $isArchivedView ? 'No archived products found.' : 'No produ
                         ];
                         $productDetailJson = htmlspecialchars(json_encode($productDetailPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8');
                         $galleryJson = htmlspecialchars(json_encode($galleryImagesForProduct, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8');
-                        $rowIsArchived = (int) ($p['is_archived'] ?? 0) === 1;
+                        $rowBrandNormalised = $normaliseTaxonomyValue($p['brand'] ?? '');
+                        $rowCategoryNormalised = $normaliseTaxonomyValue($p['category'] ?? '');
+                        $rowHasArchivedBrand = $rowBrandNormalised !== '' && isset($archivedBrandLookup[$rowBrandNormalised]);
+                        $rowHasArchivedCategory = $rowCategoryNormalised !== '' && isset($archivedCategoryLookup[$rowCategoryNormalised]);
+                        $rowHasArchivedTaxonomy = $rowHasArchivedBrand || $rowHasArchivedCategory;
+                        $rowIsArchivedFlagged = (int) ($p['is_archived'] ?? 0) === 1;
+                        $rowIsArchived = $rowIsArchivedFlagged || $rowHasArchivedTaxonomy;
                         $archiveParams = $actionBaseQuery;
                         $archiveParams['delete'] = $p['id'];
                         $archiveQuery = http_build_query($archiveParams);
@@ -2177,6 +2216,11 @@ $emptyTableMessage = $isArchivedView ? 'No archived products found.' : 'No produ
                         $restoreParams['restore'] = $p['id'];
                         $restoreQuery = http_build_query($restoreParams);
                         $restoreUrl = 'products.php' . ($restoreQuery ? '?' . $restoreQuery : '');
+                        $restoreDisabled = $rowHasArchivedTaxonomy;
+                        $restoreDisabledReason = '';
+                        if ($restoreDisabled) {
+                            $restoreDisabledReason = 'Restore is unavailable while the assigned brand or category remains archived.';
+                        }
                     ?>
                         <tr class="product-row" data-product="<?=$productDetailJson?>">
                             <td><?=htmlspecialchars($p['code'])?></td>
@@ -2200,10 +2244,20 @@ $emptyTableMessage = $isArchivedView ? 'No archived products found.' : 'No produ
                                     data-gallery="<?=$galleryJson?>"
                                     data-default-variant="<?=htmlspecialchars($defaultVariantLabel)?>"><i class="fas fa-edit"></i>Edit</a>
                                 <?php if ($rowIsArchived): ?>
+                                <?php if ($restoreDisabled): ?>
+                                <span class="restore-btn action-btn action-btn--disabled" aria-disabled="true" title="<?= htmlspecialchars($restoreDisabledReason) ?>">
+                                    <i class="fas fa-rotate-left"></i>Restore
+                                </span>
+                                <?php elseif ($rowIsArchivedFlagged): ?>
                                 <a href="<?= htmlspecialchars($restoreUrl) ?>" class="restore-btn action-btn"
                                     data-product-name="<?= htmlspecialchars($p['name'] ?? 'this product') ?>">
                                     <i class="fas fa-rotate-left"></i>Restore
                                 </a>
+                                <?php else: ?>
+                                <span class="restore-btn action-btn action-btn--disabled" aria-disabled="true" title="<?= htmlspecialchars('Restore is unavailable because this product is archived through its brand or category.') ?>">
+                                    <i class="fas fa-rotate-left"></i>Restore
+                                </span>
+                                <?php endif; ?>
                                 <?php else: ?>
                                 <a href="<?= htmlspecialchars($archiveUrl) ?>" class="delete-btn action-btn"
                                     data-product-name="<?= htmlspecialchars($p['name'] ?? 'this product') ?>">
