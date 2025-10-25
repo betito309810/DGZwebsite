@@ -450,18 +450,22 @@ document.addEventListener('DOMContentLoaded', () => {
             // End POS online order modal populator
 
             const openProofModalFromButton = (button) => {
-                if (!button) {
+                if (!button || button.disabled || button.classList.contains('is-disabled')) {
                     return;
                 }
 
                 const image = button.dataset.image || '';
+                const fallbackImage = button.dataset.fallbackImage || '';
+                const resolvedImage = image || fallbackImage || '';
                 const reference = button.dataset.reference || '';
                 const customer = button.dataset.customer || 'Customer';
                 const proofType = button.dataset.proofType || '';
 
                 if (!proofModal) {
-                    if (image) {
-                        window.open(image, '_blank');
+                    if (resolvedImage) {
+                        window.open(resolvedImage, '_blank');
+                    } else {
+                        window.alert('No proof has been uploaded yet.');
                     }
                     return;
                 }
@@ -479,8 +483,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 if (proofImage) {
-                    if (image) {
-                        proofImage.src = image;
+                    if (resolvedImage) {
+                        proofImage.src = resolvedImage;
                         proofImage.style.display = 'block';
                     } else {
                         proofImage.removeAttribute('src');
@@ -489,7 +493,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 if (proofNoImage) {
-                    proofNoImage.style.display = image ? 'none' : 'flex';
+                    proofNoImage.style.display = resolvedImage ? 'none' : 'flex';
                 }
 
                 proofModal.classList.add('show');
@@ -636,6 +640,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const proofIcon = proofType === 'delivery' ? 'fa-truck' : 'fa-receipt';
                 const paymentProofUrl = order && order.payment_proof_url ? String(order.payment_proof_url) : '';
                 const deliveryProofUrl = order && order.delivery_proof_url ? String(order.delivery_proof_url) : '';
+                const hasPaymentProof = Boolean(order && order.has_payment_proof);
+                const hasDeliveryProof = Boolean(order && order.has_delivery_proof);
+                const proofFallbackUrl = proofImageUrl;
                 const showCompletedProofs = ['completed', 'complete'].includes(statusValue);
                 const availableStatusChanges = Array.isArray(order?.available_status_changes)
                     ? order.available_status_changes
@@ -704,24 +711,39 @@ document.addEventListener('DOMContentLoaded', () => {
                         </form>
                     `;
 
-                const buildProofButton = (type, label, icon, imageUrl) => `
-                    <button type="button" class="view-proof-btn"
-                        data-image="${escapeHtml(imageUrl)}"
-                        data-reference="${escapeHtml(referenceNumber)}"
-                        data-customer="${escapeHtml(order?.customer_name || 'Customer')}"
-                        data-proof-type="${escapeHtml(type)}">
-                        <i class="fas ${escapeHtml(icon)}"></i> ${escapeHtml(label)}
-                    </button>
-                `;
+                const buildProofButton = (type, label, icon, imageUrl, fallbackUrl, enabled) => {
+                    const primary = imageUrl || '';
+                    const fallback = fallbackUrl || '';
+                    const isEnabled = Boolean(enabled) && (primary !== '' || fallback !== '');
+                    const classes = `view-proof-btn${isEnabled ? '' : ' is-disabled'}`;
+                    const disabledAttr = isEnabled ? '' : ' disabled';
+                    return `
+                        <button type="button" class="${classes}"
+                            data-image="${escapeHtml(primary)}"
+                            data-fallback-image="${escapeHtml(fallback)}"
+                            data-reference="${escapeHtml(referenceNumber)}"
+                            data-customer="${escapeHtml(order?.customer_name || 'Customer')}"
+                            data-proof-type="${escapeHtml(type)}"${disabledAttr}>
+                            <i class="fas ${escapeHtml(icon)}"></i> ${escapeHtml(label)}
+                        </button>
+                    `;
+                };
 
                 const proofButtonsHtml = showCompletedProofs
                     ? `
                         <div class="proof-button-group">
-                            ${buildProofButton('payment', 'View Payment Proof', 'fa-receipt', paymentProofUrl)}
-                            ${buildProofButton('delivery', 'View Delivery Proof', 'fa-truck', deliveryProofUrl)}
+                            ${buildProofButton('payment', 'View Payment Proof', 'fa-receipt', paymentProofUrl, proofFallbackUrl, hasPaymentProof)}
+                            ${buildProofButton('delivery', 'View Delivery Proof', 'fa-truck', deliveryProofUrl, deliveryProofUrl, hasDeliveryProof)}
                         </div>
                     `
-                    : buildProofButton(proofType, `View ${proofLabel}`, proofIcon, proofImageUrl);
+                    : buildProofButton(
+                        proofType,
+                        `View ${proofLabel}`,
+                        proofIcon,
+                        proofImageUrl,
+                        proofFallbackUrl,
+                        proofType === 'delivery' ? hasDeliveryProof : hasPaymentProof,
+                    );
 
                 row.innerHTML = `
                     <td>#${escapeHtml(orderId)}</td>

@@ -1746,6 +1746,13 @@ if ($receiptDataJson === false) {
                                     $paymentProofUrl = (string) ($order['payment_proof_url'] ?? '');
                                     $deliveryProofUrl = (string) ($order['delivery_proof_url'] ?? '');
                                     $showCompletedProofs = in_array($statusValue, ['completed', 'complete'], true);
+                                    $hasPaymentProof = !empty($order['has_payment_proof']);
+                                    $hasDeliveryProof = !empty($order['has_delivery_proof']);
+                                    $proofFallbackUrl = (string) ($order['proof_image_url'] ?? '');
+                                    $paymentButtonClasses = 'view-proof-btn' . ($hasPaymentProof ? '' : ' is-disabled');
+                                    $deliveryButtonClasses = 'view-proof-btn' . ($hasDeliveryProof ? '' : ' is-disabled');
+                                    $paymentButtonDisabled = $hasPaymentProof ? '' : ' disabled';
+                                    $deliveryButtonDisabled = $hasDeliveryProof ? '' : ' disabled';
                                 ?>
                                 <tr class="online-order-row" data-order-id="<?= (int) $order['id'] ?>"
                                     data-decline-reason-id="<?= (int) ($order['decline_reason_id'] ?? 0) ?>"
@@ -1765,27 +1772,35 @@ if ($receiptDataJson === false) {
                                     <td>
                                         <?php if ($showCompletedProofs): ?>
                                             <div class="proof-button-group">
-                                                <button type="button" class="view-proof-btn"
-                                                    data-image="<?= htmlspecialchars($order['payment_proof_url'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+                                                <button type="button" class="<?= htmlspecialchars($paymentButtonClasses, ENT_QUOTES, 'UTF-8') ?>"
+                                                    data-image="<?= htmlspecialchars($paymentProofUrl, ENT_QUOTES, 'UTF-8') ?>"
+                                                    data-fallback-image="<?= htmlspecialchars($proofFallbackUrl, ENT_QUOTES, 'UTF-8') ?>"
                                                     data-reference="<?= htmlspecialchars($referenceNumber, ENT_QUOTES, 'UTF-8') ?>"
                                                     data-customer="<?= htmlspecialchars($order['customer_name'] ?? 'Customer', ENT_QUOTES, 'UTF-8') ?>"
-                                                    data-proof-type="payment">
+                                                    data-proof-type="payment"<?= $paymentButtonDisabled ?>>
                                                     <i class="fas fa-receipt"></i> View Payment Proof
                                                 </button>
-                                                <button type="button" class="view-proof-btn"
+                                                <button type="button" class="<?= htmlspecialchars($deliveryButtonClasses, ENT_QUOTES, 'UTF-8') ?>"
                                                     data-image="<?= htmlspecialchars($deliveryProofUrl, ENT_QUOTES, 'UTF-8') ?>"
+                                                    data-fallback-image="<?= htmlspecialchars($deliveryProofUrl, ENT_QUOTES, 'UTF-8') ?>"
                                                     data-reference="<?= htmlspecialchars($referenceNumber, ENT_QUOTES, 'UTF-8') ?>"
                                                     data-customer="<?= htmlspecialchars($order['customer_name'] ?? 'Customer', ENT_QUOTES, 'UTF-8') ?>"
-                                                    data-proof-type="delivery">
+                                                    data-proof-type="delivery"<?= $deliveryButtonDisabled ?>>
                                                     <i class="fas fa-truck"></i> View Delivery Proof
                                                 </button>
                                             </div>
                                         <?php else: ?>
-                                            <button type="button" class="view-proof-btn"
+                                            <?php
+                                                $primaryButtonClasses = 'view-proof-btn' . ($proofImageUrl !== '' ? '' : ' is-disabled');
+                                                $primaryButtonDisabled = $proofImageUrl !== '' ? '' : ' disabled';
+                                                $primaryFallback = $proofImageUrl !== '' ? $proofImageUrl : $proofFallbackUrl;
+                                            ?>
+                                            <button type="button" class="<?= htmlspecialchars($primaryButtonClasses, ENT_QUOTES, 'UTF-8') ?>"
                                                 data-image="<?= htmlspecialchars($proofImageUrl, ENT_QUOTES, 'UTF-8') ?>"
+                                                data-fallback-image="<?= htmlspecialchars($primaryFallback, ENT_QUOTES, 'UTF-8') ?>"
                                                 data-reference="<?= htmlspecialchars($referenceNumber, ENT_QUOTES, 'UTF-8') ?>"
                                                 data-customer="<?= htmlspecialchars($order['customer_name'] ?? 'Customer', ENT_QUOTES, 'UTF-8') ?>"
-                                                data-proof-type="<?= htmlspecialchars($proofType, ENT_QUOTES, 'UTF-8') ?>">
+                                                data-proof-type="<?= htmlspecialchars($proofType, ENT_QUOTES, 'UTF-8') ?>"<?= $primaryButtonDisabled ?>>
                                                 <i class="fas <?= htmlspecialchars($proofIcon, ENT_QUOTES, 'UTF-8') ?>"></i> View <?= htmlspecialchars($proofButtonLabel, ENT_QUOTES, 'UTF-8') ?>
                                             </button>
                                         <?php endif; ?>
@@ -1997,10 +2012,6 @@ if ($receiptDataJson === false) {
             </div>
         </div>
     </div>
-    
-
-
-</script>
     <!-- Profile modal -->
     <div class="modal-overlay" id="profileModal" aria-hidden="true">
         <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="profileModalTitle">

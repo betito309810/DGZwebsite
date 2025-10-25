@@ -258,6 +258,7 @@ if (!function_exists('fetchOnlineOrdersData')) {
             $paymentDetails = parsePaymentProofValue($row['payment_proof'] ?? null, $row['reference_no'] ?? null);
             $referenceNumber = (string) ($paymentDetails['reference'] ?? '');
             $proofImage = normalizePaymentProofPath($paymentDetails['image'] ?? '');
+            $hasPaymentProof = $proofImage !== '';
             if ($deliveryProofColumn !== null && array_key_exists($deliveryProofColumn, $row)) {
                 $deliveryProofRaw = $row[$deliveryProofColumn];
             } else {
@@ -317,6 +318,7 @@ if (!function_exists('fetchOnlineOrdersData')) {
                 'proof_button_label' => $primaryProofType === 'delivery' ? 'Delivery Proof' : 'Payment Proof',
                 'payment_proof_url' => $proofImage,
                 'delivery_proof_url' => $deliveryProofUrl,
+                'has_payment_proof' => $hasPaymentProof,
                 'has_delivery_proof' => $hasDeliveryProof,
                 'delivery_proof_supported' => $supportsDeliveryProof,
                 'status_value' => $statusValue,

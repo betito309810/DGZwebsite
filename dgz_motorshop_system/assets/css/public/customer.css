@@ -785,6 +785,34 @@
     transition: background-color 0.2s ease, transform 0.2s ease;
 }
 
+.customer-delivery-proof__toggle {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.55rem 1.1rem;
+    border-radius: 999px;
+    border: 1px solid rgba(37, 99, 235, 0.25);
+    background: rgba(37, 99, 235, 0.16);
+    color: #1d4ed8;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.customer-delivery-proof__toggle:hover,
+.customer-delivery-proof__toggle:focus-visible {
+    background: rgba(37, 99, 235, 0.25);
+    transform: translateY(-1px);
+    outline: none;
+}
+
+.customer-delivery-proof__toggle.is-open {
+    background: rgba(37, 99, 235, 0.35);
+    border-color: rgba(37, 99, 235, 0.45);
+    color: #1e3a8a;
+}
+
 .customer-delivery-proof__link:hover,
 .customer-delivery-proof__link:focus-visible {
     background: rgba(37, 99, 235, 0.25);

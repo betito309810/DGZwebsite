@@ -569,6 +569,41 @@
         });
     }
 
+    document.querySelectorAll('[data-delivery-proof-toggle]').forEach((button) => {
+        const targetId = button.getAttribute('data-proof-target') || '';
+        const proofUrl = button.getAttribute('data-proof-url') || '';
+        const hasPreview = button.getAttribute('data-has-preview') === '1';
+        const preview = targetId !== '' ? document.getElementById(targetId) : null;
+
+        const setExpanded = (expanded) => {
+            const isExpanded = Boolean(expanded);
+            button.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+            button.classList.toggle('is-open', isExpanded);
+            if (preview) {
+                if (isExpanded) {
+                    preview.removeAttribute('hidden');
+                } else if (hasPreview) {
+                    preview.setAttribute('hidden', '');
+                }
+            }
+            button.textContent = isExpanded ? 'Hide proof' : 'View proof';
+        };
+
+        button.addEventListener('click', (event) => {
+            event.preventDefault();
+
+            if (hasPreview && preview) {
+                const expanded = button.getAttribute('aria-expanded') === 'true';
+                setExpanded(!expanded);
+                return;
+            }
+
+            if (proofUrl !== '') {
+                window.open(proofUrl, '_blank', 'noopener');
+            }
+        });
+    });
+
     document.querySelectorAll('[data-order-card]').forEach((card) => {
         const toggle = card.querySelector('[data-order-toggle]');
         const details = card.querySelector('[data-order-details]');

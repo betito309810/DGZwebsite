@@ -305,6 +305,14 @@ body {
     color: #fff;
 }
 
+.view-proof-btn.is-disabled,
+.view-proof-btn.is-disabled:hover {
+    border-color: #cbd5f5;
+    background: #f1f5ff;
+    color: #94a3b8;
+    cursor: not-allowed;
+}
+
 .status-badge {
     display: inline-block;
     padding: 4px 12px;

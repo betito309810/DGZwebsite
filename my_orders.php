@@ -999,16 +999,33 @@ $statusLabels = [
                         <?php if (in_array($statusKey, ['completed', 'complete'], true) && $hasDeliveryProofRecord): ?>
                             <div class="customer-order-card__section customer-order-card__section--delivery-proof">
                                 <h3>Proof of delivery</h3>
-                                <?php if ($deliveryProofPreviewUrl !== ''): ?>
-                                    <?php if ($deliveryProofLinkUrl !== ''): ?>
-                                        <a class="customer-delivery-proof__link" href="<?= htmlspecialchars($deliveryProofLinkUrl) ?>" target="_blank" rel="noopener">View proof</a>
-                                    <?php endif; ?>
-                                    <div class="customer-delivery-proof__preview">
-                                        <img src="<?= htmlspecialchars($deliveryProofPreviewUrl) ?>" alt="Proof of delivery for order #<?= (int) $order['id'] ?>">
+                                <?php
+                                    $deliveryProofTargetId = 'delivery-proof-' . (int) $order['id'];
+                                    $hasPreviewImage = $deliveryProofPreviewUrl !== '';
+                                    $proofButtonUrl = $deliveryProofLinkUrl !== '' ? $deliveryProofLinkUrl : $deliveryProofPreviewUrl;
+                                ?>
+                                <?php if ($hasPreviewImage || $proofButtonUrl !== ''): ?>
+                                    <button type="button"
+                                        class="customer-delivery-proof__toggle"
+                                        data-delivery-proof-toggle
+                                        data-proof-target="<?= htmlspecialchars($deliveryProofTargetId) ?>"
+                                        data-proof-url="<?= htmlspecialchars($proofButtonUrl) ?>"
+                                        data-has-preview="<?= $hasPreviewImage ? '1' : '0' ?>"
+                                        aria-expanded="false">
+                                        View proof
+                                    </button>
+                                    <div id="<?= htmlspecialchars($deliveryProofTargetId) ?>"
+                                        class="customer-delivery-proof__preview"
+                                        data-delivery-proof-preview<?= $hasPreviewImage ? ' hidden' : '' ?>>
+                                        <?php if ($hasPreviewImage): ?>
+                                            <img src="<?= htmlspecialchars($deliveryProofPreviewUrl) ?>" alt="Proof of delivery for order #<?= (int) $order['id'] ?>">
+                                            <?php if ($deliveryProofLinkUrl !== '' && $deliveryProofLinkUrl !== $deliveryProofPreviewUrl): ?>
+                                                <p class="customer-delivery-proof__note"><a href="<?= htmlspecialchars($deliveryProofLinkUrl) ?>" target="_blank" rel="noopener">Open full size</a></p>
+                                            <?php endif; ?>
+                                        <?php else: ?>
+                                            <p class="customer-delivery-proof__note">Click the button above to open your proof of delivery in a new tab.</p>
+                                        <?php endif; ?>
                                     </div>
-                                <?php elseif ($deliveryProofLinkUrl !== ''): ?>
-                                    <a class="customer-delivery-proof__link" href="<?= htmlspecialchars($deliveryProofLinkUrl) ?>" target="_blank" rel="noopener">Download proof</a>
-                                    <p class="customer-delivery-proof__note">Proof of delivery has been uploaded. Use the button above to download the photo.</p>
                                 <?php else: ?>
                                     <p class="customer-delivery-proof__note">Proof of delivery has been uploaded but is not available for viewing right now. Please contact support if you need a copy.</p>
                                 <?php endif; ?>
