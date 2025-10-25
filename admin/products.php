@@ -1506,6 +1506,52 @@ $validStatusFilters = ['active', 'archived', 'all'];
 if (!in_array($status_filter, $validStatusFilters, true)) {
     $status_filter = 'active';
 }
+$selectedArchivedFilter = false;
+if ($status_filter === 'active') {
+    $normaliseTaxonomyValue = static function (?string $value): string {
+        if ($value === null) {
+            return '';
+        }
+
+        $trimmed = trim((string) $value);
+        if ($trimmed === '') {
+            return '';
+        }
+
+        if (function_exists('catalogTaxonomyNormaliseName')) {
+            return catalogTaxonomyNormaliseName($trimmed);
+        }
+
+        return function_exists('mb_strtolower')
+            ? mb_strtolower($trimmed, 'UTF-8')
+            : strtolower($trimmed);
+    };
+
+    if ($brand_filter !== '') {
+        $normalisedBrandFilter = $normaliseTaxonomyValue($brand_filter);
+        foreach ($archivedBrandLabels as $archivedLabel) {
+            if ($normaliseTaxonomyValue($archivedLabel) === $normalisedBrandFilter) {
+                $selectedArchivedFilter = true;
+                break;
+            }
+        }
+    }
+
+    if (!$selectedArchivedFilter && $category_filter !== '') {
+        $normalisedCategoryFilter = $normaliseTaxonomyValue($category_filter);
+        foreach ($archivedCategoryLabels as $archivedLabel) {
+            if ($normaliseTaxonomyValue($archivedLabel) === $normalisedCategoryFilter) {
+                $selectedArchivedFilter = true;
+                break;
+            }
+        }
+    }
+
+    if ($selectedArchivedFilter) {
+        $status_filter = 'archived';
+        $_GET['status'] = $status_filter;
+    }
+}
 $isArchivedView = $status_filter === 'archived';
 
 // Pagination setup (matching sales.php style)
