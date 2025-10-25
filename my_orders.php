@@ -18,6 +18,7 @@ $logoutUrl = orderingUrl('logout.php');
 $myOrdersUrl = orderingUrl('my_orders.php');
 $settingsUrl = orderingUrl('settings.php');
 $cartUrl = orderingUrl('checkout.php');
+$customerCartEndpoint = orderingUrl('api/customer-cart.php');
 
 $pdo = db();
 $alerts = [
@@ -964,7 +965,8 @@ $statusLabels = [
 </main>
 <script>
     window.dgzPaths = Object.assign({}, window.dgzPaths || {}, {
-        checkout: <?= json_encode($cartUrl) ?>
+        checkout: <?= json_encode($cartUrl) ?>,
+        customerCart: <?= json_encode($customerCartEndpoint) ?>
     });
 </script>
 <script src="<?= htmlspecialchars($cartScript) ?>"></script>

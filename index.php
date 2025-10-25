@@ -24,6 +24,7 @@ $aboutUrl = orderingUrl('about.php');
 $trackOrderUrl = orderingUrl('track-order.php');
 $checkoutUrl = orderingUrl('checkout.php');
 $productImagesEndpoint = orderingUrl('api/product-images.php');
+$customerCartEndpoint = orderingUrl('api/customer-cart.php');
 
 $customerStylesheet = assetUrl('assets/css/public/customer.css');
 $customerScript = assetUrl('assets/js/public/customer.js');
@@ -446,7 +447,8 @@ natcasesort($categories);
             checkout: <?= json_encode($checkoutUrl) ?>,
             productImages: <?= json_encode($productImagesEndpoint) ?>,
             productPlaceholder: <?= json_encode($productPlaceholder) ?>,
-            inventoryAvailability: <?= json_encode($inventoryAvailabilityApi) ?>
+            inventoryAvailability: <?= json_encode($inventoryAvailabilityApi) ?>,
+            customerCart: <?= json_encode($customerCartEndpoint) ?>
         });
     </script>
     <script src="<?= htmlspecialchars($cartScript) ?>"></script>

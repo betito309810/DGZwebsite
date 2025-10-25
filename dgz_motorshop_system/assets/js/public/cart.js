@@ -26,6 +26,18 @@
             onProceed: null,
             onCancel: null,
         };
+        const customerSessionState = typeof document !== 'undefined' && document.body
+            ? String(document.body.dataset.customerSession || '').toLowerCase()
+            : 'guest';
+        const isCustomerAuthenticated = customerSessionState === 'authenticated';
+        const customerCartUrl = (typeof dgzPaths.customerCart === 'string' && dgzPaths.customerCart !== '')
+            ? dgzPaths.customerCart
+            : null;
+        const fetchSupported = typeof window.fetch === 'function';
+        const promiseSupported = typeof Promise !== 'undefined' && typeof Promise.resolve === 'function';
+        const serverSyncSupported = Boolean(isCustomerAuthenticated && customerCartUrl && fetchSupported && promiseSupported);
+        let serverSyncChain = promiseSupported ? Promise.resolve() : null;
+        let serverLastPayloadSignature = null;
 
         function clearHighValueDecision() {
             highValueDecision.onProceed = null;
@@ -241,9 +253,17 @@
         }
 
         // Start saveCart: persist the in-memory cart to localStorage so the cart survives reloads
-        function saveCart() {
+        function saveCart(options = {}) {
             localStorage.setItem('cartItems', JSON.stringify(cartItems));
             localStorage.setItem('cartCount', cartCount.toString());
+
+            if (!options || options.skipServer) {
+                return;
+            }
+
+            if (serverSyncSupported) {
+                queueCartSyncToServer();
+            }
         }
         // End saveCart
 
@@ -286,8 +306,341 @@
 
             updateCartBadge();
             evaluateHighValueCart();
+
+            if (serverSyncSupported) {
+                initialiseServerCartSync();
+            }
         }
         // End loadCart
+
+        function normaliseCartStateItem(item) {
+            if (!item || typeof item !== 'object') {
+                return null;
+            }
+
+            const productRaw = item.id ?? item.product_id;
+            const productId = Number(productRaw);
+            if (!Number.isFinite(productId) || productId <= 0) {
+                return null;
+            }
+
+            const variantRaw = item.variantId ?? item.variant_id ?? null;
+            let variantId = null;
+            if (variantRaw !== null && variantRaw !== undefined) {
+                const candidate = Number(variantRaw);
+                if (Number.isFinite(candidate) && candidate > 0) {
+                    variantId = candidate;
+                }
+            }
+
+            const quantity = Number(item.quantity);
+            if (!Number.isFinite(quantity) || quantity <= 0) {
+                return null;
+            }
+
+            const nameCandidate = item.name ?? item.product_name ?? '';
+            const variantLabelCandidate = item.variantLabel ?? item.variant_label ?? '';
+            const variantPriceRaw = item.variantPrice ?? item.variant_price ?? null;
+            const basePriceRaw = item.price ?? item.unitPrice ?? item.unit_price ?? variantPriceRaw ?? 0;
+
+            let unitPrice = normaliseMoney(basePriceRaw);
+            if (unitPrice <= 0 && variantPriceRaw !== null && variantPriceRaw !== undefined) {
+                unitPrice = normaliseMoney(variantPriceRaw);
+            }
+
+            let variantPrice = null;
+            if (variantId !== null) {
+                variantPrice = normaliseMoney(variantPriceRaw);
+                if (variantPrice <= 0) {
+                    variantPrice = unitPrice;
+                }
+            }
+
+            if (variantPrice === null) {
+                variantPrice = unitPrice;
+            }
+
+            return {
+                id: productId,
+                name: typeof nameCandidate === 'string' && nameCandidate.trim() !== '' ? nameCandidate.trim() : 'Product',
+                price: unitPrice > 0 ? unitPrice : 0,
+                quantity: Math.min(999, Math.max(1, Math.trunc(quantity))),
+                variantId,
+                variantLabel: typeof variantLabelCandidate === 'string' ? variantLabelCandidate : '',
+                variantPrice: variantPrice > 0 ? variantPrice : unitPrice,
+            };
+        }
+
+        function serialiseCartItemsForServer(items = cartItems) {
+            const map = new Map();
+
+            items.forEach((item) => {
+                const normalised = normaliseCartStateItem(item);
+                if (!normalised) {
+                    return;
+                }
+
+                const key = `${normalised.id}:${normalised.variantId === null ? 'null' : normalised.variantId}`;
+                const quantity = Number(normalised.quantity) || 0;
+                if (quantity <= 0) {
+                    return;
+                }
+
+                if (!map.has(key)) {
+                    map.set(key, {
+                        product_id: normalised.id,
+                        variant_id: normalised.variantId,
+                        quantity: 0,
+                    });
+                }
+
+                const entry = map.get(key);
+                entry.quantity = Math.min(999, entry.quantity + quantity);
+            });
+
+            const payload = Array.from(map.values());
+            if (payload.length > 50) {
+                return payload.slice(0, 50);
+            }
+
+            return payload;
+        }
+
+        function computeCartSignature(payload) {
+            if (!Array.isArray(payload)) {
+                return null;
+            }
+
+            const sorted = payload
+                .map((item) => ({
+                    product_id: Number(item.product_id) || 0,
+                    variant_id: item.variant_id === null || item.variant_id === undefined ? null : Number(item.variant_id),
+                    quantity: Number(item.quantity) || 0,
+                }))
+                .sort((a, b) => {
+                    if (a.product_id !== b.product_id) {
+                        return a.product_id - b.product_id;
+                    }
+                    const aVariant = a.variant_id ?? 0;
+                    const bVariant = b.variant_id ?? 0;
+                    if (aVariant !== bVariant) {
+                        return aVariant - bVariant;
+                    }
+                    return a.quantity - b.quantity;
+                });
+
+            return JSON.stringify(sorted);
+        }
+
+        function mergeCartCollections(primaryItems, secondaryItems) {
+            const map = new Map();
+
+            const addItems = (items) => {
+                items.forEach((item) => {
+                    const normalised = normaliseCartStateItem(item);
+                    if (!normalised) {
+                        return;
+                    }
+
+                    const key = `${normalised.id}:${normalised.variantId === null ? 'null' : normalised.variantId}`;
+                    const quantity = Number(normalised.quantity) || 0;
+                    if (quantity <= 0) {
+                        return;
+                    }
+
+                    if (!map.has(key)) {
+                        map.set(key, {
+                            id: normalised.id,
+                            name: normalised.name,
+                            price: normalised.variantId !== null ? normalised.variantPrice : normalised.price,
+                            quantity: Math.min(999, quantity),
+                            variantId: normalised.variantId,
+                            variantLabel: normalised.variantLabel,
+                            variantPrice: normalised.variantPrice,
+                        });
+                        return;
+                    }
+
+                    const existing = map.get(key);
+                    existing.quantity = Math.min(999, existing.quantity + quantity);
+                    if (existing.name === 'Product' && normalised.name !== 'Product') {
+                        existing.name = normalised.name;
+                    }
+                    if ((existing.variantLabel === '' || existing.variantLabel === null) && normalised.variantLabel) {
+                        existing.variantLabel = normalised.variantLabel;
+                    }
+                    if (normalised.variantId !== null) {
+                        if (normalised.variantPrice > 0) {
+                            existing.variantPrice = normalised.variantPrice;
+                            existing.price = normalised.variantPrice;
+                        }
+                    } else if (existing.price <= 0 && normalised.price > 0) {
+                        existing.price = normalised.price;
+                    }
+                });
+            };
+
+            addItems(primaryItems);
+            addItems(secondaryItems);
+
+            return Array.from(map.values());
+        }
+
+        function applyServerCartItems(items, options = {}) {
+            const normalisedItems = Array.isArray(items)
+                ? items.map((item) => normaliseCartStateItem(item)).filter(Boolean)
+                : [];
+
+            cartItems = normalisedItems;
+            cartCount = cartItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+            updateCartBadge();
+            evaluateHighValueCart();
+
+            if (!options || !options.skipLocalStorage) {
+                saveCart({ skipServer: true });
+            }
+
+            if (!options || !options.skipSignatureUpdate) {
+                const payload = serialiseCartItemsForServer(cartItems);
+                serverLastPayloadSignature = computeCartSignature(payload);
+            }
+        }
+
+        async function fetchServerCart() {
+            if (!serverSyncSupported) {
+                return null;
+            }
+
+            try {
+                const response = await fetch(customerCartUrl, {
+                    method: 'GET',
+                    credentials: 'same-origin',
+                    headers: {
+                        Accept: 'application/json',
+                    },
+                });
+
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        serverLastPayloadSignature = null;
+                        return [];
+                    }
+
+                    throw new Error(`Request failed with status ${response.status}`);
+                }
+
+                const data = await response.json();
+                return Array.isArray(data.items) ? data.items : [];
+            } catch (error) {
+                console.error('Unable to load your saved cart.', error);
+                return null;
+            }
+        }
+
+        async function pushCartToServer(payload, signature) {
+            if (!serverSyncSupported) {
+                return;
+            }
+
+            try {
+                const response = await fetch(customerCartUrl, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                    },
+                    body: JSON.stringify({ items: payload }),
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Request failed with status ${response.status}`);
+                }
+
+                const data = await response.json();
+                if (data && Array.isArray(data.items)) {
+                    applyServerCartItems(data.items, { skipSignatureUpdate: true });
+                }
+
+                serverLastPayloadSignature = signature ?? computeCartSignature(serialiseCartItemsForServer(cartItems));
+            } catch (error) {
+                console.error('Unable to save your cart.', error);
+                serverLastPayloadSignature = null;
+                throw error;
+            }
+        }
+
+        function queueCartSyncToServer() {
+            if (!serverSyncSupported) {
+                return;
+            }
+
+            const payload = serialiseCartItemsForServer(cartItems);
+            const signature = computeCartSignature(payload);
+
+            if (signature !== null && signature === serverLastPayloadSignature) {
+                return;
+            }
+
+            serverSyncChain = serverSyncChain
+                .catch(() => undefined)
+                .then(() => pushCartToServer(payload, signature))
+                .catch(() => undefined);
+        }
+
+        function initialiseServerCartSync() {
+            if (!serverSyncSupported) {
+                return;
+            }
+
+            const localSnapshot = cartItems.slice();
+            const localPayload = serialiseCartItemsForServer(localSnapshot);
+            const localSignature = computeCartSignature(localPayload);
+
+            serverSyncChain = serverSyncChain
+                .catch(() => undefined)
+                .then(async () => {
+                    const serverRawItems = await fetchServerCart();
+                    if (serverRawItems === null) {
+                        serverLastPayloadSignature = null;
+                        return;
+                    }
+
+                    const normalisedServer = serverRawItems.map((item) => normaliseCartStateItem(item)).filter(Boolean);
+                    const serverPayload = serialiseCartItemsForServer(normalisedServer);
+                    const serverSignature = computeCartSignature(serverPayload);
+
+                    if (normalisedServer.length === 0 && localSnapshot.length === 0) {
+                        serverLastPayloadSignature = '[]';
+                        return;
+                    }
+
+                    let finalItems;
+                    if (normalisedServer.length === 0) {
+                        finalItems = localSnapshot;
+                    } else if (localSnapshot.length === 0) {
+                        finalItems = normalisedServer;
+                    } else {
+                        finalItems = mergeCartCollections(normalisedServer, localSnapshot);
+                    }
+
+                    applyServerCartItems(finalItems, { skipSignatureUpdate: true });
+
+                    const mergedPayload = serialiseCartItemsForServer(finalItems);
+                    const mergedSignature = computeCartSignature(mergedPayload);
+                    serverLastPayloadSignature = mergedSignature;
+
+                    if (mergedSignature !== serverSignature) {
+                        try {
+                            await pushCartToServer(mergedPayload, mergedSignature);
+                        } catch (error) {
+                            // Error already logged in pushCartToServer
+                        }
+                    } else if (mergedSignature !== localSignature) {
+                        saveCart({ skipServer: true });
+                    }
+                });
+        }
 
         // Start handleCartClick: intercept the cart button to validate and forward cart contents to checkout
         function handleCartClick(event) {

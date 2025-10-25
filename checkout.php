@@ -127,6 +127,7 @@ $logoAsset = assetUrl('assets/logo.png');
 $productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
 $shopUrl = orderingUrl('index.php');
 $inventoryAvailabilityApi = orderingUrl('api/inventory-availability.php');
+$customerCartApi = orderingUrl('api/customer-cart.php');
 
 $customerStylesheet = assetUrl('assets/css/public/customer.css');
 $customerScript = assetUrl('assets/js/public/customer.js');
@@ -1102,7 +1103,11 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
     }
     echo '<p style="color: #636e72; margin-bottom: 30px;">Status: <span style="background: #fdcb6e; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">Pending</span></p>';
     echo '<a href="' . htmlspecialchars($shopUrl, ENT_QUOTES, 'UTF-8') . '" style="background: #2563eb; color: white; text-decoration: none; padding: 15px 30px; border-radius: 8px; font-weight: 600;">Back to Shop</a>';
-    echo '<script>try{localStorage.removeItem("cartItems");localStorage.removeItem("cartCount");}catch(e){}</script>';
+    $clearCartScript = '<script>(function(){' .
+        'try{localStorage.removeItem("cartItems");localStorage.removeItem("cartCount");}catch(e){}' .
+        'try{fetch(' . json_encode($customerCartApi) . ',{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({items:[]})}).catch(function(){})}catch(e){}' .
+        '})();</script>';
+    echo $clearCartScript;
     echo '</div>';
     exit;
 }

@@ -17,6 +17,7 @@ $productPlaceholder = assetUrl('assets/img/product-placeholder.svg');
 $checkoutModalStylesheet = assetUrl('assets/css/public/checkoutModals.css');
 $customerStylesheet = assetUrl('assets/css/public/customer.css');
 $customerScript = assetUrl('assets/js/public/customer.js');
+$customerCartEndpoint = orderingUrl('api/customer-cart.php');
 $customerSessionState = customerSessionExport();
 $isCustomerAuthenticated = !empty($customerSessionState['authenticated']);
 $customerFirstName = $customerSessionState['firstName'] ?? null;
@@ -153,7 +154,8 @@ $bodyCustomerFirstName = $customerFirstName ?? '';
         window.dgzPaths = Object.assign({}, window.dgzPaths || {}, {
             checkout: <?= json_encode($checkoutUrl) ?>,
             orderStatus: <?= json_encode($orderStatusEndpoint) ?>,
-            productPlaceholder: <?= json_encode($productPlaceholder) ?>
+            productPlaceholder: <?= json_encode($productPlaceholder) ?>,
+            customerCart: <?= json_encode($customerCartEndpoint) ?>
         });
     </script>
     <script src="<?= htmlspecialchars($customerScript) ?>" defer></script>
