@@ -584,7 +584,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                 }
 
                 $transitions = [
-                    'pending' => ['payment_verification', 'disapproved'],
+                    'pending' => ['payment_verification', 'approved', 'disapproved'],
                     'payment_verification' => ['approved', 'disapproved'],
                     'approved' => ['delivery'],
                     'delivery' => ['completed'],
@@ -1743,6 +1743,9 @@ if ($receiptDataJson === false) {
                                     $proofButtonLabel = (string) ($order['proof_button_label'] ?? ($proofType === 'delivery' ? 'Delivery Proof' : 'Payment Proof'));
                                     $proofIcon = $proofType === 'delivery' ? 'fa-truck' : 'fa-receipt';
                                     $proofFieldClasses = 'delivery-proof-field' . ($supportsDeliveryProof ? '' : ' is-disabled');
+                                    $paymentProofUrl = (string) ($order['payment_proof_url'] ?? '');
+                                    $deliveryProofUrl = (string) ($order['delivery_proof_url'] ?? '');
+                                    $showCompletedProofs = in_array($statusValue, ['completed', 'complete'], true);
                                 ?>
                                 <tr class="online-order-row" data-order-id="<?= (int) $order['id'] ?>"
                                     data-decline-reason-id="<?= (int) ($order['decline_reason_id'] ?? 0) ?>"
@@ -1760,13 +1763,32 @@ if ($receiptDataJson === false) {
                                         <?php endif; ?>
                                     </td>
                                     <td>
-                                        <button type="button" class="view-proof-btn"
-                                            data-image="<?= htmlspecialchars($proofImageUrl, ENT_QUOTES, 'UTF-8') ?>"
-                                            data-reference="<?= htmlspecialchars($referenceNumber, ENT_QUOTES, 'UTF-8') ?>"
-                                            data-customer="<?= htmlspecialchars($order['customer_name'] ?? 'Customer', ENT_QUOTES, 'UTF-8') ?>"
-                                            data-proof-type="<?= htmlspecialchars($proofType, ENT_QUOTES, 'UTF-8') ?>">
-                                            <i class="fas <?= htmlspecialchars($proofIcon, ENT_QUOTES, 'UTF-8') ?>"></i> View <?= htmlspecialchars($proofButtonLabel, ENT_QUOTES, 'UTF-8') ?>
-                                        </button>
+                                        <?php if ($showCompletedProofs): ?>
+                                            <div class="proof-button-group">
+                                                <button type="button" class="view-proof-btn"
+                                                    data-image="<?= htmlspecialchars($order['payment_proof_url'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+                                                    data-reference="<?= htmlspecialchars($referenceNumber, ENT_QUOTES, 'UTF-8') ?>"
+                                                    data-customer="<?= htmlspecialchars($order['customer_name'] ?? 'Customer', ENT_QUOTES, 'UTF-8') ?>"
+                                                    data-proof-type="payment">
+                                                    <i class="fas fa-receipt"></i> View Payment Proof
+                                                </button>
+                                                <button type="button" class="view-proof-btn"
+                                                    data-image="<?= htmlspecialchars($deliveryProofUrl, ENT_QUOTES, 'UTF-8') ?>"
+                                                    data-reference="<?= htmlspecialchars($referenceNumber, ENT_QUOTES, 'UTF-8') ?>"
+                                                    data-customer="<?= htmlspecialchars($order['customer_name'] ?? 'Customer', ENT_QUOTES, 'UTF-8') ?>"
+                                                    data-proof-type="delivery">
+                                                    <i class="fas fa-truck"></i> View Delivery Proof
+                                                </button>
+                                            </div>
+                                        <?php else: ?>
+                                            <button type="button" class="view-proof-btn"
+                                                data-image="<?= htmlspecialchars($proofImageUrl, ENT_QUOTES, 'UTF-8') ?>"
+                                                data-reference="<?= htmlspecialchars($referenceNumber, ENT_QUOTES, 'UTF-8') ?>"
+                                                data-customer="<?= htmlspecialchars($order['customer_name'] ?? 'Customer', ENT_QUOTES, 'UTF-8') ?>"
+                                                data-proof-type="<?= htmlspecialchars($proofType, ENT_QUOTES, 'UTF-8') ?>">
+                                                <i class="fas <?= htmlspecialchars($proofIcon, ENT_QUOTES, 'UTF-8') ?>"></i> View <?= htmlspecialchars($proofButtonLabel, ENT_QUOTES, 'UTF-8') ?>
+                                            </button>
+                                        <?php endif; ?>
                                     </td>
                                     <td>
                                         <span class="status-badge <?= htmlspecialchars($statusBadgeClass, ENT_QUOTES, 'UTF-8') ?>">

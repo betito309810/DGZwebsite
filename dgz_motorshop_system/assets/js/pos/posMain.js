@@ -616,6 +616,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     ? String(order.proof_button_label)
                     : (proofType === 'delivery' ? 'Delivery Proof' : 'Payment Proof');
                 const proofIcon = proofType === 'delivery' ? 'fa-truck' : 'fa-receipt';
+                const paymentProofUrl = order && order.payment_proof_url ? String(order.payment_proof_url) : '';
+                const deliveryProofUrl = order && order.delivery_proof_url ? String(order.delivery_proof_url) : '';
+                const showCompletedProofs = ['completed', 'complete'].includes(statusValue);
                 const availableStatusChanges = Array.isArray(order?.available_status_changes)
                     ? order.available_status_changes
                     : [];
@@ -682,6 +685,25 @@ document.addEventListener('DOMContentLoaded', () => {
                         </form>
                     `;
 
+                const buildProofButton = (type, label, icon, imageUrl) => `
+                    <button type="button" class="view-proof-btn"
+                        data-image="${escapeHtml(imageUrl)}"
+                        data-reference="${escapeHtml(referenceNumber)}"
+                        data-customer="${escapeHtml(order?.customer_name || 'Customer')}"
+                        data-proof-type="${escapeHtml(type)}">
+                        <i class="fas ${escapeHtml(icon)}"></i> ${escapeHtml(label)}
+                    </button>
+                `;
+
+                const proofButtonsHtml = showCompletedProofs
+                    ? `
+                        <div class="proof-button-group">
+                            ${buildProofButton('payment', 'View Payment Proof', 'fa-receipt', paymentProofUrl)}
+                            ${buildProofButton('delivery', 'View Delivery Proof', 'fa-truck', deliveryProofUrl)}
+                        </div>
+                    `
+                    : buildProofButton(proofType, `View ${proofLabel}`, proofIcon, proofImageUrl);
+
                 row.innerHTML = `
                     <td>#${escapeHtml(orderId)}</td>
                     <td>${escapeHtml(order?.customer_name || 'Customer')}</td>
@@ -691,15 +713,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         ? `<span class="reference-badge">${escapeHtml(referenceNumber)}</span>`
                         : '<span class="muted">Not provided</span>'}
                     </td>
-                    <td>
-                        <button type="button" class="view-proof-btn"
-                            data-image="${escapeHtml(proofImageUrl)}"
-                            data-reference="${escapeHtml(referenceNumber)}"
-                            data-customer="${escapeHtml(order?.customer_name || 'Customer')}"
-                            data-proof-type="${escapeHtml(proofType)}">
-                            <i class="fas ${escapeHtml(proofIcon)}"></i> View ${escapeHtml(proofLabel)}
-                        </button>
-                    </td>
+                    <td>${proofButtonsHtml}</td>
                     <td>
                         <span class="status-badge ${escapeHtml(badgeClass)}">${escapeHtml(statusLabel)}</span>
                         ${statusFormHtml}

@@ -280,6 +280,12 @@ body {
     font-size: 13px;
 }
 
+.proof-button-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
 .view-proof-btn {
     display: inline-flex;
     align-items: center;
