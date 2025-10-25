@@ -187,6 +187,33 @@ if (!function_exists('ensureOrdersProcessedByColumn')) {
     }
 }
 ensureOrdersProcessedByColumn($pdo);
+if (!function_exists('ensureOrdersDeliveryProofColumn')) {
+    /**
+     * Make sure the orders table can store proof of delivery attachments.
+     */
+    function ensureOrdersDeliveryProofColumn(PDO $pdo): void
+    {
+        static $ensured = false;
+        if ($ensured) {
+            return;
+        }
+
+        $ensured = true;
+
+        try {
+            $stmt = $pdo->query("SHOW COLUMNS FROM orders LIKE 'delivery_proof'");
+            $hasColumn = $stmt !== false && $stmt->fetch() !== false;
+            if ($hasColumn) {
+                return;
+            }
+
+            $pdo->exec("ALTER TABLE orders ADD COLUMN delivery_proof TEXT NULL AFTER payment_proof");
+        } catch (Throwable $e) {
+            error_log('Unable to ensure delivery_proof column: ' . $e->getMessage());
+        }
+    }
+}
+ensureOrdersDeliveryProofColumn($pdo);
 if (!function_exists('ensureOrderItemsDescriptionColumn')) {
     /**
      * Ensure order_items table can store custom item labels (e.g. POS services).
@@ -570,9 +597,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                 }
 
                 $transitions = [
-                    'pending' => ['payment_verification', 'approved', 'delivery', 'disapproved', 'completed'],
-                    'payment_verification' => ['approved', 'delivery', 'disapproved'],
-                    'approved' => ['delivery', 'completed'],
+                    'pending' => ['payment_verification', 'approved', 'disapproved'],
+                    'payment_verification' => ['approved', 'disapproved'],
+                    'approved' => ['delivery'],
                     'delivery' => ['completed'],
                     'completed' => [],
                     'complete' => ['completed'],
@@ -588,42 +615,123 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                 $success = false;
 
                 if ($transitionAllowed) {
-                    $fields = [];
-                    $params = [];
+                    $deliveryProofPath = null;
+                    $requiresDeliveryProof = ($newStatus === 'completed');
 
-                    if ($newStatus !== $currentStatus) {
-                        $fields[] = 'status = ?';
-                        $params[] = $newStatus;
-                    }
+                    if ($requiresDeliveryProof) {
+                        $fileInfo = $_FILES['delivery_proof'] ?? null;
+                        $fileError = is_array($fileInfo) ? (int) ($fileInfo['error'] ?? UPLOAD_ERR_NO_FILE) : UPLOAD_ERR_NO_FILE;
 
-                    $existingInvoice = $supportsInvoiceNumbers
-                        ? (string) ($currentOrder['invoice_number'] ?? '')
-                        : '';
-                    $needsInvoice = $supportsInvoiceNumbers
-                        && in_array($newStatus, ['delivery', 'completed'], true)
-                        && $existingInvoice === '';
+                        if ($fileError === UPLOAD_ERR_NO_FILE) {
+                            $statusError = 'delivery_proof_required';
+                        } elseif ($fileError !== UPLOAD_ERR_OK) {
+                            $statusError = 'delivery_proof_upload_error';
+                        } else {
+                            $allowedMimeTypes = [
+                                'image/jpeg' => 'jpg',
+                                'image/png' => 'png',
+                                'image/gif' => 'gif',
+                                'image/webp' => 'webp',
+                            ];
 
-                    if ($needsInvoice) {
-                        $generatedInvoice = generateInvoiceNumber($pdo);
-                        if ($generatedInvoice !== '') {
-                            $fields[] = 'invoice_number = ?';
-                            $params[] = $generatedInvoice;
+                            $tmpName = (string) ($fileInfo['tmp_name'] ?? '');
+                            $finfo = $tmpName !== '' ? finfo_open(FILEINFO_MIME_TYPE) : false;
+                            $mimeType = $finfo ? finfo_file($finfo, $tmpName) : null;
+                            if ($finfo) {
+                                finfo_close($finfo);
+                            }
+
+                            if (!$mimeType || !isset($allowedMimeTypes[$mimeType])) {
+                                $statusError = 'delivery_proof_invalid_type';
+                            } else {
+                                $uploadsRoot = __DIR__ . '/../dgz_motorshop_system/uploads';
+                                $uploadDir = $uploadsRoot . '/delivery-proofs';
+                                $publicDir = 'dgz_motorshop_system/uploads/delivery-proofs';
+
+                                $ensureDir = static function (string $path): bool {
+                                    if (is_dir($path)) {
+                                        return is_writable($path) || @chmod($path, 0777);
+                                    }
+
+                                    if (!@mkdir($path, 0777, true) && !is_dir($path)) {
+                                        return false;
+                                    }
+
+                                    return is_writable($path) || @chmod($path, 0777);
+                                };
+
+                                if (!$ensureDir($uploadsRoot) || !$ensureDir($uploadDir)) {
+                                    $statusError = 'delivery_proof_storage_error';
+                                } else {
+                                    try {
+                                        $random = bin2hex(random_bytes(16));
+                                    } catch (Throwable $e) {
+                                        $random = (string) time();
+                                    }
+
+                                    $fileName = sprintf('%s.%s', $random, $allowedMimeTypes[$mimeType]);
+                                    $targetPath = $uploadDir . '/' . $fileName;
+
+                                    if (!move_uploaded_file($tmpName, $targetPath)) {
+                                        $fileContents = @file_get_contents($tmpName);
+                                        if ($fileContents === false || @file_put_contents($targetPath, $fileContents) === false) {
+                                            $statusError = 'delivery_proof_storage_error';
+                                        }
+                                    }
+
+                                    if ($statusError === '') {
+                                        $deliveryProofPath = $publicDir . '/' . $fileName;
+                                    }
+                                }
+                            }
                         }
                     }
 
-                    $fields[] = 'decline_reason_id = ?';
-                    $params[] = null;
-                    $fields[] = 'decline_reason_note = ?';
-                    $params[] = null;
+                    if ($statusError !== '') {
+                        $success = false;
+                    } else {
+                        $fields = [];
+                        $params = [];
 
-                    $fields[] = 'processed_by_user_id = ?';
-                    $params[] = isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null;
+                        if ($newStatus !== $currentStatus) {
+                            $fields[] = 'status = ?';
+                            $params[] = $newStatus;
+                        }
 
-                    $params[] = $orderId;
-                    $updateSql = 'UPDATE orders SET ' . implode(', ', $fields) . ' WHERE id = ?';
-                    $stmt = $pdo->prepare($updateSql);
-                    $success = $stmt->execute($params);
-                    $statusParam = $success ? '1' : '0';
+                        $existingInvoice = $supportsInvoiceNumbers
+                            ? (string) ($currentOrder['invoice_number'] ?? '')
+                            : '';
+                        $needsInvoice = $supportsInvoiceNumbers
+                            && in_array($newStatus, ['delivery', 'completed'], true)
+                            && $existingInvoice === '';
+
+                        if ($needsInvoice) {
+                            $generatedInvoice = generateInvoiceNumber($pdo);
+                            if ($generatedInvoice !== '') {
+                                $fields[] = 'invoice_number = ?';
+                                $params[] = $generatedInvoice;
+                            }
+                        }
+
+                        $fields[] = 'decline_reason_id = ?';
+                        $params[] = null;
+                        $fields[] = 'decline_reason_note = ?';
+                        $params[] = null;
+
+                        $fields[] = 'processed_by_user_id = ?';
+                        $params[] = isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null;
+
+                        if ($deliveryProofPath !== null) {
+                            $fields[] = 'delivery_proof = ?';
+                            $params[] = $deliveryProofPath;
+                        }
+
+                        $params[] = $orderId;
+                        $updateSql = 'UPDATE orders SET ' . implode(', ', $fields) . ' WHERE id = ?';
+                        $stmt = $pdo->prepare($updateSql);
+                        $success = $stmt->execute($params);
+                        $statusParam = $success ? '1' : '0';
+                    }
 
                     if ($success && $newStatus === 'approved') {
                         $orderInfo = fetchOrderNotificationContext($pdo, $orderId);
@@ -1534,6 +1642,14 @@ if ($receiptDataJson === false) {
                             $statusMessage = 'Cancelled orders can no longer be updated from the POS.';
                         } elseif ($statusErrorCode === 'invalid_transition') {
                             $statusMessage = 'Please choose one of the available next statuses for this order.';
+                        } elseif ($statusErrorCode === 'delivery_proof_required') {
+                            $statusMessage = 'Please upload a proof of delivery photo before completing the order.';
+                        } elseif ($statusErrorCode === 'delivery_proof_upload_error') {
+                            $statusMessage = 'We could not upload the delivery proof. Please try again.';
+                        } elseif ($statusErrorCode === 'delivery_proof_invalid_type') {
+                            $statusMessage = 'Delivery proof must be an image (JPG, PNG, GIF, or WEBP).';
+                        } elseif ($statusErrorCode === 'delivery_proof_storage_error') {
+                            $statusMessage = 'We could not save the delivery proof. Please check the uploads folder permissions.';
                         }
                     }
                 ?>
@@ -1543,20 +1659,32 @@ if ($receiptDataJson === false) {
                 </div>
             <?php endif; ?>
 
+            <?php
+                $statusTabs = [
+                    '' => ['label' => 'All Orders', 'icon' => 'fa-list'],
+                    'pending' => ['label' => 'Pending', 'icon' => 'fa-hourglass-half'],
+                    'payment_verification' => ['label' => 'Payment Verification', 'icon' => 'fa-money-check'],
+                    'approved' => ['label' => 'Approved', 'icon' => 'fa-circle-check'],
+                    'delivery' => ['label' => 'Out for Delivery', 'icon' => 'fa-truck'],
+                    'completed' => ['label' => 'Completed', 'icon' => 'fa-clipboard-check'],
+                    'disapproved' => ['label' => 'Disapproved', 'icon' => 'fa-circle-xmark'],
+                ];
+            ?>
             <div class="online-orders-filters">
-                <div class="filter-group">
-                    <label for="statusFilter">Filter by Status:</label>
-                    <select id="statusFilter" name="status_filter">
-                        <option value="">All Orders</option>
-                        <option value="pending" <?= $statusFilter === 'pending' ? 'selected' : '' ?>>Pending</option>
-                        <option value="payment_verification" <?= $statusFilter === 'payment_verification' ? 'selected' : '' ?>>Payment Verification</option>
-                        <option value="approved" <?= $statusFilter === 'approved' ? 'selected' : '' ?>>Approved</option>
-                        <option value="delivery" <?= $statusFilter === 'delivery' ? 'selected' : '' ?>>Out for Delivery</option>
-                        <option value="completed" <?= $statusFilter === 'completed' ? 'selected' : '' ?>>Completed</option>
-                        <option value="disapproved" <?= $statusFilter === 'disapproved' ? 'selected' : '' ?>>Disapproved</option>
-                    </select>
+                <div class="status-filter-tabs" role="tablist">
+                    <?php foreach ($statusTabs as $value => $meta): ?>
+                        <?php $isActive = ($value === '' && $statusFilter === '') || $statusFilter === $value; ?>
+                        <button type="button"
+                            class="status-filter-button<?= $isActive ? ' is-active' : '' ?>"
+                            data-status-filter-button
+                            data-status-value="<?= htmlspecialchars($value, ENT_QUOTES, 'UTF-8') ?>"
+                            aria-pressed="<?= $isActive ? 'true' : 'false' ?>">
+                            <i class="fas <?= htmlspecialchars($meta['icon'], ENT_QUOTES, 'UTF-8') ?>"></i>
+                            <?= htmlspecialchars($meta['label'], ENT_QUOTES, 'UTF-8') ?>
+                        </button>
+                    <?php endforeach; ?>
                 </div>
-              
+
             </div>
 
             <div class="online-orders-container">
@@ -1595,6 +1723,13 @@ if ($receiptDataJson === false) {
                                     $statusBadgeClass = (string) ($order['status_badge_class'] ?? ('status-' . $statusValue));
                                     $statusFormDisabled = !empty($order['status_form_disabled']);
                                     $availableStatusChanges = $order['available_status_changes'] ?? [];
+                                    $defaultNextStatus = (!$statusFormDisabled && !empty($availableStatusChanges))
+                                        ? (string) ($availableStatusChanges[0]['value'] ?? '')
+                                        : '';
+                                    $proofFieldHidden = $defaultNextStatus !== 'completed';
+                                    $proofType = (string) ($order['proof_type'] ?? 'payment');
+                                    $proofButtonLabel = (string) ($order['proof_button_label'] ?? ($proofType === 'delivery' ? 'Delivery Proof' : 'Payment Proof'));
+                                    $proofIcon = $proofType === 'delivery' ? 'fa-truck' : 'fa-receipt';
                                 ?>
                                 <tr class="online-order-row" data-order-id="<?= (int) $order['id'] ?>"
                                     data-decline-reason-id="<?= (int) ($order['decline_reason_id'] ?? 0) ?>"
@@ -1615,20 +1750,21 @@ if ($receiptDataJson === false) {
                                         <button type="button" class="view-proof-btn"
                                             data-image="<?= htmlspecialchars($proofImageUrl, ENT_QUOTES, 'UTF-8') ?>"
                                             data-reference="<?= htmlspecialchars($referenceNumber, ENT_QUOTES, 'UTF-8') ?>"
-                                            data-customer="<?= htmlspecialchars($order['customer_name'] ?? 'Customer', ENT_QUOTES, 'UTF-8') ?>">
-                                            <i class="fas fa-receipt"></i> View
+                                            data-customer="<?= htmlspecialchars($order['customer_name'] ?? 'Customer', ENT_QUOTES, 'UTF-8') ?>"
+                                            data-proof-type="<?= htmlspecialchars($proofType, ENT_QUOTES, 'UTF-8') ?>">
+                                            <i class="fas <?= htmlspecialchars($proofIcon, ENT_QUOTES, 'UTF-8') ?>"></i> View <?= htmlspecialchars($proofButtonLabel, ENT_QUOTES, 'UTF-8') ?>
                                         </button>
                                     </td>
                                     <td>
                                         <span class="status-badge <?= htmlspecialchars($statusBadgeClass, ENT_QUOTES, 'UTF-8') ?>">
                                             <?= htmlspecialchars($order['status_label'] ?? ucfirst($statusValue), ENT_QUOTES, 'UTF-8') ?>
                                         </span>
-                                        <form method="post" class="status-form">
+                                        <form method="post" class="status-form" enctype="multipart/form-data">
                                             <input type="hidden" name="order_id" value="<?= (int) $order['id'] ?>">
                                             <input type="hidden" name="update_order_status" value="1">
                                             <input type="hidden" name="decline_reason_id" value="">
                                             <input type="hidden" name="decline_reason_note" value="">
-                                            <select name="new_status" <?= $statusFormDisabled ? 'disabled' : '' ?>>
+                                            <select name="new_status" <?= $statusFormDisabled ? 'disabled' : '' ?> data-status-select>
                                                 <?php if ($statusFormDisabled): ?>
                                                     <option value=""><?= htmlspecialchars($order['status_label'] ?? ucfirst($statusValue), ENT_QUOTES, 'UTF-8') ?></option>
                                                 <?php else: ?>
@@ -1639,6 +1775,11 @@ if ($receiptDataJson === false) {
                                                     <?php endforeach; ?>
                                                 <?php endif; ?>
                                             </select>
+                                            <div class="delivery-proof-field" data-delivery-proof-field <?= $proofFieldHidden ? 'hidden' : '' ?>>
+                                                <label for="delivery-proof-<?= (int) $order['id'] ?>">Proof of delivery</label>
+                                                <input type="file" name="delivery_proof" id="delivery-proof-<?= (int) $order['id'] ?>" accept="image/*" <?= $statusFormDisabled ? 'disabled' : '' ?> <?= $defaultNextStatus === 'completed' ? 'required' : '' ?>>
+                                                <p class="delivery-proof-help">Upload a photo confirming the delivery.</p>
+                                            </div>
                                             <button type="submit" class="status-save" <?= $statusFormDisabled ? 'disabled' : '' ?>>Update</button>
                                         </form>
                                         <?php if ($statusValue === 'disapproved' && !empty($order['decline_reason_label'])): ?>

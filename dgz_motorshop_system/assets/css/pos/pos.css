@@ -353,6 +353,33 @@ body {
     font-size: 13px;
 }
 
+.status-form .delivery-proof-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.status-form .delivery-proof-field[hidden] {
+    display: none;
+}
+
+.status-form .delivery-proof-field label {
+    font-size: 13px;
+    color: #374151;
+    font-weight: 600;
+}
+
+.status-form .delivery-proof-field input[type="file"] {
+    font-size: 13px;
+    color: #374151;
+}
+
+.status-form .delivery-proof-help {
+    font-size: 12px;
+    color: #6b7280;
+}
+
 .status-save {
     background: #1abc9c;
     border: none;
@@ -433,6 +460,53 @@ body {
     outline: none;
     border-color: #3b82f6;
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.status-filter-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.status-filter-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    color: #374151;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.status-filter-button i {
+    font-size: 14px;
+    color: inherit;
+}
+
+.status-filter-button:hover {
+    border-color: #2563eb;
+    color: #2563eb;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
+}
+
+.status-filter-button.is-active {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: #fff;
+}
+
+.status-filter-button.is-active:hover {
+    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.25);
+}
+
+.status-filter-button:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
 }
 
 /* Unified pagination info styling (align with products/sales) */

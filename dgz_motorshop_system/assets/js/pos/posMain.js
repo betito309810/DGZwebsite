@@ -71,6 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const proofImage = document.getElementById('proofImage');
             const proofReferenceValue = document.getElementById('proofReferenceValue');
             const proofCustomerName = document.getElementById('proofCustomerName');
+            const proofTitle = proofModal ? proofModal.querySelector('.proof-title') : null;
             const proofNoImage = document.getElementById('proofNoImage');
             const closeProofModalButton = document.getElementById('closeProofModal');
 
@@ -100,6 +101,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const onlineOrdersPaginationContainer = document.querySelector('[data-online-orders-pagination]');
             const onlineOrdersPaginationBody = document.querySelector('[data-online-orders-pagination-body]');
             const onlineOrdersContainer = document.querySelector('.online-orders-container');
+            const statusFilterButtons = Array.from(document.querySelectorAll('[data-status-filter-button]'));
 
             const tabButtons = document.querySelectorAll('.pos-tab-button');
             const tabPanels = {
@@ -121,6 +123,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 orders: Array.isArray(onlineOrdersBootstrap.orders) ? onlineOrdersBootstrap.orders : [],
             };
 
+            updateStatusFilterButtons(onlineOrdersState.statusFilter);
+
             const escapeHtml = (value) => {
                 if (value === null || value === undefined) {
                     return '';
@@ -134,6 +138,49 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             const escapeMultiline = (value) => escapeHtml(value).replace(/\r?\n/g, '<br>');
+
+            const updateStatusFilterButtons = (activeStatus) => {
+                const active = typeof activeStatus === 'string' ? activeStatus : '';
+                statusFilterButtons.forEach((button) => {
+                    const value = button?.dataset?.statusValue || '';
+                    const isActive = value === active || (!value && active === '');
+                    button.classList.toggle('is-active', isActive);
+                    button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+                });
+            };
+
+            const updateDeliveryProofField = (form) => {
+                if (!form) {
+                    return;
+                }
+
+                const select = form.querySelector('[data-status-select]');
+                const proofField = form.querySelector('[data-delivery-proof-field]');
+                const fileInput = proofField ? proofField.querySelector('input[type="file"]') : null;
+                const selectedValue = select ? String(select.value || '') : '';
+                const shouldShow = selectedValue === 'completed';
+
+                if (proofField) {
+                    if (shouldShow) {
+                        proofField.removeAttribute('hidden');
+                    } else {
+                        proofField.setAttribute('hidden', 'hidden');
+                    }
+                }
+
+                if (fileInput) {
+                    fileInput.required = shouldShow;
+                    if (!shouldShow) {
+                        fileInput.value = '';
+                    }
+                }
+            };
+
+            const initializeStatusForms = () => {
+                document.querySelectorAll('.status-form').forEach((form) => {
+                    updateDeliveryProofField(form);
+                });
+            };
 
             // Begin POS profile modal opener (inline)
             const openProfileModal = () => {
@@ -338,6 +385,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const image = button.dataset.image || '';
                 const reference = button.dataset.reference || '';
                 const customer = button.dataset.customer || 'Customer';
+                const proofType = button.dataset.proofType || '';
+
+                if (proofTitle) {
+                    proofTitle.textContent = proofType === 'delivery' ? 'Delivery Proof' : 'Payment Proof';
+                }
 
                 proofReferenceValue.textContent = reference !== '' ? reference : 'Not provided';
                 proofCustomerName.textContent = customer;
@@ -486,10 +538,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 const referenceNumber = order && order.reference_number ? String(order.reference_number) : '';
                 const contactDisplayRaw = order && order.contact_display ? String(order.contact_display) : '';
                 const contactDisplay = contactDisplayRaw.trim() !== '' ? contactDisplayRaw : '—';
+                const proofImageUrl = order && order.proof_image_url ? String(order.proof_image_url) : '';
+                const proofType = order && order.proof_type ? String(order.proof_type) : 'payment';
+                const proofLabel = order && order.proof_button_label
+                    ? String(order.proof_button_label)
+                    : (proofType === 'delivery' ? 'Delivery Proof' : 'Payment Proof');
+                const proofIcon = proofType === 'delivery' ? 'fa-truck' : 'fa-receipt';
                 const availableStatusChanges = Array.isArray(order?.available_status_changes)
                     ? order.available_status_changes
                     : [];
                 const statusFormDisabled = Boolean(order?.status_form_disabled) || availableStatusChanges.length === 0;
+                const defaultNextStatus = (!statusFormDisabled && availableStatusChanges.length > 0)
+                    ? String(availableStatusChanges[0].value || '')
+                    : '';
+                const proofFieldHidden = defaultNextStatus !== 'completed';
+                const proofInputId = `delivery-proof-${orderId}`;
                 const declineReasonLabel = order && order.decline_reason_label ? String(order.decline_reason_label) : '';
                 const declineReasonNote = order && order.decline_reason_note ? String(order.decline_reason_note) : '';
 
@@ -523,28 +586,36 @@ document.addEventListener('DOMContentLoaded', () => {
                     </td>
                     <td>
                         <button type="button" class="view-proof-btn"
-                            data-image="${escapeHtml(order?.proof_image_url || '')}"
+                            data-image="${escapeHtml(proofImageUrl)}"
                             data-reference="${escapeHtml(referenceNumber)}"
-                            data-customer="${escapeHtml(order?.customer_name || 'Customer')}">
-                            <i class="fas fa-receipt"></i> View
+                            data-customer="${escapeHtml(order?.customer_name || 'Customer')}"
+                            data-proof-type="${escapeHtml(proofType)}">
+                            <i class="fas ${escapeHtml(proofIcon)}"></i> View ${escapeHtml(proofLabel)}
                         </button>
                     </td>
                     <td>
                         <span class="status-badge ${escapeHtml(badgeClass)}">${escapeHtml(statusLabel)}</span>
-                        <form method="post" class="status-form">
+                        <form method="post" class="status-form" enctype="multipart/form-data">
                             <input type="hidden" name="order_id" value="${escapeHtml(orderId)}">
                             <input type="hidden" name="update_order_status" value="1">
                             <input type="hidden" name="decline_reason_id" value="">
                             <input type="hidden" name="decline_reason_note" value="">
-                            <select name="new_status" ${statusFormDisabled ? 'disabled' : ''}>
+                            <select name="new_status" ${statusFormDisabled ? 'disabled' : ''} data-status-select>
                                 ${statusOptionsHtml}
                             </select>
+                            <div class="delivery-proof-field" data-delivery-proof-field ${proofFieldHidden ? 'hidden' : ''}>
+                                <label for="${escapeHtml(proofInputId)}">Proof of delivery</label>
+                                <input type="file" name="delivery_proof" id="${escapeHtml(proofInputId)}" accept="image/*" ${statusFormDisabled ? 'disabled' : ''} ${defaultNextStatus === 'completed' ? 'required' : ''}>
+                                <p class="delivery-proof-help">Upload a photo confirming the delivery.</p>
+                            </div>
                             <button type="submit" class="status-save" ${statusFormDisabled ? 'disabled' : ''}>Update</button>
                         </form>
                         ${declineHtml}
                     </td>
                     <td>${escapeHtml(order?.created_at_formatted || 'N/A')}</td>
                 `;
+
+                updateDeliveryProofField(row.querySelector('.status-form'));
 
                 return row;
             };
@@ -590,6 +661,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderOnlineOrdersTable(onlineOrdersState.orders);
                 renderOnlineOrdersSummary(onlineOrdersState.orders.length, onlineOrdersState.totalOrders, onlineOrdersState);
                 renderOnlineOrdersPagination(onlineOrdersState);
+                updateStatusFilterButtons(onlineOrdersState.statusFilter);
                 updateOnlineOrderBadges(onlineOrdersState.attentionCount);
             };
 
@@ -2020,12 +2092,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             });
 
+            statusFilterButtons.forEach((button) => {
+                button.addEventListener('click', () => {
+                    const value = button?.dataset?.statusValue || '';
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('tab', 'online');
+                    url.searchParams.set('page', '1');
+
+                    if (value) {
+                        url.searchParams.set('status_filter', value);
+                    } else {
+                        url.searchParams.delete('status_filter');
+                    }
+
+                    window.location.href = url.toString();
+                });
+            });
+
             const statusAlert = document.querySelector('.status-alert');
             if (statusAlert) {
                 const url = new URL(window.location.href);
                 url.searchParams.delete('status_updated');
                 window.history.replaceState({}, document.title, url.toString());
             }
+
+            initializeStatusForms();
 
             onlineOrdersContainer?.addEventListener('click', (event) => {
                 const proofButton = event.target.closest('.view-proof-btn');
@@ -2058,6 +2149,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 fetchOnlineOrderDetails(orderId);
             });
 
+            onlineOrdersContainer?.addEventListener('change', (event) => {
+                const select = event.target.closest('[data-status-select]');
+                if (!select) {
+                    return;
+                }
+
+                const form = select.closest('.status-form');
+                updateDeliveryProofField(form);
+            });
+
             closeProofModalButton?.addEventListener('click', closeProofModal);
             proofModal?.addEventListener('click', (event) => {
                 if (event.target === proofModal) {
@@ -2066,22 +2167,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             // Status filter functionality
-            const statusFilter = document.getElementById('statusFilter');
-            statusFilter?.addEventListener('change', (event) => {
-                const selectedStatus = event.target.value;
-                const url = new URL(window.location.href);
-                url.searchParams.set('tab', 'online');
-                url.searchParams.set('page', '1'); // Reset to first page when filtering
-                
-                if (selectedStatus) {
-                    url.searchParams.set('status_filter', selectedStatus);
-                } else {
-                    url.searchParams.delete('status_filter');
-                }
-                
-                window.location.href = url.toString();
-            });
-
             closeOnlineOrderModalButton?.addEventListener('click', closeOnlineOrderModalOverlay);
             onlineOrderModal?.addEventListener('click', (event) => {
                 if (event.target === onlineOrderModal) {

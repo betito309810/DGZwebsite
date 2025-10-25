@@ -92,6 +92,50 @@ if (!function_exists('ordersFindColumn')) {
     }
 }
 
+if (!function_exists('resolveOrderDocumentUrl')) {
+    function resolveOrderDocumentUrl($path): string
+    {
+        $path = trim((string) $path);
+        if ($path === '') {
+            return '';
+        }
+
+        $normalizedUrl = normalizePaymentProofPath($path);
+        if ($normalizedUrl !== '' && $normalizedUrl !== '/' && strncmp($normalizedUrl, '../', 3) !== 0) {
+            return $normalizedUrl;
+        }
+
+        $candidates = [$path];
+        $normalizedRelative = normalizePaymentProofPath($path, '');
+        if ($normalizedRelative !== '' && !in_array($normalizedRelative, $candidates, true)) {
+            $candidates[] = $normalizedRelative;
+        }
+
+        foreach ($candidates as $candidatePath) {
+            if ($candidatePath === '') {
+                continue;
+            }
+
+            if (preg_match('#^(?:[a-z][a-z0-9+.-]*:)?//#i', $candidatePath) === 1 || strncmp($candidatePath, 'data:', 5) === 0) {
+                return $candidatePath;
+            }
+
+            $assetUrl = assetUrl($candidatePath);
+            if ($assetUrl !== '' && $assetUrl !== '/') {
+                return $assetUrl;
+            }
+
+            $prefixed = 'dgz_motorshop_system/' . ltrim($candidatePath, '/');
+            $assetUrl = assetUrl($prefixed);
+            if ($assetUrl !== '' && $assetUrl !== '/') {
+                return $assetUrl;
+            }
+        }
+
+        return '';
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_update_order_id'])) {
     $orderId = (int) $_POST['payment_update_order_id'];
     $referenceInput = trim((string) ($_POST['reference_number'] ?? ''));
@@ -231,7 +275,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['payment_update_order_
                         $status = 'pending';
                     }
 
-                    $lockedStatuses = ['delivery'];
+                    $lockedStatuses = ['delivery', 'approved'];
                     $terminalStatuses = ['complete', 'completed', 'cancelled_by_staff', 'cancelled_by_customer', 'disapproved'];
 
                     if (in_array($status, $lockedStatuses, true) || in_array($status, $terminalStatuses, true)) {
@@ -318,11 +362,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_order_id'])) {
                 $status = 'pending';
             }
 
-            $lockedStatuses = ['delivery'];
+            $lockedStatuses = ['delivery', 'approved'];
             $terminalStatuses = ['complete', 'completed', 'cancelled_by_staff', 'cancelled_by_customer', 'disapproved'];
 
             if (in_array($status, $lockedStatuses, true)) {
-                $alerts['error'][] = 'Orders that are already out for delivery can no longer be cancelled online.';
+                $alerts['error'][] = 'Orders that are already approved or out for delivery can no longer be cancelled online.';
                 if ($transactionActive && $pdo->inTransaction()) {
                     $pdo->rollBack();
                 }
@@ -465,6 +509,7 @@ $orderFacebookColumn = ordersFindColumn($pdo, ['facebook_account', 'facebook', '
 $orderCustomerNoteColumn = ordersFindColumn($pdo, ['customer_note', 'notes', 'note']);
 $orderReferenceColumn = ordersFindColumn($pdo, ['reference_no', 'reference_number', 'reference', 'ref_no']);
 $orderProofColumn = ordersFindColumn($pdo, ['payment_proof', 'proof_of_payment', 'payment_proof_path', 'proof']);
+$orderDeliveryProofColumn = ordersFindColumn($pdo, ['delivery_proof', 'proof_of_delivery', 'delivery_proof_path', 'delivery_proof_image']);
 
 $orderSelectParts = [];
 $appendSelect = static function (?string $column, string $alias) use (&$orderSelectParts): void {
@@ -541,6 +586,10 @@ if ($orderReferenceColumn !== null) {
 
 if ($orderProofColumn !== null) {
     $appendSelect($orderProofColumn, 'payment_proof');
+}
+
+if ($orderDeliveryProofColumn !== null) {
+    $appendSelect($orderDeliveryProofColumn, 'delivery_proof');
 }
 
 $statusFilter = isset($_GET['status']) ? strtolower(trim((string) $_GET['status'])) : '';
@@ -741,7 +790,7 @@ $statusLabels = [
                         $statusKey = 'pending';
                     }
                     $statusLabel = $statusLabels[$statusKey] ?? ucwords(str_replace('_', ' ', $statusKey));
-                    $nonCancellableStatuses = ['delivery', 'complete', 'completed', 'cancelled_by_staff', 'cancelled_by_customer', 'disapproved'];
+                    $nonCancellableStatuses = ['delivery', 'approved', 'complete', 'completed', 'cancelled_by_staff', 'cancelled_by_customer', 'disapproved'];
                     $canCancel = !in_array($statusKey, $nonCancellableStatuses, true);
 
                     $contactEmail = trim((string) ($order['email'] ?? $order['customer_email'] ?? ''));
@@ -749,6 +798,7 @@ $statusLabels = [
                     $facebookAccount = trim((string) ($order['facebook_account'] ?? $order['facebook'] ?? ''));
                     $referenceNumber = trim((string) ($order['reference_no'] ?? $order['reference_number'] ?? ''));
                     $paymentProofPath = trim((string) ($order['payment_proof'] ?? $order['proof_of_payment'] ?? ''));
+                    $deliveryProofPath = trim((string) ($order['delivery_proof'] ?? ''));
                     $canMarkReceived = ($statusKey === 'delivery');
                     $addressLine = trim((string) ($order['address'] ?? $order['customer_address'] ?? ''));
                     $postalCode = trim((string) ($order['postal_code'] ?? $order['postal'] ?? $order['zip_code'] ?? ''));
@@ -765,45 +815,8 @@ $statusLabels = [
                     }
                     $billingDisplay = implode("\n", $billingLines);
                     $customerNote = trim((string) ($order['customer_note'] ?? $order['notes'] ?? ''));
-                    $paymentProofUrl = '';
-                    if ($paymentProofPath !== '') {
-                        $normalizedUrl = normalizePaymentProofPath($paymentProofPath);
-                        if ($normalizedUrl !== '' && $normalizedUrl !== '/' && strncmp($normalizedUrl, '../', 3) !== 0) {
-                            $paymentProofUrl = $normalizedUrl;
-                        } else {
-                            $candidatePaths = [$paymentProofPath];
-                            $normalizedRelative = normalizePaymentProofPath($paymentProofPath, '');
-                            if ($normalizedRelative !== '' && !in_array($normalizedRelative, $candidatePaths, true)) {
-                                $candidatePaths[] = $normalizedRelative;
-                            }
-
-                            foreach ($candidatePaths as $candidatePath) {
-                                if ($candidatePath === '') {
-                                    continue;
-                                }
-
-                                if (preg_match('#^(?:[a-z][a-z0-9+.-]*:)?//#i', $candidatePath) === 1 || strncmp($candidatePath, 'data:', 5) === 0) {
-                                    $paymentProofUrl = $candidatePath;
-                                    break;
-                                }
-
-                                $url = assetUrl($candidatePath);
-                                if ($url !== '' && $url !== '/') {
-                                    $paymentProofUrl = $url;
-                                    break;
-                                }
-
-                                $prefixed = 'dgz_motorshop_system/' . ltrim($candidatePath, '/');
-                                if ($prefixed !== $candidatePath) {
-                                    $url = assetUrl($prefixed);
-                                    if ($url !== '' && $url !== '/') {
-                                        $paymentProofUrl = $url;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    $paymentProofUrl = resolveOrderDocumentUrl($paymentProofPath);
+                    $deliveryProofUrl = resolveOrderDocumentUrl($deliveryProofPath);
                     $canUpdatePayment = $canCancel;
                 ?>
                 <article class="customer-order-card" data-order-card>
@@ -943,6 +956,15 @@ $statusLabels = [
                                             </div>
                                         </form>
                                     <?php endif; ?>
+                                </div>
+                            </div>
+                        <?php endif; ?>
+                        <?php if (in_array($statusKey, ['completed', 'complete'], true) && $deliveryProofUrl !== ''): ?>
+                            <div class="customer-order-card__section customer-order-card__section--delivery-proof">
+                                <h3>Proof of delivery</h3>
+                                <a class="customer-delivery-proof__link" href="<?= htmlspecialchars($deliveryProofUrl) ?>" target="_blank" rel="noopener">View proof</a>
+                                <div class="customer-delivery-proof__preview">
+                                    <img src="<?= htmlspecialchars($deliveryProofUrl) ?>" alt="Proof of delivery for order #<?= (int) $order['id'] ?>">
                                 </div>
                             </div>
                         <?php endif; ?>

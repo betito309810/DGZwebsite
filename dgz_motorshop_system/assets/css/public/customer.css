@@ -754,6 +754,80 @@
     outline: none;
 }
 
+.customer-order-card__section--delivery-proof {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(59, 130, 246, 0.18));
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 1rem;
+    padding: 1.25rem;
+}
+
+.customer-order-card__section--delivery-proof h3 {
+    margin: 0;
+    font-size: 1.05rem;
+    color: #1d4ed8;
+    font-weight: 700;
+}
+
+.customer-delivery-proof__link {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 0.95rem;
+    border-radius: 999px;
+    background: rgba(37, 99, 235, 0.14);
+    color: #1d4ed8;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.customer-delivery-proof__link:hover,
+.customer-delivery-proof__link:focus-visible {
+    background: rgba(37, 99, 235, 0.25);
+    transform: translateY(-1px);
+    outline: none;
+}
+
+.customer-delivery-proof__preview {
+    position: relative;
+    overflow: hidden;
+    border-radius: 0.75rem;
+    max-width: min(320px, 100%);
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    box-shadow: 0 20px 40px rgba(15, 23, 42, 0.08);
+}
+
+.customer-delivery-proof__preview img {
+    display: block;
+    width: 100%;
+    height: auto;
+    transition: transform 0.2s ease;
+}
+
+.customer-delivery-proof__preview::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0) 65%, rgba(15, 23, 42, 0.35) 100%);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.customer-delivery-proof__preview:hover::after,
+.customer-delivery-proof__preview:focus-within::after {
+    opacity: 1;
+}
+
+.customer-delivery-proof__preview:hover img,
+.customer-delivery-proof__preview:focus-within img {
+    transform: scale(1.02);
+}
+
 .customer-payment-card__stored {
     display: grid;
     gap: 1rem;
@@ -991,6 +1065,12 @@
     .customer-payment-card__view-proof {
         width: 100%;
         justify-content: center;
+    }
+    .customer-order-card__section--delivery-proof {
+        padding: 1rem;
+    }
+    .customer-delivery-proof__preview {
+        max-width: 100%;
     }
     .customer-payment-card__stored {
         grid-template-columns: 1fr;

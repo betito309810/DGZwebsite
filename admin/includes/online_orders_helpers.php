@@ -128,9 +128,9 @@ if (!function_exists('getOnlineOrderStatusTransitions')) {
     function getOnlineOrderStatusTransitions(): array
     {
         return [
-            'pending' => ['payment_verification', 'approved', 'delivery', 'disapproved', 'completed'],
-            'payment_verification' => ['approved', 'delivery', 'disapproved'],
-            'approved' => ['delivery', 'completed'],
+            'pending' => ['payment_verification', 'approved', 'disapproved'],
+            'payment_verification' => ['approved', 'disapproved'],
+            'approved' => ['delivery'],
             'delivery' => ['completed'],
             'completed' => [],
             'complete' => ['completed'],
@@ -238,6 +238,11 @@ if (!function_exists('fetchOnlineOrdersData')) {
             $paymentDetails = parsePaymentProofValue($row['payment_proof'] ?? null, $row['reference_no'] ?? null);
             $referenceNumber = (string) ($paymentDetails['reference'] ?? '');
             $proofImage = normalizePaymentProofPath($paymentDetails['image'] ?? '');
+            $deliveryProofRaw = $row['delivery_proof'] ?? null;
+            $deliveryProofUrl = $deliveryProofRaw !== null ? normalizePaymentProofPath((string) $deliveryProofRaw) : '';
+            $hasDeliveryProof = $deliveryProofUrl !== '';
+            $primaryProofType = $hasDeliveryProof ? 'delivery' : 'payment';
+            $primaryProofUrl = $hasDeliveryProof && $deliveryProofUrl !== '' ? $deliveryProofUrl : $proofImage;
 
             $contactDisplay = '';
             if (!empty($row['email'])) {
@@ -282,7 +287,12 @@ if (!function_exists('fetchOnlineOrdersData')) {
                 'total' => (float) ($row['total'] ?? 0),
                 'total_formatted' => '₱' . number_format((float) ($row['total'] ?? 0), 2),
                 'reference_number' => $referenceNumber !== '' ? $referenceNumber : (string) ($row['reference_no'] ?? ''),
-                'proof_image_url' => $proofImage,
+                'proof_image_url' => $primaryProofUrl,
+                'proof_type' => $primaryProofType,
+                'proof_button_label' => $primaryProofType === 'delivery' ? 'Delivery Proof' : 'Payment Proof',
+                'payment_proof_url' => $proofImage,
+                'delivery_proof_url' => $deliveryProofUrl,
+                'has_delivery_proof' => $hasDeliveryProof,
                 'status_value' => $statusValue,
                 'status_label' => $statusLabel,
                 'status_badge_class' => 'status-' . $statusValue,
