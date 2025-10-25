@@ -462,7 +462,8 @@
                     }
 
                     const existing = map.get(key);
-                    existing.quantity = Math.min(999, existing.quantity + quantity);
+                    const cappedQuantity = Math.min(999, quantity);
+                    existing.quantity = Math.min(999, Math.max(existing.quantity, cappedQuantity));
                     if (existing.name === 'Product' && normalised.name !== 'Product') {
                         existing.name = normalised.name;
                     }
@@ -612,6 +613,16 @@
 
                     if (normalisedServer.length === 0 && localSnapshot.length === 0) {
                         serverLastPayloadSignature = '[]';
+                        return;
+                    }
+
+                    if (
+                        serverSignature !== null
+                        && localSignature !== null
+                        && serverSignature === localSignature
+                    ) {
+                        applyServerCartItems(normalisedServer);
+                        serverLastPayloadSignature = serverSignature;
                         return;
                     }
 
