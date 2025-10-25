@@ -450,7 +450,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // End POS online order modal populator
 
             const openProofModalFromButton = (button) => {
-                if (!button || !proofModal) {
+                if (!button) {
                     return;
                 }
 
@@ -459,25 +459,43 @@ document.addEventListener('DOMContentLoaded', () => {
                 const customer = button.dataset.customer || 'Customer';
                 const proofType = button.dataset.proofType || '';
 
+                if (!proofModal) {
+                    if (image) {
+                        window.open(image, '_blank');
+                    }
+                    return;
+                }
+
                 if (proofTitle) {
                     proofTitle.textContent = proofType === 'delivery' ? 'Delivery Proof' : 'Payment Proof';
                 }
 
-                proofReferenceValue.textContent = reference !== '' ? reference : 'Not provided';
-                proofCustomerName.textContent = customer;
+                if (proofReferenceValue) {
+                    proofReferenceValue.textContent = reference !== '' ? reference : 'Not provided';
+                }
 
-                if (image) {
-                    proofImage.src = image;
-                    proofImage.style.display = 'block';
-                    proofNoImage.style.display = 'none';
-                } else {
-                    proofImage.removeAttribute('src');
-                    proofImage.style.display = 'none';
-                    proofNoImage.style.display = 'flex';
+                if (proofCustomerName) {
+                    proofCustomerName.textContent = customer;
+                }
+
+                if (proofImage) {
+                    if (image) {
+                        proofImage.src = image;
+                        proofImage.style.display = 'block';
+                    } else {
+                        proofImage.removeAttribute('src');
+                        proofImage.style.display = 'none';
+                    }
+                }
+
+                if (proofNoImage) {
+                    proofNoImage.style.display = image ? 'none' : 'flex';
                 }
 
                 proofModal.classList.add('show');
+                proofModal.style.display = 'flex';
                 proofModal.setAttribute('aria-hidden', 'false');
+                document.body.classList.add('modal-open');
             };
 
             const fetchOnlineOrderDetails = async (orderId) => {
@@ -646,6 +664,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const declineReasonLabel = order && order.decline_reason_label ? String(order.decline_reason_label) : '';
                 const declineReasonNote = order && order.decline_reason_note ? String(order.decline_reason_note) : '';
 
+                row.classList.add('online-order-row');
                 row.dataset.orderId = String(orderId);
                 row.dataset.declineReasonId = String(order?.decline_reason_id ?? 0);
                 row.dataset.declineReasonLabel = declineReasonLabel;
@@ -1857,11 +1876,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Begin POS proof modal closer
             function closeProofModal() {
+                if (!proofModal) {
+                    return;
+                }
+
                 proofModal.classList.remove('show');
                 proofModal.setAttribute('aria-hidden', 'true');
-                proofImage.removeAttribute('src');
-                proofImage.style.display = 'none';
-                proofNoImage.style.display = 'none';
+                proofModal.style.display = 'none';
+                document.body.classList.remove('modal-open');
+
+                if (proofImage) {
+                    proofImage.removeAttribute('src');
+                    proofImage.style.display = 'none';
+                }
+
+                if (proofNoImage) {
+                    proofNoImage.style.display = 'none';
+                }
             }
             // End POS proof modal closer
 

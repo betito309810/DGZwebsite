@@ -34,7 +34,8 @@ try {
     $deliveryProofColumn = ordersFindColumn($pdo, $deliveryProofCandidates);
     $deliveryProofNotice = is_string($deliveryProofColumn) && $deliveryProofColumn !== ''
         ? ''
-        : 'Proof-of-delivery uploads need a delivery_proof column (TEXT) on the existing orders table—no new table required.';
+        : 'Proof-of-delivery uploads need a delivery_proof column (TEXT) on the existing orders table—no new table required. '
+            . 'Run: ALTER TABLE orders ADD COLUMN delivery_proof TEXT NULL;';
 
     $data = fetchOnlineOrdersData($pdo, [
         'page' => $page,

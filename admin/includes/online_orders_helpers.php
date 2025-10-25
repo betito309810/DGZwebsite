@@ -174,7 +174,8 @@ if (!function_exists('fetchOnlineOrdersData')) {
         $supportsDeliveryProof = is_string($deliveryProofColumn) && $deliveryProofColumn !== '';
         $deliveryProofNotice = isset($options['delivery_proof_notice'])
             ? (string) $options['delivery_proof_notice']
-            : 'Proof-of-delivery uploads need a delivery_proof column (TEXT) on the existing orders table—no new table required.';
+            : 'Proof-of-delivery uploads need a delivery_proof column (TEXT) on the existing orders table—no new table required. '
+                . 'Run: ALTER TABLE orders ADD COLUMN delivery_proof TEXT NULL;';
         if ($supportsDeliveryProof) {
             $deliveryProofNotice = '';
         }
