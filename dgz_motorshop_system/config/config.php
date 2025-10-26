@@ -1341,11 +1341,6 @@ if (!function_exists('getOnlineOrdersBaseCondition')) {
             return $clause;
         }
 
-        $parts = [
-            "(payment_method IS NOT NULL AND payment_method <> '' AND LOWER(payment_method) = 'gcash')",
-            "(payment_proof IS NOT NULL AND payment_proof <> '')",
-        ];
-
         $statusSeeds = [
             'pending',
             'payment_verification',
@@ -1405,10 +1400,9 @@ if (!function_exists('getOnlineOrdersBaseCondition')) {
 
         sort($quotedStatuses);
 
-        $parts[] = 'LOWER(TRIM(status)) IN (' . implode(',', $quotedStatuses) . ')';
+        $clause = 'LOWER(TRIM(status)) IN (' . implode(',', $quotedStatuses) . ')';
 
-        $clause = '(' . implode(' OR ', $parts) . ')';
-        return $clause;
+        return '(' . $clause . ')';
     }
 }
 
@@ -1452,8 +1446,42 @@ if (!function_exists('onlineOrdersAggregateCounts')) {
 
         // Pull likely online orders, then normalise status and count in PHP
         $where = getOnlineOrdersBaseCondition();
-        $sql = 'SELECT id, status, payment_method, payment_proof, processed_by_user_id, customer_name, order_type'
-             . ' FROM orders WHERE ' . $where;
+
+        $selectColumns = ['orders.id', 'orders.status'];
+
+        $paymentMethodColumn = ordersFindColumn($pdo, ['payment_method']);
+        $paymentProofColumn = ordersFindColumn($pdo, ['payment_proof', 'payment_proof_image', 'proof_of_payment']);
+        $processedByColumn = ordersFindColumn($pdo, ['processed_by_user_id', 'processed_by']);
+        $customerNameColumn = ordersFindColumn($pdo, ['customer_name', 'name', 'customer']);
+        $orderTypeColumn = ordersFindColumn($pdo, ['order_type', 'order_origin', 'source']);
+
+        $selectColumns[] = $paymentMethodColumn
+            ? 'orders.' . $paymentMethodColumn . ' AS payment_method'
+            : "NULL AS payment_method";
+
+        $selectColumns[] = $paymentProofColumn
+            ? 'orders.' . $paymentProofColumn . ' AS payment_proof'
+            : "NULL AS payment_proof";
+
+        if ($processedByColumn) {
+            $selectColumns[] = 'orders.' . $processedByColumn . ' AS processed_by_user_id';
+        } else {
+            $selectColumns[] = 'NULL AS processed_by_user_id';
+        }
+
+        if ($customerNameColumn) {
+            $selectColumns[] = 'orders.' . $customerNameColumn . ' AS customer_name';
+        } else {
+            $selectColumns[] = 'NULL AS customer_name';
+        }
+
+        if ($orderTypeColumn) {
+            $selectColumns[] = 'orders.' . $orderTypeColumn . ' AS order_type';
+        } else {
+            $selectColumns[] = 'NULL AS order_type';
+        }
+
+        $sql = 'SELECT ' . implode(', ', $selectColumns) . ' FROM orders WHERE ' . $where;
 
         try {
             $stmt = $pdo->query($sql);
