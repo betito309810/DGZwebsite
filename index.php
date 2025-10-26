@@ -106,7 +106,7 @@ natcasesort($categories);
     data-customer-session-heartbeat-interval="<?= (int) $customerSessionHeartbeatInterval ?>"
     data-customer-login-url="<?= htmlspecialchars($loginUrl) ?>">
     <!-- Header -->
-    <header class="customer-orders-header">
+    <header class="customer-orders-header customer-orders-header--with-search">
         <div class="customer-orders-brand">
             <a href="<?= htmlspecialchars($homeUrl) ?>" class="customer-orders-logo" aria-label="DGZ Motorshop home">
                 <img src="<?= htmlspecialchars($logoAsset) ?>" alt="DGZ Motorshop logo">

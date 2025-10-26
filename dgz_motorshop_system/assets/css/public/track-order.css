@@ -28,39 +28,6 @@ body {
     min-height: 100vh;
 }
 
-/* Make the tracker header actions sit flush right like My Orders */
-.track-order-page .header-content {
-    width: 100% !important;
-    max-width: none !important;
-    margin: 0 !important;
-    padding-left: 16px;
-    padding-right: 16px;
-}
-
-.track-order-page .header-actions {
-    margin-left: auto !important;
-    justify-content: flex-end !important;
-}
-
-/* Header spacer not needed on this page; keep nav attached to header */
-.track-order-page .header-offset {
-    height: 0 !important;
-    display: none !important;
-}
-
-.track-order-page .nav {
-    top: 0 !important;
-}
-
-/* Ensure account dropdown overlays the sticky nav on this page */
-.track-order-page .account-menu__dropdown {
-    z-index: 2500; /* higher than .nav (1500) and header */
-}
-
-.header-offset {
-    height: var(--header-height);
-}
-
 /* Tracker layout */
 main {
     /* Grow the main element so empty states still push the footer down */

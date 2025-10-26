@@ -87,8 +87,6 @@ $bodyCustomerFirstName = $customerFirstName ?? '';
         </div>
     </header>
 
-    <div class="header-offset" aria-hidden="true"></div>
-
     <!-- Navigation: adds the Track Order entry while keeping existing links -->
     <nav class="nav" id="primaryNav" aria-label="Primary navigation">
         <div class="nav-content">
