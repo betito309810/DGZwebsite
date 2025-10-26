@@ -143,6 +143,7 @@ if (!function_exists('normaliseOnlineOrderStatus')) {
             'cancelled_by_staff',
             'cancelled',
             'canceled',
+            'disapproved_cancelled',
         ];
 
         return in_array($status, $allowed, true) ? $status : '';
@@ -239,9 +240,35 @@ if (!function_exists('fetchOnlineOrdersData')) {
         $whereClause = getOnlineOrdersBaseCondition();
         $params = [];
         if ($statusFilter !== '') {
-            $statusSynonyms = function_exists('getOnlineOrderStatusSynonyms')
-                ? getOnlineOrderStatusSynonyms($statusFilter)
-                : [$statusFilter];
+            $aggregateStatusFilters = [
+                'disapproved_cancelled' => [
+                    'disapproved',
+                    'cancelled_by_customer',
+                    'cancelled_by_staff',
+                    'cancelled',
+                    'canceled',
+                ],
+            ];
+
+            $statusSynonyms = [];
+            if (isset($aggregateStatusFilters[$statusFilter])) {
+                foreach ($aggregateStatusFilters[$statusFilter] as $aggregateStatus) {
+                    $aggregateStatus = normaliseOnlineOrderStatus($aggregateStatus);
+                    if ($aggregateStatus === '') {
+                        continue;
+                    }
+
+                    $synonyms = function_exists('getOnlineOrderStatusSynonyms')
+                        ? getOnlineOrderStatusSynonyms($aggregateStatus)
+                        : [$aggregateStatus];
+                    $statusSynonyms = array_merge($statusSynonyms, $synonyms);
+                }
+            } else {
+                $statusSynonyms = function_exists('getOnlineOrderStatusSynonyms')
+                    ? getOnlineOrderStatusSynonyms($statusFilter)
+                    : [$statusFilter];
+            }
+
             $statusSynonyms = array_values(array_filter(array_map(static function ($value) {
                 return strtolower(trim((string) $value));
             }, $statusSynonyms), static function ($value) {

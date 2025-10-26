@@ -15,21 +15,12 @@ if (!isset($sidebarPdo) || !($sidebarPdo instanceof PDO)) {
 
 if (!isset($onlineOrderBadgeCount)) {
     try {
-        $trackedOnlineStatuses = function_exists('getOnlineOrderStatusOptions')
-            ? array_values(array_unique(array_keys(getOnlineOrderStatusOptions())))
-            : [
-                'pending',
-                'payment_verification',
-                'approved',
-                'delivery',
-                'completed',
-                'complete',
-                'disapproved',
-                'cancelled_by_customer',
-                'cancelled_by_staff',
-                'cancelled',
-                'canceled',
-            ];
+        $trackedOnlineStatuses = [
+            'pending',
+            'payment_verification',
+            'approved',
+            'delivery',
+        ];
         $onlineOrderBadgeCount = $sidebarPdo instanceof PDO
             ? countOnlineOrdersByStatus($sidebarPdo, $trackedOnlineStatuses)
             : 0;

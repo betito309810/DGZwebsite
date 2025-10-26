@@ -420,6 +420,7 @@ if (!function_exists('normalizeOnlineOrderStatusKey')) {
             'cancelledstaff' => 'cancelled_by_staff',
             'cancelled' => 'cancelled',
             'canceled' => 'canceled',
+            'disapproved_cancelled' => 'disapproved_cancelled',
         ];
 
         return $map[$value] ?? '';
@@ -458,9 +459,27 @@ if (!function_exists('getOnlineOrderStatusSynonyms')) {
             'cancelled_by_staff' => ['cancelled_by_staff', 'canceled_by_staff', 'cancelled staff', 'cancelledstaff'],
             'cancelled' => ['cancelled'],
             'canceled' => ['canceled'],
+            'disapproved_cancelled' => [],
         ];
 
-        $values = $synonyms[$key] ?? [$key];
+        if ($key === 'disapproved_cancelled') {
+            $groupedKeys = [
+                'disapproved',
+                'cancelled_by_customer',
+                'cancelled_by_staff',
+                'cancelled',
+                'canceled',
+            ];
+
+            $values = [$key];
+            foreach ($groupedKeys as $groupKey) {
+                if (isset($synonyms[$groupKey])) {
+                    $values = array_merge($values, $synonyms[$groupKey]);
+                }
+            }
+        } else {
+            $values = $synonyms[$key] ?? [$key];
+        }
 
         $normalised = [];
         foreach ($values as $value) {
