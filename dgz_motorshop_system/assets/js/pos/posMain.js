@@ -2014,6 +2014,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     createdAt = new Date();
                 }
 
+                const paramPaymentMethod = (params.get('payment_method') || '').trim();
+                if (paramPaymentMethod !== '') {
+                    paymentMethodLabel = paramPaymentMethod;
+                }
+
+                const paramPaymentReference = (params.get('payment_reference') || '').trim();
+                if (paramPaymentReference !== '') {
+                    paymentReferenceValue = paramPaymentReference;
+                }
+
                 receiptItemsBody.innerHTML = '';
                 items.forEach((item) => {
                     const row = document.createElement('tr');

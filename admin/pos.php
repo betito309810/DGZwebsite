@@ -1569,6 +1569,14 @@ HTML;
             $params['invoice_number'] = $invoiceNumber;
         }
 
+        if ($paymentMethodLabel !== '') {
+            $params['payment_method'] = $paymentMethodLabel;
+        }
+
+        if ($paymentReference !== '') {
+            $params['payment_reference'] = $paymentReference;
+        }
+
         header('Location: pos.php?' . http_build_query($params));
         exit;
     } catch (Throwable $exception) {
