@@ -52,22 +52,6 @@ body {
     top: 0 !important;
 }
 
-/* Slimmer header like My Orders but shorter for Track Order */
-.track-order-page .customer-orders-header {
-    padding: 0.9rem 1.25rem;
-}
-
-.track-order-page .customer-orders-logo img {
-    width: 100px;
-}
-
-.track-order-page .customer-orders-actions .account-menu__trigger,
-.track-order-page .customer-orders-actions .account-menu__guest,
-.track-order-page .customer-orders-actions .customer-orders-cart {
-    height: 40px;
-    padding: 0.45rem 1rem;
-}
-
 /* Ensure account dropdown overlays the sticky nav on this page */
 .track-order-page .account-menu__dropdown {
     z-index: 2500; /* higher than .nav (1500) and header */

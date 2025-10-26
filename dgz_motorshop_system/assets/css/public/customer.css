@@ -455,6 +455,7 @@
     align-items: center;
     gap: 1.25rem;
     padding: 0.9rem 1.25rem;
+    min-height: 78px;
     background: #43d6ff;
     color: #ffffff;
 }
@@ -1378,6 +1379,7 @@
         align-items: stretch;
         gap: 1rem;
         padding: 1.1rem 1.5rem;
+        min-height: auto;
     }
     .customer-orders-search {
         width: 100%;
