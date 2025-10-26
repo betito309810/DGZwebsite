@@ -144,7 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const onlineOrdersTableBody = document.querySelector('[data-online-orders-body]');
             const onlineOrdersSummary = document.querySelector('[data-online-orders-summary]');
             const onlineOrdersTabCount = document.querySelector('[data-online-orders-count]');
-            const sidebarPosCount = document.querySelector('[data-sidebar-pos-count]');
+            let sidebarPosCount = document.querySelector('[data-sidebar-pos-count]');
             const onlineOrdersPaginationContainer = document.querySelector('[data-online-orders-pagination]');
             const onlineOrdersPaginationBody = document.querySelector('[data-online-orders-pagination-body]');
             const onlineOrdersContainer = document.querySelector('.online-orders-container');
@@ -666,6 +666,23 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             const updateOnlineOrderBadges = (count) => {
+                if (sidebarPosCount && !sidebarPosCount.isConnected) {
+                    sidebarPosCount = null;
+                }
+
+                if (!sidebarPosCount && count > 0) {
+                    const sidebarLink = document.querySelector('.nav-menu .nav-link[href="pos.php"]');
+                    if (sidebarLink) {
+                        const badge = document.createElement('span');
+                        badge.className = 'nav-badge';
+                        badge.setAttribute('data-sidebar-pos-count', '');
+                        badge.textContent = '0';
+                        badge.hidden = true;
+                        sidebarLink.appendChild(badge);
+                        sidebarPosCount = badge;
+                    }
+                }
+
                 updateBadgeElement(onlineOrdersTabCount, count);
                 updateBadgeElement(sidebarPosCount, count);
             };
