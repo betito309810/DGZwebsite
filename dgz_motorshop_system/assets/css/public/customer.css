@@ -664,22 +664,12 @@
     border-radius: 999px;
     text-decoration: none;
     font-weight: 600;
-    color: #0f172a;
+    color: #000000;
 }
 
 .customer-orders-tab.is-active {
     background: #2563eb;
     color: #ffffff;
-}
-
-.customer-orders-tab--approved,
-.customer-orders-tab--completed {
-    color: #1d4ed8;
-}
-
-.customer-orders-tab--cancelled,
-.customer-orders-tab--disapproved {
-    color: #b91c1c;
 }
 
 .customer-orders-tab--approved.is-active,
