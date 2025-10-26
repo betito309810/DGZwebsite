@@ -171,6 +171,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 totalOrders: Number(onlineOrdersBootstrap.totalOrders) || 0,
                 totalPages: Number(onlineOrdersBootstrap.totalPages) || 1,
                 attentionCount: Number(onlineOrdersBootstrap.attentionCount) || 0,
+                badgeCount: Number(onlineOrdersBootstrap.badgeCount)
+                    || Number(onlineOrdersBootstrap.attentionCount)
+                    || 0,
                 orders: Array.isArray(onlineOrdersBootstrap.orders) ? onlineOrdersBootstrap.orders : [],
                 statusCounts: typeof onlineOrdersBootstrap.statusCounts === 'object'
                     && onlineOrdersBootstrap.statusCounts !== null
@@ -929,6 +932,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     totalOrders: Number(data.total_orders) || 0,
                     totalPages: Number(data.total_pages) || 1,
                     attentionCount: Number(data.attention_count) || 0,
+                    badgeCount: Number(data.badge_count)
+                        || Number(data.attention_count)
+                        || onlineOrdersState.badgeCount
+                        || 0,
                     orders: Array.isArray(data.orders) ? data.orders : [],
                     statusCounts: data.status_counts && typeof data.status_counts === 'object'
                         ? data.status_counts
@@ -949,7 +956,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderOnlineOrdersPagination(onlineOrdersState);
                 updateStatusFilterButtons(onlineOrdersState.statusFilter);
                 updateStatusCountBadges(onlineOrdersState.statusCounts);
-                updateOnlineOrderBadges(onlineOrdersState.attentionCount);
+                updateOnlineOrderBadges(onlineOrdersState.badgeCount);
                 updateDeliveryProofNotice();
                 initializeStatusForms();
             };
@@ -2586,7 +2593,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderOnlineOrdersTable(onlineOrdersState.orders);
             renderOnlineOrdersSummary(onlineOrdersState.orders.length, onlineOrdersState.totalOrders, onlineOrdersState);
             renderOnlineOrdersPagination(onlineOrdersState);
-            updateOnlineOrderBadges(onlineOrdersState.attentionCount);
+            updateOnlineOrderBadges(onlineOrdersState.badgeCount);
             startOnlineOrdersPoll();
             window.setTimeout(fetchOnlineOrders, 4000);
 

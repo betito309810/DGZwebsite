@@ -441,6 +441,17 @@ if (!function_exists('fetchOnlineOrdersData')) {
         $attentionCount = countOnlineOrdersByStatus($pdo, $attentionStatuses, $excludeWalkIn);
         $statusCounts = getOnlineOrdersStatusCounts($pdo, $trackedStatusCounts, $excludeWalkIn);
 
+        $badgeCount = 0;
+        if (!empty($trackedStatusCounts)) {
+            foreach ($trackedStatusCounts as $statusKey) {
+                if ($statusKey === '') {
+                    continue;
+                }
+
+                $badgeCount += (int) ($statusCounts[$statusKey] ?? 0);
+            }
+        }
+
         return [
             'orders' => $orders,
             'page' => $page,
@@ -450,6 +461,7 @@ if (!function_exists('fetchOnlineOrdersData')) {
             'status_filter' => $statusFilter,
             'attention_count' => $attentionCount,
             'status_counts' => $statusCounts,
+            'badge_count' => $badgeCount,
             'delivery_proof_supported' => $supportsDeliveryProof,
             'delivery_proof_column' => $supportsDeliveryProof ? $deliveryProofColumn : null,
             'delivery_proof_notice' => $deliveryProofNotice,

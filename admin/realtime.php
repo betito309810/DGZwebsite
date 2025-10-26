@@ -31,12 +31,16 @@ function fetchOnlineOrderSnapshot(PDO $pdo): array
 {
     $snapshot = [
         'pendingCount' => 0,
+        'badgeCount' => 0,
         'latestId' => 0,
         'latestCreatedAt' => 0,
     ];
 
     try {
-        $snapshot['pendingCount'] = countOnlineOrdersByStatus($pdo);
+        $trackedStatuses = ['pending', 'payment_verification', 'approved', 'delivery'];
+        $count = countOnlineOrdersByStatus($pdo, $trackedStatuses);
+        $snapshot['pendingCount'] = $count;
+        $snapshot['badgeCount'] = $count;
     } catch (Throwable $e) {
         error_log('SSE countOnlineOrdersByStatus failed: ' . $e->getMessage());
     }

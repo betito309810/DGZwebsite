@@ -1591,12 +1591,23 @@ $totalPages = $onlineOrdersData['total_pages'];
 $page = $onlineOrdersData['page'];
 $statusFilter = $onlineOrdersData['status_filter'];
 $statusFilterForDisplay = $statusFilter !== '' ? $statusFilter : 'pending';
-$pendingOnlineOrdersCount = $onlineOrdersData['attention_count'];
+$attentionOnlineOrdersCount = (int) ($onlineOrdersData['attention_count'] ?? 0);
 $onlineOrdersOnPage = count($onlineOrders);
-$onlineOrderBadgeCount = $pendingOnlineOrdersCount;
+$onlineOrdersBadgeCount = isset($onlineOrdersData['badge_count']) ? (int) $onlineOrdersData['badge_count'] : 0;
 $onlineOrderStatusCounts = is_array($onlineOrdersData['status_counts'] ?? null)
     ? $onlineOrdersData['status_counts']
     : [];
+
+if ($onlineOrdersBadgeCount === 0 && !empty($onlineOrderStatusCounts)) {
+    foreach ($trackedOnlineStatuses as $statusKey) {
+        $statusKey = normaliseOnlineOrderStatus($statusKey);
+        if ($statusKey === '') {
+            continue;
+        }
+
+        $onlineOrdersBadgeCount += (int) ($onlineOrderStatusCounts[$statusKey] ?? 0);
+    }
+}
 $supportsDeliveryProof = !empty($onlineOrdersData['delivery_proof_supported']);
 $deliveryProofColumn = $onlineOrdersData['delivery_proof_column'] ?? $deliveryProofColumn;
 $deliveryProofNotice = (string) ($onlineOrdersData['delivery_proof_notice'] ?? $deliveryProofNotice);
@@ -1774,7 +1785,7 @@ if ($receiptDataJson === false) {
             <button type="button" class="pos-tab-button<?= $activeTab === 'online' ? ' active' : '' ?>" data-tab="online">
                 <i class="fas fa-shopping-bag"></i>
                 <span class="pos-tab-label">Online Orders</span>
-                <span class="pos-tab-count" data-online-orders-count <?= ($pendingOnlineOrdersCount ?? 0) > 0 ? '' : 'hidden' ?>><?= (int) ($pendingOnlineOrdersCount ?? 0) ?></span>
+                <span class="pos-tab-count" data-online-orders-count <?= ($onlineOrdersBadgeCount ?? 0) > 0 ? '' : 'hidden' ?>><?= (int) ($onlineOrdersBadgeCount ?? 0) ?></span>
             </button>
         </div>
 
@@ -2463,7 +2474,8 @@ if ($receiptDataJson === false) {
                 totalOrders: <?= (int) $totalOrders ?>,
                 totalPages: <?= (int) $totalPages ?>,
                 statusFilter: <?= json_encode($statusFilterForDisplay) ?>,
-                attentionCount: <?= (int) ($pendingOnlineOrdersCount ?? 0) ?>,
+                attentionCount: <?= (int) $attentionOnlineOrdersCount ?>,
+                badgeCount: <?= (int) $onlineOrdersBadgeCount ?>,
                 onPage: <?= (int) $onlineOrdersOnPage ?>,
                 orders: <?= $onlineOrdersJson ?>,
                 statusCounts: <?= $onlineOrderStatusCountsJson ?>,

@@ -1268,8 +1268,68 @@ if (!function_exists('getOnlineOrdersBaseCondition')) {
         $parts = [
             "(payment_method IS NOT NULL AND payment_method <> '' AND LOWER(payment_method) = 'gcash')",
             "(payment_proof IS NOT NULL AND payment_proof <> '')",
-            "LOWER(TRIM(status)) IN ('pending','payment_verification','approved','delivery','complete','completed','disapproved')",
         ];
+
+        $statusSeeds = [
+            'pending',
+            'payment_verification',
+            'approved',
+            'delivery',
+            'completed',
+            'disapproved',
+            'cancelled_by_customer',
+            'cancelled_by_staff',
+            'cancelled',
+            'canceled',
+        ];
+
+        $statusValues = [];
+        foreach ($statusSeeds as $seed) {
+            $seedValue = strtolower(trim((string) $seed));
+            if ($seedValue === '') {
+                continue;
+            }
+
+            $statusValues[$seedValue] = true;
+
+            if (function_exists('normalizeOnlineOrderStatusKey')) {
+                $normalized = normalizeOnlineOrderStatusKey($seedValue);
+                if ($normalized !== '') {
+                    $statusValues[strtolower($normalized)] = true;
+                }
+            }
+
+            if (function_exists('getOnlineOrderStatusSynonyms')) {
+                foreach (getOnlineOrderStatusSynonyms($seedValue) as $synonym) {
+                    $synonymValue = strtolower(trim((string) $synonym));
+                    if ($synonymValue === '') {
+                        continue;
+                    }
+
+                    $statusValues[$synonymValue] = true;
+                }
+            }
+        }
+
+        if (empty($statusValues)) {
+            $statusValues = [
+                'pending' => true,
+                'payment_verification' => true,
+                'approved' => true,
+                'delivery' => true,
+                'complete' => true,
+                'completed' => true,
+                'disapproved' => true,
+            ];
+        }
+
+        $quotedStatuses = array_map(static function (string $value): string {
+            return "'" . str_replace("'", "''", $value) . "'";
+        }, array_keys($statusValues));
+
+        sort($quotedStatuses);
+
+        $parts[] = 'LOWER(TRIM(status)) IN (' . implode(',', $quotedStatuses) . ')';
 
         $clause = '(' . implode(' OR ', $parts) . ')';
         return $clause;

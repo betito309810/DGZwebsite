@@ -15,7 +15,10 @@ if (!isset($sidebarPdo) || !($sidebarPdo instanceof PDO)) {
 
 if (!isset($onlineOrderBadgeCount)) {
     try {
-        $onlineOrderBadgeCount = $sidebarPdo instanceof PDO ? countOnlineOrdersByStatus($sidebarPdo) : 0;
+        $trackedOnlineStatuses = ['pending', 'payment_verification', 'approved', 'delivery'];
+        $onlineOrderBadgeCount = $sidebarPdo instanceof PDO
+            ? countOnlineOrdersByStatus($sidebarPdo, $trackedOnlineStatuses)
+            : 0;
     } catch (Throwable $e) {
         $onlineOrderBadgeCount = 0;
     }
