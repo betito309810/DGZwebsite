@@ -453,8 +453,8 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 1.5rem;
-    padding: 1.15rem 2.5rem;
+    gap: 1.25rem;
+    padding: 0.9rem 1.25rem;
     background: #43d6ff;
     color: #ffffff;
 }
@@ -479,10 +479,10 @@
 
 .customer-orders-search .search-container {
     width: min(520px, 100%);
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 0.75rem;
+    display: flex;
     align-items: center;
+    justify-content: center;
+    margin: 0 auto;
 }
 
 .customer-orders-search .search-bar {
@@ -499,27 +499,8 @@
     color: rgba(30, 41, 59, 0.6);
 }
 
-.customer-orders-search .search-btn {
-    position: relative;
-    top: auto;
-    right: auto;
-    transform: none;
-    padding: 0.65rem 1.35rem;
-    border: none;
-    border-radius: 999px;
-    background: #1d9bf0;
-    color: #ffffff;
-    font-weight: 600;
-    font-size: 0.95rem;
-    cursor: pointer;
-    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-}
-
-.customer-orders-search .search-btn:hover,
-.customer-orders-search .search-btn:focus-visible {
-    background: #0f7edb;
-    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.15);
-    transform: translateY(-1px);
+.customer-orders-search .search-container:focus-within .search-bar {
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
 }
 
 .customer-orders-actions {
@@ -1396,17 +1377,14 @@
         flex-direction: column;
         align-items: stretch;
         gap: 1rem;
-        padding: 1.25rem 1.5rem;
+        padding: 1.1rem 1.5rem;
     }
     .customer-orders-search {
         width: 100%;
     }
     .customer-orders-search .search-container {
         width: 100%;
-        grid-template-columns: 1fr;
-    }
-    .customer-orders-search .search-btn {
-        width: 100%;
+        margin: 0;
     }
     .customer-orders-actions {
         width: 100%;

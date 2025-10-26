@@ -55,12 +55,6 @@ $bodyCustomerFirstName = $customerFirstName !== null ? $customerFirstName : '';
                 <img src="<?= htmlspecialchars($logoAsset) ?>" alt="DGZ Motorshop logo">
             </a>
         </div>
-        <div class="customer-orders-search" role="search">
-            <div class="search-container">
-                <input type="text" class="search-bar" placeholder="Search by Category, Part, Brand..." aria-label="Search products">
-                <button class="search-btn" type="button">Search</button>
-            </div>
-        </div>
         <div class="customer-orders-actions">
             <a href="<?= htmlspecialchars($cartUrl ?? '#') ?>" class="customer-orders-cart" id="cartButton">
                 <i class="fas fa-shopping-cart" aria-hidden="true"></i>

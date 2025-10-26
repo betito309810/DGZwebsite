@@ -115,7 +115,6 @@ natcasesort($categories);
         <div class="customer-orders-search" role="search">
             <div class="search-container">
                 <input type="text" class="search-bar" placeholder="Search by Category, Part, Brand..." aria-label="Search products">
-                <button class="search-btn" type="button">Search</button>
             </div>
         </div>
         <div class="customer-orders-actions">
