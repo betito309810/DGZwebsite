@@ -112,6 +112,12 @@ natcasesort($categories);
                 <img src="<?= htmlspecialchars($logoAsset) ?>" alt="DGZ Motorshop logo">
             </a>
         </div>
+        <div class="customer-orders-search" role="search">
+            <div class="search-container">
+                <input type="text" class="search-bar" placeholder="Search by Category, Part, Brand..." aria-label="Search products">
+                <button class="search-btn" type="button">Search</button>
+            </div>
+        </div>
         <div class="customer-orders-actions">
             <a href="<?= htmlspecialchars($cartUrl ?? '#') ?>" class="customer-orders-cart" id="cartButton">
                 <i class="fas fa-shopping-cart" aria-hidden="true"></i>
@@ -140,8 +146,6 @@ natcasesort($categories);
         </div>
     </header>
 
-    <div class="header-offset" aria-hidden="true"></div>
-
     <!-- Navigation -->
     <nav class="nav" id="primaryNav" aria-label="Primary navigation">
         <div class="nav-content">
@@ -154,15 +158,6 @@ natcasesort($categories);
     <div class="nav-backdrop" id="navBackdrop" hidden></div>
 
     <?php require __DIR__ . '/dgz_motorshop_system/includes/login_required_modal.php'; ?>
-
-    <section class="catalog-search" aria-label="Product search">
-        <div class="search-container">
-            <input type="text" class="search-bar" placeholder="Search by Category, Part, Brand..." aria-label="Search products">
-            <button class="search-btn" type="button" aria-label="Run product search">
-                <i class="fas fa-search" aria-hidden="true"></i>
-            </button>
-        </div>
-    </section>
 
     <div class="mobile-toolbar" id="mobileCatalogToolbar" aria-label="Catalog controls">
         <button type="button" class="toolbar-btn" id="mobileFilterToggle" aria-controls="categorySidebar" aria-expanded="false">

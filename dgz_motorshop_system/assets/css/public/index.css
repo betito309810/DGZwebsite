@@ -5,7 +5,7 @@
 }
 
 :root {
-    --header-height: 84px;
+    --header-height: 0px;
 }
 
 body {
@@ -225,8 +225,8 @@ body {
     padding: 10px 0;
     box-shadow: 0 1px 5px rgba(0, 0, 0, 0.05);
     position: sticky;
-    top: var(--header-height);
-    z-index: 1500;
+    top: 0;
+    z-index: 1200;
 }
 
 .nav-content {
