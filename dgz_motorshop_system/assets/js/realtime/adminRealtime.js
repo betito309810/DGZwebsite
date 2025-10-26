@@ -147,21 +147,13 @@
         const pos = payload.pos || {};
         const stock = payload.stock || {};
 
-        if (isSidebarLinkActive('pos.php')) {
-            removeSidebarBadge('[data-sidebar-pos-count]');
-        } else {
-            updateSidebarBadge('[data-sidebar-pos-count]', pos.pendingCount, function (count) {
-                createSidebarBadge('pos.php', 'data-sidebar-pos-count', count);
-            });
-        }
+        updateSidebarBadge('[data-sidebar-pos-count]', pos.pendingCount, function (count) {
+            createSidebarBadge('pos.php', 'data-sidebar-pos-count', count);
+        });
 
-        if (isSidebarLinkActive('stockRequests.php')) {
-            removeSidebarBadge('[data-sidebar-stock-count]');
-        } else {
-            updateSidebarBadge('[data-sidebar-stock-count]', stock.pendingCount, function (count) {
-                createSidebarBadge('stockRequests.php', 'data-sidebar-stock-count', count);
-            });
-        }
+        updateSidebarBadge('[data-sidebar-stock-count]', stock.pendingCount, function (count) {
+            createSidebarBadge('stockRequests.php', 'data-sidebar-stock-count', count);
+        });
 
         try {
             window.dispatchEvent(new CustomEvent('dgz:online-orders-refresh', { detail: pos }));

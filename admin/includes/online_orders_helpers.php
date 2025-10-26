@@ -405,7 +405,15 @@ if (!function_exists('fetchOnlineOrdersData')) {
             $declineReasonNote = (string) ($row['decline_reason_note'] ?? '');
 
             $availableTransitions = $statusTransitions[$statusValue] ?? [];
-            $statusFormHidden = in_array($statusValue, ['completed', 'disapproved'], true);
+            $lockedStatuses = [
+                'completed',
+                'disapproved',
+                'cancelled_by_customer',
+                'cancelled_by_staff',
+                'cancelled',
+                'canceled',
+            ];
+            $statusFormHidden = in_array($statusValue, $lockedStatuses, true);
             $transitionOptions = [];
             foreach ($availableTransitions as $value) {
                 $transitionOptions[] = [
