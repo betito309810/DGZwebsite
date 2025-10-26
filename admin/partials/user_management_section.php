@@ -6,11 +6,31 @@
 
 $showUserManagementBackButton = $showUserManagementBackButton ?? true;
 ?>
-<?php if (!empty($userManagementSuccess)): ?>
-    <div class="alert alert-success"><?php echo htmlspecialchars($userManagementSuccess); ?></div>
-<?php endif; ?>
-<?php if (!empty($userManagementError)): ?>
-    <div class="alert alert-error"><?php echo htmlspecialchars($userManagementError); ?></div>
+<?php
+$userManagementFlashMessages = [];
+if (!empty($userManagementSuccess)) {
+    $userManagementFlashMessages[] = [
+        'type' => 'success',
+        'message' => (string) $userManagementSuccess,
+    ];
+}
+if (!empty($userManagementError)) {
+    $userManagementFlashMessages[] = [
+        'type' => 'error',
+        'message' => (string) $userManagementError,
+    ];
+}
+?>
+<?php if (!empty($userManagementFlashMessages)): ?>
+    <div class="user-management-flash" data-user-management-flash hidden>
+        <?php foreach ($userManagementFlashMessages as $flashMessage): ?>
+            <div
+                class="user-management-flash__message"
+                data-user-toast-type="<?= htmlspecialchars($flashMessage['type'], ENT_QUOTES, 'UTF-8') ?>"
+                data-user-toast-message="<?= htmlspecialchars($flashMessage['message'], ENT_QUOTES, 'UTF-8') ?>"
+            ></div>
+        <?php endforeach; ?>
+    </div>
 <?php endif; ?>
 
 <div class="user-management-wrapper">

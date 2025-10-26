@@ -680,6 +680,11 @@ $statusFilterConfig = [
         'statuses' => ['pending'],
         'empty_message' => 'No pending orders right now.',
     ],
+    'payment_verification' => [
+        'label' => 'Payment verification',
+        'statuses' => ['payment_verification'],
+        'empty_message' => 'No orders awaiting payment verification right now.',
+    ],
     'approved' => [
         'label' => 'Approved',
         'statuses' => ['approved'],

@@ -110,7 +110,8 @@ try {
     $columnCandidates = [
         'id' => ['id', 'order_id'],
         'tracking_code' => [$trackingCodeColumn],
-        'customer_name' => ['customer_name', 'name'],
+        'customer_name' => ['customer_name', 'name', 'customer_fullname', 'full_name', 'customer'],
+        'customer_id' => ['customer_id', 'customerId', 'customerID', 'customerid'],
         'status' => ['status', 'order_status'],
         'created_at' => ['created_at', 'order_date', 'date_created', 'created'],
         'total' => ['total', 'grand_total', 'amount', 'total_amount'],
@@ -244,16 +245,70 @@ try {
         }
     }
 
+    $customerName = '';
+    if (array_key_exists('customer_name', $order)) {
+        $customerName = trim((string) ($order['customer_name'] ?? ''));
+    }
+
+    $customerId = 0;
+    if (array_key_exists('customer_id', $order)) {
+        $customerId = (int) ($order['customer_id'] ?? 0);
+    }
+
+    if ($customerName === '' && $customerId > 0) {
+        try {
+            $customerStmt = $pdo->prepare(
+                'SELECT full_name, name, first_name, last_name FROM customers WHERE id = ? LIMIT 1'
+            );
+            if ($customerStmt && $customerStmt->execute([$customerId])) {
+                $customerRow = $customerStmt->fetch(PDO::FETCH_ASSOC);
+                if ($customerRow) {
+                    $nameCandidates = [
+                        trim((string) ($customerRow['full_name'] ?? '')),
+                        trim((string) ($customerRow['name'] ?? '')),
+                    ];
+                    $first = trim((string) ($customerRow['first_name'] ?? ''));
+                    $last = trim((string) ($customerRow['last_name'] ?? ''));
+                    $nameCandidates[] = trim($first . ' ' . $last);
+
+                    foreach ($nameCandidates as $candidateName) {
+                        if ($candidateName !== '') {
+                            $customerName = $candidateName;
+                            break;
+                        }
+                    }
+                }
+            }
+        } catch (Throwable $customerLookupException) {
+            error_log('Unable to resolve customer name for tracking lookup: ' . $customerLookupException->getMessage());
+        }
+    }
+
+    $customerName = $customerName !== '' ? $customerName : 'Customer';
+
+    $paymentMethodRaw = '';
+    if (array_key_exists('payment_method', $order)) {
+        $paymentMethodRaw = (string) ($order['payment_method'] ?? '');
+    }
+    $paymentMethodKey = strtolower(trim($paymentMethodRaw));
+    $paymentMethodLabels = [
+        'gcash' => 'GCash',
+        'maya' => 'Maya',
+    ];
+    $paymentMethodDisplay = $paymentMethodLabels[$paymentMethodKey] ?? ($paymentMethodRaw !== '' ? $paymentMethodRaw : 'Not specified');
+
+    $internalId = (int) ($order['id'] ?? 0);
+
     echo json_encode([
         'success' => true,
         'order' => [
             'trackingCode' => $trackingCode,
-            'internalId' => (int) $order['id'],
-            'customerName' => $order['customer_name'] !== '' ? $order['customer_name'] : 'Customer',
+            'internalId' => $internalId,
+            'customerName' => $customerName,
             'status' => $status,
             'statusMessage' => $statusMessages[$status] ?? 'We found your order. Stay tuned for updates!',
             'createdAt' => $createdAt !== '' ? $createdAt : 'Processing',
-            'paymentMethod' => $order['payment_method'] !== '' ? $order['payment_method'] : 'Not specified',
+            'paymentMethod' => $paymentMethodDisplay,
             'total' => $formattedTotal,
         ],
     ]);
