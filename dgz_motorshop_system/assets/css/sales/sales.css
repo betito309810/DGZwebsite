@@ -158,6 +158,13 @@ body {
     width: 100%;
 }
 
+.sales-date-range {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+}
+
 .sales-filter-label {
     font-size: 13px;
     font-weight: 600;
@@ -179,6 +186,24 @@ body {
 }
 
 .sales-filter-select:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.sales-date-input {
+    border-radius: 10px;
+    border: 1px solid #d4d4d8;
+    padding: 10px 16px;
+    font-size: 15px;
+    background: #ffffff;
+    height: 44px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    min-width: 160px;
+    max-width: 190px;
+}
+
+.sales-date-input:focus {
     outline: none;
     border-color: #2563eb;
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
@@ -245,6 +270,10 @@ body {
     .sales-filter-select {
         width: 100%;
     }
+
+    .sales-date-range {
+        width: 100%;
+    }
 }
 
 /* Common Button Styles */
@@ -277,12 +306,12 @@ body {
 }
 
 /* Generate Report Button */
-.btn-generate { background: #27ae60; color: white; }
+.btn-generate { background: #3498db; color: white; }
 
 .btn-generate:hover {
-    background: #219a52;
+    background: #2563eb;
     transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(39, 174, 96, 0.3);
+    box-shadow: 0 4px 8px rgba(37, 99, 235, 0.25);
 }
 
 /* Table container */

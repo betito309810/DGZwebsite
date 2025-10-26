@@ -153,27 +153,21 @@ table td {
     text-decoration: none;
     transition: all 0.2s ease;
     white-space: nowrap;
+    border-radius: 8px;
 }
 
-.add-stock-btn {
+.add-stock-btn,
+.export-btn {
     background: #3498db;
     color: #fff;
     box-shadow: 0 4px 12px rgba(52, 152, 219, 0.25);
+    border: none;
 }
 
-.add-stock-btn:hover {
+.add-stock-btn:hover,
+.export-btn:hover {
     background: #2c82c9;
     box-shadow: 0 6px 18px rgba(52, 152, 219, 0.35);
-}
-
-.export-btn {
-    background: #f8fafc;
-    color: #1f2937;
-    border: 1px solid #d1d5db;
-}
-
-.export-btn:hover {
-    background: #e5ebf5;
 }
 
 table tr {

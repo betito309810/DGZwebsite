@@ -827,30 +827,44 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
 
         .btn-primary, .btn-secondary {
             padding: 8px 16px;
-            border-radius: 4px;
+            border-radius: 8px;
             cursor: pointer;
             display: inline-flex;
             align-items: center;
             gap: 8px;
             text-decoration: none;
+            border: none;
+            transition: background-color 0.2s ease, box-shadow 0.2s ease;
         }
 
         .btn-primary { 
-            background-color: #007bff;
-            color: white;
-            border: none;
+            background-color: #3498db;
+            color: #fff;
         }
 
         .btn-secondary {
-            background-color: #6c757d;
-            color: white;
-            border: none;
+            background-color: #2563eb;
+            color: #fff;
         }
 
         .btn-accent {
-            background-color: #17a2b8;
+            background-color: #3498db;
             color: #fff;
             border: none;
+            border-radius: 8px;
+            padding: 10px 20px;
+            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.25);
+        }
+
+        .btn-accent:hover,
+        .btn-primary:hover {
+            background-color: #2c82c9;
+            box-shadow: 0 6px 18px rgba(52, 152, 219, 0.35);
+        }
+
+        .btn-secondary:hover {
+            background-color: #1d4ed8;
+            box-shadow: 0 6px 18px rgba(29, 78, 216, 0.35);
         }
 
         /* Modal Styles */
@@ -905,19 +919,28 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
         }
 
         .status-toggle-btn {
-            background-color: #17a2b8;
+            background-color: #3498db;
             color: #fff;
             border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
+            padding: 10px 20px;
+            border-radius: 8px;
             cursor: pointer;
             display: inline-flex;
             align-items: center;
             gap: 8px;
+            transition: background-color 0.2s ease, box-shadow 0.2s ease;
+            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.25);
         }
 
         .status-toggle-btn.active {
             box-shadow: inset 0 0 0 2px rgba(255,255,255,0.4);
+        }
+
+        .status-toggle-btn:hover,
+        .status-toggle-btn:focus {
+            background-color: #2c82c9;
+            box-shadow: 0 6px 18px rgba(52, 152, 219, 0.35);
+            outline: none;
         }
 
         .restock-status {

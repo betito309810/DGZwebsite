@@ -52,6 +52,7 @@ $buildCashierFragments = static function (bool $enabled): array {
  */
 function generateSalesReport(PDO $pdo, string $period): array
 {
+    $eligibleStatuses = "('approved','delivery','completed','complete')";
     $sql = '';
     switch ($period) {
         case 'daily':
@@ -61,7 +62,7 @@ function generateSalesReport(PDO $pdo, string $period): array
                         COALESCE(SUM(total), 0) AS total_sales
                     FROM orders
                     WHERE DATE(created_at) = CURDATE()
-                    AND status IN ('delivery','completed','complete')";
+                    AND status IN $eligibleStatuses";
             break;
         case 'weekly':
             // Sales for current week (Monday to Sunday)
@@ -70,7 +71,7 @@ function generateSalesReport(PDO $pdo, string $period): array
                         COALESCE(SUM(total), 0) AS total_sales
                     FROM orders
                     WHERE YEARWEEK(created_at, 1) = YEARWEEK(CURDATE(), 1)
-                    AND status IN ('delivery','completed','complete')";
+                    AND status IN $eligibleStatuses";
             break;
         case 'monthly':
             // Sales for current month
@@ -80,7 +81,7 @@ function generateSalesReport(PDO $pdo, string $period): array
                     FROM orders
                     WHERE YEAR(created_at) = YEAR(CURDATE())
                     AND MONTH(created_at) = MONTH(CURDATE())
-                    AND status IN ('delivery','completed','complete')";
+                    AND status IN $eligibleStatuses";
             break;
         case 'annually':
             // Sales for current year
@@ -89,7 +90,7 @@ function generateSalesReport(PDO $pdo, string $period): array
                         COALESCE(SUM(total), 0) AS total_sales
                     FROM orders
                     WHERE YEAR(created_at) = YEAR(CURDATE())
-                    AND status IN ('delivery','completed','complete')";
+                    AND status IN $eligibleStatuses";
             break;
         default:
             // Invalid period, return zeros
@@ -237,11 +238,55 @@ try {
 
 $orderTypeFilterDetails = buildOrderTypeFilterCondition($orderTypeFilter, $hasOrderTypeColumn);
 
+$normalizeDateInput = static function ($value) {
+    $value = is_string($value) ? trim($value) : '';
+    if ($value === '') {
+        return null;
+    }
+
+    $date = DateTimeImmutable::createFromFormat('Y-m-d', $value);
+    $errors = DateTimeImmutable::getLastErrors();
+    $warningCount = is_array($errors) && isset($errors['warning_count']) ? (int) $errors['warning_count'] : 0;
+    $errorCount = is_array($errors) && isset($errors['error_count']) ? (int) $errors['error_count'] : 0;
+
+    if ($date === false || !$date || $warningCount > 0 || $errorCount > 0) {
+        return null;
+    }
+
+    return $date;
+};
+
+$createdFromDate = $normalizeDateInput($_GET['created_from'] ?? null);
+$createdToDate = $normalizeDateInput($_GET['created_to'] ?? null);
+
+if ($createdFromDate !== null && $createdToDate !== null && $createdFromDate > $createdToDate) {
+    $tmp = $createdFromDate;
+    $createdFromDate = $createdToDate;
+    $createdToDate = $tmp;
+}
+
+$createdFromValue = $createdFromDate instanceof DateTimeImmutable ? $createdFromDate->format('Y-m-d') : '';
+$createdToValue = $createdToDate instanceof DateTimeImmutable ? $createdToDate->format('Y-m-d') : '';
+
+$createdFromSql = $createdFromDate instanceof DateTimeImmutable
+    ? $createdFromDate->setTime(0, 0, 0)->format('Y-m-d H:i:s')
+    : null;
+
+$createdToSql = $createdToDate instanceof DateTimeImmutable
+    ? $createdToDate->modify('+1 day')->setTime(0, 0, 0)->format('Y-m-d H:i:s')
+    : null;
+
 // Handle CSV export FIRST - before any other queries
 if(isset($_GET['export']) && $_GET['export'] == 'csv') {
     $exportConditions = ["o.status IN ('approved','delivery','completed','complete','disapproved','cancelled_by_customer','cancelled_by_staff','cancelled','canceled')"];
     if ($orderTypeFilterDetails['clause'] !== '') {
         $exportConditions[] = $orderTypeFilterDetails['clause'];
+    }
+    if ($createdFromSql !== null) {
+        $exportConditions[] = 'o.created_at >= :created_from';
+    }
+    if ($createdToSql !== null) {
+        $exportConditions[] = 'o.created_at < :created_to';
     }
 
     $exportWhereClause = implode(' AND ', $exportConditions);
@@ -261,6 +306,12 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
         foreach ($orderTypeFilterDetails['params'] as $param => $value) {
             $export_stmt->bindValue($param, $value, PDO::PARAM_STR);
         }
+        if ($createdFromSql !== null) {
+            $export_stmt->bindValue(':created_from', $createdFromSql, PDO::PARAM_STR);
+        }
+        if ($createdToSql !== null) {
+            $export_stmt->bindValue(':created_to', $createdToSql, PDO::PARAM_STR);
+        }
         $export_stmt->execute();
     } catch (Throwable $e) {
         if ($supportsProcessedBy) {
@@ -277,6 +328,12 @@ if(isset($_GET['export']) && $_GET['export'] == 'csv') {
             $export_stmt = $pdo->prepare($export_sql);
             foreach ($orderTypeFilterDetails['params'] as $param => $value) {
                 $export_stmt->bindValue($param, $value, PDO::PARAM_STR);
+            }
+            if ($createdFromSql !== null) {
+                $export_stmt->bindValue(':created_from', $createdFromSql, PDO::PARAM_STR);
+            }
+            if ($createdToSql !== null) {
+                $export_stmt->bindValue(':created_to', $createdToSql, PDO::PARAM_STR);
             }
             $export_stmt->execute();
         } else {
@@ -353,6 +410,12 @@ if ($hasInvoiceSearch) {
 if ($orderTypeFilter !== 'all') {
     $queryParams['order_type'] = $orderTypeFilter;
 }
+if ($createdFromValue !== '') {
+    $queryParams['created_from'] = $createdFromValue;
+}
+if ($createdToValue !== '') {
+    $queryParams['created_to'] = $createdToValue;
+}
 
 
 // Pagination variables
@@ -375,6 +438,14 @@ if ($orderTypeFilterDetails['clause'] !== '') {
     foreach ($orderTypeFilterDetails['params'] as $param => $value) {
         $sqlParams[$param] = $value;
     }
+}
+if ($createdFromSql !== null) {
+    $baseConditions[] = 'o.created_at >= :created_from';
+    $sqlParams[':created_from'] = $createdFromSql;
+}
+if ($createdToSql !== null) {
+    $baseConditions[] = 'o.created_at < :created_to';
+    $sqlParams[':created_to'] = $createdToSql;
 }
 
 $whereClause = implode(' AND ', $baseConditions);
@@ -550,6 +621,30 @@ $buildPageUrl = static function (int $page) use ($queryParams): string {
                         <option value="walkin"<?php if($orderTypeFilter === 'walkin') echo ' selected'; ?>>Walk-in orders</option>
                         <option value="online"<?php if($orderTypeFilter === 'online') echo ' selected'; ?>>Online orders</option>
                     </select>
+                </div>
+                <div class="sales-date-range">
+                    <div class="sales-filter-group">
+                        <label for="createdFromFilter" class="sales-filter-label">Created from</label>
+                        <input
+                            type="date"
+                            id="createdFromFilter"
+                            name="created_from"
+                            class="sales-date-input"
+                            value="<?= htmlspecialchars($createdFromValue, ENT_QUOTES, 'UTF-8') ?>"
+                            onchange="this.form.submit()"
+                        >
+                    </div>
+                    <div class="sales-filter-group">
+                        <label for="createdToFilter" class="sales-filter-label">Created to</label>
+                        <input
+                            type="date"
+                            id="createdToFilter"
+                            name="created_to"
+                            class="sales-date-input"
+                            value="<?= htmlspecialchars($createdToValue, ENT_QUOTES, 'UTF-8') ?>"
+                            onchange="this.form.submit()"
+                        >
+                    </div>
                 </div>
             </form>
 

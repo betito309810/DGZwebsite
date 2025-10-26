@@ -147,9 +147,14 @@
         const pos = payload.pos || {};
         const stock = payload.stock || {};
 
-        updateSidebarBadge('[data-sidebar-pos-count]', pos.pendingCount, function (count) {
-            createSidebarBadge('pos.php', 'data-sidebar-pos-count', count);
-        });
+        // Hide POS badge when the POS page is the active sidebar item
+        if (isSidebarLinkActive('pos.php')) {
+            removeSidebarBadge('[data-sidebar-pos-count]');
+        } else {
+            updateSidebarBadge('[data-sidebar-pos-count]', pos.pendingCount, function (count) {
+                createSidebarBadge('pos.php', 'data-sidebar-pos-count', count);
+            });
+        }
 
         updateSidebarBadge('[data-sidebar-stock-count]', stock.pendingCount, function (count) {
             createSidebarBadge('stockRequests.php', 'data-sidebar-stock-count', count);
@@ -328,6 +333,11 @@
 
     if (!isLeader) {
         evaluateLeadership();
+    }
+
+    // One-time cleanup on load: if POS is the active page, hide its badge
+    if (isSidebarLinkActive('pos.php')) {
+        removeSidebarBadge('[data-sidebar-pos-count]');
     }
 
     window.setInterval(function () {

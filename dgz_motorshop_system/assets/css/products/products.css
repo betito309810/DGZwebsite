@@ -123,95 +123,44 @@ h3 {
     padding-bottom: 10px;
     border-bottom: 2px solid #e2e8f0;
 }
-/* Add Product Button */
-.add-btn {
-    background:#3498db;
-    color: #fff;
-    border: none;
+/* Action buttons (Add, Manage, Archive, History) */
+.products-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
     border-radius: 8px;
     font-size: 15px;
-    padding: 10px 20px;
+    font-weight: 600;
+    line-height: 1;
+    color: #fff;
+    background: #3498db;
+    border: none;
     cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    font-weight: 600;
-    width: fit-content;
-    transition: background 0.2s;
-    margin: 0;
-}
-
-.manage-btn {
-    background: #4c51bf;
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    font-size: 15px;
-    padding: 10px 20px;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    font-weight: 600;
-    width: fit-content;
-    transition: background 0.2s;
-    margin: 0;
-}
-
-.history-btn {
-    background:#3498db;
-    color:#fff;
-    border:none;
-    border-radius:8px;
-    font-size:15px;
-    padding:10px 20px;
-    cursor:pointer;
-    display:inline-flex;
-    align-items:center;
-    gap:8px;
-    font-weight:600;
+    transition: background 0.2s ease;
+    white-space: nowrap;
     width: fit-content;
     margin: 0;
-    transition:background 0.2s;
-}
-
-.history-btn:hover {
-    background: #2563eb;
-}
-.archive-toggle-btn {
-    background: #6b7280;
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    font-size: 15px;
-    padding: 10px 20px;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    font-weight: 600;
-    width: fit-content;
     text-decoration: none;
-    transition: background 0.2s;
 }
 
-.archive-toggle-btn:hover {
-    background: #4b5563;
+.products-action-btn:hover,
+.products-action-btn:focus {
+    background: #2563eb;
     color: #fff;
+}
+
+.products-action-btn:focus {
+    outline: none;
 }
 
 .archive-toggle-btn--active {
-    background: #10b981;
-}
-
-.archive-toggle-btn--active:hover {
-    background: #059669;
-}
-.add-btn:hover {
     background: #2563eb;
 }
 
-.manage-btn:hover {
-    background: #4338ca;
+.archive-toggle-btn--active:hover,
+.archive-toggle-btn--active:focus {
+    background: #1d4ed8;
 }
 
 .products-action-bar {

@@ -1783,17 +1783,17 @@ $emptyTableMessage = $isArchivedView ? 'No archived products found.' : 'No produ
                 <?php endif; ?>
             </div>
             <?php if (!$isStaff): ?>
-            <button id="openAddModal" class="add-btn" type="button">
+            <button id="openAddModal" class="add-btn products-action-btn" type="button">
                 <i class="fas fa-plus"></i> Add Product
             </button>
-            <button id="openTaxonomyModal" class="manage-btn" type="button">
+            <button id="openTaxonomyModal" class="manage-btn products-action-btn" type="button">
                 <i class="fas fa-tags"></i> Manage Catalog Lists
             </button>
             <?php endif; ?>
-            <a href="<?= htmlspecialchars($archiveToggleUrl) ?>" class="archive-toggle-btn<?= $isArchivedView ? ' archive-toggle-btn--active' : '' ?>">
+            <a href="<?= htmlspecialchars($archiveToggleUrl) ?>" class="archive-toggle-btn products-action-btn<?= $isArchivedView ? ' archive-toggle-btn--active' : '' ?>">
                 <i class="fas fa-box-archive"></i> <?= htmlspecialchars($archiveToggleLabel) ?>
             </a>
-            <button id="openHistoryModal" class="history-btn" type="button">
+            <button id="openHistoryModal" class="history-btn products-action-btn" type="button">
                 <i class="fas fa-history"></i> History
             </button>
         </div>
