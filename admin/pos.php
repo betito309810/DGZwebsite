@@ -1572,7 +1572,21 @@ if ($requestedStatusFilter === null || trim((string) $requestedStatusFilter) ===
     $requestedStatusFilter = 'pending';
 }
 
-$trackedOnlineStatuses = ['pending', 'payment_verification', 'approved', 'delivery'];
+$trackedOnlineStatuses = function_exists('getOnlineOrderStatusOptions')
+    ? array_values(array_unique(array_keys(getOnlineOrderStatusOptions())))
+    : [
+        'pending',
+        'payment_verification',
+        'approved',
+        'delivery',
+        'completed',
+        'complete',
+        'disapproved',
+        'cancelled_by_customer',
+        'cancelled_by_staff',
+        'cancelled',
+        'canceled',
+    ];
 
 $onlineOrdersData = fetchOnlineOrdersData($pdo, [
     'page' => $page,
