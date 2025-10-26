@@ -38,16 +38,36 @@ if (!function_exists('ordersNormalizeWalkInName')) {
             ? (int) $normalized['processed_by_user_id']
             : 0;
 
-        if ($processedBy > 0) {
-            $name = isset($normalized['customer_name'])
-                ? trim((string) $normalized['customer_name'])
-                : '';
+        $name = isset($normalized['customer_name'])
+            ? trim((string) $normalized['customer_name'])
+            : '';
 
-            if ($name === '' || strcasecmp($name, 'n/a') === 0) {
-                $normalized['customer_name'] = 'Walk-in';
-            } elseif (strcasecmp($name, 'walk in') === 0) {
-                $normalized['customer_name'] = 'Walk-in';
-            }
+        if (strcasecmp($name, 'walk in') === 0) {
+            $normalized['customer_name'] = 'Walk-in';
+            return $normalized;
+        }
+
+        $orderType = isset($normalized['order_type'])
+            ? strtolower(trim((string) $normalized['order_type']))
+            : '';
+
+        $isWalkInType = $orderType !== ''
+            && in_array($orderType, ['walkin', 'walk-in', 'walk_in', 'pos', 'in-store', 'instore'], true);
+
+        if ($orderType !== '' && !$isWalkInType) {
+            return $normalized;
+        }
+
+        $paymentMethod = isset($normalized['payment_method'])
+            ? strtolower(trim((string) $normalized['payment_method']))
+            : '';
+
+        $cashLikeMethods = ['cash', 'cash payment', 'cashpayment', 'cash-on-hand'];
+        $isLikelyWalkIn = $isWalkInType
+            || ($processedBy > 0 && ($paymentMethod === '' || in_array($paymentMethod, $cashLikeMethods, true)));
+
+        if ($isLikelyWalkIn && ($name === '' || strcasecmp($name, 'n/a') === 0)) {
+            $normalized['customer_name'] = 'Walk-in';
         }
 
         return $normalized;

@@ -1288,6 +1288,7 @@ HTML;
     $orderPhoneColumn = ordersFindColumn($pdo, ['phone', 'mobile', 'contact_number']);
     $orderLegacyContactColumn = ordersFindColumn($pdo, ['contact']);
     $orderPaymentMethodColumn = ordersFindColumn($pdo, ['payment_method', 'payment_type', 'payment']);
+    $orderTypeColumn = ordersFindColumn($pdo, ['order_type']);
     $orderProcessedByColumn = ordersFindColumn($pdo, ['processed_by_user_id', 'processed_by']);
     $orderVatableColumn = ordersFindColumn($pdo, ['vatable']);
     $orderVatColumn = ordersFindColumn($pdo, ['vat', 'tax']);
@@ -1334,6 +1335,7 @@ HTML;
 
         $appendColumn($orderTotalColumn, $salesTotal);
         $appendColumn($orderPaymentMethodColumn, 'Cash');
+        $appendColumn($orderTypeColumn, 'walkin');
         $appendColumn($orderStatusColumn, 'completed');
 
         $processedByValue = isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null;
