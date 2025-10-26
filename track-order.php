@@ -6,6 +6,7 @@ $logoAsset = assetUrl('assets/logo.png');
 $indexStylesheet = assetUrl('assets/css/public/index.css');
 $trackStylesheet = assetUrl('assets/css/public/track-order.css');
 $cartScript = assetUrl('assets/js/public/cart.js');
+$termsScript = assetUrl('assets/js/public/termsNotice.js');
 $mobileNavScript = assetUrl('assets/js/public/mobileNav.js');
 $trackScript = assetUrl('assets/js/public/track-order.js');
 $homeUrl = orderingUrl('index.php');
@@ -158,6 +159,28 @@ $bodyCustomerFirstName = $customerFirstName ?? '';
     <script src="<?= htmlspecialchars($customerScript) ?>" defer></script>
     <script src="<?= htmlspecialchars($cartScript) ?>"></script>
     <script src="<?= htmlspecialchars($mobileNavScript) ?>"></script>
+    <!-- First-visit Terms overlay -->
+    <div class="terms-overlay" id="termsOverlay" role="dialog" aria-modal="true" aria-labelledby="termsTitle" hidden>
+        <div class="terms-overlay__backdrop" aria-hidden="true"></div>
+        <div class="terms-overlay__dialog" role="document">
+            <h2 class="terms-overlay__title" id="termsTitle">Before you continue</h2>
+            <div class="terms-overlay__content" id="termsScrollRegion" tabindex="0" data-terms-scroll>
+                <p class="terms-overlay__description">
+                    Please review the Terms and Conditions below. Scroll to the bottom to enable the accept button.
+                </p>
+                <ol class="terms-overlay__list">
+                    <li><strong>Payment and approval</strong> — You must pay for your order first before it is reviewed and approved. After an order is approved, <strong>cancellations are no longer allowed</strong>.</li>
+                    <li><strong>Delivery coverage</strong> — We can deliver to far cities; we will review your location first and confirm delivery availability, lead times, and fees before fulfillment.</li>
+                    <li><strong>Delivery fee</strong> — The delivery fee must be paid to the courier upon receiving the order, unless otherwise stated on your checkout method.</li>
+                    <li><strong>Condition and liability</strong> — All products are checked and packed in good condition before shipping. Once the item is handed to the courier, DGZ Motorshop is no longer responsible for any loss or damage in transit.</li>
+                    <li><strong>Contact information</strong> — Please provide accurate address and contact details so the courier can reach you. Delays caused by incomplete or incorrect information are not covered.</li>
+                    <li><strong>Acceptance</strong> — By continuing, you acknowledge that you have read and agree to these terms.</li>
+                </ol>
+            </div>
+            <button type="button" class="terms-overlay__button" id="termsAcceptButton" disabled data-terms-accept>I Understand and Accept</button>
+        </div>
+    </div>
+    <script src="<?= htmlspecialchars($termsScript) ?>"></script>
     <!-- Page specific logic for handling status lookups -->
     <script src="<?= htmlspecialchars($trackScript) ?>"></script>
 </body>

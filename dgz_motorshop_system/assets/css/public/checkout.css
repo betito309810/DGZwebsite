@@ -198,6 +198,91 @@ h2 {
     gap: 20px;
 }
 
+/* Checkout Terms Overlay */
+.checkout-terms-overlay[hidden] { display: none !important; }
+.checkout-terms-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    color: #0f172a;
+}
+.checkout-terms-overlay__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+}
+.checkout-terms-overlay__dialog {
+    position: relative;
+    width: 100%;
+    max-width: 560px;
+    background: #ffffff;
+    border-radius: 20px;
+    padding: 28px;
+    box-shadow: 0 24px 48px rgba(15, 23, 42, 0.18);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+.checkout-terms-overlay__title {
+    font-size: 22px;
+    font-weight: 800;
+    color: #0a3d62;
+    margin: 0;
+}
+.checkout-terms-overlay__notice {
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.28);
+    color: #991b1b;
+    padding: 10px 12px;
+    border-radius: 12px;
+    margin-bottom: 6px;
+}
+.checkout-terms-overlay__content {
+    max-height: 300px;
+    overflow-y: auto;
+    padding-right: 8px;
+}
+.checkout-terms-overlay__list {
+    padding-left: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.checkout-terms-overlay__button {
+    align-self: flex-end;
+    background: #2563eb;
+    color: #ffffff;
+    border: none;
+    border-radius: 999px;
+    padding: 12px 24px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.checkout-terms-overlay__button:hover,
+.checkout-terms-overlay__button:focus {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 22px rgba(37, 99, 235, 0.35);
+    outline: none;
+}
+.checkout-terms-overlay__button.is-disabled,
+.checkout-terms-overlay__button:disabled {
+    background: #d1d5db;
+    color: #6b7280;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+@media (max-width: 600px) {
+    .checkout-terms-overlay__dialog { padding: 22px; border-radius: 16px; }
+    .checkout-terms-overlay__title { font-size: 20px; }
+    .checkout-terms-overlay__button { width: 100%; align-self: stretch; }
+}
+
 .section-title {
     color: #1f2937;
     font-size: 18px;

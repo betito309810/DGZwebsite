@@ -1619,8 +1619,29 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
         </div>
     </div>
 
+    <!-- Checkout Terms: shown on first submit attempt; requires scroll to enable -->
+    <div class="checkout-terms-overlay" id="checkoutTermsOverlay" role="dialog" aria-modal="true" aria-labelledby="checkoutTermsTitle" hidden>
+        <div class="checkout-terms-overlay__backdrop" aria-hidden="true"></div>
+        <div class="checkout-terms-overlay__dialog" role="document">
+            <h3 class="checkout-terms-overlay__title" id="checkoutTermsTitle">Terms and Conditions</h3>
+            <div class="checkout-terms-overlay__content" tabindex="0" data-checkout-terms-scroll>
+                <p class="checkout-terms-overlay__notice"><strong>Important:</strong> If you don’t settle your payment within <strong>24 hours</strong>, your order will be automatically cancelled. You must pay first before the order will be approved.</p>
+                <ol class="checkout-terms-overlay__list">
+                    <li><strong>Payment and approval</strong> — You must pay for your order first before it is reviewed and approved. After an order is approved, <strong>cancellations are no longer allowed</strong>.</li>
+                    <li><strong>Delivery coverage</strong> — We can deliver to far cities; we will review your location first and confirm delivery availability, lead times, and fees before fulfillment.</li>
+                    <li><strong>Delivery fee</strong> — The delivery fee must be paid to the courier upon receiving the order, unless otherwise stated on your checkout method.</li>
+                    <li><strong>Condition and liability</strong> — All products are checked and packed in good condition before shipping. Once the item is handed to the courier, DGZ Motorshop is no longer responsible for any loss or damage in transit.</li>
+                    <li><strong>Contact information</strong> — Please provide accurate address and contact details so the courier can reach you. Delays caused by incomplete or incorrect information are not covered.</li>
+                    <li><strong>Acceptance</strong> — By continuing, you acknowledge that you have read and agree to these terms.</li>
+                </ol>
+            </div>
+            <button type="button" class="checkout-terms-overlay__button" id="checkoutTermsAccept" disabled>I Understand and Agree</button>
+        </div>
+    </div>
+
     <script src="<?= htmlspecialchars($dialogsScript) ?>"></script>
     <script src="<?= htmlspecialchars($customerScript) ?>" defer></script>
+    <script src="dgz_motorshop_system/assets/js/public/checkoutTerms.js"></script>
     <script>
         const cartInput = document.querySelector('input[name="cart"]');
         const showCheckoutAlert = (message, options) => {

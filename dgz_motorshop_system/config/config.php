@@ -492,6 +492,19 @@ if (!function_exists('ordersIsLikelyWalkIn')) {
             return (string) $value;
         };
 
+        // If there are strong online-order signals, never classify as walk-in.
+        // This protects online orders that may have an "order_type" set
+        // unintentionally during processing.
+        $paymentMethodToken = $normaliseToken($row['payment_method'] ?? '');
+        $hasOnlinePayment = ($paymentMethodToken === 'gcash');
+        $hasProof = false;
+        if (isset($row['payment_proof'])) {
+            $hasProof = trim((string) $row['payment_proof']) !== '';
+        }
+        if ($hasOnlinePayment || $hasProof) {
+            return false;
+        }
+
         $orderTypeToken = $normaliseToken($row['order_type'] ?? '');
         if ($orderTypeToken !== '') {
             if (strpos($orderTypeToken, 'walkin') === 0) {
@@ -515,7 +528,6 @@ if (!function_exists('ordersIsLikelyWalkIn')) {
             $processedBy = (int) $row['processed_by'];
         }
 
-        $paymentMethodToken = $normaliseToken($row['payment_method'] ?? '');
         $cashLikeMethods = ['cash', 'cashpayment', 'cashonhand'];
 
         if ($processedBy > 0 && ($paymentMethodToken === '' || in_array($paymentMethodToken, $cashLikeMethods, true))) {
@@ -1343,57 +1355,10 @@ if (!function_exists('countOnlineOrdersByStatus')) {
      */
     function countOnlineOrdersByStatus(PDO $pdo, array $statuses = ['pending', 'payment_verification'], bool $excludeWalkIn = true): int
     {
-        $normalized = [];
-        foreach ($statuses as $status) {
-            $statusKey = normalizeOnlineOrderStatusKey($status);
-            if ($statusKey !== '') {
-                $normalized[$statusKey] = true;
-            }
-        }
-
-        if (empty($normalized)) {
-            return 0;
-        }
-
-        $synonymMap = [];
-        foreach (array_keys($normalized) as $statusKey) {
-            foreach (getOnlineOrderStatusSynonyms($statusKey) as $synonym) {
-                $synonymMap[$synonym] = $statusKey;
-            }
-        }
-
-        if (empty($synonymMap)) {
-            return 0;
-        }
-
-        $placeholders = implode(',', array_fill(0, count($synonymMap), '?'));
-        $statusWhere = 'LOWER(TRIM(status)) IN (' . $placeholders . ')';
-        $sql = 'SELECT * FROM orders WHERE ' . getOnlineOrdersBaseCondition() . ' AND ' . $statusWhere;
-
-        try {
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute(array_keys($synonymMap));
-
-            $total = 0;
-            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-                $rawStatus = strtolower(trim((string) ($row['status'] ?? '')));
-                $statusKey = $synonymMap[$rawStatus] ?? normalizeOnlineOrderStatusKey($rawStatus);
-                if ($statusKey === '' || !isset($normalized[$statusKey])) {
-                    continue;
-                }
-
-                if ($excludeWalkIn && ordersIsLikelyWalkIn($row)) {
-                    continue;
-                }
-
-                $total++;
-            }
-
-            return $total;
-        } catch (Throwable $e) {
-            error_log('Unable to count online orders: ' . $e->getMessage());
-            return 0;
-        }
+        $counts = onlineOrdersAggregateCounts($pdo, $statuses, $excludeWalkIn);
+        $total = 0;
+        foreach ($counts as $c) { $total += (int) $c; }
+        return $total;
     }
 }
 
@@ -1404,86 +1369,49 @@ if (!function_exists('getOnlineOrdersStatusCounts')) {
      */
     function getOnlineOrdersStatusCounts(PDO $pdo, array $statuses, bool $excludeWalkIn = true): array
     {
-        $normalized = [];
-        foreach ($statuses as $status) {
-            $statusKey = normalizeOnlineOrderStatusKey($status);
-            if ($statusKey !== '') {
-                $normalized[$statusKey] = 0;
-            }
+        return onlineOrdersAggregateCounts($pdo, $statuses, $excludeWalkIn);
+    }
+}
+
+// New: robust, single-path aggregator that avoids fragile SQL filters and
+// handles synonyms + walk-in exclusion in PHP.
+if (!function_exists('onlineOrdersAggregateCounts')) {
+    function onlineOrdersAggregateCounts(PDO $pdo, array $statuses, bool $excludeWalkIn = true): array
+    {
+        // Initialize counters for requested status keys
+        $track = [];
+        foreach ($statuses as $s) {
+            $key = normalizeOnlineOrderStatusKey($s);
+            if ($key !== '') { $track[$key] = 0; }
         }
+        if (empty($track)) { return []; }
 
-        if (empty($normalized)) {
-            return [];
-        }
-
-        $synonymMap = [];
-        foreach (array_keys($normalized) as $statusKey) {
-            $synonyms = function_exists('getOnlineOrderStatusSynonyms')
-                ? getOnlineOrderStatusSynonyms($statusKey)
-                : [];
-
-            if (empty($synonyms)) {
-                $synonyms = [$statusKey];
-            }
-
-            foreach ($synonyms as $synonym) {
-                $normalizedSynonym = strtolower(trim((string) $synonym));
-                if ($normalizedSynonym === '') {
-                    continue;
-                }
-
-                $synonymMap[$normalizedSynonym] = $statusKey;
-            }
-
-            // Ensure canonical key is always recognised.
-            $synonymMap[$statusKey] = $statusKey;
-        }
-
-        if (empty($synonymMap)) {
-            return $normalized;
-        }
-
-        $placeholders = implode(',', array_fill(0, count($synonymMap), '?'));
-        $statusWhere = 'LOWER(TRIM(status)) IN (' . $placeholders . ')';
-        $sql = 'SELECT * FROM orders WHERE ' . getOnlineOrdersBaseCondition() . ' AND ' . $statusWhere;
+        // Pull likely online orders, then normalise status and count in PHP
+        $where = getOnlineOrdersBaseCondition();
+        $sql = 'SELECT id, status, payment_method, payment_proof, processed_by_user_id, customer_name, order_type'
+             . ' FROM orders WHERE ' . $where;
 
         try {
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute(array_keys($synonymMap));
-
-            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-                $rowForEvaluation = $row;
-                if (function_exists('normalizeOnlineOrderRow')) {
-                    $rowForEvaluation = normalizeOnlineOrderRow($rowForEvaluation);
-                }
-
-                $statusSource = $rowForEvaluation['status']
-                    ?? ($rowForEvaluation['status_original'] ?? ($row['status'] ?? ''));
-                $statusKey = normalizeOnlineOrderStatusKey($statusSource);
-                if ($statusKey === '') {
-                    $rawStatus = strtolower(trim((string) ($row['status'] ?? '')));
-                    $statusKey = $synonymMap[$rawStatus] ?? '';
-                }
-
-                if ($statusKey === '' || !array_key_exists($statusKey, $normalized)) {
-                    continue;
-                }
-
-                if (
-                    $excludeWalkIn
-                    && function_exists('ordersIsLikelyWalkIn')
-                    && ordersIsLikelyWalkIn($rowForEvaluation)
-                ) {
-                    continue;
-                }
-
-                $normalized[$statusKey]++;
-            }
+            $stmt = $pdo->query($sql);
         } catch (Throwable $e) {
-            error_log('Unable to summarise online order statuses: ' . $e->getMessage());
+            error_log('onlineOrdersAggregateCounts query failed: ' . $e->getMessage());
+            return $track;
         }
 
-        return $normalized;
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $statusKey = normalizeOnlineOrderStatusKey($row['status'] ?? '');
+            if ($statusKey === '' || !array_key_exists($statusKey, $track)) {
+                continue;
+            }
+
+            if ($excludeWalkIn && ordersIsLikelyWalkIn($row)) {
+                continue;
+            }
+
+            $track[$statusKey]++;
+        }
+
+        return $track;
     }
 }
 

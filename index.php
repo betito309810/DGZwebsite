@@ -417,11 +417,15 @@ natcasesort($categories);
             <h2 class="terms-overlay__title" id="termsTitle">Before you continue</h2>
             <div class="terms-overlay__content" id="termsScrollRegion" tabindex="0" data-terms-scroll>
                 <p class="terms-overlay__description">
-                    By placing an order with DGZ Motorshop, you agree that:
+                    Please review the Terms and Conditions below. Scroll to the bottom to enable the accept button.
                 </p>
                 <ol class="terms-overlay__list">
-                    <li>The customer who confirms the booking will arrange the courier and shoulder the delivery fee.</li>
-                    <li>Once the items are handed over to the courier, the shop is not responsible for any damages during transit.</li>
+                    <li><strong>Payment and approval</strong> — You must pay for your order first before it is reviewed and approved. After an order is approved, <strong>cancellations are no longer allowed</strong>.</li>
+                    <li><strong>Delivery coverage</strong> — We can deliver to far cities; we will review your location first and confirm delivery availability, lead times, and fees before fulfillment.</li>
+                    <li><strong>Delivery fee</strong> — The delivery fee must be paid to the courier upon receiving the order, unless otherwise stated on your checkout method.</li>
+                    <li><strong>Condition and liability</strong> — All products are checked and packed in good condition before shipping. Once the item is handed to the courier, DGZ Motorshop is no longer responsible for any loss or damage in transit.</li>
+                    <li><strong>Contact information</strong> — Please provide accurate address and contact details so the courier can reach you. Delays caused by incomplete or incorrect information are not covered.</li>
+                    <li><strong>Acceptance</strong> — By continuing, you acknowledge that you have read and agree to these terms.</li>
                 </ol>
             </div>
             <button type="button" class="terms-overlay__button" id="termsAcceptButton" disabled data-terms-accept>I Understand and Accept</button>

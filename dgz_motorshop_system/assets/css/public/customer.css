@@ -517,9 +517,16 @@
 }
 
 @media (min-width: 768px) {
+    /* Keep full-width header background, but align content to 1200px container */
+    .customer-orders-header {
+        padding-left: max(16px, calc((100vw - 1200px) / 2));
+        padding-right: max(16px, calc((100vw - 1200px) / 2));
+    }
+
     .customer-orders-header--with-search {
         display: grid;
-        grid-template-columns: auto minmax(280px, 520px) auto;
+        /* Equal side tracks; center column holds the search */
+        grid-template-columns: 1fr minmax(360px, 520px) 1fr;
         align-items: center;
     }
 
