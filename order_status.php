@@ -115,6 +115,8 @@ try {
         'customer_first_name' => ['customer_first_name', 'first_name', 'firstname', 'customer_first', 'given_name', 'fname'],
         'customer_last_name' => ['customer_last_name', 'last_name', 'lastname', 'customer_last', 'surname', 'lname'],
         'customer_id' => ['customer_id', 'customerId', 'customerID', 'customerid'],
+        'customer_email' => ['customer_email', 'email', 'email_address'],
+        'customer_phone' => ['customer_phone', 'phone', 'mobile', 'contact_number', 'contact'],
         'status' => ['status', 'order_status'],
         'created_at' => ['created_at', 'order_date', 'date_created', 'created'],
         'total' => ['total', 'grand_total', 'amount', 'total_amount'],
@@ -196,6 +198,13 @@ try {
     if ($customerName === '' && array_key_exists('customer_display_name', $order)) {
         $customerName = trim((string) ($order['customer_display_name'] ?? ''));
     }
+
+    $customerEmail = array_key_exists('customer_email', $order)
+        ? trim((string) ($order['customer_email'] ?? ''))
+        : '';
+    $customerPhone = array_key_exists('customer_phone', $order)
+        ? trim((string) ($order['customer_phone'] ?? ''))
+        : '';
 
     $customerFirstName = array_key_exists('customer_first_name', $order)
         ? trim((string) ($order['customer_first_name'] ?? ''))
@@ -309,6 +318,80 @@ try {
             }
         } catch (Throwable $customerLookupException) {
             error_log('Unable to resolve customer name for tracking lookup: ' . $customerLookupException->getMessage());
+        }
+    }
+
+    if ($customerName === '' && $customerEmail !== '') {
+        try {
+            $emailStmt = $pdo->prepare(
+                'SELECT full_name, name, first_name, firstname, given_name, fname, last_name, lastname, surname, lname, middle_name, middlename FROM customers WHERE email = ? LIMIT 1'
+            );
+            if ($emailStmt && $emailStmt->execute([$customerEmail])) {
+                $customerRow = $emailStmt->fetch(PDO::FETCH_ASSOC);
+                if ($customerRow) {
+                    $nameCandidates = [
+                        trim((string) ($customerRow['full_name'] ?? '')),
+                        trim((string) ($customerRow['name'] ?? '')),
+                        trim((string) ($customerRow['firstname'] ?? '')),
+                        trim((string) ($customerRow['lastname'] ?? '')),
+                        trim((string) ($customerRow['given_name'] ?? '')),
+                        trim((string) ($customerRow['surname'] ?? '')),
+                        trim((string) ($customerRow['fname'] ?? '')),
+                        trim((string) ($customerRow['lname'] ?? '')),
+                    ];
+                    $first = trim((string) ($customerRow['first_name'] ?? ''));
+                    $last = trim((string) ($customerRow['last_name'] ?? ''));
+                    $middle = trim((string) ($customerRow['middle_name'] ?? ($customerRow['middlename'] ?? '')));
+                    $nameCandidates[] = trim($first . ' ' . $last);
+                    $nameCandidates[] = trim($first . ' ' . $middle . ' ' . $last);
+
+                    foreach ($nameCandidates as $candidateName) {
+                        if ($candidateName !== '') {
+                            $customerName = $candidateName;
+                            break;
+                        }
+                    }
+                }
+            }
+        } catch (Throwable $customerLookupException) {
+            error_log('Unable to resolve customer name by email for tracking lookup: ' . $customerLookupException->getMessage());
+        }
+    }
+
+    if ($customerName === '' && $customerPhone !== '') {
+        try {
+            $phoneStmt = $pdo->prepare(
+                'SELECT full_name, name, first_name, firstname, given_name, fname, last_name, lastname, surname, lname, middle_name, middlename FROM customers WHERE phone = ? LIMIT 1'
+            );
+            if ($phoneStmt && $phoneStmt->execute([$customerPhone])) {
+                $customerRow = $phoneStmt->fetch(PDO::FETCH_ASSOC);
+                if ($customerRow) {
+                    $nameCandidates = [
+                        trim((string) ($customerRow['full_name'] ?? '')),
+                        trim((string) ($customerRow['name'] ?? '')),
+                        trim((string) ($customerRow['firstname'] ?? '')),
+                        trim((string) ($customerRow['lastname'] ?? '')),
+                        trim((string) ($customerRow['given_name'] ?? '')),
+                        trim((string) ($customerRow['surname'] ?? '')),
+                        trim((string) ($customerRow['fname'] ?? '')),
+                        trim((string) ($customerRow['lname'] ?? '')),
+                    ];
+                    $first = trim((string) ($customerRow['first_name'] ?? ''));
+                    $last = trim((string) ($customerRow['last_name'] ?? ''));
+                    $middle = trim((string) ($customerRow['middle_name'] ?? ($customerRow['middlename'] ?? '')));
+                    $nameCandidates[] = trim($first . ' ' . $last);
+                    $nameCandidates[] = trim($first . ' ' . $middle . ' ' . $last);
+
+                    foreach ($nameCandidates as $candidateName) {
+                        if ($candidateName !== '') {
+                            $customerName = $candidateName;
+                            break;
+                        }
+                    }
+                }
+            }
+        } catch (Throwable $customerLookupException) {
+            error_log('Unable to resolve customer name by phone for tracking lookup: ' . $customerLookupException->getMessage());
         }
     }
 
