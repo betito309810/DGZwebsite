@@ -96,7 +96,9 @@ $normalizedTrackingCode = 'DGZ-' . substr($normalizedTrackingCode, 3, 4) . '-' .
 try {
     $pdo = db();
 
-    if (!ordersSupportsTrackingCodes($pdo)) {
+    $trackingCodeColumn = ordersFindColumn($pdo, ['tracking_code', 'tracking_number', 'tracking_no']);
+
+    if ($trackingCodeColumn === null) {
         http_response_code(503);
         echo json_encode([
             'success' => false,
@@ -105,23 +107,64 @@ try {
         exit;
     }
 
-    $columns = [
-        'id',
-        'tracking_code',
-        'customer_name',
-        'status',
-        'created_at',
-        'total',
-        'payment_method',
+    $columnCandidates = [
+        'id' => ['id', 'order_id'],
+        'tracking_code' => [$trackingCodeColumn],
+        'customer_name' => ['customer_name', 'name'],
+        'status' => ['status', 'order_status'],
+        'created_at' => ['created_at', 'order_date', 'date_created', 'created'],
+        'total' => ['total', 'grand_total', 'amount', 'total_amount'],
+        'payment_method' => ['payment_method', 'payment_type', 'payment'],
     ];
 
-    $hasOrderTypeColumn = ordersHasColumn($pdo, 'order_type');
-    if ($hasOrderTypeColumn) {
-        $columns[] = 'order_type';
+    $resolvedColumns = [];
+    $selectParts = [];
+
+    foreach ($columnCandidates as $alias => $candidates) {
+        $column = null;
+        if ($alias === 'tracking_code') {
+            $column = $trackingCodeColumn;
+        } else {
+            $column = ordersFindColumn($pdo, $candidates);
+        }
+
+        if ($column === null) {
+            continue;
+        }
+
+        $resolvedColumns[$alias] = $column;
+        $safeColumn = '`' . str_replace('`', '``', $column) . '`';
+        $safeAlias = '`' . str_replace('`', '``', $alias) . '`';
+        $selectParts[] = $safeColumn . ' AS ' . $safeAlias;
     }
 
-    // Fetch a small, focused subset of the order information to share with customers.
-    $sql = 'SELECT ' . implode(', ', $columns) . ' FROM orders WHERE tracking_code = ? LIMIT 1';
+    if (!isset($resolvedColumns['tracking_code'])) {
+        http_response_code(503);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Order tracking is temporarily unavailable. Please try again later.',
+        ]);
+        exit;
+    }
+
+    $orderTypeColumn = ordersFindColumn($pdo, ['order_type', 'order_origin', 'source']);
+    if ($orderTypeColumn !== null) {
+        $resolvedColumns['order_type'] = $orderTypeColumn;
+        $safeColumn = '`' . str_replace('`', '``', $orderTypeColumn) . '`';
+        $selectParts[] = $safeColumn . ' AS `order_type`';
+    }
+
+    if (empty($selectParts)) {
+        http_response_code(503);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Order tracking is temporarily unavailable. Please try again later.',
+        ]);
+        exit;
+    }
+
+    $whereColumn = '`' . str_replace('`', '``', $resolvedColumns['tracking_code']) . '`';
+    $sql = 'SELECT ' . implode(', ', $selectParts) . ' FROM orders WHERE ' . $whereColumn . ' = ? LIMIT 1';
     $stmt = $pdo->prepare($sql);
     $stmt->execute([$normalizedTrackingCode]);
     $order = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -157,7 +200,7 @@ try {
         exit;
     }
 
-    if ($hasOrderTypeColumn) {
+    if ($orderTypeColumn !== null) {
         $orderType = strtolower((string) ($order['order_type'] ?? ''));
         if ($orderType !== '' && $orderType !== 'online') {
             http_response_code(404);
@@ -179,6 +222,7 @@ try {
 
     $statusMessages = [
         'pending' => 'Your order is being reviewed by our team.',
+        'payment_verification' => 'We are verifying your payment details. Thank you for your patience.',
         'approved' => 'Great news! Your order has been approved and is moving to fulfillment.',
         'delivery' => 'Your order has been handed to the courier and is on its way.',
         'complete' => 'Your order has been completed. Thank you for shopping with us!',
@@ -189,7 +233,8 @@ try {
         'canceled' => 'This order has been cancelled.',
     ];
 
-    $formattedTotal = '₱' . number_format((float) ($order['total'] ?? 0), 2);
+    $rawTotal = isset($order['total']) ? (float) $order['total'] : 0.0;
+    $formattedTotal = '₱' . number_format($rawTotal, 2);
     $createdAt = $order['created_at'] ?? '';
     if ($createdAt !== '') {
         try {

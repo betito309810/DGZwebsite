@@ -768,6 +768,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                                     ? date('F j, Y g:i A', strtotime($createdAt))
                                     : date('F j, Y g:i A');
 
+                                $itemsTotal = (float) ($itemData['items_total'] ?? 0.0);
+                                $orderTotal = (float) ($orderInfo['total'] ?? $itemsTotal);
+                                $invoiceNumber = trim((string) ($orderInfo['invoice_number'] ?? ''));
+                                $receiptData = [
+                                    'order_id' => $orderId,
+                                    'invoice_number' => $invoiceNumber,
+                                    'customer_name' => $customerName,
+                                    'created_at' => $createdAt,
+                                    'sales_total' => $orderTotal,
+                                    'vatable' => $orderTotal / 1.12,
+                                    'vat' => $orderTotal - ($orderTotal / 1.12),
+                                    'amount_paid' => $orderTotal,
+                                    'change' => 0.0,
+                                    'cashier' => currentSessionUserDisplayName() ?? 'Cashier',
+                                    'items' => array_map(static function (array $item): array {
+                                        return [
+                                            'name' => $item['name'] ?? 'Item',
+                                            'quantity' => (int) ($item['quantity'] ?? 0),
+                                            'price' => (float) ($item['price'] ?? 0),
+                                            'total' => (float) ($item['total'] ?? 0),
+                                        ];
+                                    }, $itemData['items'] ?? []),
+                                ];
+
+                                $pdfContent = generateReceiptPDF($receiptData);
+                                $pdfFilename = 'receipt_' . $orderId . '.pdf';
+
                                 $subject = 'Order Approved - DGZ Motorshop Update';
 
                                 $body = '<div style="font-family: Arial, sans-serif; font-size:14px; color:#333;">'
@@ -779,7 +806,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                                     . '<p style="margin:16px 0 0;">We\'ll let you know once it\'s on the way. Thank you for shopping with <strong>DGZ Motorshop</strong>!</p>'
                                     . '</div>';
 
-                                try { sendEmail($customerEmail, $subject, $body); } catch (Throwable $e) { /* logged */ }
+                                try {
+                                    sendEmail($customerEmail, $subject, $body, $pdfContent, $pdfFilename);
+                                } catch (Throwable $e) { /* logged */ }
                             }
                         }
                     }
@@ -814,6 +843,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                                     . '<p style="margin:0 0 12px;">Please reach us within <strong>5 working days</strong> via '
                                     . '<a href="mailto:' . htmlspecialchars($supportEmail, ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($supportEmail, ENT_QUOTES, 'UTF-8') . '</a>'
                                     . ' or call us at ' . htmlspecialchars($supportPhone, ENT_QUOTES, 'UTF-8') . '.</p>'
+                                    . '<p style="margin:0 0 12px;">Here are the payment options:<br><strong>GCASH:</strong> 0987654321<br><strong>MAYA:</strong> 0987654321</p>'
                                     . $summaryTableHtml
                                     . '<p style="margin:0;">If we don\'t hear back within 5 working days, the order will be automatically cancelled.</p>'
                                     . '<p style="margin:12px 0 0;">Thank you,<br>DGZ Motorshop Team</p>'

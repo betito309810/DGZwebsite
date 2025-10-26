@@ -1220,6 +1220,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 . '<p>We received your order, we will review your order and wait for your order to approve.</p>'
                 . '<p>Your tracking code is <strong>' . $safeTrackingCode . '</strong>.</p>'
                 . '<p>You can use this code on the <a href="' . $safeTrackOrderUrl . '">Track Order page</a> to follow the progress of your purchase.</p>'
+                . '<p>Here are the payment options:<br><strong>GCASH:</strong> 0987654321<br><strong>MAYA:</strong> 0987654321</p>'
                 . '<p>Thank you,<br>DGZ Motorshop</p>';
 
             try {

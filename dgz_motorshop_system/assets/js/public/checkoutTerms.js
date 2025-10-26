@@ -1,5 +1,4 @@
 (function () {
-  const storageKey = 'dgz_checkout_terms_ack_v1';
 
   function qs(sel, root) {
     return (root || document).querySelector(sel);
@@ -35,9 +34,6 @@
     }
 
     let accepted = false;
-    try {
-      accepted = (window.sessionStorage && window.sessionStorage.getItem(storageKey) === 'accepted');
-    } catch (e) { accepted = false; }
 
     disable(accept);
 
@@ -53,7 +49,6 @@
     onScroll();
 
     accept.addEventListener('click', function () {
-      try { window.sessionStorage && window.sessionStorage.setItem(storageKey, 'accepted'); } catch (e) {}
       accepted = true;
       hide(overlay);
       // Intentionally DO NOT auto-submit; user must click submit again.
