@@ -1,6 +1,36 @@
 <?php
 declare(strict_types=1);
 
+if (!function_exists('inventoryReservationsTableExists')) {
+    function inventoryReservationsTableExists(PDO $pdo, string $table): bool
+    {
+        static $cache = [];
+
+        $table = trim($table);
+        if ($table === '') {
+            return false;
+        }
+
+        $key = strtolower($table);
+        if (array_key_exists($key, $cache)) {
+            return $cache[$key];
+        }
+
+        try {
+            $stmt = $pdo->prepare('SHOW TABLES LIKE ?');
+            $stmt->execute([$table]);
+            $exists = $stmt->fetchColumn() !== false;
+        } catch (Throwable $exception) {
+            error_log('Unable to determine if table exists (' . $table . '): ' . $exception->getMessage());
+            $exists = false;
+        }
+
+        $cache[$key] = $exists;
+
+        return $exists;
+    }
+}
+
 if (!function_exists('inventoryReservationsEnsureSchema')) {
     function inventoryReservationsEnsureSchema(PDO $pdo): void
     {
@@ -283,41 +313,50 @@ if (!function_exists('inventoryReservationsDeductForApproval')) {
             }
         }
 
-        try {
-            if ($variantTotals !== []) {
-                $variantStmt = $pdo->prepare(
-                    'UPDATE product_variants '
-                    . 'SET quantity = GREATEST(quantity - ?, 0), '
-                    . 'low_stock_threshold = CASE '
-                    . '    WHEN low_stock_threshold IS NULL THEN '
-                    . '        CASE '
-                    . '            WHEN (GREATEST(quantity - ?, 0)) <= 0 THEN 0 '
-                    . '            ELSE LEAST(9999, GREATEST(1, CEIL(GREATEST(quantity - ?, 0) * 0.2))) '
-                    . '        END '
-                    . '    ELSE GREATEST(0, low_stock_threshold) '
-                    . 'END '
-                    . 'WHERE id = ?'
-                );
+        $variantSuccess = true;
+        if ($variantTotals !== []) {
+            if (inventoryReservationsTableExists($pdo, 'product_variants')) {
+                try {
+                    $variantStmt = $pdo->prepare(
+                        'UPDATE product_variants '
+                        . 'SET quantity = GREATEST(quantity - ?, 0), '
+                        . 'low_stock_threshold = CASE '
+                        . '    WHEN low_stock_threshold IS NULL THEN '
+                        . '        CASE '
+                        . '            WHEN (GREATEST(quantity - ?, 0)) <= 0 THEN 0 '
+                        . '            ELSE LEAST(9999, GREATEST(1, CEIL(GREATEST(quantity - ?, 0) * 0.2))) '
+                        . '        END '
+                        . '    ELSE GREATEST(0, low_stock_threshold) '
+                        . 'END '
+                        . 'WHERE id = ?'
+                    );
 
-                foreach ($variantTotals as $variantId => $qty) {
-                    $variantStmt->execute([$qty, $qty, $qty, $variantId]);
+                    foreach ($variantTotals as $variantId => $qty) {
+                        $variantStmt->execute([$qty, $qty, $qty, $variantId]);
+                    }
+                } catch (Throwable $exception) {
+                    error_log('Failed to deduct reserved variant inventory for order ' . $orderId . ': ' . $exception->getMessage());
+                    $variantSuccess = false;
                 }
             }
+        }
 
-            if ($productTotals !== []) {
+        $productSuccess = true;
+        if ($productTotals !== []) {
+            try {
                 $productStmt = $pdo->prepare('UPDATE products SET quantity = GREATEST(quantity - ?, 0) WHERE id = ?');
                 foreach ($productTotals as $productId => $qty) {
                     $productStmt->execute([$qty, $productId]);
                 }
+            } catch (Throwable $exception) {
+                error_log('Failed to deduct reserved product inventory for order ' . $orderId . ': ' . $exception->getMessage());
+                $productSuccess = false;
             }
-
-            inventoryReservationsReleaseForOrder($pdo, $orderId);
-        } catch (Throwable $exception) {
-            error_log('Failed to deduct reserved inventory for order ' . $orderId . ': ' . $exception->getMessage());
-            return false;
         }
 
-        return true;
+        inventoryReservationsReleaseForOrder($pdo, $orderId);
+
+        return $variantSuccess && $productSuccess;
     }
 }
 
