@@ -124,7 +124,13 @@ if (!empty($userManagementError)) {
                                 <td><?php echo date('M d, Y H:i', strtotime($user['created_at'])); ?></td>
                                 <td class="table-actions">
                                     <?php if ($user['role'] === 'staff'): ?>
-                                        <form method="post" class="inline-form" onsubmit="return confirm('<?php echo $isDeactivated ? 'Reactivate this staff account?' : 'Deactivate this staff account?'; ?>');">
+                                        <form
+                                            method="post"
+                                            class="inline-form"
+                                            data-user-status-form
+                                            data-user-status-action="<?php echo $isDeactivated ? 'activate' : 'deactivate'; ?>"
+                                            data-user-status-name="<?php echo htmlspecialchars($user['name'] ?? 'this staff member'); ?>"
+                                        >
                                             <input type="hidden" name="toggle_user_status" value="1">
                                             <input type="hidden" name="toggle_user_id" value="<?php echo (int) $user['id']; ?>">
                                             <input type="hidden" name="toggle_action" value="<?php echo $isDeactivated ? 'activate' : 'deactivate'; ?>">
@@ -151,5 +157,19 @@ if (!empty($userManagementError)) {
                 </table>
             </div>
         </section>
+    </div>
+</div>
+
+<div class="user-status-confirm" data-user-confirm-overlay hidden>
+    <div class="user-status-confirm__backdrop" data-user-confirm-dismiss></div>
+    <div class="user-status-confirm__dialog" role="alertdialog" aria-modal="true" aria-labelledby="userStatusConfirmTitle" aria-describedby="userStatusConfirmMessage">
+        <div class="user-status-confirm__body">
+            <h2 id="userStatusConfirmTitle" class="user-status-confirm__title" data-user-confirm-title>Confirm action</h2>
+            <p id="userStatusConfirmMessage" class="user-status-confirm__message" data-user-confirm-message></p>
+        </div>
+        <div class="user-status-confirm__actions">
+            <button type="button" class="user-status-confirm__button user-status-confirm__button--cancel" data-user-confirm-cancel>Cancel</button>
+            <button type="button" class="user-status-confirm__button user-status-confirm__button--confirm" data-user-confirm-accept>Continue</button>
+        </div>
     </div>
 </div>

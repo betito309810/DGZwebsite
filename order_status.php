@@ -110,7 +110,10 @@ try {
     $columnCandidates = [
         'id' => ['id', 'order_id'],
         'tracking_code' => [$trackingCodeColumn],
-        'customer_name' => ['customer_name', 'name', 'customer_fullname', 'full_name', 'customer'],
+        'customer_name' => ['customer_name', 'name', 'customer_fullname', 'customer_full_name', 'full_name', 'customer'],
+        'customer_display_name' => ['customer_display_name', 'display_name', 'recipient_name', 'contact_name'],
+        'customer_first_name' => ['customer_first_name', 'first_name', 'firstname', 'customer_first', 'given_name', 'fname'],
+        'customer_last_name' => ['customer_last_name', 'last_name', 'lastname', 'customer_last', 'surname', 'lname'],
         'customer_id' => ['customer_id', 'customerId', 'customerID', 'customerid'],
         'status' => ['status', 'order_status'],
         'created_at' => ['created_at', 'order_date', 'date_created', 'created'],
@@ -190,6 +193,28 @@ try {
     }
 
     $customerName = (string) ($order['customer_name'] ?? '');
+    if ($customerName === '' && array_key_exists('customer_display_name', $order)) {
+        $customerName = trim((string) ($order['customer_display_name'] ?? ''));
+    }
+
+    $customerFirstName = array_key_exists('customer_first_name', $order)
+        ? trim((string) ($order['customer_first_name'] ?? ''))
+        : '';
+    $customerLastName = array_key_exists('customer_last_name', $order)
+        ? trim((string) ($order['customer_last_name'] ?? ''))
+        : '';
+
+    if ($customerName === '') {
+        $composed = trim(trim($customerFirstName . ' ' . $customerLastName));
+        if ($composed !== '') {
+            $customerName = $composed;
+        }
+    }
+
+    if ($customerName === '' && $customerFirstName !== '') {
+        $customerName = $customerFirstName;
+    }
+
     $normalizedCustomerName = strtolower(preg_replace('/[^a-z]/', '', $customerName));
 
     if ($normalizedCustomerName !== '' && strpos($normalizedCustomerName, 'walkin') !== false) {
@@ -245,11 +270,6 @@ try {
         }
     }
 
-    $customerName = '';
-    if (array_key_exists('customer_name', $order)) {
-        $customerName = trim((string) ($order['customer_name'] ?? ''));
-    }
-
     $customerId = 0;
     if (array_key_exists('customer_id', $order)) {
         $customerId = (int) ($order['customer_id'] ?? 0);
@@ -258,7 +278,7 @@ try {
     if ($customerName === '' && $customerId > 0) {
         try {
             $customerStmt = $pdo->prepare(
-                'SELECT full_name, name, first_name, last_name FROM customers WHERE id = ? LIMIT 1'
+                'SELECT full_name, name, first_name, firstname, given_name, fname, last_name, lastname, surname, lname, middle_name, middlename FROM customers WHERE id = ? LIMIT 1'
             );
             if ($customerStmt && $customerStmt->execute([$customerId])) {
                 $customerRow = $customerStmt->fetch(PDO::FETCH_ASSOC);
@@ -266,10 +286,18 @@ try {
                     $nameCandidates = [
                         trim((string) ($customerRow['full_name'] ?? '')),
                         trim((string) ($customerRow['name'] ?? '')),
+                        trim((string) ($customerRow['firstname'] ?? '')),
+                        trim((string) ($customerRow['lastname'] ?? '')),
+                        trim((string) ($customerRow['given_name'] ?? '')),
+                        trim((string) ($customerRow['surname'] ?? '')),
+                        trim((string) ($customerRow['fname'] ?? '')),
+                        trim((string) ($customerRow['lname'] ?? '')),
                     ];
                     $first = trim((string) ($customerRow['first_name'] ?? ''));
                     $last = trim((string) ($customerRow['last_name'] ?? ''));
+                    $middle = trim((string) ($customerRow['middle_name'] ?? ($customerRow['middlename'] ?? '')));
                     $nameCandidates[] = trim($first . ' ' . $last);
+                    $nameCandidates[] = trim($first . ' ' . $middle . ' ' . $last);
 
                     foreach ($nameCandidates as $candidateName) {
                         if ($candidateName !== '') {
@@ -282,6 +310,46 @@ try {
         } catch (Throwable $customerLookupException) {
             error_log('Unable to resolve customer name for tracking lookup: ' . $customerLookupException->getMessage());
         }
+    }
+
+    if ($customerName === '' && $customerId > 0) {
+        try {
+            $userStmt = $pdo->prepare(
+                'SELECT full_name, name, first_name, firstname, last_name, lastname FROM users WHERE id = ? LIMIT 1'
+            );
+            if ($userStmt && $userStmt->execute([$customerId])) {
+                $userRow = $userStmt->fetch(PDO::FETCH_ASSOC);
+                if ($userRow) {
+                    $first = trim((string) ($userRow['first_name'] ?? ($userRow['firstname'] ?? '')));
+                    $last = trim((string) ($userRow['last_name'] ?? ($userRow['lastname'] ?? '')));
+                    $userCandidates = [
+                        trim((string) ($userRow['full_name'] ?? '')),
+                        trim((string) ($userRow['name'] ?? '')),
+                        trim($first . ' ' . $last),
+                        $first,
+                    ];
+
+                    foreach ($userCandidates as $candidate) {
+                        if ($candidate !== '') {
+                            $customerName = $candidate;
+                            break;
+                        }
+                    }
+                }
+            }
+        } catch (Throwable $userLookupException) {
+            error_log('Unable to resolve user name for tracking lookup: ' . $userLookupException->getMessage());
+        }
+    }
+
+    $finalNormalizedCustomerName = strtolower(preg_replace('/[^a-z]/', '', $customerName));
+    if ($finalNormalizedCustomerName !== '' && strpos($finalNormalizedCustomerName, 'walkin') !== false) {
+        http_response_code(404);
+        echo json_encode([
+            'success' => false,
+            'message' => 'In-store purchases are not available for online tracking. Please contact the store directly for updates.',
+        ]);
+        exit;
     }
 
     $customerName = $customerName !== '' ? $customerName : 'Customer';

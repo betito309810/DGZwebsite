@@ -438,7 +438,9 @@ if (!function_exists('fetchOnlineOrdersData')) {
             $statusLabel = $statusOptions[$statusValue] ?? ucwords(str_replace('_', ' ', $statusValue));
 
             $paymentDetails = parsePaymentProofValue($row['payment_proof'] ?? null, $row['reference_no'] ?? null);
-            $referenceNumber = (string) ($paymentDetails['reference'] ?? '');
+            $rawReferenceNumber = (string) ($paymentDetails['reference'] ?? '');
+            $fallbackReferenceNumber = (string) ($row['reference_no'] ?? '');
+            $effectiveReferenceNumber = $rawReferenceNumber !== '' ? $rawReferenceNumber : $fallbackReferenceNumber;
             $proofImage = normalizePaymentProofPath($paymentDetails['image'] ?? '');
             $hasPaymentProof = $proofImage !== '';
             if ($deliveryProofColumn !== null && array_key_exists($deliveryProofColumn, $row)) {
@@ -477,6 +479,14 @@ if (!function_exists('fetchOnlineOrdersData')) {
             $declineReasonNote = (string) ($row['decline_reason_note'] ?? '');
 
             $availableTransitions = $statusTransitions[$statusValue] ?? [];
+            if (in_array('approved', $availableTransitions, true)) {
+                $canApprove = $effectiveReferenceNumber !== '' && $hasPaymentProof;
+                if (!$canApprove) {
+                    $availableTransitions = array_values(array_filter($availableTransitions, static function ($status) {
+                        return $status !== 'approved';
+                    }));
+                }
+            }
             $lockedStatuses = [
                 'completed',
                 'disapproved',
@@ -502,7 +512,7 @@ if (!function_exists('fetchOnlineOrdersData')) {
                 'contact_display' => $contactDisplay,
                 'total' => (float) ($row['total'] ?? 0),
                 'total_formatted' => '₱' . number_format((float) ($row['total'] ?? 0), 2),
-                'reference_number' => $referenceNumber !== '' ? $referenceNumber : (string) ($row['reference_no'] ?? ''),
+                'reference_number' => $effectiveReferenceNumber,
                 'proof_image_url' => $primaryProofUrl,
                 'proof_type' => $primaryProofType,
                 'proof_button_label' => $primaryProofType === 'delivery' ? 'Delivery Proof' : 'Payment Proof',
