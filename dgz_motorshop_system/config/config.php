@@ -594,9 +594,18 @@ if (!function_exists('ordersIsLikelyWalkIn')) {
 
         $cashLikeMethods = ['cash', 'cashpayment', 'cashonhand'];
 
+        $statusKey = '';
+        if (isset($row['status'])) {
+            $statusKey = function_exists('normalizeOnlineOrderStatusKey')
+                ? normalizeOnlineOrderStatusKey($row['status'])
+                : strtolower(trim((string) $row['status']));
+        }
+
         if ($processedBy > 0 && ($paymentMethodToken === '' || in_array($paymentMethodToken, $cashLikeMethods, true))) {
             if ($nameToken === '' || in_array($nameToken, ['na', 'customer', 'walkin'], true)) {
-                return true;
+                if (!in_array($statusKey, ['payment_verification', 'approved', 'delivery', 'completed'], true)) {
+                    return true;
+                }
             }
         }
 
