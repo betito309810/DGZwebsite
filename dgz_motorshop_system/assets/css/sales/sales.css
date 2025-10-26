@@ -165,6 +165,12 @@ body {
     align-items: flex-end;
 }
 
+.sales-date-range .sales-filter-group {
+    width: auto;
+    min-width: 0;
+    flex: 0 1 auto;
+}
+
 .sales-filter-label {
     font-size: 13px;
     font-weight: 600;
@@ -199,8 +205,8 @@ body {
     background: #ffffff;
     height: 44px;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
-    min-width: 160px;
-    max-width: 190px;
+    min-width: 120px;
+    max-width: 150px;
 }
 
 .sales-date-input:focus {
