@@ -683,6 +683,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                     } else {
                         $fields = [];
                         $params = [];
+                        $generatedInvoiceNumber = '';
 
                         if ($newStatus !== $currentStatus) {
                             $fields[] = 'status = ?';
@@ -693,14 +694,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                             ? (string) ($currentOrder['invoice_number'] ?? '')
                             : '';
                         $needsInvoice = $supportsInvoiceNumbers
-                            && in_array($newStatus, ['delivery', 'completed'], true)
+                            && in_array($newStatus, ['approved', 'delivery', 'completed'], true)
                             && $existingInvoice === '';
 
                         if ($needsInvoice) {
-                            $generatedInvoice = generateInvoiceNumber($pdo);
-                            if ($generatedInvoice !== '') {
+                            $generatedInvoiceNumber = generateInvoiceNumber($pdo);
+                            if ($generatedInvoiceNumber !== '') {
                                 $fields[] = 'invoice_number = ?';
-                                $params[] = $generatedInvoice;
+                                $params[] = $generatedInvoiceNumber;
                             }
                         }
 
@@ -982,12 +983,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                         }
                     }
 
-                    if ($success && $supportsInvoiceNumbers && in_array($newStatus, ['delivery', 'completed'], true)) {
-                        $invoiceStmt = $pdo->prepare('SELECT invoice_number FROM orders WHERE id = ?');
-                        $invoiceStmt->execute([$orderId]);
-                        $updatedInvoice = (string) ($invoiceStmt->fetchColumn() ?: '');
-                        if ($updatedInvoice !== '') {
-                            $_SESSION['pos_invoice_number'] = $updatedInvoice;
+                    if ($success && $supportsInvoiceNumbers && in_array($newStatus, ['approved', 'delivery', 'completed'], true)) {
+                        if ($generatedInvoiceNumber !== '') {
+                            $_SESSION['pos_invoice_number'] = $generatedInvoiceNumber;
+                        } else {
+                            $invoiceStmt = $pdo->prepare('SELECT invoice_number FROM orders WHERE id = ?');
+                            $invoiceStmt->execute([$orderId]);
+                            $updatedInvoice = (string) ($invoiceStmt->fetchColumn() ?: '');
+                            if ($updatedInvoice !== '') {
+                                $_SESSION['pos_invoice_number'] = $updatedInvoice;
+                            }
                         }
                     }
                 } else {
