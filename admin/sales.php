@@ -354,9 +354,6 @@ if ($orderTypeFilter !== 'all') {
     $queryParams['order_type'] = $orderTypeFilter;
 }
 
-$exportUrlParams = $queryParams;
-$exportUrlParams['export'] = 'csv';
-$exportUrl = '?' . http_build_query($exportUrlParams);
 
 // Pagination variables
 $records_per_page = 20;
@@ -557,10 +554,6 @@ $buildPageUrl = static function (int $page) use ($queryParams): string {
             </form>
 
             <div class="action-buttons">
-                <a href="<?=htmlspecialchars($exportUrl, ENT_QUOTES, 'UTF-8')?>" class="btn btn-export">
-                    <i class="fas fa-file-export"></i>
-                    Export to CSV
-                </a>
                 <button type="button" id="openSalesReport" class="btn btn-generate">
                     <i class="fas fa-chart-line"></i>
                     Generate Sales Report

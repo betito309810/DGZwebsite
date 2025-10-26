@@ -37,7 +37,26 @@ try {
         : 'Proof-of-delivery uploads need a delivery_proof column (TEXT) on the existing orders table—no new table required. '
             . 'Run: ALTER TABLE orders ADD COLUMN delivery_proof TEXT NULL;';
 
-    $trackedStatuses = ['pending', 'payment_verification', 'approved', 'delivery'];
+    $attentionStatuses = function_exists('onlineOrdersAttentionStatuses')
+        ? onlineOrdersAttentionStatuses()
+        : ['pending', 'payment_verification', 'approved', 'delivery'];
+    $trackedStatuses = function_exists('onlineOrdersStatusCountSeeds')
+        ? onlineOrdersStatusCountSeeds()
+        : array_merge(
+            $attentionStatuses,
+            ['completed', 'disapproved', 'cancelled_by_customer', 'cancelled_by_staff', 'cancelled', 'canceled']
+        );
+    $aggregateGroups = function_exists('onlineOrdersAggregateStatusGroups')
+        ? onlineOrdersAggregateStatusGroups()
+        : [
+            'disapproved_cancelled' => [
+                'disapproved',
+                'cancelled_by_customer',
+                'cancelled_by_staff',
+                'cancelled',
+                'canceled',
+            ],
+        ];
 
     $data = fetchOnlineOrdersData($pdo, [
         'page' => $page,
@@ -48,6 +67,9 @@ try {
         'delivery_proof_candidates' => $deliveryProofCandidates,
         'delivery_proof_notice' => $deliveryProofNotice,
         'tracked_status_counts' => $trackedStatuses,
+        'attention_statuses' => $attentionStatuses,
+        'badge_statuses' => $attentionStatuses,
+        'aggregate_status_counts' => $aggregateGroups,
         'exclude_walkin' => true,
     ]);
 

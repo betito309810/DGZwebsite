@@ -37,7 +37,9 @@ function fetchOnlineOrderSnapshot(PDO $pdo): array
     ];
 
     try {
-        $trackedStatuses = ['pending', 'payment_verification', 'approved', 'delivery'];
+        $trackedStatuses = function_exists('onlineOrdersAttentionStatuses')
+            ? onlineOrdersAttentionStatuses()
+            : ['pending', 'payment_verification', 'approved', 'delivery'];
         $count = countOnlineOrdersByStatus($pdo, $trackedStatuses);
         $snapshot['pendingCount'] = $count;
         $snapshot['badgeCount'] = $count;

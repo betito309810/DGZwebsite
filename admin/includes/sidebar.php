@@ -15,12 +15,14 @@ if (!isset($sidebarPdo) || !($sidebarPdo instanceof PDO)) {
 
 if (!isset($onlineOrderBadgeCount)) {
     try {
-        $trackedOnlineStatuses = [
-            'pending',
-            'payment_verification',
-            'approved',
-            'delivery',
-        ];
+        $trackedOnlineStatuses = function_exists('onlineOrdersAttentionStatuses')
+            ? onlineOrdersAttentionStatuses()
+            : [
+                'pending',
+                'payment_verification',
+                'approved',
+                'delivery',
+            ];
         $onlineOrderBadgeCount = $sidebarPdo instanceof PDO
             ? countOnlineOrdersByStatus($sidebarPdo, $trackedOnlineStatuses)
             : 0;
@@ -95,7 +97,6 @@ if (!empty($stockRequestBadgeCount)) {
 $staffAllowedPages = [
     'dashboard.php',
     'products.php',
-    'sales.php',
     'pos.php',
     'inventory.php',
     'stockEntry.php',

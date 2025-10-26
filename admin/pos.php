@@ -1572,32 +1572,35 @@ if ($requestedStatusFilter === null || trim((string) $requestedStatusFilter) ===
     $requestedStatusFilter = 'pending';
 }
 
-$attentionOnlineStatuses = ['pending', 'payment_verification', 'approved', 'delivery'];
-$trackedOnlineStatuses = [];
-foreach ($attentionOnlineStatuses as $statusKey) {
-    $normalisedKey = normaliseOnlineOrderStatus($statusKey);
-    if ($normalisedKey !== '') {
-        $trackedOnlineStatuses[] = $normalisedKey;
-    }
-}
-$trackedOnlineStatuses = array_values(array_unique($trackedOnlineStatuses));
+$attentionOnlineStatuses = function_exists('onlineOrdersAttentionStatuses')
+    ? onlineOrdersAttentionStatuses()
+    : ['pending', 'payment_verification', 'approved', 'delivery'];
 
-$additionalStatusCounts = [
-    'completed',
-    'complete',
-    'disapproved',
-    'cancelled_by_customer',
-    'cancelled_by_staff',
-    'cancelled',
-    'canceled',
-];
-$statusCountKeys = $trackedOnlineStatuses;
-foreach ($additionalStatusCounts as $statusKey) {
-    $normalisedKey = normaliseOnlineOrderStatus($statusKey);
-    if ($normalisedKey !== '' && !in_array($normalisedKey, $statusCountKeys, true)) {
-        $statusCountKeys[] = $normalisedKey;
-    }
+$trackedOnlineStatuses = array_values(array_filter(array_map(static function ($status) {
+    return normaliseOnlineOrderStatus($status);
+}, (array) $attentionOnlineStatuses)));
+if ($trackedOnlineStatuses === []) {
+    $trackedOnlineStatuses = ['pending', 'payment_verification', 'approved', 'delivery'];
 }
+
+$aggregateStatusGroups = function_exists('onlineOrdersAggregateStatusGroups')
+    ? onlineOrdersAggregateStatusGroups()
+    : [
+        'disapproved_cancelled' => [
+            'disapproved',
+            'cancelled_by_customer',
+            'cancelled_by_staff',
+            'cancelled',
+            'canceled',
+        ],
+    ];
+
+$statusCountSeeds = function_exists('onlineOrdersStatusCountSeeds')
+    ? onlineOrdersStatusCountSeeds()
+    : array_merge(
+        $attentionOnlineStatuses,
+        ['completed', 'disapproved', 'cancelled_by_customer', 'cancelled_by_staff', 'cancelled', 'canceled']
+    );
 
 $onlineOrdersData = fetchOnlineOrdersData($pdo, [
     'page' => $page,
@@ -1606,8 +1609,10 @@ $onlineOrdersData = fetchOnlineOrdersData($pdo, [
     'decline_reason_lookup' => $declineReasonLookup,
     'delivery_proof_column' => $deliveryProofColumn,
     'delivery_proof_notice' => $deliveryProofNotice,
-    'tracked_status_counts' => $statusCountKeys,
-    'attention_statuses' => $trackedOnlineStatuses,
+    'tracked_status_counts' => $statusCountSeeds,
+    'attention_statuses' => $attentionOnlineStatuses,
+    'badge_statuses' => $attentionOnlineStatuses,
+    'aggregate_status_counts' => $aggregateStatusGroups,
     'exclude_walkin' => true,
 ]);
 
@@ -1622,17 +1627,8 @@ $onlineOrdersOnPage = count($onlineOrders);
 $onlineOrderStatusCounts = is_array($onlineOrdersData['status_counts'] ?? null)
     ? $onlineOrdersData['status_counts']
     : [];
-$onlineOrdersBadgeCount = 0;
-foreach ($trackedOnlineStatuses as $statusKey) {
-    $onlineOrdersBadgeCount += (int) ($onlineOrderStatusCounts[$statusKey] ?? 0);
-}
-$disapprovedCancelledCount =
-    (int) ($onlineOrderStatusCounts['disapproved'] ?? 0)
-    + (int) ($onlineOrderStatusCounts['cancelled_by_customer'] ?? 0)
-    + (int) ($onlineOrderStatusCounts['cancelled_by_staff'] ?? 0)
-    + (int) ($onlineOrderStatusCounts['cancelled'] ?? 0)
-    + (int) ($onlineOrderStatusCounts['canceled'] ?? 0);
-$onlineOrderStatusCounts['disapproved_cancelled'] = $disapprovedCancelledCount;
+$onlineOrdersBadgeCount = (int) ($onlineOrdersData['badge_count'] ?? 0);
+$disapprovedCancelledCount = (int) ($onlineOrderStatusCounts['disapproved_cancelled'] ?? 0);
 $supportsDeliveryProof = !empty($onlineOrdersData['delivery_proof_supported']);
 $deliveryProofColumn = $onlineOrdersData['delivery_proof_column'] ?? $deliveryProofColumn;
 $deliveryProofNotice = (string) ($onlineOrdersData['delivery_proof_notice'] ?? $deliveryProofNotice);

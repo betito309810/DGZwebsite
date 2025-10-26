@@ -226,29 +226,101 @@ if (!function_exists('fetchOnlineOrdersData')) {
             $deliveryProofNotice = '';
         }
 
-        $trackedStatusCounts = $options['tracked_status_counts'] ?? array_keys($statusOptions);
+        $normalizeStatusList = static function (array $statuses): array {
+            $normalized = [];
+            foreach ($statuses as $status) {
+                $key = normaliseOnlineOrderStatus($status);
+                if ($key === '') {
+                    continue;
+                }
+                $normalized[$key] = true;
+            }
+
+            return array_keys($normalized);
+        };
+
+        $defaultTrackedStatuses = function_exists('onlineOrdersStatusCountSeeds')
+            ? onlineOrdersStatusCountSeeds()
+            : ['pending', 'payment_verification', 'approved', 'delivery', 'completed', 'disapproved'];
+
+        $trackedStatusCounts = $options['tracked_status_counts'] ?? $defaultTrackedStatuses;
         if (!is_array($trackedStatusCounts)) {
-            $trackedStatusCounts = array_keys($statusOptions);
+            $trackedStatusCounts = $defaultTrackedStatuses;
         }
-        $trackedStatusCounts = array_values(array_filter(array_map(static function ($status) {
-            return normaliseOnlineOrderStatus($status);
-        }, $trackedStatusCounts)));
+        $trackedStatusCounts = $normalizeStatusList($trackedStatusCounts);
+        if (empty($trackedStatusCounts)) {
+            $trackedStatusCounts = $normalizeStatusList($defaultTrackedStatuses);
+        }
         if (empty($trackedStatusCounts)) {
             $trackedStatusCounts = ['pending', 'payment_verification', 'approved', 'delivery'];
+        }
+
+        $defaultAttentionStatuses = function_exists('onlineOrdersAttentionStatuses')
+            ? onlineOrdersAttentionStatuses()
+            : ['pending', 'payment_verification'];
+
+        $attentionStatuses = $options['attention_statuses'] ?? $defaultAttentionStatuses;
+        if (!is_array($attentionStatuses)) {
+            $attentionStatuses = $defaultAttentionStatuses;
+        }
+        $attentionStatuses = $normalizeStatusList($attentionStatuses);
+        if (empty($attentionStatuses)) {
+            $attentionStatuses = $normalizeStatusList($defaultAttentionStatuses);
+        }
+        if (empty($attentionStatuses)) {
+            $attentionStatuses = ['pending', 'payment_verification'];
+        }
+
+        $badgeStatusKeys = $options['badge_statuses'] ?? $attentionStatuses;
+        if (!is_array($badgeStatusKeys)) {
+            $badgeStatusKeys = $attentionStatuses;
+        }
+        $badgeStatuses = $normalizeStatusList($badgeStatusKeys);
+        if (empty($badgeStatuses)) {
+            $badgeStatuses = $attentionStatuses;
+        }
+
+        $aggregateStatusCounts = [];
+        if (isset($options['aggregate_status_counts']) && is_array($options['aggregate_status_counts'])) {
+            foreach ($options['aggregate_status_counts'] as $aggregateKey => $sourceStatuses) {
+                $aggregateKeyString = is_string($aggregateKey) ? trim((string) $aggregateKey) : '';
+                if ($aggregateKeyString === '' || !is_array($sourceStatuses)) {
+                    continue;
+                }
+
+                $normalizedSource = $normalizeStatusList($sourceStatuses);
+                if (empty($normalizedSource)) {
+                    continue;
+                }
+
+                $normalizedKey = normaliseOnlineOrderStatus($aggregateKeyString);
+                if ($normalizedKey === '') {
+                    $normalizedKey = strtolower(preg_replace('/[^a-z0-9]+/', '_', $aggregateKeyString));
+                    $normalizedKey = trim($normalizedKey, '_');
+                }
+
+                if ($normalizedKey === '') {
+                    continue;
+                }
+
+                $aggregateStatusCounts[$normalizedKey] = $normalizedSource;
+            }
         }
 
         $whereClause = getOnlineOrdersBaseCondition();
         $params = [];
         if ($statusFilter !== '') {
-            $aggregateStatusFilters = [
-                'disapproved_cancelled' => [
-                    'disapproved',
-                    'cancelled_by_customer',
-                    'cancelled_by_staff',
-                    'cancelled',
-                    'canceled',
-                ],
-            ];
+            $aggregateStatusFilters = function_exists('onlineOrdersAggregateStatusGroups')
+                ? onlineOrdersAggregateStatusGroups()
+                : [
+                    'disapproved_cancelled' => [
+                        'disapproved',
+                        'cancelled_by_customer',
+                        'cancelled_by_staff',
+                        'cancelled',
+                        'canceled',
+                    ],
+                ];
 
             $statusSynonyms = [];
             if (isset($aggregateStatusFilters[$statusFilter])) {
@@ -462,23 +534,20 @@ if (!function_exists('fetchOnlineOrdersData')) {
             ];
         }
 
-        $attentionStatuses = $options['attention_statuses'] ?? ['pending', 'payment_verification'];
-        if (!is_array($attentionStatuses)) {
-            $attentionStatuses = ['pending', 'payment_verification'];
-        }
-        $attentionStatuses = array_values(array_filter(array_map(static function ($status) {
-            return normaliseOnlineOrderStatus($status);
-        }, $attentionStatuses)));
-        if ($attentionStatuses === []) {
-            $attentionStatuses = ['pending', 'payment_verification'];
-        }
-
         $attentionCount = countOnlineOrdersByStatus($pdo, $attentionStatuses, $excludeWalkIn);
         $statusCounts = getOnlineOrdersStatusCounts($pdo, $trackedStatusCounts, $excludeWalkIn);
 
+        foreach ($aggregateStatusCounts as $aggregateKey => $sourceStatuses) {
+            $aggregateTotal = 0;
+            foreach ($sourceStatuses as $statusKey) {
+                $aggregateTotal += (int) ($statusCounts[$statusKey] ?? 0);
+            }
+            $statusCounts[$aggregateKey] = $aggregateTotal;
+        }
+
         $badgeCount = 0;
-        if (!empty($trackedStatusCounts)) {
-            foreach ($trackedStatusCounts as $statusKey) {
+        if (!empty($badgeStatuses)) {
+            foreach ($badgeStatuses as $statusKey) {
                 if ($statusKey === '') {
                     continue;
                 }

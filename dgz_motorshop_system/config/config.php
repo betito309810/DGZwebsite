@@ -427,6 +427,51 @@ if (!function_exists('normalizeOnlineOrderStatusKey')) {
     }
 }
 
+if (!function_exists('onlineOrdersAttentionStatuses')) {
+    function onlineOrdersAttentionStatuses(): array
+    {
+        return [
+            'pending',
+            'payment_verification',
+            'approved',
+            'delivery',
+        ];
+    }
+}
+
+if (!function_exists('onlineOrdersAggregateStatusGroups')) {
+    function onlineOrdersAggregateStatusGroups(): array
+    {
+        return [
+            'disapproved_cancelled' => [
+                'disapproved',
+                'cancelled_by_customer',
+                'cancelled_by_staff',
+                'cancelled',
+                'canceled',
+            ],
+        ];
+    }
+}
+
+if (!function_exists('onlineOrdersStatusCountSeeds')) {
+    function onlineOrdersStatusCountSeeds(): array
+    {
+        return [
+            'pending',
+            'payment_verification',
+            'approved',
+            'delivery',
+            'completed',
+            'disapproved',
+            'cancelled_by_customer',
+            'cancelled_by_staff',
+            'cancelled',
+            'canceled',
+        ];
+    }
+}
+
 if (!function_exists('getOnlineOrderStatusSynonyms')) {
     function getOnlineOrderStatusSynonyms(string $status): array
     {
@@ -1838,7 +1883,6 @@ if (!function_exists('staffAllowedAdminPages')) {
     {
         return [
             'dashboard.php',
-            'sales.php',
             'pos.php',
             'inventory.php',
             'sales_report_pdf.php',
