@@ -110,13 +110,13 @@ try {
     $columnCandidates = [
         'id' => ['id', 'order_id'],
         'tracking_code' => [$trackingCodeColumn],
-        'customer_name' => ['customer_name', 'name', 'customer_fullname', 'customer_full_name', 'full_name', 'customer'],
-        'customer_display_name' => ['customer_display_name', 'display_name', 'recipient_name', 'contact_name'],
+        'customer_name' => ['customer_name', 'name', 'customer_fullname', 'customer_full_name', 'full_name', 'customer', 'contact_person', 'recipient', 'shipping_name', 'billing_name'],
+        'customer_display_name' => ['customer_display_name', 'display_name', 'recipient_name', 'contact_name', 'contact_person'],
         'customer_first_name' => ['customer_first_name', 'first_name', 'firstname', 'customer_first', 'given_name', 'fname'],
         'customer_last_name' => ['customer_last_name', 'last_name', 'lastname', 'customer_last', 'surname', 'lname'],
-        'customer_id' => ['customer_id', 'customerId', 'customerID', 'customerid'],
-        'customer_email' => ['customer_email', 'email', 'email_address'],
-        'customer_phone' => ['customer_phone', 'phone', 'mobile', 'contact_number', 'contact'],
+        'customer_id' => ['customer_id', 'customerid', 'customer_id_fk', 'user_id', 'account_id'],
+        'customer_email' => ['customer_email', 'email', 'email_address', 'user_email'],
+        'customer_phone' => ['customer_phone', 'phone', 'mobile', 'contact_number', 'contact', 'user_phone'],
         'status' => ['status', 'order_status'],
         'created_at' => ['created_at', 'order_date', 'date_created', 'created'],
         'total' => ['total', 'grand_total', 'amount', 'total_amount'],
@@ -194,9 +194,25 @@ try {
         exit;
     }
 
-    $customerName = (string) ($order['customer_name'] ?? '');
+    $normalizeNameCandidate = static function ($value): string {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return '';
+        }
+
+        $normalized = strtolower(preg_replace('/[^a-z]/', '', $value));
+        $genericMarkers = ['customer', 'guest', 'na', 'n/a', 'unknown'];
+        if ($normalized === '' || in_array($normalized, $genericMarkers, true)) {
+            return '';
+        }
+
+        return $value;
+    };
+
+    $customerName = $normalizeNameCandidate($order['customer_name'] ?? '');
+    $rawCustomerName = $order['customer_name'] ?? '';
     if ($customerName === '' && array_key_exists('customer_display_name', $order)) {
-        $customerName = trim((string) ($order['customer_display_name'] ?? ''));
+        $customerName = $normalizeNameCandidate($order['customer_display_name'] ?? '');
     }
 
     $customerEmail = array_key_exists('customer_email', $order)
@@ -222,6 +238,16 @@ try {
 
     if ($customerName === '' && $customerFirstName !== '') {
         $customerName = $customerFirstName;
+    }
+
+    $customerName = $normalizeNameCandidate($customerName);
+
+    if ($customerName === '') {
+        $contactDetails = resolveOrderContactDetails($order);
+        $contactName = $normalizeNameCandidate($contactDetails['name'] ?? '');
+        if ($contactName !== '') {
+            $customerName = $contactName;
+        }
     }
 
     $normalizedCustomerName = strtolower(preg_replace('/[^a-z]/', '', $customerName));
@@ -309,6 +335,7 @@ try {
                     $nameCandidates[] = trim($first . ' ' . $middle . ' ' . $last);
 
                     foreach ($nameCandidates as $candidateName) {
+                        $candidateName = $normalizeNameCandidate($candidateName);
                         if ($candidateName !== '') {
                             $customerName = $candidateName;
                             break;
@@ -346,6 +373,7 @@ try {
                     $nameCandidates[] = trim($first . ' ' . $middle . ' ' . $last);
 
                     foreach ($nameCandidates as $candidateName) {
+                        $candidateName = $normalizeNameCandidate($candidateName);
                         if ($candidateName !== '') {
                             $customerName = $candidateName;
                             break;
@@ -383,6 +411,7 @@ try {
                     $nameCandidates[] = trim($first . ' ' . $middle . ' ' . $last);
 
                     foreach ($nameCandidates as $candidateName) {
+                        $candidateName = $normalizeNameCandidate($candidateName);
                         if ($candidateName !== '') {
                             $customerName = $candidateName;
                             break;
@@ -413,6 +442,7 @@ try {
                     ];
 
                     foreach ($userCandidates as $candidate) {
+                        $candidate = $normalizeNameCandidate($candidate);
                         if ($candidate !== '') {
                             $customerName = $candidate;
                             break;

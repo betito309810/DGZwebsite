@@ -992,6 +992,12 @@ if (!function_exists('resolveOrderContactDetails')) {
             'name',
             'customer_full_name',
             'customer_name_value',
+            'customer_display_name',
+            'contact_name',
+            'contact_person',
+            'recipient_name',
+            'billing_name',
+            'shipping_name',
         ] as $key) {
             if (!empty($row[$key])) {
                 $nameCandidates[] = $row[$key];

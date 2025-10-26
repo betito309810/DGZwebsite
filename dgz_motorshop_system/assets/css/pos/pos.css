@@ -355,23 +355,31 @@ body {
 .status-form {
     margin-top: 8px;
     display: flex;
-    gap: 8px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.status-action-row {
+    display: flex;
     align-items: center;
+    gap: 10px;
     flex-wrap: wrap;
 }
 
 .status-form select {
     border: 1px solid #dfe4ea;
     border-radius: 6px;
-    padding: 6px 10px;
+    padding: 6px 12px;
     font-size: 13px;
+    min-width: 150px;
 }
 
 .status-form .delivery-proof-field {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    margin-top: 8px;
+    width: 100%;
 }
 
 .status-form .delivery-proof-field[hidden] {
@@ -393,23 +401,13 @@ body {
     color: #374151;
 }
 
-.status-form .delivery-proof-help {
-    font-size: 12px;
-    color: #6b7280;
-}
-
-.status-form .delivery-proof-help--warning {
-    color: #b45309;
-    font-weight: 600;
-}
-
 .status-save {
     background: #1abc9c;
     border: none;
     border-radius: 6px;
     color: #fff;
     font-weight: 600;
-    padding: 6px 12px;
+    padding: 8px 16px;
     cursor: pointer;
     transition: background 0.2s ease;
 }

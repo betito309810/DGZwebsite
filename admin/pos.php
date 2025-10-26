@@ -832,7 +832,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                                     : date('F j, Y g:i A');
 
                                 $supportEmail = 'dgzstoninocapstone@gmail.com';
-                                $supportPhone = '(123) 456-7890';
+                                $supportPhone = '09536514033';
 
                                 $subject = 'Payment Verification Needed - DGZ Motorshop Order #' . (int) $orderId;
                                 $body = '<div style="font-family: Arial, sans-serif; font-size:14px; color:#333;">'
@@ -840,12 +840,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
                                     . '<p style="margin:0 0 12px;">Hi ' . htmlspecialchars($customerName, ENT_QUOTES, 'UTF-8') . ',</p>'
                                     . '<p style="margin:0 0 12px;">We reviewed your order #' . (int) $orderId . ' placed on '
                                     . htmlspecialchars($prettyDate, ENT_QUOTES, 'UTF-8') . ', but we could not match any payment on our records.</p>'
-                                    . '<p style="margin:0 0 12px;">Please reach us within <strong>5 working days</strong> via '
+                                    . '<p style="margin:0 0 12px;">Please reach us within <strong>24 hours</strong> via '
                                     . '<a href="mailto:' . htmlspecialchars($supportEmail, ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($supportEmail, ENT_QUOTES, 'UTF-8') . '</a>'
                                     . ' or call us at ' . htmlspecialchars($supportPhone, ENT_QUOTES, 'UTF-8') . '.</p>'
                                     . '<p style="margin:0 0 12px;">Here are the payment options:<br><strong>GCASH:</strong> 0987654321<br><strong>MAYA:</strong> 0987654321</p>'
                                     . $summaryTableHtml
-                                    . '<p style="margin:0;">If we don\'t hear back within 5 working days, the order will be automatically cancelled.</p>'
+                                    . '<p style="margin:0;">If we don\'t hear back within 24 hours, the order will be automatically cancelled.</p>'
                                     . '<p style="margin:12px 0 0;">Thank you,<br>DGZ Motorshop Team</p>'
                                     . '</div>';
 
@@ -2133,25 +2133,24 @@ if ($receiptDataJson === false) {
                                                 <input type="hidden" name="update_order_status" value="1">
                                                 <input type="hidden" name="decline_reason_id" value="">
                                                 <input type="hidden" name="decline_reason_note" value="">
-                                                <select name="new_status" <?= $statusFormDisabled ? 'disabled' : '' ?> data-status-select>
-                                                    <?php if ($statusFormDisabled): ?>
-                                                        <option value=""><?= htmlspecialchars($order['status_label'] ?? ucfirst($statusValue), ENT_QUOTES, 'UTF-8') ?></option>
-                                                    <?php else: ?>
-                                                        <?php foreach ($availableStatusChanges as $option): ?>
-                                                            <option value="<?= htmlspecialchars($option['value'], ENT_QUOTES, 'UTF-8') ?>">
-                                                                <?= htmlspecialchars($option['label'], ENT_QUOTES, 'UTF-8') ?>
-                                                            </option>
-                                                        <?php endforeach; ?>
-                                                    <?php endif; ?>
-                                                </select>
+                                                <div class="status-action-row">
+                                                    <select name="new_status" <?= $statusFormDisabled ? 'disabled' : '' ?> data-status-select>
+                                                        <?php if ($statusFormDisabled): ?>
+                                                            <option value=""><?= htmlspecialchars($order['status_label'] ?? ucfirst($statusValue), ENT_QUOTES, 'UTF-8') ?></option>
+                                                        <?php else: ?>
+                                                            <?php foreach ($availableStatusChanges as $option): ?>
+                                                                <option value="<?= htmlspecialchars($option['value'], ENT_QUOTES, 'UTF-8') ?>">
+                                                                    <?= htmlspecialchars($option['label'], ENT_QUOTES, 'UTF-8') ?>
+                                                                </option>
+                                                            <?php endforeach; ?>
+                                                        <?php endif; ?>
+                                                    </select>
+                                                    <button type="submit" class="status-save" <?= $statusFormDisabled ? 'disabled' : '' ?>>Update</button>
+                                                </div>
                                                 <div class="<?= $proofFieldClasses ?>" data-delivery-proof-field <?= $proofFieldHidden ? 'hidden' : '' ?>>
                                                     <label for="delivery-proof-<?= (int) $order['id'] ?>">Proof of delivery</label>
                                                     <input type="file" name="delivery_proof" id="delivery-proof-<?= (int) $order['id'] ?>" accept="image/*" <?= ($statusFormDisabled || !$supportsDeliveryProof) ? 'disabled' : '' ?> <?= ($supportsDeliveryProof && $defaultNextStatus === 'completed') ? 'required' : '' ?>>
-                                                    <p class="delivery-proof-help<?= $supportsDeliveryProof ? '' : ' delivery-proof-help--warning' ?>" data-delivery-proof-default="<?= htmlspecialchars($deliveryProofDefaultHelp, ENT_QUOTES, 'UTF-8') ?>">
-                                                        <?= htmlspecialchars($supportsDeliveryProof ? $deliveryProofDefaultHelp : $deliveryProofNotice, ENT_QUOTES, 'UTF-8') ?>
-                                                    </p>
                                                 </div>
-                                                <button type="submit" class="status-save" <?= $statusFormDisabled ? 'disabled' : '' ?>>Update</button>
                                             </form>
                                         <?php endif; ?>
                                         <?php if ($statusValue === 'disapproved' && !empty($order['decline_reason_label'])): ?>

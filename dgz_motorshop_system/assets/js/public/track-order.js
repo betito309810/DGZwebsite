@@ -80,12 +80,6 @@
             `,
             `
                 <div class="status-detail">
-                    <span>Customer</span>
-                    <strong>${order.customerName}</strong>
-                </div>
-            `,
-            `
-                <div class="status-detail">
                     <span>Payment Method</span>
                     <strong>${order.paymentMethod}</strong>
                 </div>

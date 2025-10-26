@@ -796,16 +796,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     proofSupported = order.delivery_proof_supported;
                 }
                 proofSupported = Boolean(proofSupported);
-                const proofNotice = typeof onlineOrdersState.deliveryProofNotice === 'string'
-                    ? onlineOrdersState.deliveryProofNotice
-                    : '';
-                const proofHelpDefault = onlineOrdersState.deliveryProofHelp || DELIVERY_PROOF_HELP_FALLBACK;
                 const proofFieldHidden = proofSupported ? defaultNextStatus !== 'completed' : false;
                 const proofFieldClasses = `delivery-proof-field${proofSupported ? '' : ' is-disabled'}`;
-                const proofHelpClass = proofSupported
-                    ? 'delivery-proof-help'
-                    : 'delivery-proof-help delivery-proof-help--warning';
-                const proofHelpText = proofSupported ? proofHelpDefault : (proofNotice || proofHelpDefault);
                 const proofInputDisabled = statusFormDisabled || !proofSupported;
                 const proofInputRequired = proofSupported && defaultNextStatus === 'completed';
                 const proofInputId = `delivery-proof-${orderId}`;
@@ -843,15 +835,16 @@ document.addEventListener('DOMContentLoaded', () => {
                             <input type="hidden" name="update_order_status" value="1">
                             <input type="hidden" name="decline_reason_id" value="">
                             <input type="hidden" name="decline_reason_note" value="">
-                            <select name="new_status" ${statusFormDisabled ? 'disabled' : ''} data-status-select>
-                                ${statusOptionsHtml}
-                            </select>
+                            <div class="status-action-row">
+                                <select name="new_status" ${statusFormDisabled ? 'disabled' : ''} data-status-select>
+                                    ${statusOptionsHtml}
+                                </select>
+                                <button type="submit" class="status-save" ${statusFormDisabled ? 'disabled' : ''}>Update</button>
+                            </div>
                             <div class="${escapeHtml(proofFieldClasses)}" data-delivery-proof-field ${proofFieldHidden ? 'hidden' : ''}>
                                 <label for="${escapeHtml(proofInputId)}">Proof of delivery</label>
                                 <input type="file" name="delivery_proof" id="${escapeHtml(proofInputId)}" accept="image/*" ${proofInputDisabled ? 'disabled' : ''} ${proofInputRequired ? 'required' : ''}>
-                                <p class="${escapeHtml(proofHelpClass)}" data-delivery-proof-default="${escapeHtml(proofHelpDefault)}">${escapeHtml(proofHelpText)}</p>
                             </div>
-                            <button type="submit" class="status-save" ${statusFormDisabled ? 'disabled' : ''}>Update</button>
                         </form>
                     `;
 
