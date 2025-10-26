@@ -37,6 +37,8 @@ try {
         : 'Proof-of-delivery uploads need a delivery_proof column (TEXT) on the existing orders table—no new table required. '
             . 'Run: ALTER TABLE orders ADD COLUMN delivery_proof TEXT NULL;';
 
+    $trackedStatuses = ['pending', 'payment_verification', 'approved', 'delivery'];
+
     $data = fetchOnlineOrdersData($pdo, [
         'page' => $page,
         'per_page' => $perPage,
@@ -45,7 +47,8 @@ try {
         'delivery_proof_column' => $deliveryProofColumn,
         'delivery_proof_candidates' => $deliveryProofCandidates,
         'delivery_proof_notice' => $deliveryProofNotice,
-        'tracked_status_counts' => ['pending', 'payment_verification', 'approved', 'delivery', 'completed', 'disapproved'],
+        'tracked_status_counts' => $trackedStatuses,
+        'exclude_walkin' => true,
     ]);
 
     header('Content-Type: application/json');

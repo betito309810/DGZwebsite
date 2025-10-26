@@ -1567,6 +1567,8 @@ if ($requestedStatusFilter === null || trim((string) $requestedStatusFilter) ===
     $requestedStatusFilter = 'pending';
 }
 
+$trackedOnlineStatuses = ['pending', 'payment_verification', 'approved', 'delivery'];
+
 $onlineOrdersData = fetchOnlineOrdersData($pdo, [
     'page' => $page,
     'per_page' => $perPage,
@@ -1574,7 +1576,8 @@ $onlineOrdersData = fetchOnlineOrdersData($pdo, [
     'decline_reason_lookup' => $declineReasonLookup,
     'delivery_proof_column' => $deliveryProofColumn,
     'delivery_proof_notice' => $deliveryProofNotice,
-    'tracked_status_counts' => ['pending', 'payment_verification', 'approved', 'delivery', 'completed', 'disapproved'],
+    'tracked_status_counts' => $trackedOnlineStatuses,
+    'exclude_walkin' => true,
 ]);
 
 $onlineOrders = $onlineOrdersData['orders'];
@@ -1887,8 +1890,13 @@ if ($receiptDataJson === false) {
                     'disapproved' => ['label' => 'Disapproved', 'icon' => 'fa-circle-xmark'],
                 ];
 
+                $trackedStatusSet = array_flip($trackedOnlineStatuses);
                 foreach ($statusTabs as $statusValue => &$tabMeta) {
-                    $tabMeta['count'] = (int) ($onlineOrderStatusCounts[$statusValue] ?? 0);
+                    $isTracked = isset($trackedStatusSet[$statusValue]);
+                    $tabMeta['show_badge'] = $isTracked;
+                    $tabMeta['count'] = $isTracked
+                        ? (int) ($onlineOrderStatusCounts[$statusValue] ?? 0)
+                        : null;
                 }
                 unset($tabMeta);
             ?>
@@ -1900,27 +1908,33 @@ if ($receiptDataJson === false) {
                             $queryParams = ['tab' => 'online', 'page' => 1];
                             $queryParams['status_filter'] = $value;
                             $statusTabUrl = 'pos.php?' . http_build_query($queryParams);
-                            $statusCount = (int) ($meta['count'] ?? 0);
                             $statusLabel = (string) ($meta['label'] ?? '');
+                            $showBadge = !empty($meta['show_badge']);
+                            $statusCount = $showBadge ? (int) ($meta['count'] ?? 0) : null;
                             $statusCountLabel = $statusLabel !== ''
-                                ? $statusLabel . ' (' . number_format($statusCount) . ' orders)'
-                                : number_format($statusCount) . ' orders';
+                                ? $statusLabel
+                                : 'Orders';
+                            if ($showBadge) {
+                                $statusCountLabel .= ' (' . number_format((int) $statusCount) . ' orders)';
+                            }
                         ?>
-                        <a href="<?= htmlspecialchars($statusTabUrl, ENT_QUOTES, 'UTF-8') ?>"
-                            class="status-filter-button<?= $isActive ? ' is-active' : '' ?>"
-                            data-status-filter-button
-                            data-status-value="<?= htmlspecialchars($value, ENT_QUOTES, 'UTF-8') ?>"
-                            data-status-label="<?= htmlspecialchars($statusLabel, ENT_QUOTES, 'UTF-8') ?>"
-                            role="tab"
-                            aria-selected="<?= $isActive ? 'true' : 'false' ?>"
-                            aria-label="<?= htmlspecialchars($statusCountLabel, ENT_QUOTES, 'UTF-8') ?>"
-                            title="<?= htmlspecialchars($statusCountLabel, ENT_QUOTES, 'UTF-8') ?>">
-                            <i class="fas <?= htmlspecialchars($meta['icon'], ENT_QUOTES, 'UTF-8') ?>"></i>
-                            <?= htmlspecialchars($meta['label'], ENT_QUOTES, 'UTF-8') ?>
-                            <span class="status-count-badge" data-status-count-badge="<?= htmlspecialchars($value, ENT_QUOTES, 'UTF-8') ?>" <?= $statusCount === 0 ? 'data-status-count-empty="true"' : '' ?>>
-                                <?= number_format($statusCount) ?>
-                            </span>
-                        </a>
+                            <a href="<?= htmlspecialchars($statusTabUrl, ENT_QUOTES, 'UTF-8') ?>"
+                                class="status-filter-button<?= $isActive ? ' is-active' : '' ?>"
+                                data-status-filter-button
+                                data-status-value="<?= htmlspecialchars($value, ENT_QUOTES, 'UTF-8') ?>"
+                                data-status-label="<?= htmlspecialchars($statusLabel, ENT_QUOTES, 'UTF-8') ?>"
+                                role="tab"
+                                aria-selected="<?= $isActive ? 'true' : 'false' ?>"
+                                aria-label="<?= htmlspecialchars($statusCountLabel, ENT_QUOTES, 'UTF-8') ?>"
+                                title="<?= htmlspecialchars($statusCountLabel, ENT_QUOTES, 'UTF-8') ?>">
+                                <i class="fas <?= htmlspecialchars($meta['icon'], ENT_QUOTES, 'UTF-8') ?>"></i>
+                                <?= htmlspecialchars($meta['label'], ENT_QUOTES, 'UTF-8') ?>
+                                <?php if ($showBadge): ?>
+                                    <span class="status-count-badge" data-status-count-badge="<?= htmlspecialchars($value, ENT_QUOTES, 'UTF-8') ?>" <?= ($statusCount ?? 0) === 0 ? 'data-status-count-empty="true"' : '' ?>>
+                                        <?= number_format((int) $statusCount) ?>
+                                    </span>
+                                <?php endif; ?>
+                            </a>
                     <?php endforeach; ?>
                 </div>
 

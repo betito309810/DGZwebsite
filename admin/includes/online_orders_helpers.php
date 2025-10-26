@@ -34,39 +34,25 @@ if (!function_exists('ordersNormalizeWalkInName')) {
     {
         $normalized = $row;
 
-        $processedBy = isset($normalized['processed_by_user_id'])
-            ? (int) $normalized['processed_by_user_id']
-            : 0;
-
         $name = isset($normalized['customer_name'])
             ? trim((string) $normalized['customer_name'])
             : '';
 
-        if (strcasecmp($name, 'walk in') === 0) {
-            $normalized['customer_name'] = 'Walk-in';
-            return $normalized;
+        if ($name !== '') {
+            $nameToken = strtolower(trim((string) $name));
+            if ($nameToken === 'walk in' || $nameToken === 'walk-in') {
+                $normalized['customer_name'] = 'Walk-in';
+                return $normalized;
+            }
+
+            $nameToken = preg_replace('/[^a-z0-9]+/', '', strtolower($name));
+            if ($nameToken === 'walkin') {
+                $normalized['customer_name'] = 'Walk-in';
+                return $normalized;
+            }
         }
 
-        $orderType = isset($normalized['order_type'])
-            ? strtolower(trim((string) $normalized['order_type']))
-            : '';
-
-        $isWalkInType = $orderType !== ''
-            && in_array($orderType, ['walkin', 'walk-in', 'walk_in', 'pos', 'in-store', 'instore'], true);
-
-        if ($orderType !== '' && !$isWalkInType) {
-            return $normalized;
-        }
-
-        $paymentMethod = isset($normalized['payment_method'])
-            ? strtolower(trim((string) $normalized['payment_method']))
-            : '';
-
-        $cashLikeMethods = ['cash', 'cash payment', 'cashpayment', 'cash-on-hand'];
-        $isLikelyWalkIn = $isWalkInType
-            || ($processedBy > 0 && ($paymentMethod === '' || in_array($paymentMethod, $cashLikeMethods, true)));
-
-        if ($isLikelyWalkIn && ($name === '' || strcasecmp($name, 'n/a') === 0)) {
+        if (function_exists('ordersIsLikelyWalkIn') && ordersIsLikelyWalkIn($normalized)) {
             $normalized['customer_name'] = 'Walk-in';
         }
 
@@ -110,12 +96,22 @@ if (!function_exists('normalizeOnlineOrderRow')) {
             $normalized['created_at'] = (string) $createdAt;
         }
 
-        $statusValue = ordersResolveField($normalized, ['status', 'order_status']);
-        if ($statusValue !== null) {
-            $normalized['status'] = strtolower((string) $statusValue);
-        } elseif (!isset($normalized['status']) || trim((string) $normalized['status']) === '') {
-            $normalized['status'] = 'pending';
+        $statusFieldValue = ordersResolveField($normalized, ['status', 'order_status']);
+        if ($statusFieldValue !== null) {
+            $statusOriginal = (string) $statusFieldValue;
+        } elseif (isset($normalized['status'])) {
+            $statusOriginal = (string) $normalized['status'];
+        } else {
+            $statusOriginal = '';
         }
+
+        $statusKey = normaliseOnlineOrderStatus($statusOriginal);
+        if ($statusKey === '') {
+            $statusKey = 'pending';
+        }
+
+        $normalized['status_original'] = $statusOriginal !== '' ? $statusOriginal : $statusKey;
+        $normalized['status'] = $statusKey;
 
         $totalValue = ordersResolveField($normalized, ['total', 'grand_total', 'amount', 'total_amount']);
         if ($totalValue !== null) {
@@ -131,6 +127,10 @@ if (!function_exists('normalizeOnlineOrderRow')) {
 if (!function_exists('normaliseOnlineOrderStatus')) {
     function normaliseOnlineOrderStatus($status): string
     {
+        if (function_exists('normalizeOnlineOrderStatusKey')) {
+            return normalizeOnlineOrderStatusKey($status);
+        }
+
         $status = strtolower(trim((string) $status));
         $allowed = [
             'pending',
@@ -138,7 +138,6 @@ if (!function_exists('normaliseOnlineOrderStatus')) {
             'approved',
             'delivery',
             'completed',
-            'complete',
             'disapproved',
             'cancelled_by_customer',
             'cancelled_by_staff',
@@ -204,6 +203,7 @@ if (!function_exists('fetchOnlineOrdersData')) {
         if (isset($options['decline_reason_lookup']) && is_array($options['decline_reason_lookup'])) {
             $declineLookup = $options['decline_reason_lookup'];
         }
+        $excludeWalkIn = !empty($options['exclude_walkin']);
         $deliveryProofCandidates = $options['delivery_proof_candidates'] ?? [
             'delivery_proof',
             'proof_of_delivery',
@@ -229,12 +229,35 @@ if (!function_exists('fetchOnlineOrdersData')) {
         if (!is_array($trackedStatusCounts)) {
             $trackedStatusCounts = array_keys($statusOptions);
         }
+        $trackedStatusCounts = array_values(array_filter(array_map(static function ($status) {
+            return normaliseOnlineOrderStatus($status);
+        }, $trackedStatusCounts)));
+        if (empty($trackedStatusCounts)) {
+            $trackedStatusCounts = ['pending', 'payment_verification', 'approved', 'delivery'];
+        }
 
         $whereClause = getOnlineOrdersBaseCondition();
         $params = [];
         if ($statusFilter !== '') {
-            $whereClause .= ' AND status = ?';
-            $params[] = $statusFilter;
+            $statusSynonyms = function_exists('getOnlineOrderStatusSynonyms')
+                ? getOnlineOrderStatusSynonyms($statusFilter)
+                : [$statusFilter];
+            $statusSynonyms = array_values(array_filter(array_map(static function ($value) {
+                return strtolower(trim((string) $value));
+            }, $statusSynonyms), static function ($value) {
+                return $value !== '';
+            }));
+
+            if (!empty($statusSynonyms)) {
+                $placeholders = implode(',', array_fill(0, count($statusSynonyms), '?'));
+                $whereClause .= ' AND LOWER(TRIM(status)) IN (' . $placeholders . ')';
+                foreach ($statusSynonyms as $synonym) {
+                    $params[] = $synonym;
+                }
+            } else {
+                $whereClause .= ' AND LOWER(TRIM(status)) = ?';
+                $params[] = strtolower($statusFilter);
+            }
         }
 
         // Total count for pagination
@@ -301,8 +324,18 @@ if (!function_exists('fetchOnlineOrdersData')) {
         $orders = [];
         foreach ($rows as $row) {
             $row = normalizeOnlineOrderRow($row);
-            $rawStatus = strtolower((string) ($row['status'] ?? ''));
-            $statusValue = $rawStatus !== '' ? $rawStatus : 'pending';
+
+            if ($excludeWalkIn && function_exists('ordersIsLikelyWalkIn') && ordersIsLikelyWalkIn($row)) {
+                continue;
+            }
+
+            $rawStatusValue = isset($row['status_original'])
+                ? (string) $row['status_original']
+                : (string) ($row['status'] ?? '');
+            $statusValue = normaliseOnlineOrderStatus($row['status'] ?? $rawStatusValue);
+            if ($statusValue === '') {
+                $statusValue = 'pending';
+            }
             $statusLabel = $statusOptions[$statusValue] ?? ucwords(str_replace('_', ' ', $statusValue));
 
             $paymentDetails = parsePaymentProofValue($row['payment_proof'] ?? null, $row['reference_no'] ?? null);
@@ -345,7 +378,7 @@ if (!function_exists('fetchOnlineOrdersData')) {
             $declineReasonNote = (string) ($row['decline_reason_note'] ?? '');
 
             $availableTransitions = $statusTransitions[$statusValue] ?? [];
-            $statusFormHidden = in_array($statusValue, ['completed', 'complete', 'disapproved'], true);
+            $statusFormHidden = in_array($statusValue, ['completed', 'disapproved'], true);
             $transitionOptions = [];
             foreach ($availableTransitions as $value) {
                 $transitionOptions[] = [
@@ -395,8 +428,18 @@ if (!function_exists('fetchOnlineOrdersData')) {
         }
 
         $attentionStatuses = $options['attention_statuses'] ?? ['pending', 'payment_verification'];
-        $attentionCount = countOnlineOrdersByStatus($pdo, $attentionStatuses);
-        $statusCounts = getOnlineOrdersStatusCounts($pdo, $trackedStatusCounts);
+        if (!is_array($attentionStatuses)) {
+            $attentionStatuses = ['pending', 'payment_verification'];
+        }
+        $attentionStatuses = array_values(array_filter(array_map(static function ($status) {
+            return normaliseOnlineOrderStatus($status);
+        }, $attentionStatuses)));
+        if ($attentionStatuses === []) {
+            $attentionStatuses = ['pending', 'payment_verification'];
+        }
+
+        $attentionCount = countOnlineOrdersByStatus($pdo, $attentionStatuses, $excludeWalkIn);
+        $statusCounts = getOnlineOrdersStatusCounts($pdo, $trackedStatusCounts, $excludeWalkIn);
 
         return [
             'orders' => $orders,
