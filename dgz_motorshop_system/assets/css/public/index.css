@@ -72,6 +72,16 @@ body {
     height: auto;
 }
 
+.catalog-search {
+    padding: 24px 16px 0;
+    display: flex;
+    justify-content: center;
+}
+
+.catalog-search .search-container {
+    margin: 0;
+}
+
 .search-container {
     max-width: 520px;
     position: relative;

@@ -14,6 +14,7 @@ $homeUrl = orderingUrl('index.php');
 $aboutUrl = orderingUrl('about.php');
 $trackOrderUrl = orderingUrl('track-order.php');
 $checkoutUrl = orderingUrl('checkout.php');
+$cartUrl = $checkoutUrl;
 $loginUrl = orderingUrl('login.php');
 $myOrdersUrl = orderingUrl('my_orders.php');
 $settingsUrl = orderingUrl('settings.php');
@@ -48,42 +49,36 @@ $bodyCustomerFirstName = $customerFirstName !== null ? $customerFirstName : '';
     data-customer-session-heartbeat-interval="<?= (int) $customerSessionHeartbeatInterval ?>"
     data-customer-login-url="<?= htmlspecialchars($loginUrl) ?>">
     <!-- Header -->
-    <header class="header">
-        <div class="header-content">
-            <button type="button" class="mobile-nav-toggle" id="mobileNavToggle" aria-controls="primaryNav" aria-expanded="false">
-                <span class="mobile-nav-toggle__icon" aria-hidden="true"></span>
-                <span class="sr-only">Toggle navigation</span>
-            </button>
-            <div class="logo">
-                <a href="<?= htmlspecialchars($homeUrl) ?>" aria-label="Go to DGZ Motorshop home">
-                    <img src="<?= htmlspecialchars($logoAsset) ?>" alt="DGZ Motorshop Logo">
-                </a>
-            </div>
-            <div class="header-actions">
-                <a href="#" class="cart-btn" id="cartButton">
-                    <i class="fas fa-shopping-cart"></i>
-                    <span>Cart</span>
-                    <div class="cart-count" id="cartCount">0</div>
-                </a>
-                <div class="account-menu" data-account-menu>
-                    <?php if ($isCustomerAuthenticated): ?>
-                        <button type="button" class="account-menu__trigger" data-account-trigger aria-haspopup="true" aria-expanded="false">
-                            <span class="account-menu__avatar" aria-hidden="true"><i class="fas fa-user-circle"></i></span>
-                            <span class="account-menu__label"><?= htmlspecialchars($customerFirstName ?? 'Account') ?></span>
-                            <i class="fas fa-chevron-down" aria-hidden="true"></i>
-                        </button>
-                        <div class="account-menu__dropdown" data-account-dropdown hidden>
-                            <a href="<?= htmlspecialchars($myOrdersUrl) ?>" class="account-menu__link">My Orders</a>
-                            <a href="<?= htmlspecialchars($settingsUrl) ?>" class="account-menu__link">Settings</a>
-                            <a href="<?= htmlspecialchars($logoutUrl) ?>" class="account-menu__link">Logout</a>
-                        </div>
-                    <?php else: ?>
-                        <a href="<?= htmlspecialchars($loginUrl) ?>" class="account-menu__guest" data-account-login>
-                            <span class="account-menu__avatar" aria-hidden="true"><i class="fas fa-user-circle"></i></span>
-                            <span class="account-menu__label">Log In</span>
-                        </a>
-                    <?php endif; ?>
-                </div>
+    <header class="customer-orders-header">
+        <div class="customer-orders-brand">
+            <a href="<?= htmlspecialchars($homeUrl) ?>" class="customer-orders-logo" aria-label="DGZ Motorshop home">
+                <img src="<?= htmlspecialchars($logoAsset) ?>" alt="DGZ Motorshop logo">
+            </a>
+        </div>
+        <div class="customer-orders-actions">
+            <a href="<?= htmlspecialchars($cartUrl ?? '#') ?>" class="customer-orders-cart" id="cartButton">
+                <i class="fas fa-shopping-cart" aria-hidden="true"></i>
+                <span class="customer-orders-cart__label">Cart</span>
+                <span class="customer-orders-cart__count" id="cartCount">0</span>
+            </a>
+            <div class="account-menu" data-account-menu>
+                <?php if ($isCustomerAuthenticated): ?>
+                    <button type="button" class="account-menu__trigger" data-account-trigger aria-haspopup="true" aria-expanded="false">
+                        <span class="account-menu__avatar" aria-hidden="true"><i class="fas fa-user-circle"></i></span>
+                        <span class="account-menu__label"><?= htmlspecialchars($customerFirstName ?? 'Account') ?></span>
+                        <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                    </button>
+                    <div class="account-menu__dropdown" data-account-dropdown hidden>
+                        <a href="<?= htmlspecialchars($myOrdersUrl) ?>" class="account-menu__link">My Orders</a>
+                        <a href="<?= htmlspecialchars($settingsUrl) ?>" class="account-menu__link">Settings</a>
+                        <a href="<?= htmlspecialchars($logoutUrl) ?>" class="account-menu__link">Logout</a>
+                    </div>
+                <?php else: ?>
+                    <a href="<?= htmlspecialchars($loginUrl) ?>" class="account-menu__guest" data-account-login>
+                        <span class="account-menu__avatar" aria-hidden="true"><i class="fas fa-user-circle"></i></span>
+                        <span class="account-menu__label">Log In</span>
+                    </a>
+                <?php endif; ?>
             </div>
         </div>
     </header>
