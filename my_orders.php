@@ -680,6 +680,11 @@ $statusFilterConfig = [
         'statuses' => ['pending'],
         'empty_message' => 'No pending orders right now.',
     ],
+    'approved' => [
+        'label' => 'Approved',
+        'statuses' => ['approved'],
+        'empty_message' => 'No approved orders yet.',
+    ],
     'delivery' => [
         'label' => 'Out for delivery',
         'statuses' => ['delivery'],
@@ -858,6 +863,11 @@ if ($activeStatusFilter !== null && !empty($orders)) {
     }));
 }
 
+$totalOrders = count($orders);
+$maxVisibleOrders = 10;
+$limitOrders = $activeStatusFilterKey === '' ? $maxVisibleOrders : null;
+$hasMoreOrders = $limitOrders !== null && $totalOrders > $limitOrders;
+
 $statusLabels = [
     'pending' => 'Pending review',
     'payment_verification' => 'Awaiting payment verification',
@@ -921,10 +931,23 @@ $statusLabels = [
 <main class="customer-orders-wrapper">
     <h1>My Orders</h1>
     <nav class="customer-orders-tabs" aria-label="Order filters">
-        <a class="customer-orders-tab<?= $activeStatusFilterKey === '' ? ' is-active' : '' ?>" href="<?= htmlspecialchars($myOrdersUrl) ?>">All</a>
+        <?php
+            $allTabClasses = ['customer-orders-tab', 'customer-orders-tab--all'];
+            if ($activeStatusFilterKey === '') {
+                $allTabClasses[] = 'is-active';
+            }
+        ?>
+        <a class="<?= htmlspecialchars(implode(' ', $allTabClasses)) ?>" href="<?= htmlspecialchars($myOrdersUrl) ?>">All</a>
         <?php foreach ($statusFilterConfig as $filterKey => $filterOptions): ?>
-            <?php $filterUrl = $myOrdersUrl . '?status=' . urlencode($filterKey); ?>
-            <a class="customer-orders-tab<?= $activeStatusFilterKey === $filterKey ? ' is-active' : '' ?>" href="<?= htmlspecialchars($filterUrl) ?>"><?= htmlspecialchars($filterOptions['label']) ?></a>
+            <?php
+                $filterUrl = $myOrdersUrl . '?status=' . urlencode($filterKey);
+                $filterClassSuffix = strtolower(preg_replace('/[^a-z0-9]+/i', '-', $filterKey));
+                $tabClasses = ['customer-orders-tab', 'customer-orders-tab--' . $filterClassSuffix];
+                if ($activeStatusFilterKey === $filterKey) {
+                    $tabClasses[] = 'is-active';
+                }
+            ?>
+            <a class="<?= htmlspecialchars(implode(' ', $tabClasses)) ?>" href="<?= htmlspecialchars($filterUrl) ?>"><?= htmlspecialchars($filterOptions['label']) ?></a>
         <?php endforeach; ?>
     </nav>
     <?php foreach ($alerts as $type => $messages): ?>
@@ -942,8 +965,10 @@ $statusLabels = [
         <?php endif; ?>
     <?php else: ?>
         <div class="customer-orders-list">
-            <?php foreach ($orders as $order): ?>
+            <?php foreach ($orders as $orderIndex => $order): ?>
                 <?php
+                    $isHiddenOrder = $limitOrders !== null && $orderIndex >= $limitOrders;
+                    $hiddenAttributes = $isHiddenOrder ? ' data-order-hidden="true" hidden' : '';
                     $orderDateRaw = $order['created_at'] ?? '';
                     $orderDateFormatted = $orderDateRaw;
                     try {
@@ -1040,7 +1065,7 @@ $statusLabels = [
                         ? 'Please review the details provided by our team.'
                         : 'Please contact our team for more information.';
                 ?>
-                <article class="customer-order-card" data-order-card>
+                <article class="customer-order-card" data-order-card<?= $hiddenAttributes ?>>
                     <header class="customer-order-card__header">
                         <div>
                             <h2>Order #<?= (int) $order['id'] ?></h2>
@@ -1277,6 +1302,13 @@ $statusLabels = [
                 </article>
             <?php endforeach; ?>
         </div>
+        <?php if ($hasMoreOrders): ?>
+            <?php $remainingOrders = max(0, $totalOrders - (int) $limitOrders); ?>
+            <button type="button" class="customer-orders-expand" data-orders-expand aria-expanded="false">
+                Show <?= (int) $remainingOrders ?> more order<?= $remainingOrders === 1 ? '' : 's' ?>
+                <i class="fas fa-chevron-down" aria-hidden="true"></i>
+            </button>
+        <?php endif; ?>
     <?php endif; ?>
 </main>
 <script>

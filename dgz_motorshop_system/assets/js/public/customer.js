@@ -807,6 +807,24 @@
         }
     });
 
+    const ordersExpandButton = document.querySelector('[data-orders-expand]');
+    if (ordersExpandButton) {
+        const revealHiddenOrders = () => {
+            const hiddenCards = document.querySelectorAll('[data-order-card][data-order-hidden]');
+            hiddenCards.forEach((card) => {
+                card.removeAttribute('data-order-hidden');
+                card.removeAttribute('hidden');
+            });
+            ordersExpandButton.setAttribute('aria-expanded', 'true');
+            ordersExpandButton.remove();
+        };
+
+        ordersExpandButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            revealHiddenOrders();
+        });
+    }
+
     // Utility to expose acceptance state
     document.addEventListener('terms:reset', () => {
         try {
