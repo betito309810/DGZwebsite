@@ -1890,10 +1890,11 @@ if ($receiptDataJson === false) {
                 </div>
             <?php endif; ?>
 
-            <div class="status-alert warning" data-delivery-proof-notice <?= $supportsDeliveryProof ? 'hidden' : '' ?>>
-                <i class="fas fa-info-circle"></i>
-                <span data-delivery-proof-text><?= htmlspecialchars($deliveryProofNotice, ENT_QUOTES, 'UTF-8') ?></span>
-            </div>
+            <?php if (!$supportsDeliveryProof && trim((string) $deliveryProofNotice) !== ''): ?>
+                <div class="status-alert warning" data-delivery-proof-notice>
+                    <span data-delivery-proof-text><?= htmlspecialchars($deliveryProofNotice, ENT_QUOTES, 'UTF-8') ?></span>
+                </div>
+            <?php endif; ?>
 
             <?php
                 $statusTabs = [

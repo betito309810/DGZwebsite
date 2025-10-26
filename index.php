@@ -120,11 +120,10 @@ natcasesort($categories);
             </div>
 
             <div class="search-container">
-                <input type="text" class="search-bar" placeholder="Search by Category, Part, Brand...">
-                <button class="search-btn">
-                    <i class="fas fa-search"></i>
+                <input type="text" class="search-bar" placeholder="Search by Category, Part, Brand..." aria-label="Search products">
+                <button class="search-btn" type="button" aria-label="Run product search">
+                    <i class="fas fa-search" aria-hidden="true"></i>
                 </button>
-
             </div>
 
 

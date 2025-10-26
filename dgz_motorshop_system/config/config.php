@@ -1418,9 +1418,25 @@ if (!function_exists('getOnlineOrdersStatusCounts')) {
 
         $synonymMap = [];
         foreach (array_keys($normalized) as $statusKey) {
-            foreach (getOnlineOrderStatusSynonyms($statusKey) as $synonym) {
-                $synonymMap[$synonym] = $statusKey;
+            $synonyms = function_exists('getOnlineOrderStatusSynonyms')
+                ? getOnlineOrderStatusSynonyms($statusKey)
+                : [];
+
+            if (empty($synonyms)) {
+                $synonyms = [$statusKey];
             }
+
+            foreach ($synonyms as $synonym) {
+                $normalizedSynonym = strtolower(trim((string) $synonym));
+                if ($normalizedSynonym === '') {
+                    continue;
+                }
+
+                $synonymMap[$normalizedSynonym] = $statusKey;
+            }
+
+            // Ensure canonical key is always recognised.
+            $synonymMap[$statusKey] = $statusKey;
         }
 
         if (empty($synonymMap)) {
@@ -1436,13 +1452,28 @@ if (!function_exists('getOnlineOrdersStatusCounts')) {
             $stmt->execute(array_keys($synonymMap));
 
             while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-                $rawStatus = strtolower(trim((string) ($row['status'] ?? '')));
-                $statusKey = $synonymMap[$rawStatus] ?? normalizeOnlineOrderStatusKey($rawStatus);
+                $rowForEvaluation = $row;
+                if (function_exists('normalizeOnlineOrderRow')) {
+                    $rowForEvaluation = normalizeOnlineOrderRow($rowForEvaluation);
+                }
+
+                $statusSource = $rowForEvaluation['status']
+                    ?? ($rowForEvaluation['status_original'] ?? ($row['status'] ?? ''));
+                $statusKey = normalizeOnlineOrderStatusKey($statusSource);
+                if ($statusKey === '') {
+                    $rawStatus = strtolower(trim((string) ($row['status'] ?? '')));
+                    $statusKey = $synonymMap[$rawStatus] ?? '';
+                }
+
                 if ($statusKey === '' || !array_key_exists($statusKey, $normalized)) {
                     continue;
                 }
 
-                if ($excludeWalkIn && ordersIsLikelyWalkIn($row)) {
+                if (
+                    $excludeWalkIn
+                    && function_exists('ordersIsLikelyWalkIn')
+                    && ordersIsLikelyWalkIn($rowForEvaluation)
+                ) {
                     continue;
                 }
 
