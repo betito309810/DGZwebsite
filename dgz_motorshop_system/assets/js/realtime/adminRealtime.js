@@ -127,6 +127,7 @@
         const parts = [
             Number(pos.latestId) || 0,
             Number(pos.pendingCount) || 0,
+            Number(pos.latestUpdatedAt) || 0,
             Number(stock.latestId) || 0,
             Number(stock.pendingCount) || 0,
         ];

@@ -34,6 +34,7 @@ function fetchOnlineOrderSnapshot(PDO $pdo): array
         'badgeCount' => 0,
         'latestId' => 0,
         'latestCreatedAt' => 0,
+        'latestUpdatedAt' => 0,
     ];
 
     try {
@@ -49,13 +50,25 @@ function fetchOnlineOrderSnapshot(PDO $pdo): array
 
     try {
         $where = getOnlineOrdersBaseCondition();
-        $sql = 'SELECT COALESCE(MAX(id), 0) AS latest_id, COALESCE(MAX(UNIX_TIMESTAMP(created_at)), 0) AS latest_created '
-             . 'FROM orders WHERE ' . $where;
+        $selectParts = [
+            'COALESCE(MAX(id), 0) AS latest_id',
+            'COALESCE(MAX(UNIX_TIMESTAMP(created_at)), 0) AS latest_created',
+        ];
+
+        $hasUpdatedAt = ordersHasColumn($pdo, 'updated_at');
+        if ($hasUpdatedAt) {
+            $selectParts[] = 'COALESCE(MAX(UNIX_TIMESTAMP(updated_at)), 0) AS latest_updated';
+        }
+
+        $sql = 'SELECT ' . implode(', ', $selectParts) . ' FROM orders WHERE ' . $where;
         $stmt = $pdo->query($sql);
         if ($stmt) {
             $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
             $snapshot['latestId'] = (int) ($row['latest_id'] ?? 0);
             $snapshot['latestCreatedAt'] = (int) ($row['latest_created'] ?? 0);
+            if ($hasUpdatedAt) {
+                $snapshot['latestUpdatedAt'] = (int) ($row['latest_updated'] ?? 0);
+            }
         }
     } catch (Throwable $e) {
         error_log('SSE latest order lookup failed: ' . $e->getMessage());
