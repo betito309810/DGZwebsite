@@ -126,6 +126,11 @@ body {
     margin: 0;
 }
 
+.action-buttons .btn {
+    height: 44px;
+    padding: 0 20px;
+}
+
 .sales-controls .action-buttons {
     margin-left: auto;
 }
