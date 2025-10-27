@@ -466,6 +466,9 @@ body.nav-open {
     font-weight: 500;
     color: #546e7a;
     text-transform: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .sidebar-backdrop {
