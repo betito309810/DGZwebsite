@@ -865,8 +865,10 @@ body {
 }
 
 #paymentReference {
+    width: min(100%, 360px);
     max-width: 100%;
     letter-spacing: 0.02em;
+    justify-self: start;
 }
 
 .totals-panel [data-payment-reference-wrapper] {
