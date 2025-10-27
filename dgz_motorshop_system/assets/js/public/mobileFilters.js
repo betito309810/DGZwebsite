@@ -180,6 +180,18 @@
                 sorted = cards.sort(function (a, b) {
                     return parseFloat(b.dataset.productPrice || '0') - parseFloat(a.dataset.productPrice || '0');
                 });
+            } else if (mode === 'best-seller') {
+                sorted = cards.sort(function (a, b) {
+                    var soldB = parseInt(b.dataset.productSold || '0', 10);
+                    var soldA = parseInt(a.dataset.productSold || '0', 10);
+                    if (isNaN(soldB)) {
+                        soldB = 0;
+                    }
+                    if (isNaN(soldA)) {
+                        soldA = 0;
+                    }
+                    return soldB - soldA;
+                });
             } else if (mode === 'newest') {
                 sorted = cards.sort(function (a, b) {
                     var createdB = parseInt(b.dataset.productCreated || '0', 10);
