@@ -73,6 +73,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const posEmptyState = document.getElementById('posEmptyState');
             const amountReceivedInput = document.getElementById('amountReceived');
             const settlePaymentButton = document.getElementById('settlePaymentButton');
+            const paymentMethodSelect = document.getElementById('paymentMethod');
+            const paymentReferenceWrapper = document.querySelector('[data-payment-reference-wrapper]');
+            const paymentReferenceInput = document.getElementById('paymentReference');
             const profileButton = document.getElementById('profileTrigger');
             const profileModal = document.getElementById('profileModal');
             const profileModalClose = document.getElementById('profileModalClose');
@@ -114,6 +117,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const closeReceiptModalButton = document.getElementById('closeReceiptModal');
             const printReceiptButton = document.getElementById('printReceiptButton');
             const receiptItemsBody = document.getElementById('receiptItemsBody');
+            const receiptPaymentMethodEl = document.getElementById('receiptPaymentMethod');
+            const receiptReferenceRow = document.getElementById('receiptReferenceRow');
+            const receiptPaymentReferenceEl = document.getElementById('receiptPaymentReference');
 
             const proofModal = document.getElementById('proofModal');
             const proofImage = document.getElementById('proofImage');
@@ -1052,6 +1058,51 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             // End POS cart total calculator
 
+            function getSelectedPaymentMethodKey() {
+                if (!paymentMethodSelect) {
+                    return 'cash';
+                }
+                return String(paymentMethodSelect.value || 'cash').toLowerCase();
+            }
+
+            function requiresReferenceForMethod(methodKey) {
+                return methodKey === 'gcash' || methodKey === 'maya';
+            }
+
+            function getPaymentMethodLabel(methodKey) {
+                switch (methodKey) {
+                    case 'gcash':
+                        return 'GCash';
+                    case 'maya':
+                        return 'Maya';
+                    default:
+                        return 'Cash';
+                }
+            }
+
+            function updatePaymentMethodUI() {
+                const methodKey = getSelectedPaymentMethodKey();
+                const needsReference = requiresReferenceForMethod(methodKey);
+
+                if (paymentReferenceWrapper) {
+                    paymentReferenceWrapper.hidden = !needsReference;
+                    paymentReferenceWrapper.setAttribute('aria-hidden', needsReference ? 'false' : 'true');
+                }
+
+                if (!needsReference && paymentReferenceInput) {
+                    paymentReferenceInput.value = '';
+                }
+
+                if (paymentReferenceInput) {
+                    const label = getPaymentMethodLabel(methodKey);
+                    paymentReferenceInput.placeholder = needsReference
+                        ? `${label} reference number`
+                        : 'Enter reference number';
+                }
+
+                updateSettleButtonState();
+            }
+
             // Begin POS settle button enabler
             function updateSettleButtonState() {
                 if (!settlePaymentButton) {
@@ -1062,9 +1113,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 const amountReceivedRaw = amountReceivedInput ? amountReceivedInput.value || '0' : '0';
                 const amountReceived = parseFloat(amountReceivedRaw);
                 const salesTotal = getSalesTotal();
-                
+                const methodKey = getSelectedPaymentMethodKey();
+                const needsReference = requiresReferenceForMethod(methodKey);
+                const referenceValue = paymentReferenceInput ? paymentReferenceInput.value : '';
+                const hasReference = !needsReference || String(referenceValue).trim() !== '';
+
                 // Only enable if there are items and payment is sufficient
-                const shouldEnable = hasRows && amountReceived >= salesTotal && salesTotal > 0;
+                const shouldEnable = hasRows
+                    && amountReceived >= salesTotal
+                    && salesTotal > 0
+                    && hasReference;
 
                 settlePaymentButton.disabled = !shouldEnable;
             }
@@ -1174,6 +1232,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (amountReceivedInput) {
                     amountReceivedInput.value = '';
                 }
+                if (paymentReferenceInput) {
+                    paymentReferenceInput.value = '';
+                }
+                if (paymentMethodSelect) {
+                    paymentMethodSelect.value = 'cash';
+                }
+                updatePaymentMethodUI();
                 recalcTotals();
                 try {
                     localStorage.removeItem(posStateKey);
@@ -1865,6 +1930,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 let createdAt = new Date();
                 let orderId = params.get('order_id') || '';
                 let invoiceNumber = params.get('invoice_number') || '';
+                let paymentMethodLabel = 'Cash';
+                let paymentReferenceValue = '';
 
                 if (hasServerReceipt) {
                     items = checkoutReceipt.items.map((item) => {
@@ -1885,6 +1952,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     amountPaid = Number(checkoutReceipt.amount_paid) || parseFloat(params.get('amount_paid') || '0');
                     change = Number(checkoutReceipt.change) || parseFloat(params.get('change') || '0');
                     cashierName = checkoutReceipt.cashier || cashierName;
+                    paymentMethodLabel = checkoutReceipt.payment_method
+                        ? String(checkoutReceipt.payment_method)
+                        : paymentMethodLabel;
+                    paymentReferenceValue = checkoutReceipt.payment_reference
+                        ? String(checkoutReceipt.payment_reference)
+                        : paymentReferenceValue;
 
                     if (checkoutReceipt.order_id) {
                         orderId = checkoutReceipt.order_id;
@@ -1941,6 +2014,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     createdAt = new Date();
                 }
 
+                const paramPaymentMethod = (params.get('payment_method') || '').trim();
+                if (paramPaymentMethod !== '') {
+                    paymentMethodLabel = paramPaymentMethod;
+                }
+
+                const paramPaymentReference = (params.get('payment_reference') || '').trim();
+                if (paramPaymentReference !== '') {
+                    paymentReferenceValue = paramPaymentReference;
+                }
+
                 receiptItemsBody.innerHTML = '';
                 items.forEach((item) => {
                     const row = document.createElement('tr');
@@ -1965,6 +2048,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('receiptVat').textContent = formatPeso(vat);
                 document.getElementById('receiptAmountPaid').textContent = formatPeso(amountPaid);
                 document.getElementById('receiptChange').textContent = formatPeso(change);
+                if (receiptPaymentMethodEl) {
+                    const label = String(paymentMethodLabel || 'Cash').trim();
+                    receiptPaymentMethodEl.textContent = label !== '' ? label : 'Cash';
+                }
+                if (receiptReferenceRow && receiptPaymentReferenceEl) {
+                    const safeReference = String(paymentReferenceValue || '').trim();
+                    if (safeReference !== '') {
+                        receiptPaymentReferenceEl.textContent = safeReference;
+                        receiptReferenceRow.hidden = false;
+                        receiptReferenceRow.setAttribute('aria-hidden', 'false');
+                    } else {
+                        receiptPaymentReferenceEl.textContent = 'N/A';
+                        receiptReferenceRow.hidden = true;
+                        receiptReferenceRow.setAttribute('aria-hidden', 'true');
+                    }
+                }
 
                 receiptModal.style.display = 'flex';
 
@@ -2432,6 +2531,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
 
+            if (paymentMethodSelect) {
+                paymentMethodSelect.addEventListener('change', () => {
+                    updatePaymentMethodUI();
+                });
+            }
+
+            if (paymentReferenceInput) {
+                paymentReferenceInput.addEventListener('input', () => {
+                    updateSettleButtonState();
+                });
+            }
+
+            updatePaymentMethodUI();
+
             if (clearPosTableButton) {
                 clearPosTableButton.addEventListener('click', () => {
                     clearTable();
@@ -2459,6 +2572,29 @@ document.addEventListener('DOMContentLoaded', () => {
                             amountReceivedInput.focus();
                         }
                         return;
+                    }
+
+                    const methodKey = getSelectedPaymentMethodKey();
+                    if (requiresReferenceForMethod(methodKey)) {
+                        const referenceValue = paymentReferenceInput ? paymentReferenceInput.value.trim() : '';
+                        if (referenceValue === '') {
+                            event.preventDefault();
+                            let paymentLabel = getPaymentMethodLabel(methodKey);
+                            if (paymentMethodSelect
+                                && typeof paymentMethodSelect.selectedIndex === 'number'
+                                && paymentMethodSelect.selectedIndex >= 0
+                                && paymentMethodSelect.options[paymentMethodSelect.selectedIndex]) {
+                                paymentLabel = paymentMethodSelect
+                                    .options[paymentMethodSelect.selectedIndex]
+                                    .text
+                                    .trim();
+                            }
+                            showPosAlert(`Please enter the ${paymentLabel} reference number before completing the payment.`);
+                            if (paymentReferenceInput) {
+                                paymentReferenceInput.focus();
+                            }
+                            return;
+                        }
                     }
 
                 if (amountReceived < salesTotal) {

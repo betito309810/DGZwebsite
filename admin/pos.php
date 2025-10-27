@@ -71,6 +71,12 @@ function generateReceiptPDF(array $data): ?string {
 
         $html .= '</table>';
 
+        $paymentMethod = isset($data['payment_method']) ? (string) $data['payment_method'] : 'Cash';
+        if ($paymentMethod === '') {
+            $paymentMethod = 'Cash';
+        }
+        $paymentReference = isset($data['payment_reference']) ? (string) $data['payment_reference'] : '';
+
         // Totals section with vatable on the left and other totals on the right
         $html .= '<div style="display: flex; justify-content: space-between; width: 100%;">';
 
@@ -81,6 +87,12 @@ function generateReceiptPDF(array $data): ?string {
         $html .= '<p style="margin: 4px 0; font-weight: bold;">Total: PHP ' . number_format($data['sales_total'], 2) . '</p>';
         $html .= '<p style="margin: 4px 0;">Amount Paid: PHP ' . number_format($data['amount_paid'], 2) . '</p>';
         $html .= '<p style="margin: 4px 0;">Change: PHP ' . number_format($data['change'], 2) . '</p>';
+        $html .= '<p style="margin: 4px 0;"><strong>Payment Method:</strong> '
+            . htmlspecialchars($paymentMethod, ENT_QUOTES, 'UTF-8') . '</p>';
+        if ($paymentReference !== '') {
+            $html .= '<p style="margin: 4px 0;"><strong>Reference:</strong> '
+                . htmlspecialchars($paymentReference, ENT_QUOTES, 'UTF-8') . '</p>';
+        }
         $html .= '</div>';
 
         
@@ -1042,6 +1054,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_order_status']
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pos_checkout'])) {
     $amountPaid = isset($_POST['amount_paid']) ? (float) $_POST['amount_paid'] : 0.0;
+    $rawPaymentMethod = isset($_POST['payment_method']) ? (string) $_POST['payment_method'] : 'cash';
+    $rawPaymentReference = isset($_POST['payment_reference']) ? (string) $_POST['payment_reference'] : '';
+    $paymentMethodMap = [
+        'cash' => 'Cash',
+        'gcash' => 'GCash',
+        'maya' => 'Maya',
+    ];
+    $selectedPaymentKey = strtolower(trim($rawPaymentMethod));
+    if (!array_key_exists($selectedPaymentKey, $paymentMethodMap)) {
+        $selectedPaymentKey = 'cash';
+    }
+    $paymentMethodLabel = $paymentMethodMap[$selectedPaymentKey];
+    $paymentReference = trim($rawPaymentReference);
+    if ($paymentReference !== '') {
+        $paymentReference = function_exists('mb_substr')
+            ? mb_substr($paymentReference, 0, 191)
+            : substr($paymentReference, 0, 191);
+    }
     $cartItems = [];
     $salesTotal = 0.0;
 
@@ -1243,6 +1273,28 @@ HTML;
         exit;
     }
 
+    if ($selectedPaymentKey !== 'cash' && $paymentReference === '') {
+        $_SESSION['pos_active_tab'] = 'walkin';
+        $message = json_encode('Please provide the payment reference for ' . $paymentMethodLabel . ' transactions.');
+        $destination = json_encode('pos.php');
+        echo <<<HTML
+<script>
+(function () {
+    var message = {$message};
+    var destination = {$destination};
+    var redirect = function () { window.location = destination; };
+    if (window.dgzAlert && typeof window.dgzAlert === 'function') {
+        window.dgzAlert(message).then(redirect);
+    } else {
+        alert(message);
+        redirect();
+    }
+})();
+</script>
+HTML;
+        exit;
+    }
+
     if ($amountPaid < $salesTotal) {
         $_SESSION['pos_active_tab'] = 'walkin';
         $message = json_encode('Insufficient payment amount!');
@@ -1328,6 +1380,7 @@ HTML;
     $orderVatableColumn = ordersFindColumn($pdo, ['vatable']);
     $orderVatColumn = ordersFindColumn($pdo, ['vat', 'tax']);
     $orderAmountPaidColumn = ordersFindColumn($pdo, ['amount_paid', 'amountpaid', 'amount_paid_total', 'paid_amount', 'payment_amount']);
+    $orderReferenceColumn = ordersFindColumn($pdo, ['reference_no', 'reference_number', 'reference', 'ref_no']);
     $orderChangeColumn = ordersFindColumn($pdo, ['change_amount', 'change']);
     $orderCreatedAtColumn = ordersFindColumn($pdo, ['created_at', 'order_date', 'ordered_at', 'date_created']);
 
@@ -1369,7 +1422,7 @@ HTML;
         }
 
         $appendColumn($orderTotalColumn, $salesTotal);
-        $appendColumn($orderPaymentMethodColumn, 'Cash');
+        $appendColumn($orderPaymentMethodColumn, $paymentMethodLabel);
         $appendColumn($orderTypeColumn, 'walkin');
         $appendColumn($orderStatusColumn, 'completed');
 
@@ -1379,6 +1432,9 @@ HTML;
         $appendColumn($orderVatableColumn, $vatable);
         $appendColumn($orderVatColumn, $vat);
         $appendColumn($orderAmountPaidColumn, $amountPaid);
+        if ($orderReferenceColumn !== null && $paymentReference !== '') {
+            $appendColumn($orderReferenceColumn, $paymentReference);
+        }
         $appendColumn($orderChangeColumn, $change);
 
         if ($orderInvoiceNumberColumn !== null && $supportsInvoiceNumbers) {
@@ -1447,6 +1503,8 @@ HTML;
             'vat' => $vat,
             'amount_paid' => $amountPaid,
             'change' => $change,
+            'payment_method' => $paymentMethodLabel,
+            'payment_reference' => $paymentReference,
             'cashier' => currentSessionUserDisplayName() ?? 'Cashier',
             'items' => array_map(static function (array $item): array {
                 return [
@@ -1485,6 +1543,10 @@ HTML;
             $html .= '<p><strong>Total Amount:</strong> ₱' . number_format($salesTotal, 2) . '</p>';
             $html .= '<p><strong>Amount Paid:</strong> ₱' . number_format($amountPaid, 2) . '</p>';
             $html .= '<p><strong>Change:</strong> ₱' . number_format($change, 2) . '</p>';
+            $html .= '<p><strong>Payment Method:</strong> ' . htmlspecialchars($paymentMethodLabel, ENT_QUOTES, 'UTF-8') . '</p>';
+            if ($paymentReference !== '') {
+                $html .= '<p><strong>Reference:</strong> ' . htmlspecialchars($paymentReference, ENT_QUOTES, 'UTF-8') . '</p>';
+            }
 
             $dompdf->loadHtml($html);
             $dompdf->setPaper('A4', 'portrait');
@@ -1505,6 +1567,14 @@ HTML;
 
         if ($supportsInvoiceNumbers) {
             $params['invoice_number'] = $invoiceNumber;
+        }
+
+        if ($paymentMethodLabel !== '') {
+            $params['payment_method'] = $paymentMethodLabel;
+        }
+
+        if ($paymentReference !== '') {
+            $params['payment_reference'] = $paymentReference;
         }
 
         header('Location: pos.php?' . http_build_query($params));
@@ -1720,6 +1790,12 @@ if (isset($_GET['ok'], $_GET['order_id']) && $_GET['ok'] === '1') {
         $orderSelectColumns[] = $orderCreatedAtColumn !== null
             ? $quoteIdentifier($orderCreatedAtColumn) . ' AS created_at'
             : 'CURRENT_TIMESTAMP AS created_at';
+        $orderSelectColumns[] = $orderPaymentMethodColumn !== null
+            ? $quoteIdentifier($orderPaymentMethodColumn) . ' AS payment_method'
+            : "'Cash' AS payment_method";
+        $orderSelectColumns[] = $orderReferenceColumn !== null
+            ? $quoteIdentifier($orderReferenceColumn) . ' AS payment_reference'
+            : "'' AS payment_reference";
         if ($orderInvoiceNumberColumn !== null) {
             $orderSelectColumns[] = $quoteIdentifier($orderInvoiceNumberColumn) . ' AS invoice_number';
         } else {
@@ -1772,6 +1848,8 @@ if (isset($_GET['ok'], $_GET['order_id']) && $_GET['ok'] === '1') {
                 'vat' => (float) ($orderRow['vat'] ?? 0),
                 'amount_paid' => (float) ($orderRow['amount_paid'] ?? 0),
                 'change' => (float) ($orderRow['change_amount'] ?? 0),
+                'payment_method' => (string) ($orderRow['payment_method'] ?? 'Cash'),
+                'payment_reference' => (string) ($orderRow['payment_reference'] ?? ''),
                 'cashier' => (string) (currentSessionUserDisplayName() ?? 'Cashier'),
                 'items' => $items,
             ];
@@ -1888,6 +1966,18 @@ if ($receiptDataJson === false) {
                     <div class="totals-item">
                         <label for="amountReceived">Amount Received</label>
                         <input type="number" id="amountReceived" name="amount_paid" min="0" step="0.01" placeholder="0.00">
+                    </div>
+                    <div class="totals-item">
+                        <label for="paymentMethod">Payment Method</label>
+                        <select id="paymentMethod" name="payment_method">
+                            <option value="cash" selected>Cash</option>
+                            <option value="gcash">GCash</option>
+                            <option value="maya">Maya</option>
+                        </select>
+                    </div>
+                    <div class="totals-item" data-payment-reference-wrapper hidden>
+                        <label for="paymentReference">Reference No.</label>
+                        <input type="text" id="paymentReference" name="payment_reference" maxlength="191" placeholder="Enter reference number" autocomplete="off">
                     </div>
                     <div class="totals-item">
                         <label>Change</label>
@@ -2454,6 +2544,8 @@ if ($receiptDataJson === false) {
                     <div><span>VAT (12%):</span> <span id="receiptVat">₱0.00</span></div>
                     <div><span>Amount Paid:</span> <span id="receiptAmountPaid">₱0.00</span></div>
                     <div><span>Change:</span> <span id="receiptChange">₱0.00</span></div>
+                    <div><span>Payment Method:</span> <span id="receiptPaymentMethod">Cash</span></div>
+                    <div id="receiptReferenceRow" hidden><span>Reference:</span> <span id="receiptPaymentReference">N/A</span></div>
                 </div>
                 <div class="receipt-footer">
                     <p>Thank you for shopping!</p>
