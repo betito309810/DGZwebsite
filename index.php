@@ -5,6 +5,32 @@ require_once __DIR__ . '/dgz_motorshop_system/includes/customer_session.php';
 $pdo = db();
 $productsActiveClause = productsArchiveActiveCondition($pdo, '', true);
 $products = $pdo->query('SELECT * FROM products WHERE ' . $productsActiveClause . ' ORDER BY name')->fetchAll();
+
+$bestSellerTotals = [];
+$saleStatuses = ['pending', 'payment_verification', 'approved', 'delivery', 'completed', 'complete'];
+if (!empty($saleStatuses)) {
+    $placeholders = implode(',', array_fill(0, count($saleStatuses), '?'));
+    try {
+        $bestSellerStmt = $pdo->prepare(
+            'SELECT oi.product_id, SUM(oi.qty) AS total_sold
+             FROM order_items oi
+             INNER JOIN orders o ON o.id = oi.order_id
+             WHERE oi.product_id IS NOT NULL AND o.status IN (' . $placeholders . ')
+             GROUP BY oi.product_id'
+        );
+        $bestSellerStmt->execute($saleStatuses);
+        foreach ($bestSellerStmt->fetchAll(PDO::FETCH_ASSOC) as $bestSellerRow) {
+            $productId = isset($bestSellerRow['product_id']) ? (int) $bestSellerRow['product_id'] : 0;
+            $soldCount = isset($bestSellerRow['total_sold']) ? (int) $bestSellerRow['total_sold'] : 0;
+            if ($productId > 0) {
+                $bestSellerTotals[$productId] = max(0, $soldCount);
+            }
+        }
+    } catch (Exception $exception) {
+        error_log('Unable to compute best seller totals: ' . $exception->getMessage());
+        $bestSellerTotals = [];
+    }
+}
 $productIds = array_column($products, 'id');
 $productVariantMap = fetchVariantsForProducts($pdo, $productIds); // Added: preload variant rows for customer UI.
 
@@ -213,6 +239,7 @@ natcasesort($categories);
                             <div class="catalog-sort__select-wrapper">
                                 <select id="desktopSortSelect" class="catalog-sort__select" aria-label="Sort products">
                                     <option value="recommended">Recommended</option>
+                                    <option value="best-seller">Best Sellers</option>
                                     <option value="newest">Newest</option>
                                     <option value="price-asc">Price: Low to High</option>
                                     <option value="price-desc">Price: High to Low</option>
@@ -291,6 +318,7 @@ natcasesort($categories);
                                 $createdTimestamp = (int) $createdParsed;
                             }
                         }
+                        $totalSold = isset($bestSellerTotals[$p['id']]) ? (int) $bestSellerTotals[$p['id']] : 0;
                     ?>
                     <div class="product-card"
                         data-category="<?= htmlspecialchars($categorySlug) ?>"
@@ -301,6 +329,7 @@ natcasesort($categories);
                         data-product-category-label="<?= htmlspecialchars($category) ?>"
                         data-product-description="<?= htmlspecialchars($p['description'], ENT_QUOTES) ?>"
                         data-product-created="<?= $createdTimestamp ?>"
+                        data-product-sold="<?= $totalSold ?>"
                         data-product-price="<?= htmlspecialchars(number_format((float)$displayPrice, 2, '.', '')) ?>"
                         data-product-quantity="<?= $displayQuantity ?>"
                         data-product-variants="<?= $variantsJson ?>"
@@ -403,6 +432,7 @@ natcasesort($categories);
             </div>
             <div class="sort-sheet__options" role="radiogroup" aria-labelledby="sortSheetTitle">
                 <button type="button" class="sort-option is-active" data-sort="recommended" data-label="Recommended" data-short-label="Recommended" aria-pressed="true">Recommended</button>
+                <button type="button" class="sort-option" data-sort="best-seller" data-label="Best Sellers" data-short-label="Best" aria-pressed="false">Best Sellers</button>
                 <button type="button" class="sort-option" data-sort="newest" data-label="Newest" data-short-label="New" aria-pressed="false">Newest</button>
                 <button type="button" class="sort-option" data-sort="price-asc" data-label="Price: Low to High" data-short-label="Price ↑" aria-pressed="false">Price: Low to High</button>
                 <button type="button" class="sort-option" data-sort="price-desc" data-label="Price: High to Low" data-short-label="Price ↓" aria-pressed="false">Price: High to Low</button>
